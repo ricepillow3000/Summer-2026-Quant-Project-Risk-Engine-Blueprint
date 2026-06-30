@@ -1,0 +1,43 @@
+<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Portfolio Risk Engine — heraldic rampant lion and scale crest">
+  <polygon points="60,6 113,111 7,111" fill="#F2EFE9" stroke="#9A7B4F" stroke-width="2.5" stroke-linejoin="round"/>
+  <polygon points="60,14 105,105 15,105" fill="none" stroke="#9A7B4F" stroke-width="0.5" opacity="0.45"/>
+  <g fill="#8A6A3C">
+    <path d="M80,48 C84,50 86,56 85,64 C84,72 82,80 79,87 C77,92 75,96 74,100 L70,103 L72,98 C73,94 75,90 76,85 C78,78 79,72 82,69 C86,66 90,68 91,73 C92,79 90,84 86,84 C83,83 82,78 81,72 C80,64 79,55 80,48 Z"/>
+    <path d="M82,50 C88,47 95,47 101,50 C104,51 105,54 103,56 C98,54 92,55 88,57 C85,55 83,53 82,50 Z"/>
+    <polygon points="101,49 106,50 102,53"/><polygon points="102,53 107,55 102,56"/><polygon points="99,47 104,46 102,50"/>
+    <path d="M83,56 C90,56 97,59 102,64 C104,66 104,69 102,70 C97,67 91,66 87,66 C84,63 83,59 83,56 Z"/>
+    <polygon points="102,63 107,64 103,67"/><polygon points="103,67 108,69 103,70"/>
+    <path d="M80,76 C85,78 90,82 93,88 C95,90 95,93 93,94 C89,90 84,88 80,87 C78,84 78,79 80,76 Z"/>
+    <polygon points="93,88 98,89 94,92"/><polygon points="93,92 97,95 92,94"/>
+    <path d="M83,31 C87,30 92,31 96,33 L99,35 C97,37 95,38 92,38 C90,40 88,42 87,43 C85,44 84,42 84,40 C83,37 83,34 83,31 Z"/>
+    <path d="M82,31 Q83,24 84,19 Q86,25 86,31 Z"/>
+    <path d="M78,31 Q77,23 79,18 Q82,24 82,31 Z"/>
+    <path d="M75,34 Q71,27 73,22 Q78,28 79,34 Z"/>
+    <path d="M74,39 Q67,34 67,29 Q74,33 77,39 Z"/>
+    <path d="M74,44 Q66,43 64,39 Q72,40 78,44 Z"/>
+    <path d="M76,49 Q69,51 65,49 Q73,46 80,48 Z"/>
+    <path d="M79,53 Q74,58 70,59 Q76,52 81,51 Z"/>
+  </g>
+  <path d="M96,35 L92,37 L94,40 L91,39 Z" fill="#F2EFE9"/>
+  <polygon points="93,37 92.6,39.4 94.2,38.9" fill="#8A6A3C"/>
+  <polygon points="91.5,39 91.2,41 92.6,40.4" fill="#8A6A3C"/>
+  <path d="M95,38 C97,38.5 98,40 96.5,41 C95.5,41 94.5,39.5 95,38 Z" fill="#A8634C"/>
+  <g stroke="#6B5026" stroke-width="0.7" fill="none" opacity="0.55" stroke-linecap="round">
+    <path d="M82,54 C80,60 80,67 82,73"/>
+    <path d="M83,78 C81,84 80,89 78,93"/>
+  </g>
+  <path d="M86,83 C72,90 54,92 44,84 C37,79 34,70 35,58" fill="none" stroke="#8A6A3C" stroke-width="5" stroke-linecap="round"/>
+  <path d="M35,58 C35,54 34,50 36,47" fill="none" stroke="#8A6A3C" stroke-width="3.5" stroke-linecap="round"/>
+  <polygon points="38,52 33,50 39,48" fill="#8A6A3C"/>
+  <polygon points="36,55 31,55 37,51" fill="#8A6A3C"/>
+  <polygon points="40,50 36,46 42,47" fill="#8A6A3C"/>
+  <circle cx="35" cy="46" r="9" fill="none" stroke="#8A6A3C" stroke-width="5"/>
+  <g stroke="#3F3B35" stroke-width="1" fill="none" stroke-linecap="round">
+    <line x1="30" y1="45" x2="40" y2="45"/>
+    <line x1="35" y1="42.5" x2="35" y2="50"/>
+    <path d="M28.5,46.5 Q30,49 31.5,46.5"/>
+    <path d="M38.5,46.5 Q40,49 41.5,46.5"/>
+  </g>
+  <circle cx="35" cy="45" r="1.1" fill="#9A7B4F"/>
+  <g stroke="#3F3B35" stroke-width="0.8"><line x1="28.5" y1="46.5" x2="30" y2="44.5"/><line x1="31.5" y1="46.5" x2="30" y2="44.5"/><line x1="38.5" y1="46.5" x2="40" y2="44.5"/><line x1="41.5" y1="46.5" x2="40" y2="44.5"/></g>
+</svg>

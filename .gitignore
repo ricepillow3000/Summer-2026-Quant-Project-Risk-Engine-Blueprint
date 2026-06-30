@@ -1,0 +1,9 @@
+# Python
+__pycache__/
+*.pyc
+
+# Cached market data (regenerated on first run)
+data/*.parquet
+
+# Local logs
+streamlit.log

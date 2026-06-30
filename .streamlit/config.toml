@@ -1,9 +1,10 @@
 [theme]
-primaryColor = "#00FFAA"
-backgroundColor = "#0E1117"
-secondaryBackgroundColor = "#262730"
-textColor = "#FAFAFA"
-font = "sans serif"
+base = "light"
+primaryColor = "#9A7B4F"             # bronze — drives slider, focus, accents
+backgroundColor = "#D4CDBF"          # darker warm taupe page
+secondaryBackgroundColor = "#E9E4DB" # cream — expanders, widgets, panels
+textColor = "#4A4640"                # soft charcoal
+font = "serif"
 
 [server]
 headless = true
