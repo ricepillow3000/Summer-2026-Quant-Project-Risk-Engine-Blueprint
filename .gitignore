@@ -2,8 +2,9 @@
 __pycache__/
 *.pyc
 
-# Cached market data (regenerated on first run)
+# Cached market data + provenance (regenerated on first run)
 data/*.parquet
+data/*.meta.json
 
 # Local logs
 streamlit.log

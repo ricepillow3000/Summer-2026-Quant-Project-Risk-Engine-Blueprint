@@ -18,9 +18,12 @@ import streamlit as st
 from src.ingestion import (
     fetch_prices, get_returns, data_health, provenance, clear_cache, PRESETS,
 )
-from src.analytics import correlation_matrix
+from src.analytics import correlation_matrix, covariance_matrix
 from src.risk import monte_carlo, parametric_var, var_backtest
 from src.factors import factor_exposures
+from src.strategies import (
+    risk_contributions, risk_parity_weights, vol_target, SCENARIOS,
+)
 
 st.set_page_config(page_title="Portfolio Risk Engine", layout="centered")
 
@@ -127,9 +130,6 @@ if len(loaded) < 2:
 if missing:
     st.caption(f"Couldn't load: {', '.join(missing)} — skipped.")
 
-weights = np.ones(len(loaded)) / len(loaded)
-port_returns = returns @ weights  # real (unshocked) portfolio series for VaR/factors
-
 # ---- Data-freshness indicator (honest, not a fake real-time feed) ----
 health = data_health(prices)
 fresh_col, refresh_col = st.columns([5, 1])
@@ -142,18 +142,56 @@ if refresh_col.button("Refresh", help="Clear cache and re-pull the latest prices
     st.cache_data.clear()      # drop Streamlit's in-memory cache
     st.rerun()
 
+# ---- Allocation: equal-weight vs risk parity, optional vol target ----
+cov = covariance_matrix(returns)  # annualized covariance for risk math
+with st.container(border=True):
+    st.markdown('<div class="panel-label">Allocation</div>', unsafe_allow_html=True)
+    acol1, acol2 = st.columns(2)
+    method = acol1.radio(
+        "Weighting", ["Equal weight", "Risk parity"], label_visibility="collapsed",
+        help="Risk parity equalizes each asset's RISK contribution, so no single "
+             "name dominates — the Bridgewater All-Weather idea.")
+    use_vt = acol2.checkbox(
+        "Target volatility", help="Scale exposure to hold a constant annual vol "
+        "(AQR managed-vol style). Leverage < 1 de-risks; > 1 levers up.")
+    target_vol = acol2.slider("Target annual vol (%)", 5, 30, 10, step=1,
+                              disabled=not use_vt) / 100
+
+base_weights = risk_parity_weights(cov) if method == "Risk parity" else \
+    np.ones(len(loaded)) / len(loaded)
+
+leverage = 1.0
+if use_vt:
+    vt = vol_target(base_weights, cov, target_vol)
+    weights, leverage = vt["scaled_weights"], vt["leverage"]
+else:
+    weights = base_weights
+
+port_returns = returns @ weights  # real (unshocked) portfolio series for VaR/factors
+
 # ---- Stress controls (drives a REAL Monte Carlo re-run, not fake math) ----
+st.session_state.setdefault("dd_shock", 0)
+st.session_state.setdefault("vol_shock", 0)
 with st.container(border=True):
     st.markdown('<div class="panel-label">Stress test</div>', unsafe_allow_html=True)
+    scenario = st.selectbox(
+        "Historical scenario", ["Custom (use sliders)"] + list(SCENARIOS.keys()),
+        help="Replay the rough magnitude of a real crisis, or set your own below.")
+    # Only overwrite the sliders when the scenario selection actually changes,
+    # so the user can still hand-tune afterward.
+    if st.session_state.get("_last_scenario") != scenario:
+        st.session_state["_last_scenario"] = scenario
+        if scenario != "Custom (use sliders)":
+            st.session_state["dd_shock"] = SCENARIOS[scenario]["drawdown"]
+            st.session_state["vol_shock"] = SCENARIOS[scenario]["vol"]
     col1, col2 = st.columns(2)
-    with col1:
-        drawdown_shock = st.slider(
-            "Market drawdown shock", -50, 0, 0, step=5,
-            help="Shifts every historical daily return down before resampling.")
-    with col2:
-        vol_shock = st.slider(
-            "Volatility shock", 0, 100, 0, step=10,
-            help="Scales the spread of daily returns to simulate a higher-vol regime.")
+    drawdown_shock = col1.slider(
+        "Market drawdown shock", -50, 0, step=5, key="dd_shock",
+        help="Shifts every historical daily return down before resampling.")
+    vol_shock = col2.slider(
+        "Volatility shock", 0, 300, step=10, key="vol_shock",
+        help="Scales the spread of daily returns to simulate a higher-vol regime. "
+             "Historical scenarios can push this above 100%.")
 
 # Apply the shock directly to the return distribution Monte Carlo samples from.
 shocked_returns = returns.copy()
@@ -167,9 +205,11 @@ mc = monte_carlo(shocked_returns, weights, n_simulations=10_000, horizon_days=25
 
 # ---- Headline verdict ----
 is_shocked = drawdown_shock != 0 or vol_shock != 0
+alloc_label = "risk-parity" if method == "Risk parity" else "equal-weight"
+lev_txt = f", levered {leverage:.2f}×" if use_vt else ""
 verdict = (
-    f"In the worst 5% of simulated years, an equal-weight portfolio of these "
-    f"{len(loaded)} assets loses an average of **{mc['cvar']:.1%}**."
+    f"In the worst 5% of simulated years, a {alloc_label} portfolio of these "
+    f"{len(loaded)} assets{lev_txt} loses an average of **{mc['cvar']:.1%}**."
 )
 if is_shocked:
     verdict += " *(under the stress scenario applied above)*"
@@ -190,6 +230,20 @@ with st.expander("See the full risk breakdown"):
     c1.metric("Median 1-year return", f"{mc['median_return']:+.1%}")
     c2.metric("Probability of loss", f"{mc['prob_loss']:.1%}")
     c3.metric("Worst simulated year", f"{mc['worst_case']:+.1%}")
+
+    # --- Risk-contribution decomposition (where the risk actually lives) ---
+    st.markdown("###### Risk contribution by asset")
+    rc = risk_contributions(weights, cov)
+    st.bar_chart(
+        pd.DataFrame({"dollar weight": rc["weight"], "risk share": rc["risk_pct"]}),
+        horizontal=True,
+    )
+    top = rc["risk_pct"].idxmax()
+    st.caption(
+        f"Share of total portfolio volatility per asset. {top} contributes the most "
+        f"risk ({rc.loc[top, 'risk_pct']:.0%}). Equal dollar weight ≠ equal risk — "
+        "switch Allocation to Risk parity to flatten these bars."
+    )
 
     st.markdown("###### Correlation matrix")
     corr = correlation_matrix(shocked_returns)
@@ -235,8 +289,9 @@ with st.expander("See the full risk breakdown"):
         st.caption(f"Factor exposures unavailable: {exc}")
 
 st.caption(
-    "Methodology: 10,000-path bootstrap Monte Carlo over a 252-day horizon, "
-    "resampled from 2 years of daily historical returns. Equal-weight allocation."
+    f"Methodology: 10,000-path bootstrap Monte Carlo over a 252-day horizon, "
+    f"resampled from 2 years of daily historical returns. {alloc_label.capitalize()} "
+    f"allocation{lev_txt}."
 )
 
 # ---- Data source & provenance (traceability) ----
