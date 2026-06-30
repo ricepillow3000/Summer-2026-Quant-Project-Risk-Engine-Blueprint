@@ -12,6 +12,7 @@ Quant Deep Dive:
 
 import numpy as np
 import pandas as pd
+from scipy import stats
 from src.ingestion import fetch_prices, get_returns
 
 
@@ -41,6 +42,58 @@ def cvar(port_returns: pd.Series, confidence: float = 0.95) -> float:
     threshold = np.percentile(port_returns, (1 - confidence) * 100)
     tail = port_returns[port_returns <= threshold]
     return float(-tail.mean())
+
+
+def parametric_var(port_returns: pd.Series, confidence: float = 0.95) -> float:
+    """
+    Variance-covariance (parametric) VaR: assumes returns are normal and reads
+    the loss off the fitted distribution. Faster than historical and smooth, but
+    understates tail risk when returns are fat-tailed — which is exactly why we
+    backtest it below and keep CVaR as the headline.
+    """
+    mu, sigma = port_returns.mean(), port_returns.std()
+    z = stats.norm.ppf(1 - confidence)
+    return float(-(mu + z * sigma))
+
+
+def var_backtest(port_returns: pd.Series, confidence: float = 0.95) -> dict:
+    """
+    Backtest historical VaR against its own history (Kupiec POF test).
+
+    A VaR model is only trustworthy if losses breach it about as often as it
+    claims — a 95% VaR should be exceeded ~5% of days. Too many breaches = the
+    model understates risk; too few = it's needlessly conservative. The Kupiec
+    proportion-of-failures test turns "is the breach rate acceptable?" into a
+    formal hypothesis test (chi-square, 1 dof, 95% critical value 3.841).
+    """
+    threshold = np.percentile(port_returns, (1 - confidence) * 100)
+    breaches = int((port_returns < threshold).sum())
+    n = len(port_returns)
+    expected_rate = 1 - confidence
+    observed_rate = breaches / n
+
+    # Kupiec likelihood-ratio statistic for proportion of failures.
+    p = expected_rate
+    x = breaches
+    if 0 < x < n:
+        lr = -2 * (
+            (n - x) * np.log(1 - p) + x * np.log(p)
+            - (n - x) * np.log(1 - x / n) - x * np.log(x / n)
+        )
+    else:
+        lr = float("nan")
+    crit = 3.841  # chi-square(1) at 95%
+    passed = bool(np.isnan(lr) or lr <= crit)
+
+    return {
+        "breaches": breaches,
+        "n": n,
+        "expected_breaches": round(expected_rate * n, 1),
+        "observed_rate": observed_rate,
+        "expected_rate": expected_rate,
+        "kupiec_lr": None if np.isnan(lr) else round(float(lr), 2),
+        "passed": passed,
+    }
 
 
 def monte_carlo(

@@ -1,0 +1,23 @@
+{
+  "source": "Yahoo Finance (via yfinance)",
+  "fetched_at_utc": "2026-06-30T21:29:01+00:00",
+  "symbols": [
+    "AAPL",
+    "AMZN",
+    "AVGO",
+    "BRK-B",
+    "GOOGL",
+    "LLY",
+    "MA",
+    "META",
+    "MSFT",
+    "NVDA",
+    "UNH",
+    "V"
+  ],
+  "period": "2y",
+  "start": "2024-07-01",
+  "end": "2026-06-30",
+  "rows": 501,
+  "yfinance_version": "1.5.1"
+}

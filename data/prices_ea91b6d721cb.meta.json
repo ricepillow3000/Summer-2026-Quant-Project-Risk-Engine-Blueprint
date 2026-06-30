@@ -1,0 +1,16 @@
+{
+  "source": "Yahoo Finance (via yfinance)",
+  "fetched_at_utc": "2026-06-30T21:29:02+00:00",
+  "symbols": [
+    "IWD",
+    "IWF",
+    "IWM",
+    "MTUM",
+    "SPY"
+  ],
+  "period": "2y",
+  "start": "2024-07-01",
+  "end": "2026-06-30",
+  "rows": 501,
+  "yfinance_version": "1.5.1"
+}
