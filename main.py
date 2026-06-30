@@ -21,9 +21,8 @@ from src.ingestion import (
 from src.analytics import correlation_matrix, covariance_matrix
 from src.risk import monte_carlo, parametric_var, var_backtest
 from src.factors import factor_exposures
-from src.strategies import (
-    risk_contributions, risk_parity_weights, vol_target, SCENARIOS,
-)
+from src.strategies import risk_contributions, risk_parity_weights, vol_target
+from src.scenarios import HISTORICAL_REGIMES, replay_returns
 
 st.set_page_config(page_title="Portfolio Risk Engine", layout="centered")
 
@@ -33,13 +32,17 @@ st.markdown("""
 <style>
 html, body, [class*="css"] { font-family: Georgia, 'Times New Roman', serif; }
 h1, h2, h3 { color: #3F3B35; font-weight: 400; }
-.stCaption, [data-testid="stCaptionContainer"] { color: #7A756C; }
+/* Captions: larger + darker so the fine print is actually readable */
+.stCaption, [data-testid="stCaptionContainer"],
+[data-testid="stCaptionContainer"] p, [data-testid="stCaptionContainer"] div {
+    font-size: 13.5px !important; color: #524E47 !important; line-height: 1.5 !important; }
+[data-testid="stMetricLabel"] p { font-size: 13px !important; color: #6A645A !important; }
 
 /* Header crest + wordmark */
 .brand-row { display: flex; align-items: center; gap: 16px; margin-bottom: 2px; }
 .brand-title { font-size: 32px; color: #3F3B35; line-height: 1.1; }
-.brand-tag { font-family: 'Helvetica Neue', sans-serif; font-size: 10px;
-             letter-spacing: 0.18em; text-transform: uppercase; color: #9A7B4F; }
+.brand-tag { font-family: 'Helvetica Neue', sans-serif; font-size: 11px;
+             letter-spacing: 0.16em; text-transform: uppercase; color: #8A6E45; }
 
 /* Hero verdict card */
 .verdict-box { background: #F4F1EA; border: 1px solid #BFB8A9; border-radius: 6px;
@@ -51,9 +54,9 @@ h1, h2, h3 { color: #3F3B35; font-weight: 400; }
 .verdict-sentence { font-size: 17px; color: #54504A; line-height: 1.5; }
 
 /* Control panels — distinct cream blocks with a bronze top accent */
-.panel-label { font-family: 'Helvetica Neue', sans-serif; font-size: 11px;
-               letter-spacing: 0.12em; text-transform: uppercase; color: #9A8E7C;
-               margin-bottom: 2px; }
+.panel-label { font-family: 'Helvetica Neue', sans-serif; font-size: 12px;
+               letter-spacing: 0.12em; text-transform: uppercase; color: #7A6E5A;
+               margin-bottom: 4px; }
 
 /* Refined slider */
 [data-testid="stSlider"] [data-baseweb="slider"] > div > div { background: #C4BDAE !important; }
@@ -169,50 +172,77 @@ else:
 
 port_returns = returns @ weights  # real (unshocked) portfolio series for VaR/factors
 
-# ---- Stress controls (drives a REAL Monte Carlo re-run, not fake math) ----
-st.session_state.setdefault("dd_shock", 0)
-st.session_state.setdefault("vol_shock", 0)
-with st.container(border=True):
-    st.markdown('<div class="panel-label">Stress test</div>', unsafe_allow_html=True)
-    scenario = st.selectbox(
-        "Historical scenario", ["Custom (use sliders)"] + list(SCENARIOS.keys()),
-        help="Replay the rough magnitude of a real crisis, or set your own below.")
-    # Only overwrite the sliders when the scenario selection actually changes,
-    # so the user can still hand-tune afterward.
-    if st.session_state.get("_last_scenario") != scenario:
-        st.session_state["_last_scenario"] = scenario
-        if scenario != "Custom (use sliders)":
-            st.session_state["dd_shock"] = SCENARIOS[scenario]["drawdown"]
-            st.session_state["vol_shock"] = SCENARIOS[scenario]["vol"]
-    col1, col2 = st.columns(2)
-    drawdown_shock = col1.slider(
-        "Market drawdown shock", -50, 0, step=5, key="dd_shock",
-        help="Shifts every historical daily return down before resampling.")
-    vol_shock = col2.slider(
-        "Volatility shock", 0, 300, step=10, key="vol_shock",
-        help="Scales the spread of daily returns to simulate a higher-vol regime. "
-             "Historical scenarios can push this above 100%.")
-
-# Apply the shock directly to the return distribution Monte Carlo samples from.
-shocked_returns = returns.copy()
-if drawdown_shock != 0:
-    shocked_returns = shocked_returns + (drawdown_shock / 100) / 252
-if vol_shock != 0:
-    mean = shocked_returns.mean()
-    shocked_returns = mean + (shocked_returns - mean) * (1 + vol_shock / 100)
-
-mc = monte_carlo(shocked_returns, weights, n_simulations=10_000, horizon_days=252)
-
-# ---- Headline verdict ----
-is_shocked = drawdown_shock != 0 or vol_shock != 0
+# ---- Stress test: custom parametric shock OR historical regime replay ----
 alloc_label = "risk-parity" if method == "Risk parity" else "equal-weight"
 lev_txt = f", levered {leverage:.2f}×" if use_vt else ""
-verdict = (
-    f"In the worst 5% of simulated years, a {alloc_label} portfolio of these "
-    f"{len(loaded)} assets{lev_txt} loses an average of **{mc['cvar']:.1%}**."
-)
-if is_shocked:
-    verdict += " *(under the stress scenario applied above)*"
+
+with st.container(border=True):
+    st.markdown('<div class="panel-label">Stress test</div>', unsafe_allow_html=True)
+    mode = st.selectbox(
+        "Scenario", ["Custom shock (sliders)"] + list(HISTORICAL_REGIMES.keys()),
+        help="Custom: set your own drawdown and volatility shock. Or replay the "
+             "ACTUAL daily returns of a real crisis — real correlations, real "
+             "volatility, real path, not an approximation.")
+    if mode == "Custom shock (sliders)":
+        col1, col2 = st.columns(2)
+        drawdown_shock = col1.slider(
+            "Market drawdown shock", -50, 0, 0, step=5,
+            help="Shifts every historical daily return down before resampling.")
+        vol_shock = col2.slider(
+            "Volatility shock", 0, 300, 0, step=10,
+            help="Scales the spread of daily returns to simulate a higher-vol regime.")
+    else:
+        s_date, e_date = HISTORICAL_REGIMES[mode]
+        st.caption(f"Replaying actual market returns from {s_date} to {e_date}.")
+
+# Build the return distribution + weights the simulation will sample from.
+if mode == "Custom shock (sliders)":
+    shocked_returns = returns.copy()
+    if drawdown_shock != 0:
+        shocked_returns = shocked_returns + (drawdown_shock / 100) / 252
+    if vol_shock != 0:
+        m = shocked_returns.mean()
+        shocked_returns = m + (shocked_returns - m) * (1 + vol_shock / 100)
+    sim_weights = weights
+    excluded = []
+    is_shocked = drawdown_shock != 0 or vol_shock != 0
+    scenario_label = None
+else:
+    s_date, e_date = HISTORICAL_REGIMES[mode]
+    try:
+        shocked_returns = replay_returns(loaded, s_date, e_date)
+    except Exception as exc:  # noqa: BLE001
+        st.error(f"Couldn't load history for {mode}: {exc}")
+        st.stop()
+    sim_assets = list(shocked_returns.columns)
+    excluded = [t for t in loaded if t not in sim_assets]
+    if len(sim_assets) < 2:
+        st.warning(f"Too few of your assets traded during {mode}. Try another scenario.")
+        st.stop()
+    idx = [loaded.index(a) for a in sim_assets]
+    sim_weights = weights[idx]
+    sim_weights = sim_weights / sim_weights.sum() * weights.sum()  # preserve exposure
+    is_shocked = True
+    scenario_label = mode
+
+mc = monte_carlo(shocked_returns, sim_weights, n_simulations=10_000, horizon_days=252)
+
+# ---- Headline verdict ----
+if scenario_label:
+    verdict = (
+        f"Replaying the actual returns of {scenario_label} "
+        f"({len(shocked_returns)} trading days), a {alloc_label} portfolio{lev_txt} "
+        f"loses an average of **{mc['cvar']:.1%}** in the worst 5% of simulated years."
+    )
+    if excluded:
+        verdict += f" *(Excludes {', '.join(excluded)} — not trading in that period.)*"
+else:
+    verdict = (
+        f"In the worst 5% of simulated years, a {alloc_label} portfolio of these "
+        f"{len(loaded)} assets{lev_txt} loses an average of **{mc['cvar']:.1%}**."
+    )
+    if is_shocked:
+        verdict += " *(under the stress scenario applied above)*"
 
 st.markdown(f"""
 <div class="verdict-box">
@@ -288,10 +318,11 @@ with st.expander("See the full risk breakdown"):
     except Exception as exc:  # noqa: BLE001
         st.caption(f"Factor exposures unavailable: {exc}")
 
+source_txt = f"the {scenario_label} window" if scenario_label else \
+    "2 years of daily historical returns"
 st.caption(
     f"Methodology: 10,000-path bootstrap Monte Carlo over a 252-day horizon, "
-    f"resampled from 2 years of daily historical returns. {alloc_label.capitalize()} "
-    f"allocation{lev_txt}."
+    f"resampled from {source_txt}. {alloc_label.capitalize()} allocation{lev_txt}."
 )
 
 # ---- Data source & provenance (traceability) ----

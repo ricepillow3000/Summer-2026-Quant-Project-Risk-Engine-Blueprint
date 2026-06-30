@@ -67,9 +67,10 @@ def _clean(tickers: list[str] | None) -> list[str]:
     return sorted({t.strip().upper() for t in (tickers or DEFAULT_UNIVERSE) if t.strip()})
 
 
-def _cache_path(tickers: list[str], period: str) -> str:
+def _cache_path(tickers: list[str], period: str, align: bool = True) -> str:
     """Stable per-universe cache filename so different baskets don't collide."""
-    key = hashlib.md5((",".join(tickers) + "|" + period).encode()).hexdigest()[:12]
+    flag = "a" if align else "r"
+    key = hashlib.md5((",".join(tickers) + "|" + period + "|" + flag).encode()).hexdigest()[:12]
     return os.path.join(DATA_DIR, f"prices_{key}.parquet")
 
 
@@ -100,7 +101,8 @@ def clear_cache(tickers: list[str] | None = None, period: str = "2y") -> None:
 
 def fetch_prices(tickers: list[str] | None = None, period: str = "2y",
                  use_cache: bool = True,
-                 max_age_hours: float = CACHE_MAX_AGE_HOURS) -> pd.DataFrame:
+                 max_age_hours: float = CACHE_MAX_AGE_HOURS,
+                 align: bool = True) -> pd.DataFrame:
     """
     Return daily adjusted closing prices for the given universe, from Yahoo.
 
@@ -109,9 +111,14 @@ def fetch_prices(tickers: list[str] | None = None, period: str = "2y",
 
     Args:
         tickers: Yahoo Finance symbols. Defaults to DEFAULT_UNIVERSE if None.
-        period:  yfinance period string — "1y", "2y", "5y", etc.
+        period:  yfinance period string — "1y", "2y", "5y", "max", etc.
         use_cache: read/write the disk cache.
         max_age_hours: how old a cache may be before re-pulling.
+        align: if True, keep only common trading days across all assets (the
+            right choice for current risk). Set False for historical replay,
+            where assets have different inception dates and you slice a window
+            later — forcing common dates over full history would truncate
+            everything to the youngest asset's IPO.
 
     Returns:
         DataFrame with dates as index and tickers as columns. Symbols that
@@ -122,7 +129,7 @@ def fetch_prices(tickers: list[str] | None = None, period: str = "2y",
         raise ValueError("No tickers supplied.")
 
     os.makedirs(DATA_DIR, exist_ok=True)
-    cache_path = _cache_path(tickers, period)
+    cache_path = _cache_path(tickers, period, align)
     meta_path = _meta_path(cache_path)
 
     if use_cache and os.path.exists(cache_path) and _cache_is_fresh(meta_path, max_age_hours):
@@ -146,7 +153,8 @@ def fetch_prices(tickers: list[str] | None = None, period: str = "2y",
     # the common trading days so every asset is measured over the same dates.
     prices = prices.dropna(axis=1, how="all")
     prices = prices.ffill(limit=3)
-    prices = prices.dropna()
+    if align:
+        prices = prices.dropna()
     if prices.empty:
         raise RuntimeError("No overlapping price history for that universe.")
 
