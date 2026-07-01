@@ -16,13 +16,15 @@ import pandas as pd
 import streamlit as st
 
 from src.ingestion import (
-    fetch_prices, get_returns, data_health, provenance, clear_cache, PRESETS,
+    fetch_prices, get_returns, data_health, provenance, clear_cache,
+    average_dollar_volume, PRESETS,
 )
 from src.analytics import correlation_matrix, covariance_matrix
 from src.risk import monte_carlo, parametric_var, var_backtest
 from src.factors import factor_exposures
 from src.strategies import risk_contributions, risk_parity_weights, vol_target
 from src.scenarios import HISTORICAL_REGIMES, replay_returns
+from src.liquidity import days_to_liquidate, liquidity_profile
 
 st.set_page_config(page_title="Portfolio Risk Engine", layout="centered")
 
@@ -116,6 +118,12 @@ if len(tickers) < 2:
 @st.cache_data(ttl=3600, show_spinner="Fetching market data…")
 def load_universe(tickers_tuple: tuple[str, ...], period: str = "2y"):
     return fetch_prices(list(tickers_tuple), period=period)
+
+
+@st.cache_data(ttl=3600, show_spinner="Loading volume data…")
+def load_adv(tickers_tuple: tuple[str, ...]):
+    """Average daily dollar volume per ticker (recent 3-month lookback)."""
+    return average_dollar_volume(list(tickers_tuple))
 
 
 try:
@@ -324,6 +332,64 @@ st.caption(
     f"Methodology: 10,000-path bootstrap Monte Carlo over a 252-day horizon, "
     f"resampled from {source_txt}. {alloc_label.capitalize()} allocation{lev_txt}."
 )
+
+# ---- Liquidity: how fast could you actually get out? ----
+def _fmt_days(d: float) -> str:
+    """Human days: infinity for no-volume names, <1 day rounded sensibly."""
+    if not np.isfinite(d):
+        return "∞"
+    if d < 0.1:
+        return "<0.1d"
+    if d < 10:
+        return f"{d:.1f}d"
+    return f"{d:.0f}d"
+
+
+with st.expander("Liquidity — how fast could you exit?"):
+    lc1, lc2 = st.columns(2)
+    book = lc1.number_input(
+        "Portfolio size ($)", min_value=10_000, max_value=5_000_000_000,
+        value=1_000_000, step=100_000,
+        help="Total dollars invested. Position sizes — and so the days to unwind "
+             "them — scale from this.")
+    participation = lc2.slider(
+        "Max daily participation (% of ADV)", 5, 50, 20, step=5,
+        help="How much of a name's average daily dollar volume you'll be before "
+             "your own trading moves the price. Risk desks use ~10–20%.") / 100
+
+    try:
+        adv = load_adv(tuple(tickers)).reindex(loaded).fillna(0.0)
+        dtl = days_to_liquidate(weights, adv, book_value=book,
+                                participation_rate=participation)
+        prof = liquidity_profile(dtl)
+
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Full-exit horizon", _fmt_days(prof["full_exit_days"]))
+        m2.metric("Exitable in 1 day", f"{prof['pct_exitable_1day']:.0%}")
+        m3.metric("Avg position horizon", _fmt_days(prof["weighted_avg_days"]))
+
+        chart_days = dtl["days"].replace([np.inf, -np.inf], np.nan).dropna()
+        if not chart_days.empty:
+            st.bar_chart(chart_days.rename("days to liquidate"), horizontal=True)
+
+        caption = (
+            f"Days to unwind a **${book:,.0f}** {alloc_label} book at "
+            f"{participation:.0%} of each name's average daily dollar volume "
+            f"(recent 3-month lookback). "
+        )
+        if prof["least_liquid"] is not None:
+            caption += (
+                f"**{prof['least_liquid']}** is the bottleneck at "
+                f"{_fmt_days(prof['full_exit_days'])} to fully exit. "
+            )
+        if prof["no_volume"]:
+            caption += (
+                f"*No volume feed for {', '.join(prof['no_volume'])} "
+                "(e.g. FX/futures on Yahoo) — excluded, not estimated.*"
+            )
+        st.caption(caption)
+    except Exception as exc:  # noqa: BLE001
+        st.caption(f"Liquidity data unavailable: {exc}")
 
 # ---- Data source & provenance (traceability) ----
 with st.expander("Data source & provenance"):

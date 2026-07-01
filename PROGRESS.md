@@ -50,9 +50,10 @@ risk-engine/
 - ✅ **Phase IV** — Streamlit dashboard, logo, institutional theme
 - ✅ **Phase V** — configurable universe, data integrity, VaR backtest, named
   factors, provenance, risk parity, vol targeting, risk contribution,
-  **true historical regime replication**
-- ⬜ **Phase V polish remaining** — liquidity modeling (days-to-liquidate);
-  optional auto "executive summary"; further UI refinement
+  **true historical regime replication**, **liquidity modeling
+  (days-to-liquidate via participation-rate model)**
+- ⬜ **Phase V polish remaining** — optional auto "executive summary";
+  further UI refinement
 - ⬜ **Phase VI** — deploy to Railway/Render for the live recruiter link
   (Procfile + requirements.txt already set up)
 
@@ -82,8 +83,10 @@ risk-engine/
 
 ## Good next steps to offer
 
-1. **Liquidity modeling** (days-to-liquidate from average dollar volume — needs
-   adding volume to the fetch + a portfolio notional input; keep it defensible,
-   no fake basis-point precision).
-2. **Phase VI deployment** to a live URL (the resume link — the whole point).
-3. UI polish / optional auto-generated risk summary.
+1. **Phase VI deployment** to a live URL (the resume link — the whole point).
+   Streamlit Community Cloud is the fastest free path; Procfile + requirements
+   are already set for Railway/Render too.
+2. UI polish / optional auto-generated executive-summary paragraph (built from
+   the engine's own numbers — no LLM data).
+3. Extend liquidity: per-asset liquidity-adjusted VaR, or a book-size slider
+   preset that showcases a small/mid-cap basket where days-to-liquidate bites.

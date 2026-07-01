@@ -91,12 +91,26 @@ def _cache_is_fresh(meta_path: str, max_age_hours: float) -> bool:
     return age <= datetime.timedelta(hours=max_age_hours)
 
 
+def _dv_cache_path(tickers: list[str], period: str) -> str:
+    """Cache filename for a universe's daily dollar-volume history."""
+    key = hashlib.md5((",".join(tickers) + "|" + period + "|dv").encode()).hexdigest()[:12]
+    return os.path.join(DATA_DIR, f"dollarvol_{key}.parquet")
+
+
 def clear_cache(tickers: list[str] | None = None, period: str = "2y") -> None:
     """Delete the disk cache + provenance for a universe, forcing a fresh pull."""
-    cache_path = _cache_path(_clean(tickers), period)
-    for path in (cache_path, _meta_path(cache_path)):
+    cleaned = _clean(tickers)
+    price_cache = _cache_path(cleaned, period)
+    # Clear both the price cache and the (independently-fetched) dollar-volume
+    # cache so a Refresh re-pulls everything the dashboard shows.
+    for path in (price_cache, _meta_path(price_cache)):
         if os.path.exists(path):
             os.remove(path)
+    for dv_period in ("6mo",):
+        dv_cache = _dv_cache_path(cleaned, dv_period)
+        for path in (dv_cache, _meta_path(dv_cache)):
+            if os.path.exists(path):
+                os.remove(path)
 
 
 def fetch_prices(tickers: list[str] | None = None, period: str = "2y",
@@ -185,6 +199,77 @@ def provenance(tickers: list[str] | None = None, period: str = "2y") -> dict | N
         with open(meta_path, encoding="utf-8") as fh:
             return json.load(fh)
     return None
+
+
+def fetch_dollar_volume(tickers: list[str] | None = None, period: str = "6mo",
+                        use_cache: bool = True,
+                        max_age_hours: float = CACHE_MAX_AGE_HOURS) -> pd.DataFrame:
+    """
+    Daily DOLLAR volume (adjusted close x share volume) per asset, from Yahoo.
+
+    Dollar volume — not share count — is the liquidity metric that matters: a
+    million shares of a $5 stock and a million shares of a $500 stock absorb
+    wildly different amounts of capital. Same freshness-aware cache + provenance
+    as prices, so a deployed app never rate-limits or serves stale figures.
+
+    Assets that report no volume (Yahoo returns 0 for FX pairs, for instance)
+    come back as columns of zeros — we surface that honestly downstream rather
+    than inventing a liquidity number.
+    """
+    tickers = _clean(tickers)
+    if not tickers:
+        raise ValueError("No tickers supplied.")
+
+    os.makedirs(DATA_DIR, exist_ok=True)
+    cache_path = _dv_cache_path(tickers, period)
+    meta_path = _meta_path(cache_path)
+
+    if use_cache and os.path.exists(cache_path) and _cache_is_fresh(meta_path, max_age_hours):
+        return pd.read_parquet(cache_path)
+
+    raw = yf.download(tickers, period=period, auto_adjust=True, progress=False,
+                      repair=True, timeout=30)
+
+    # Normalize the multi- vs single-ticker column shapes, same as fetch_prices.
+    if isinstance(raw.columns, pd.MultiIndex):
+        close, volume = raw["Close"], raw["Volume"]
+    else:
+        close = raw[["Close"]].copy(); close.columns = tickers[:1]
+        volume = raw[["Volume"]].copy(); volume.columns = tickers[:1]
+
+    dollar_vol = (close * volume).dropna(axis=1, how="all")
+    if dollar_vol.empty:
+        raise RuntimeError("No volume history for that universe.")
+
+    if use_cache:
+        dollar_vol.to_parquet(cache_path)
+        meta = {
+            "source": "Yahoo Finance (via yfinance)",
+            "metric": "daily dollar volume (adj close x volume)",
+            "fetched_at_utc": datetime.datetime.now(datetime.timezone.utc)
+                              .isoformat(timespec="seconds"),
+            "symbols": list(dollar_vol.columns),
+            "period": period,
+            "rows": len(dollar_vol),
+            "yfinance_version": getattr(yf, "__version__", "unknown"),
+        }
+        with open(meta_path, "w", encoding="utf-8") as fh:
+            json.dump(meta, fh, indent=2)
+    return dollar_vol
+
+
+def average_dollar_volume(tickers: list[str] | None = None, period: str = "6mo",
+                          lookback_days: int = 63, **kwargs) -> pd.Series:
+    """
+    Mean daily dollar volume over the last `lookback_days` (default ~3 months of
+    trading), as a Series indexed by ticker. Recent volume, not a multi-year
+    average, is what tells you how much a name can absorb *today*.
+
+    Assets with no volume data (e.g. Yahoo FX pairs) return 0.0 — a flag for the
+    caller to treat as "not liquidatable from this feed," never a fabricated fill.
+    """
+    dv = fetch_dollar_volume(tickers, period=period, **kwargs)
+    return dv.tail(lookback_days).mean().fillna(0.0)
 
 
 def data_health(prices: pd.DataFrame) -> dict:
