@@ -54,7 +54,13 @@ risk-engine/
   (days-to-liquidate via participation-rate model)**, **Merton jump-diffusion
   Monte Carlo engine (fat-tailed alternative to the bootstrap)**
 - ✅ **Regression test suite** (`tests/test_engine.py`) — math-invariant tests +
-  full-app boot test; run `python -m tests.test_engine` or `pytest`
+  closed-form validation (Gaussian CVaR, Sharpe) + full-app boot test; run
+  `python -m tests.test_engine` or `pytest`
+- ✅ **Data engine speed** — one Yahoo download now fills both price + dollar-volume
+  caches (cold load = 1 round-trip, not 2); Sharpe ratio vs live ^IRX risk-free rate
+- ✅ **Visual upgrade** — themed Plotly charts (beige/bronze); hero Monte Carlo
+  fan chart (outcome cone) under the verdict; themed histogram, risk-contribution,
+  factor, and liquidity charts
 - ⬜ **Phase V polish remaining** — optional auto "executive summary";
   further UI refinement
 - ⬜ **Phase VI** — deploy to Railway/Render for the live recruiter link

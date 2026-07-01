@@ -14,6 +14,7 @@ so the engine speaks to any audience — not just one watchlist.
 import numpy as np
 import pandas as pd
 import streamlit as st
+import plotly.graph_objects as go
 
 from src.ingestion import (
     fetch_prices, get_returns, data_health, provenance, clear_cache,
@@ -76,6 +77,82 @@ h1, h2, h3 { color: #3F3B35; font-weight: 400; }
     border-radius: 6px !important; background: #ECE7DD !important; }
 </style>
 """, unsafe_allow_html=True)
+
+# ---- Themed Plotly palette + chart helpers (institutional beige/bronze) ----
+BRONZE = "#9A7B4F"
+BRONZE_DK = "#8A6A3C"
+CHARCOAL = "#3F3B35"
+BAND_OUTER = "rgba(154,123,79,0.14)"   # light bronze — 5–95 percentile cone
+BAND_INNER = "rgba(154,123,79,0.30)"   # medium bronze — 25–75 percentile cone
+GRID = "rgba(63,59,53,0.12)"
+AXIS_LINE = "rgba(63,59,53,0.28)"
+
+PLOTLY_CFG = {"displayModeBar": False, "staticPlot": False}
+
+
+def _style_fig(fig, height: int = 300):
+    """Apply the calm serif/beige institutional theme to any Plotly figure."""
+    fig.update_layout(
+        height=height,
+        margin=dict(l=8, r=8, t=8, b=8),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="Georgia, 'Times New Roman', serif", color=CHARCOAL, size=13),
+        showlegend=False,
+        bargap=0.12,
+        hoverlabel=dict(bgcolor="#F4F1EA", font=dict(family="Georgia, serif", color=CHARCOAL)),
+    )
+    fig.update_xaxes(gridcolor=GRID, zeroline=False, linecolor=AXIS_LINE, ticks="outside",
+                     tickcolor=AXIS_LINE)
+    fig.update_yaxes(gridcolor=GRID, zeroline=True, zerolinecolor=AXIS_LINE, linecolor=AXIS_LINE)
+    return fig
+
+
+def fan_chart(bands: dict):
+    """Monte Carlo outcome cone: median path + 25–75 and 5–95 percentile bands."""
+    d = bands["days"]
+
+    def p(a):
+        return np.asarray(a) * 100.0
+
+    fig = go.Figure()
+    # Outer 5–95 cone (draw upper first, then lower with fill-to-previous)
+    fig.add_trace(go.Scatter(x=d, y=p(bands["p95"]), line=dict(width=0), hoverinfo="skip"))
+    fig.add_trace(go.Scatter(x=d, y=p(bands["p5"]), fill="tonexty", fillcolor=BAND_OUTER,
+                             line=dict(width=0), hoverinfo="skip"))
+    # Inner 25–75 cone
+    fig.add_trace(go.Scatter(x=d, y=p(bands["p75"]), line=dict(width=0), hoverinfo="skip"))
+    fig.add_trace(go.Scatter(x=d, y=p(bands["p25"]), fill="tonexty", fillcolor=BAND_INNER,
+                             line=dict(width=0), hoverinfo="skip"))
+    # Median path
+    fig.add_trace(go.Scatter(x=d, y=p(bands["p50"]), line=dict(color=CHARCOAL, width=2.2),
+                             hovertemplate="Day %{x}: %{y:.1f}%<extra>median</extra>"))
+    fig.add_hline(y=0, line=dict(color=AXIS_LINE, width=1, dash="dot"))
+    fig.update_layout(xaxis_title="Trading days", yaxis_title="Cumulative return (%)")
+    return _style_fig(fig, height=300)
+
+
+def outcome_hist(total_returns, cvar: float):
+    """Themed histogram of simulated 1-year outcomes with the CVaR line marked."""
+    fig = go.Figure(go.Histogram(x=np.asarray(total_returns) * 100, nbinsx=48,
+                                 marker=dict(color=BRONZE, line=dict(width=0)), opacity=0.9))
+    fig.add_vline(x=-cvar * 100, line=dict(color=CHARCOAL, width=2, dash="dash"),
+                  annotation_text="CVaR", annotation_position="top left",
+                  annotation_font=dict(color=CHARCOAL, size=12))
+    fig.update_layout(xaxis_title="1-year return (%)", yaxis_title="Simulations")
+    return _style_fig(fig, height=280)
+
+
+def hbar(series: pd.Series, color=BRONZE, pct: bool = False, title_x: str = ""):
+    """Themed horizontal bar chart for a single labeled series (factors, etc.)."""
+    x = series.values * (100 if pct else 1)
+    fig = go.Figure(go.Bar(
+        x=x, y=list(series.index), orientation="h",
+        marker=dict(color=color),
+        hovertemplate="%{y}: %{x:.2f}" + ("%" if pct else "") + "<extra></extra>"))
+    fig.update_layout(xaxis_title=title_x)
+    return _style_fig(fig, height=max(160, 30 * len(series) + 40))
+
 
 # ---- Header: crest + wordmark ----
 with open("assets/logo.svg", "r", encoding="utf-8") as f:
@@ -277,6 +354,14 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
+# ---- Hero visual: the cone of simulated outcomes ----
+st.plotly_chart(fan_chart(mc["path_bands"]), width="stretch", config=PLOTLY_CFG)
+st.caption(
+    "Each simulated path compounds a year of daily returns. The dark line is the "
+    "median outcome; the shaded cones are the 25–75% and 5–95% ranges — the lower "
+    "edge is the tail the CVaR above measures. Change any setting to watch the cone move."
+)
+
 # ---- Supporting context, only if you want it ----
 with st.expander("See the full risk breakdown"):
     st.caption(f"Universe ({len(loaded)}): {', '.join(loaded)}")
@@ -305,10 +390,20 @@ with st.expander("See the full risk breakdown"):
     # --- Risk-contribution decomposition (where the risk actually lives) ---
     st.markdown("###### Risk contribution by asset")
     rc = risk_contributions(weights, cov)
-    st.bar_chart(
-        pd.DataFrame({"dollar weight": rc["weight"], "risk share": rc["risk_pct"]}),
-        horizontal=True,
-    )
+    rc_fig = go.Figure()
+    rc_fig.add_trace(go.Bar(
+        y=list(rc.index), x=rc["weight"].values * 100, orientation="h",
+        name="dollar weight", marker=dict(color="#CBBB94"),
+        hovertemplate="%{y} weight: %{x:.1f}%<extra></extra>"))
+    rc_fig.add_trace(go.Bar(
+        y=list(rc.index), x=rc["risk_pct"].values * 100, orientation="h",
+        name="risk share", marker=dict(color=BRONZE_DK),
+        hovertemplate="%{y} risk: %{x:.1f}%<extra></extra>"))
+    rc_fig = _style_fig(rc_fig, height=max(200, 46 * len(rc)))
+    rc_fig.update_layout(
+        barmode="group", xaxis_title="% of portfolio", showlegend=True,
+        legend=dict(orientation="h", y=1.14, x=0, font=dict(size=11)))
+    st.plotly_chart(rc_fig, width="stretch", config=PLOTLY_CFG)
     top = rc["risk_pct"].idxmax()
     st.caption(
         f"Share of total portfolio volatility per asset. {top} contributes the most "
@@ -328,7 +423,8 @@ with st.expander("See the full risk breakdown"):
     st.dataframe(corr.style.format("{:.2f}").map(beige_scale))
 
     st.markdown("###### Distribution of simulated 1-year outcomes")
-    st.bar_chart(np.histogram(mc["total_returns"], bins=40)[0])
+    st.plotly_chart(outcome_hist(mc["total_returns"], mc["cvar"]),
+                    width="stretch", config=PLOTLY_CFG)
     if mc.get("engine") == "jump-diffusion":
         jp = mc["jump_params"]
         st.caption(
@@ -358,7 +454,8 @@ with st.expander("See the full risk breakdown"):
     st.markdown("###### Factor exposures")
     try:
         fx = factor_exposures(port_returns)
-        st.bar_chart(pd.Series(fx["betas"], name="beta"), horizontal=True)
+        st.plotly_chart(hbar(pd.Series(fx["betas"]), color=BRONZE, title_x="beta"),
+                        width="stretch", config=PLOTLY_CFG)
         st.caption(
             f"Market beta {fx['betas']['Market']:+.2f} · "
             f"R-squared {fx['r_squared']:.0%} · "
@@ -414,9 +511,10 @@ with st.expander("Liquidity — how fast could you exit?"):
         m2.metric("Exitable in 1 day", f"{prof['pct_exitable_1day']:.0%}")
         m3.metric("Avg position horizon", _fmt_days(prof["weighted_avg_days"]))
 
-        chart_days = dtl["days"].replace([np.inf, -np.inf], np.nan).dropna()
+        chart_days = dtl["days"].replace([np.inf, -np.inf], np.nan).dropna().sort_values()
         if not chart_days.empty:
-            st.bar_chart(chart_days.rename("days to liquidate"), horizontal=True)
+            st.plotly_chart(hbar(chart_days, color=BRONZE, title_x="days to liquidate"),
+                            width="stretch", config=PLOTLY_CFG)
 
         caption = (
             f"Days to unwind a **${book:,.0f}** {alloc_label} book at "

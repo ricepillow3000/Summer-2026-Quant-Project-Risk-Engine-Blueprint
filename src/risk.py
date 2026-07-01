@@ -144,8 +144,9 @@ def monte_carlo(
     # Each row = one simulated year of daily returns
     sampled = rng.choice(port_returns, size=(n_simulations, horizon_days), replace=True)
 
-    # Compound daily returns into a final portfolio value (starting at $1)
-    final_values = np.prod(1 + sampled, axis=1)
+    # Compound into cumulative value paths (start = $1); last column = final value
+    value_paths = np.cumprod(1 + sampled, axis=1)
+    final_values = value_paths[:, -1]
     total_returns = final_values - 1
 
     # Risk metrics on the simulated distribution
@@ -156,6 +157,7 @@ def monte_carlo(
     return {
         "final_values": final_values,
         "total_returns": total_returns,
+        "path_bands": _path_bands(value_paths, horizon_days),
         "median_return": float(np.median(total_returns)),
         "mean_return": float(np.mean(total_returns)),
         "var": sim_var,
@@ -167,6 +169,21 @@ def monte_carlo(
         "horizon_days": horizon_days,
         "confidence": confidence,
         "engine": "bootstrap",
+    }
+
+
+def _path_bands(value_paths: np.ndarray, horizon_days: int) -> dict:
+    """
+    Percentile bands of the simulated cumulative-value paths, for a fan chart.
+
+    Returns each band as a RETURN series (value - 1) over the horizon, so the
+    y-axis reads directly in profit/loss terms. p5..p95 form the outcome cone;
+    p50 is the median path.
+    """
+    pct = np.percentile(value_paths, [5, 25, 50, 75, 95], axis=0) - 1.0
+    return {
+        "days": np.arange(1, horizon_days + 1),
+        "p5": pct[0], "p25": pct[1], "p50": pct[2], "p75": pct[3], "p95": pct[4],
     }
 
 
@@ -249,8 +266,9 @@ def jump_diffusion_mc(
     jump = (n_jumps * params["mu_j"]
             + params["sigma_j"] * np.sqrt(n_jumps) * rng.standard_normal(shape))
 
-    total_log = (diffusion + jump).sum(axis=1)     # compound in log-space
-    final_values = np.exp(total_log)
+    cum_log = np.cumsum(diffusion + jump, axis=1)  # compound in log-space, per day
+    value_paths = np.exp(cum_log)
+    final_values = value_paths[:, -1]
     total_returns = final_values - 1
 
     sim_var = float(-np.percentile(total_returns, (1 - confidence) * 100))
@@ -260,6 +278,7 @@ def jump_diffusion_mc(
     return {
         "final_values": final_values,
         "total_returns": total_returns,
+        "path_bands": _path_bands(value_paths, horizon_days),
         "median_return": float(np.median(total_returns)),
         "mean_return": float(np.mean(total_returns)),
         "var": sim_var,
