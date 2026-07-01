@@ -51,7 +51,8 @@ risk-engine/
 - ✅ **Phase V** — configurable universe, data integrity, VaR backtest, named
   factors, provenance, risk parity, vol targeting, risk contribution,
   **true historical regime replication**, **liquidity modeling
-  (days-to-liquidate via participation-rate model)**
+  (days-to-liquidate via participation-rate model)**, **Merton jump-diffusion
+  Monte Carlo engine (fat-tailed alternative to the bootstrap)**
 - ⬜ **Phase V polish remaining** — optional auto "executive summary";
   further UI refinement
 - ⬜ **Phase VI** — deploy to Railway/Render for the live recruiter link

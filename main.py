@@ -20,7 +20,7 @@ from src.ingestion import (
     average_dollar_volume, PRESETS,
 )
 from src.analytics import correlation_matrix, covariance_matrix
-from src.risk import monte_carlo, parametric_var, var_backtest
+from src.risk import monte_carlo, jump_diffusion_mc, parametric_var, var_backtest
 from src.factors import factor_exposures
 from src.strategies import risk_contributions, risk_parity_weights, vol_target
 from src.scenarios import HISTORICAL_REGIMES, replay_returns
@@ -186,6 +186,13 @@ lev_txt = f", levered {leverage:.2f}×" if use_vt else ""
 
 with st.container(border=True):
     st.markdown('<div class="panel-label">Stress test</div>', unsafe_allow_html=True)
+    engine = st.radio(
+        "Return model", ["Bootstrap (empirical)", "Jump-diffusion (Merton)"],
+        horizontal=True,
+        help="Bootstrap resamples real historical days — it can only replay tails "
+             "it has already seen. Jump-diffusion (Merton 1976) adds Poisson jumps "
+             "on top of Gaussian diffusion, generating NEW extremes — deeper crashes "
+             "and jump clusters — for a fatter, more honest tail.")
     mode = st.selectbox(
         "Scenario", ["Custom shock (sliders)"] + list(HISTORICAL_REGIMES.keys()),
         help="Custom: set your own drawdown and volatility shock. Or replay the "
@@ -233,7 +240,9 @@ else:
     is_shocked = True
     scenario_label = mode
 
-mc = monte_carlo(shocked_returns, sim_weights, n_simulations=10_000, horizon_days=252)
+use_jd = engine.startswith("Jump-diffusion")
+mc_fn = jump_diffusion_mc if use_jd else monte_carlo
+mc = mc_fn(shocked_returns, sim_weights, n_simulations=10_000, horizon_days=252)
 
 # ---- Headline verdict ----
 if scenario_label:
@@ -296,6 +305,15 @@ with st.expander("See the full risk breakdown"):
 
     st.markdown("###### Distribution of simulated 1-year outcomes")
     st.bar_chart(np.histogram(mc["total_returns"], bins=40)[0])
+    if mc.get("engine") == "jump-diffusion":
+        jp = mc["jump_params"]
+        st.caption(
+            f"Merton jump-diffusion: the engine flagged **{jp['n_jumps']} jump days** "
+            f"in {jp['n_days']} (moves beyond {jp['k']:.0f}σ), implying "
+            f"**~{jp['lambda_daily'] * 252:.1f} jumps/year** on a diffusion vol of "
+            f"{jp['sigma_d'] * np.sqrt(252):.0%}. Poisson jumps let the tail run "
+            "deeper than any single historical day — a fatter, more honest crash."
+        )
 
     # --- VaR methods + backtest (validates the model, not just reports it) ---
     st.markdown("###### Value at Risk — methods & backtest")
@@ -328,9 +346,13 @@ with st.expander("See the full risk breakdown"):
 
 source_txt = f"the {scenario_label} window" if scenario_label else \
     "2 years of daily historical returns"
+engine_txt = (
+    "Merton jump-diffusion (Poisson jumps on Gaussian diffusion), calibrated to"
+    if use_jd else "bootstrap Monte Carlo, resampled from"
+)
 st.caption(
-    f"Methodology: 10,000-path bootstrap Monte Carlo over a 252-day horizon, "
-    f"resampled from {source_txt}. {alloc_label.capitalize()} allocation{lev_txt}."
+    f"Methodology: 10,000-path {engine_txt} {source_txt}, over a 252-day horizon. "
+    f"{alloc_label.capitalize()} allocation{lev_txt}."
 )
 
 # ---- Liquidity: how fast could you actually get out? ----

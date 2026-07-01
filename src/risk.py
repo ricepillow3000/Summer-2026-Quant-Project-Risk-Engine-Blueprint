@@ -148,6 +148,112 @@ def monte_carlo(
         "n_simulations": n_simulations,
         "horizon_days": horizon_days,
         "confidence": confidence,
+        "engine": "bootstrap",
+    }
+
+
+def calibrate_jump_diffusion(port_returns, k: float = 3.0) -> dict:
+    """
+    Split a daily return series into a Gaussian DIFFUSION part and a discrete
+    JUMP part, then estimate Merton (1976) jump-diffusion parameters from data.
+
+    Method — transparent k-sigma thresholding, not a black box:
+      1. Work in log-returns, so diffusion and jumps add cleanly.
+      2. Flag any day more than k standard deviations from the mean as a JUMP.
+      3. Diffusion mu/sigma come from the CALM (non-jump) days.
+      4. Jump intensity lambda = jump-days / total-days; jump-size mean and std
+         come from the excess move on JUMP days.
+
+    Every parameter is estimated from the real series — nothing is assumed. The
+    split is mean-consistent by construction: mu_d + lambda*mu_j equals the
+    empirical mean exactly. (Full Merton calibration uses MLE/EM; thresholding
+    is the honest, reproducible version a reviewer can re-derive by hand.)
+
+    Returns daily-scale parameters plus the jump count for display.
+    """
+    r = np.asarray(port_returns, dtype=float)
+    lr = np.log1p(r)                       # log-returns: diffusion + jumps add
+    m, s = float(lr.mean()), float(lr.std())
+    if s == 0:                             # degenerate constant series
+        return {"mu_d": m, "sigma_d": 0.0, "lambda_daily": 0.0,
+                "mu_j": 0.0, "sigma_j": 0.0, "k": k, "n_jumps": 0, "n_days": len(lr)}
+
+    is_jump = np.abs(lr - m) > k * s
+    calm, jumps = lr[~is_jump], lr[is_jump]
+
+    mu_d = float(calm.mean()) if calm.size else m
+    sigma_d = float(calm.std()) if calm.size > 1 else s
+    lambda_daily = float(is_jump.mean())
+    if jumps.size:
+        mu_j = float(jumps.mean() - mu_d)          # jump = move in EXCESS of drift
+        sigma_j = float(jumps.std()) if jumps.size > 1 else 0.0
+    else:
+        mu_j = sigma_j = 0.0
+
+    return {
+        "mu_d": mu_d, "sigma_d": sigma_d, "lambda_daily": lambda_daily,
+        "mu_j": mu_j, "sigma_j": sigma_j,
+        "k": k, "n_jumps": int(is_jump.sum()), "n_days": int(lr.size),
+    }
+
+
+def jump_diffusion_mc(
+    returns: pd.DataFrame,
+    weights: np.ndarray,
+    n_simulations: int = 10_000,
+    horizon_days: int = 252,
+    confidence: float = 0.95,
+    k: float = 3.0,
+) -> dict:
+    """
+    Merton jump-diffusion Monte Carlo — same signature and output dict as
+    monte_carlo(), so it drops into the dashboard as an interchangeable engine.
+
+    Why it differs from the bootstrap: resampling can only ever replay tail days
+    it has already seen. A jump-diffusion process GENERATES new extreme paths —
+    two jumps landing in the same week, or a crash deeper than any single day in
+    the sample — so VaR/CVaR reflect what the process can produce, not just what
+    happened to occur in the last two years.
+
+    Each simulated daily log-return:
+        r_t = mu_d + sigma_d * Z          (diffusion)
+            + N_t*mu_j + sigma_j*sqrt(N_t)*Z'    (jumps, N_t ~ Poisson(lambda))
+    using that a sum of N_t iid Normal(mu_j, sigma_j^2) is Normal(N_t*mu_j,
+    N_t*sigma_j^2) — which lets us vectorize the whole jump term.
+    """
+    port_returns = portfolio_daily_returns(returns, weights).values
+    params = calibrate_jump_diffusion(port_returns, k=k)
+    rng = np.random.default_rng(seed=42)
+
+    shape = (n_simulations, horizon_days)
+    diffusion = params["mu_d"] + params["sigma_d"] * rng.standard_normal(shape)
+    n_jumps = rng.poisson(params["lambda_daily"], size=shape)
+    jump = (n_jumps * params["mu_j"]
+            + params["sigma_j"] * np.sqrt(n_jumps) * rng.standard_normal(shape))
+
+    total_log = (diffusion + jump).sum(axis=1)     # compound in log-space
+    final_values = np.exp(total_log)
+    total_returns = final_values - 1
+
+    sim_var = float(-np.percentile(total_returns, (1 - confidence) * 100))
+    threshold = np.percentile(total_returns, (1 - confidence) * 100)
+    sim_cvar = float(-total_returns[total_returns <= threshold].mean())
+
+    return {
+        "final_values": final_values,
+        "total_returns": total_returns,
+        "median_return": float(np.median(total_returns)),
+        "mean_return": float(np.mean(total_returns)),
+        "var": sim_var,
+        "cvar": sim_cvar,
+        "worst_case": float(total_returns.min()),
+        "best_case": float(total_returns.max()),
+        "prob_loss": float((total_returns < 0).mean()),
+        "n_simulations": n_simulations,
+        "horizon_days": horizon_days,
+        "confidence": confidence,
+        "engine": "jump-diffusion",
+        "jump_params": params,
     }
 
 
@@ -176,3 +282,20 @@ if __name__ == "__main__":
     print(f"  Worst simulated year : {mc['worst_case']:+.1%}")
     print(f"  Best simulated year  : {mc['best_case']:+.1%}")
     print(f"  Probability of loss  : {mc['prob_loss']:.1%}")
+
+    # Jump-diffusion engine — fat-tailed alternative to the bootstrap
+    print("\n--- Merton Jump-Diffusion Monte Carlo (same portfolio) ---")
+    jd = jump_diffusion_mc(returns, equal_weights)
+    p = jd["jump_params"]
+    print(f"  Calibration: {p['n_jumps']} jump days in {p['n_days']} "
+          f"(> {p['k']}sigma) -> {p['lambda_daily'] * 252:.1f} jumps/yr expected")
+    print(f"  Diffusion vol (annual): {p['sigma_d'] * np.sqrt(252):.1%}")
+    print(f"  1-Year VaR  (95%)    : {jd['var']:.1%}")
+    print(f"  1-Year CVaR (95%)    : {jd['cvar']:.1%}")
+    print(f"  Worst simulated year : {jd['worst_case']:+.1%}")
+    print("\n  Tail comparison (CVaR): "
+          f"bootstrap {mc['cvar']:.1%}  vs  jump-diffusion {jd['cvar']:.1%}")
+    # Mean-consistency check: mu_d + lambda*mu_j should match the empirical mean.
+    emp = float(np.log1p(port_returns.values).mean())
+    recon = p["mu_d"] + p["lambda_daily"] * p["mu_j"]
+    print(f"  Mean-consistency: empirical {emp:.2e} vs mu_d+lambda*mu_j {recon:.2e}")
