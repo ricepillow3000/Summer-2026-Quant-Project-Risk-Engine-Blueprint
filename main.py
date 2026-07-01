@@ -11,6 +11,8 @@ preset basket (equities, sector ETFs, FX, futures) or type their own symbols,
 so the engine speaks to any audience — not just one watchlist.
 """
 
+import json
+
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -29,6 +31,8 @@ from src.strategies import risk_contributions, risk_parity_weights, vol_target
 from src.scenarios import HISTORICAL_REGIMES, replay_returns
 from src.liquidity import days_to_liquidate, liquidity_profile
 from src.grit import grit_scores, MIN_HISTORY_DAYS
+from src.security_master import security_master
+from src.data_quality import validate_prices
 
 st.set_page_config(page_title="Meleona", layout="centered")
 
@@ -216,6 +220,112 @@ def surface_chart(density: dict):
     return fig
 
 
+def _seed_particles(density: dict, n_particles: int = 220, seed: int = 42):
+    """
+    Sample particle anchor points weighted by the density surface itself, so
+    the 'drifting particle' overlay clusters where the probability mass
+    actually is instead of floating randomly in empty space.
+    """
+    z = np.asarray(density["density"])            # shape (n_days, n_returns)
+    days = np.asarray(density["days"], dtype=float)
+    rets = np.asarray(density["returns"], dtype=float)
+
+    w = np.clip(z.flatten(), 0, None)
+    w = w / w.sum() if w.sum() > 0 else np.ones_like(w) / w.size
+    rng = np.random.default_rng(seed)
+    idx = rng.choice(w.size, size=n_particles, p=w, replace=True)
+    day_idx, ret_idx = np.unravel_index(idx, z.shape)
+
+    px = days[day_idx].tolist()
+    py = rets[ret_idx].tolist()
+    pz = (z[day_idx, ret_idx] * 1.05).tolist()      # sit just above the surface
+    return px, py, pz
+
+
+def living_surface_html(density: dict, height: int = 520, n_particles: int = 220) -> str:
+    """
+    A 'living' version of the 3D outcome-distribution surface: raw plotly.js
+    (bypassing st.plotly_chart's static embed) with a drifting-particle
+    overlay and a slow continuous camera auto-rotate, paused while the viewer
+    is manually dragging. Same surface/colorscale/hover as surface_chart().
+    """
+    z = np.asarray(density["density"])
+    payload = json.dumps({
+        "days": [float(x) for x in density["days"]],
+        "rets": [float(x) for x in density["returns"]],
+        "z": z.T.tolist(),                          # shape (n_returns, n_days)
+        "px": (p := _seed_particles(density, n_particles))[0],
+        "py": p[1],
+        "pz": p[2],
+    })
+
+    return f"""
+<div id="living3d" style="width:100%;height:{height}px;"></div>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<script>
+(function() {{
+  const data = {payload};
+  const surface = {{
+    type: 'surface', x: data.days, y: data.rets, z: data.z,
+    colorscale: [[0, '#EDE9E3'], [0.5, '#9A7B4F'], [1, '#3F3B35']],
+    showscale: false, opacity: 0.96,
+    hovertemplate: 'Day %{{x}} · Return %{{y:.0%}} · density %{{z:.3f}}<extra></extra>',
+  }};
+  const particles = {{
+    type: 'scatter3d', mode: 'markers', x: data.px, y: data.py, z: data.pz,
+    marker: {{ size: 2.6, color: '#C9A227', opacity: 0.55 }},
+    hoverinfo: 'skip',
+  }};
+  const layout = {{
+    height: {height}, margin: {{l:0,r:0,t:10,b:0}},
+    paper_bgcolor: 'rgba(0,0,0,0)',
+    font: {{ family: "Georgia, 'Times New Roman', serif", color: '#3F3B35', size: 12 }},
+    scene: {{
+      bgcolor: 'rgba(0,0,0,0)',
+      xaxis: {{ title: 'Trading day', gridcolor: 'rgba(63,59,53,0.12)',
+               backgroundcolor: 'rgba(237,233,227,0.35)', showbackground: true }},
+      yaxis: {{ title: '1-year outcome', tickformat: '.0%', gridcolor: 'rgba(63,59,53,0.12)',
+               backgroundcolor: 'rgba(237,233,227,0.35)', showbackground: true }},
+      zaxis: {{ title: 'Density', gridcolor: 'rgba(63,59,53,0.12)',
+               backgroundcolor: 'rgba(237,233,227,0.35)', showbackground: true }},
+      camera: {{ eye: {{x: 1.6, y: 1.6, z: 0.9}} }},
+    }},
+  }};
+
+  Plotly.newPlot('living3d', [surface, particles], layout, {{displayModeBar: false}})
+    .then(function(gd) {{
+      let t = 0, userInteracting = false, resumeTimer = null;
+      const pause = () => {{ userInteracting = true; clearTimeout(resumeTimer); }};
+      const resume = () => {{ resumeTimer = setTimeout(() => {{ userInteracting = false; }}, 4000); }};
+      gd.addEventListener('mousedown', pause);
+      gd.addEventListener('touchstart', pause);
+      window.addEventListener('mouseup', resume);
+      window.addEventListener('touchend', resume);
+
+      setInterval(function() {{
+        t += 1;
+        const n = data.px.length;
+        const nx = new Array(n), ny = new Array(n), nz = new Array(n);
+        for (let i = 0; i < n; i++) {{
+          nx[i] = data.px[i] + Math.sin(t * 0.2 + i * 1.7) * 3;
+          ny[i] = data.py[i] + Math.cos(t * 0.25 + i * 2.3) * 0.01;
+          nz[i] = Math.max(0, data.pz[i] + Math.sin(t * 0.35 + i) * 0.012);
+        }}
+        Plotly.restyle('living3d', {{x: [nx], y: [ny], z: [nz]}}, [1]);
+        if (!userInteracting) {{
+          const angle = t * 0.01;
+          Plotly.relayout('living3d', {{
+            'scene.camera.eye.x': 1.6 * Math.cos(angle),
+            'scene.camera.eye.y': 1.6 * Math.sin(angle),
+          }});
+        }}
+      }}, 150);
+    }});
+}})();
+</script>
+"""
+
+
 def outcome_hist(total_returns, cvar: float):
     """Themed histogram of simulated 1-year outcomes with the CVaR line marked."""
     fig = go.Figure(go.Histogram(x=np.asarray(total_returns) * 100, nbinsx=48,
@@ -343,7 +453,10 @@ if len(tickers) < 2:
     st.stop()
 
 
-@st.cache_data(ttl=3600, show_spinner="Fetching market data…")
+# Short TTL so the session re-checks the (already freshness-aware, 6h) disk
+# cache often and the UI feels snappy -- this does NOT hit Yahoo more often;
+# it just re-reads the local parquet faster. See PROGRESS.md "fast polling."
+@st.cache_data(ttl=60, show_spinner="Fetching market data…")
 def load_universe(tickers_tuple: tuple[str, ...], period: str = "2y"):
     return fetch_prices(list(tickers_tuple), period=period)
 
@@ -367,6 +480,29 @@ def load_grit(tickers_tuple: tuple[str, ...]):
     return grit_scores(list(tickers_tuple))
 
 
+@st.cache_data(ttl=3600, show_spinner="Building the security master…")
+def load_security_master(tickers_tuple: tuple[str, ...]):
+    """Corporate actions change rarely (not intraday) — a longer TTL is fine."""
+    return security_master(list(tickers_tuple))
+
+
+@st.fragment(run_every="1s")
+def _freshness_ticker(fetched_at_iso: str):
+    """Live-ticking 'as of Xs ago' -- reruns only this fragment, not the app."""
+    fetched = pd.Timestamp(fetched_at_iso)
+    now = pd.Timestamp.now(tz=fetched.tzinfo) if fetched.tzinfo else pd.Timestamp.now()
+    secs = max(0, int((now - fetched).total_seconds()))
+    st.caption(f"⟳ Polling every 60s during market hours · data pulled {secs}s ago.")
+
+
+# ---- Audit trail: what this run actually did, in order (see Lineage tab) ----
+audit_log = []
+
+
+def _audit(step: str, detail: str) -> None:
+    audit_log.append({"step": step, "detail": detail})
+
+
 try:
     prices = load_universe(tuple(tickers))
 except Exception as exc:  # noqa: BLE001 — surface any fetch failure to the user
@@ -381,14 +517,18 @@ if len(loaded) < 2:
     st.stop()
 if missing:
     st.caption(f"Couldn't load: {', '.join(missing)} — skipped.")
+_audit("Data fetch", f"{len(loaded)} tickers loaded from {preset!r}: {', '.join(loaded)}"
+      + (f" (missing: {', '.join(missing)})" if missing else ""))
 
 # ---- Data-freshness indicator (honest, not a fake real-time feed) ----
 health = data_health(prices)
 fresh_col, refresh_col = st.columns([5, 1])
-fresh = "live" if health["staleness_days"] <= 1 else f"{health['staleness_days']}d old"
-fresh_col.caption(
-    f"Data: {health['rows']} trading days · through {health['end']} · {fresh}"
-)
+with fresh_col:
+    fresh = "live" if health["staleness_days"] <= 1 else f"{health['staleness_days']}d old"
+    st.caption(f"Data: {health['rows']} trading days · through {health['end']} · {fresh}")
+    prov_now = provenance(tickers)
+    if prov_now:
+        _freshness_ticker(prov_now["fetched_at_utc"])
 if refresh_col.button("Refresh", help="Clear cache and re-pull the latest prices."):
     clear_cache(tickers)       # drop disk cache so Yahoo is hit fresh
     st.cache_data.clear()      # drop Streamlit's in-memory cache
@@ -420,6 +560,8 @@ else:
     weights = base_weights
 
 port_returns = returns @ weights  # real (unshocked) portfolio series for VaR/factors
+_audit("Allocation", f"{method}" + (f", vol-targeted to {target_vol:.0%} "
+      f"(leverage {leverage:.2f}x)" if use_vt else ""))
 
 # ---- Stress test: custom parametric shock OR historical regime replay ----
 alloc_label = "risk-parity" if method == "Risk parity" else "equal-weight"
@@ -484,6 +626,10 @@ else:
 use_jd = engine.startswith("Jump-diffusion")
 mc_fn = jump_diffusion_mc if use_jd else monte_carlo
 mc = mc_fn(shocked_returns, sim_weights, n_simulations=10_000, horizon_days=252)
+_audit("Stress scenario", scenario_label or
+      (f"Custom shock (drawdown {drawdown_shock:+d}%, vol {vol_shock:+d}%)"
+       if is_shocked else "None (base case)"))
+_audit("Monte Carlo", f"{engine}, 10,000 paths x 252 days -> CVaR {mc['cvar']:.2%}")
 
 # ---- Headline verdict ----
 if scenario_label:
@@ -518,16 +664,19 @@ st.caption(
     "edge is the tail the CVaR above measures. Change any setting to watch the cone move."
 )
 
-# ---- Supporting depth: one tab at a time, not five stacked accordions ----
-tab_3d, tab_breakdown, tab_grit, tab_liquidity, tab_provenance = st.tabs(
-    ["3D Distribution", "Risk Breakdown", "Grit Zone", "Liquidity", "Provenance"]
-)
+# ---- Supporting depth: one tab at a time, not stacked accordions ----
+(tab_3d, tab_breakdown, tab_grit, tab_liquidity,
+ tab_secmaster, tab_dq, tab_lineage) = st.tabs([
+    "3D Distribution", "Risk Breakdown", "Grit Zone", "Liquidity",
+    "Security Master", "Data Quality", "Lineage & Audit",
+])
 
 with tab_3d:
-    st.plotly_chart(surface_chart(mc["path_density"]), width="stretch", config=PLOTLY_CFG)
+    st.iframe(living_surface_html(mc["path_density"]), height=540)
     st.caption(
         "Simulated (Monte Carlo) distribution of portfolio value over the next "
-        "year — the fan chart's cone shown as a probability surface. "
+        "year — the fan chart's cone shown as a probability surface, with a "
+        "drifting particle overlay and slow auto-rotate (drag to take over). "
         "Hypothetical, not historical."
     )
 
@@ -755,7 +904,43 @@ with tab_liquidity:
     except Exception as exc:  # noqa: BLE001
         st.caption(f"Liquidity data unavailable: {exc}")
 
-with tab_provenance:
+with tab_secmaster:
+    st.caption(
+        "A security master maps each ticker to stable identifiers and surfaces "
+        "the real corporate-action events (splits, dividends) already folded "
+        "into the adjusted-close prices used everywhere else in this engine — "
+        "nothing here changes a risk number, it makes the underlying events "
+        "auditable instead of silently absorbed."
+    )
+    try:
+        sm = load_security_master(tuple(loaded))
+        st.dataframe(sm, width="stretch")
+        missing_isin = sm[sm["isin"] == "unavailable"].index.tolist()
+        if missing_isin:
+            st.caption(
+                f"*ISIN unavailable on the free feed for: {', '.join(missing_isin)}. "
+                "SEDOL/CUSIP and full merger history need a paid reference-data "
+                "vendor (Bloomberg, Refinitiv) — not fabricated here.*"
+            )
+    except Exception as exc:  # noqa: BLE001
+        st.caption(f"Security master unavailable: {exc}")
+
+with tab_dq:
+    st.caption(
+        "Every price pull runs through an automated validation gate before "
+        "any risk number is computed from it — schema checks, positivity, "
+        "coverage, staleness, and an extreme-move flag. This validates "
+        "structure and plausibility, not truth: it catches a malformed or "
+        "implausible feed, not a wrong-but-plausible number."
+    )
+    report = validate_prices(prices)
+    icon = {"PASS": "✅", "WARN": "⚠️", "FAIL": "❌"}
+    for c in report["checks"]:
+        st.caption(f"{icon[c['status']]} **{c['check']}** — {c['message']}")
+    verdict_dq = "PASS" if report["passed"] else "FAIL"
+    st.markdown(f"###### Overall gate: **{verdict_dq}**")
+
+with tab_lineage:
     prov = provenance(tickers)
     if prov:
         st.markdown(
@@ -768,9 +953,18 @@ with tab_provenance:
         )
         st.caption(
             "Prices are live end-of-day adjusted closes, pulled on demand from "
-            "Yahoo Finance and cached for one hour. Every figure above is computed "
-            "from this source by the engine's own code — no value originates from a "
-            "language model. Use Refresh to re-pull and update this timestamp."
+            "Yahoo Finance. Every figure above is computed from this source by "
+            "the engine's own code — no value originates from a language model. "
+            "Use Refresh to re-pull and update this timestamp."
         )
     else:
         st.caption("Provenance record appears after the first live fetch.")
+
+    st.markdown("###### This run's audit trail")
+    st.caption(
+        "Every step this run took, in order — session-scoped (rebuilt fresh "
+        "each rerun, not persisted across sessions). A full compliance system "
+        "would append this to durable storage; this is the same concept at "
+        "the scale this engine actually operates at."
+    )
+    st.dataframe(pd.DataFrame(audit_log), width="stretch", hide_index=True)

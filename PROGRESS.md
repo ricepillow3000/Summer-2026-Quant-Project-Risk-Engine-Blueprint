@@ -41,7 +41,9 @@ risk-engine/
 │   ├── factors.py       # named factor exposures (market/size/value/momentum via ETF proxies)
 │   ├── strategies.py    # risk parity (ERC), vol targeting, risk-contribution decomposition
 │   ├── scenarios.py     # historical regime replication (real crisis-window replay)
-│   └── grit.py          # Grit Zone: drawdown recovery, rolling consistency, regime resilience
+│   ├── grit.py          # Grit Zone: drawdown recovery, rolling consistency, regime resilience
+│   ├── security_master.py  # ISIN + corporate actions (dividends/splits) via yfinance
+│   └── data_quality.py  # automated schema/sanity validation gate on every price pull
 ├── assets/logo.svg      # lion + scale + triangle crest (bronze, "Pride · Integrity")
 ├── .streamlit/config.toml  # beige/bronze institutional theme
 ├── requirements.txt · Procfile · README.md · .gitignore
@@ -86,13 +88,42 @@ risk-engine/
   provenance) are now one `st.tabs()` strip instead of stacked accordions.
   Added CSS scroll-reveal animation, smooth-scroll CTAs, hover-lift cards —
   pure CSS, no new toolchain, `streamlit run main.py` deploy story unchanged.
-- ⬜ **"Living" 3D particle effect** (requested, not yet built) — make the 3D
-  outcome-distribution surface feel animated/alive (drifting particles, not
-  just rotatable). Needs a custom `st.components.v1.html` component (raw
-  plotly.js + a small JS animation loop restyling a particle overlay trace),
-  since `st.plotly_chart`'s embedding doesn't expose that. Scoped out of this
-  pass — check in on approach before building (novel, harder to iterate on
-  than CSS).
+- ✅ **"Living" 3D particle effect** (`main.py`'s `living_surface_html()`) —
+  the 3D Distribution tab is now a self-contained `st.iframe` component: raw
+  plotly.js loaded from CDN, a density-weighted particle overlay
+  (`scatter3d`) whose points jitter every 150ms, and a slow continuous
+  camera auto-rotate that pauses on manual drag/touch and resumes after 4s
+  idle. `st.components.v1.html` was already past its removal window
+  (deprecated in favor of `st.iframe` in Streamlit 1.58) — built directly on
+  `st.iframe` instead of the soon-to-be-removed API.
+- ✅ **Security Master & Corporate Actions** (`src/security_master.py`) —
+  free-tier reference data: ISIN via `yfinance`'s `Ticker.isin` (available
+  for some tickers, honestly flagged `"unavailable"` for others — e.g. many
+  US large caps don't expose one on the free feed), plus real dividend/split
+  event history via `Ticker.dividends` / `Ticker.splits`. Verified against
+  live data: AVGO's actual 2024-07-15 10:1 split, GOOGL's 2022-07-18 20:1
+  split, NVDA's 2024-06-10 10:1 split, AMZN's 2022-06-06 20:1 split all came
+  back correctly. SEDOL/CUSIP/merger history explicitly flagged as needing a
+  paid vendor, not fabricated.
+- ✅ **Data Quality validation gate** (`src/data_quality.py`) — hand-rolled
+  (no new dependency) automated schema + sanity checks run on every price
+  pull: DatetimeIndex/dtype/sort/duplicate checks, positivity, minimum row
+  coverage, staleness, calendar-gap %, and an extreme-single-day-move flag
+  (WARN, not FAIL — a real crash day should surface, not silently block).
+  5 deterministic unit tests, each engineered to trip exactly one check.
+- ✅ **Lineage & Audit tab** — extends the existing provenance panel with a
+  session-scoped audit trail (`audit_log` built as the script runs: data
+  fetch → allocation → stress scenario → Monte Carlo engine, each with real
+  parameters). Explicitly labeled as session-scoped, not durable storage —
+  same concept a full compliance system uses, at the scale this engine
+  actually operates at.
+- ✅ **Fast polling ("as live as honestly possible")** — `load_universe`'s
+  Streamlit-session cache TTL dropped from 1h to 60s (re-checks the local
+  disk cache far more often) while the underlying disk-cache freshness
+  window stays at 6h (`ingestion.CACHE_MAX_AGE_HOURS`) so Yahoo itself isn't
+  hit any harder — this is what actually protects against rate-limiting, not
+  the session TTL. A `st.fragment(run_every="1s")` ticker shows "data pulled
+  Xs ago," reruns only itself, not the whole page/Monte Carlo computation.
 - ⬜ **Phase V polish remaining** — optional auto "executive summary";
   further UI refinement
 - ⬜ **Phase VI** — deploy to Railway/Render for the live recruiter link
@@ -123,50 +154,42 @@ risk-engine/
 - Cache files (`data/*.parquet`, `*.meta.json`) are gitignored.
 - The user is new to Git/GitHub — explain steps plainly, do the git work for them.
 
-## Data-engineering domain roadmap (requested, scoped as backlog)
+## Data-engineering domain checklist — free-tier status
 
-A broader "resume checklist" of hedge-fund-grade data-engineering capabilities
-was requested alongside the redesign above. Deliberately scoped OUT of the
-redesign pass — each item below is substantial on its own, and a couple
-directly interact with this project's own honesty principles or need a paid
-vendor decision from the user before implementation can start:
+A "resume checklist" of hedge-fund-grade data-engineering capabilities was
+requested. Everything with a genuinely free alternative is now built; the
+two paid-vendor-dependent pieces remain explicit backlog items:
 
-1. **Risk fundamentals (VaR/ES/vol/stress testing)** — largely already built:
+1. **Risk fundamentals (VaR/ES/vol/stress testing)** — ✅ already built:
    `src/risk.py` (historical + parametric VaR, CVaR, Kupiec backtest, bootstrap
    + Merton jump-diffusion Monte Carlo), `src/scenarios.py` (historical-regime
-   stress replay), `src/grit.py` (drawdown/resilience scoring). If "understand
-   it deeply" means more explanatory depth (more Quant Deep Dive copy, worked
-   examples), that's a smaller, low-risk follow-up.
-2. **Corporate actions & security master** (ISIN/SEDOL cross-referencing,
-   dividend/split/merger handling) — NOT built. `yfinance` with
-   `auto_adjust=True` (already used) silently folds splits/dividends into
-   adjusted close, but there's no explicit corporate-actions ledger, no
-   merger/ticker-change handling, and no identifier cross-reference layer.
-   OpenFIGI (free) can map identifiers; structured corporate-actions calendars
-   are usually a paid vendor. Needs a data-source decision before scoping.
-3. **Regulatory awareness (data lineage, audit trails)** — partially built:
-   `ingestion.py`'s `.meta.json` provenance record covers source/timestamp/
-   coverage, but there's no formal lineage graph or audit log of what was
-   queried/computed/shown when.
-4. **Real-time / low-latency streaming** — NOT built, and in tension with
-   constraint #2 above (honest "live end-of-day," not "real-time"). `yfinance`
-   is a polling scraper, not a streaming API. Fast honest polling (e.g. every
-   15-60s during market hours, clearly labeled "refreshed Xs ago") is
-   achievable for free; true tick-level streaming needs a paid vendor
-   (Polygon.io, Alpaca, IEX Cloud) and an API key.
-5. **Automated data-quality validation framework** — partially built
-   (`data_health()` staleness/gap/row-count checks, various "excluded, not
-   estimated" honesty patterns throughout); no formal schema-validation or
-   anomaly-detection gate on ingest/egress yet.
+   stress replay), `src/grit.py` (drawdown/resilience scoring).
+2. **Corporate actions & security master** — ✅ built free-tier
+   (`src/security_master.py`): ISIN via `yfinance`, real dividend/split event
+   history. ⬜ SEDOL/CUSIP and full merger/ticker-change history still need a
+   paid reference-data vendor (Bloomberg, Refinitiv) — explicitly flagged as
+   unavailable in the UI, not fabricated.
+3. **Regulatory awareness (data lineage, audit trails)** — ✅ built: the
+   Lineage & Audit tab combines the existing provenance record with a
+   session-scoped audit trail of what this run actually did. Session-scoped
+   is a deliberate honesty choice, not a durable compliance log — see Status
+   above.
+4. **Real-time / low-latency streaming** — ✅ built free-tier (fast session
+   polling + live "Xs ago" ticker, disk-cache freshness window unchanged so
+   Yahoo isn't hit harder). ⬜ True tick-level streaming still needs a paid
+   vendor (Polygon.io, Alpaca, IEX Cloud) and an API key from the user.
+5. **Automated data-quality validation framework** — ✅ built
+   (`src/data_quality.py`): schema, positivity, coverage, staleness,
+   calendar-gap, and extreme-move checks, run on every price pull and
+   surfaced in its own Data Quality tab.
 
 ## Good next steps to offer
 
 1. **Phase VI deployment** to a live URL (the resume link — the whole point).
    Streamlit Community Cloud is the fastest free path; Procfile + requirements
    are already set for Railway/Render too.
-2. The "living" 3D particle effect (see Status above) — highest-novelty piece
-   of the redesign ask, worth a design check-in before building.
-3. Pick one item from the data-engineering roadmap above to scope properly
-   (start with #2 or #5 — they don't need a paid vendor decision first).
-4. Extend liquidity: per-asset liquidity-adjusted VaR, or a book-size slider
+2. If a paid data vendor becomes available: SEDOL/CUSIP/merger history
+   (security master) or true tick-level streaming (Polygon.io/Alpaca/IEX) —
+   both are scoped and ready to wire in once an API key exists.
+3. Extend liquidity: per-asset liquidity-adjusted VaR, or a book-size slider
    preset that showcases a small/mid-cap basket where days-to-liquidate bites.

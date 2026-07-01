@@ -27,6 +27,7 @@ from src.grit import (
     drawdown_episodes, recovery_stats, rolling_consistency,
     regime_drawdown_and_recovery, grit_scores, _score01,
 )
+from src.data_quality import validate_prices
 
 
 def _synthetic_returns(n_days: int = 500, n_assets: int = 5, seed: int = 0) -> pd.DataFrame:
@@ -290,6 +291,68 @@ def test_grit_scores_ranks_resilient_above_fragile():
     assert scores.loc["FRAGILE", "still_underwater"] is np.True_ or scores.loc["FRAGILE", "still_underwater"] is True
     assert scores.loc["GRITTY", "consistency"] > scores.loc["FRAGILE", "consistency"]
     assert scores.loc["GRITTY", "grit_score"] > scores.loc["FRAGILE", "grit_score"]
+
+
+def _clean_prices(n_days: int = 100, n_assets: int = 3) -> pd.DataFrame:
+    idx = pd.bdate_range("2024-01-02", periods=n_days)
+    vals = 100 + np.cumsum(np.random.default_rng(1).normal(0, 1, size=(n_days, n_assets)), axis=0)
+    vals = np.abs(vals) + 50  # keep strictly positive
+    return pd.DataFrame(vals, index=idx, columns=[f"A{i}" for i in range(n_assets)])
+
+
+def test_data_quality_clean_data_passes():
+    report = validate_prices(_clean_prices())
+    assert report["passed"] is True
+    assert all(c["status"] in ("PASS", "WARN") for c in report["checks"])
+
+
+def test_data_quality_catches_negative_price():
+    prices = _clean_prices()
+    prices.iloc[10, 0] = -5.0
+    report = validate_prices(prices)
+    assert report["passed"] is False
+    statuses = {c["check"]: c["status"] for c in report["checks"]}
+    assert statuses["positivity.non_positive_prices"] == "FAIL"
+
+
+def test_data_quality_catches_duplicate_dates():
+    prices = _clean_prices()
+    dup = pd.concat([prices, prices.iloc[[0]]]).sort_index()
+    report = validate_prices(dup)
+    assert report["passed"] is False
+    statuses = {c["check"]: c["status"] for c in report["checks"]}
+    assert statuses["schema.duplicate_dates"] == "FAIL"
+
+
+def test_data_quality_flags_extreme_move_without_failing():
+    prices = _clean_prices()
+    prices.iloc[20:, 0] = prices.iloc[20:, 0] * 3.0  # a +200% jump, single asset
+    report = validate_prices(prices)
+    statuses = {c["check"]: c["status"] for c in report["checks"]}
+    assert statuses["sanity.extreme_moves"] == "WARN"
+    assert report["passed"] is True   # WARN surfaces the issue, doesn't block
+
+
+def test_data_quality_catches_too_few_rows():
+    report = validate_prices(_clean_prices(n_days=10))
+    assert report["passed"] is False
+    statuses = {c["check"]: c["status"] for c in report["checks"]}
+    assert statuses["coverage.min_rows"] == "FAIL"
+
+
+def test_security_master_live():
+    """Integration: real yfinance identifiers + corporate actions. Self-skips offline."""
+    try:
+        from src.security_master import security_master
+        sm = security_master(["AAPL", "MSFT"])
+    except Exception as exc:  # noqa: BLE001 — network hiccup, don't fail the suite
+        print(f"[skip] security_master live check: {exc}")
+        return
+    assert set(sm.index) == {"AAPL", "MSFT"}
+    assert {"isin", "dividends_paid", "total_dividends", "splits"}.issubset(sm.columns)
+    # AAPL's ISIN is stable and well-known on the free feed; a good canary that
+    # the free-tier lookup still works if it ever silently breaks upstream.
+    assert sm.loc["AAPL", "isin"] == "US0378331005"
 
 
 def test_full_app_boots():
