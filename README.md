@@ -1,4 +1,4 @@
-# Institutional-Grade Portfolio Optimization & Risk Engine
+# Meleona — Institutional-Grade Portfolio Optimization & Risk Engine
 
 A quantitative risk dashboard that lets anyone load a portfolio — equities, ETFs, FX, or futures — and stress-test it against thousands of simulated and historical market paths, live. Built by a 2nd-year Data Analytics student to recruiter-facing, quant-interview standards.
 
@@ -24,6 +24,7 @@ Every market figure is fetched from Yahoo Finance at runtime and computed by the
 - **Stress testing** — custom parametric shocks (drawdown + volatility) *or* replay of the actual daily returns of real crisis windows (dot-com, GFC, COVID, 2022, SVB, …), preserving real correlation breakdown.
 - **Risk decomposition** — per-asset risk-contribution vs. dollar-weight, named factor exposures (market/size/value/momentum via ETF proxies), and a correlation matrix.
 - **Liquidity modeling** — days-to-liquidate via a participation-rate model on average daily dollar volume; names with no volume feed are flagged, not faked.
+- **Grit Zone** — ranks each asset's own price history on drawdown-recovery speed, rolling 1-year consistency, and resilience across real historical crisis windows; a relative "perseverance" score, not a mood index.
 
 ---
 
@@ -72,7 +73,8 @@ risk-engine/
 │   ├── factors.py           # Named factor exposures (ETF-proxy regression)
 │   ├── strategies.py        # Risk parity, vol targeting, risk contribution
 │   ├── scenarios.py         # Historical regime replay (real crisis windows)
-│   └── liquidity.py         # Days-to-liquidate (participation-rate model)
+│   ├── liquidity.py         # Days-to-liquidate (participation-rate model)
+│   └── grit.py              # Grit Zone: recovery/consistency/resilience scoring
 ├── tests/test_engine.py     # Regression suite
 ├── requirements.txt · Procfile · main.py
 ```

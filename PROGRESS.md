@@ -1,4 +1,4 @@
-# Portfolio Risk Engine — Session Handoff
+# Meleona — Session Handoff
 
 Paste this into a new chat session to bring it up to speed instantly.
 
@@ -6,9 +6,13 @@ Paste this into a new chat session to bring it up to speed instantly.
 
 ## What this project is
 
-An institutional-grade **Portfolio Optimization & Risk Engine** with a live
-Streamlit dashboard, built by a 2nd-year Data Analytics student to be
-recruiter-facing (the goal is a public live link on a resume).
+**Meleona** is an institutional-grade **Portfolio Optimization & Risk Engine**
+with a live Streamlit dashboard, built by a 2nd-year Data Analytics student to
+be recruiter-facing (the goal is a public live link on a resume). The name
+merges "Durand" (Old French, "enduring/built to withstand hard times") with
+"Mereoleona" (mother lioness) — it ties into the existing lion-crest logo and
+"Pride · Integrity" tagline, and into the Grit Zone feature (below), which
+scores assets on resilience and perseverance rather than market mood.
 
 - **Repo:** https://github.com/ricepillow3000/Summer-2026-Quant-Project-Risk-Engine-Blueprint
 - **Local path:** `C:\Users\john4\Claude\Projects\risk-engine`
@@ -36,7 +40,8 @@ risk-engine/
 │   ├── risk.py          # Monte Carlo, historical/parametric VaR, CVaR, Kupiec backtest
 │   ├── factors.py       # named factor exposures (market/size/value/momentum via ETF proxies)
 │   ├── strategies.py    # risk parity (ERC), vol targeting, risk-contribution decomposition
-│   └── scenarios.py     # historical regime replication (real crisis-window replay)
+│   ├── scenarios.py     # historical regime replication (real crisis-window replay)
+│   └── grit.py          # Grit Zone: drawdown recovery, rolling consistency, regime resilience
 ├── assets/logo.svg      # lion + scale + triangle crest (bronze, "Pride · Integrity")
 ├── .streamlit/config.toml  # beige/bronze institutional theme
 ├── requirements.txt · Procfile · README.md · .gitignore
@@ -61,6 +66,17 @@ risk-engine/
 - ✅ **Visual upgrade** — themed Plotly charts (beige/bronze); hero Monte Carlo
   fan chart (outcome cone) under the verdict; themed histogram, risk-contribution,
   factor, and liquidity charts
+- ✅ **3D outcome distribution** — rotatable Plotly surface (day x return-bin x
+  density) under the fan chart, collapsed by default
+- ✅ **Grit Zone** (`src/grit.py`) — a "grit score" concept as a counterpart to
+  Fear & Greed: ranks each asset's OWN price history on drawdown-recovery
+  speed/completeness, rolling 1-year consistency, and drawdown/recovery
+  behavior across the real historical crisis windows in `scenarios.py`.
+  Percentile-ranked RELATIVE to the chosen universe (no absolute "grit" scale
+  claimed). 7 deterministic unit tests; verified against live data (history
+  length and regimes-survived per ticker line up with real IPO dates).
+- ✅ **Rebrand to Meleona** — page title, header wordmark, logo alt text, and
+  docs updated from "Portfolio Risk Engine"
 - ⬜ **Phase V polish remaining** — optional auto "executive summary";
   further UI refinement
 - ⬜ **Phase VI** — deploy to Railway/Render for the live recruiter link

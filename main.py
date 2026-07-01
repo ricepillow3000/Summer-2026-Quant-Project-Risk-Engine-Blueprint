@@ -1,5 +1,5 @@
 """
-Portfolio Risk Engine — Streamlit entry point.
+Meleona — Streamlit entry point.
 
 Design philosophy:
 A risk desk doesn't hand a PM eight charts and say "figure it out." It leads
@@ -30,7 +30,7 @@ from src.scenarios import HISTORICAL_REGIMES, replay_returns
 from src.liquidity import days_to_liquidate, liquidity_profile
 from src.grit import grit_scores, MIN_HISTORY_DAYS
 
-st.set_page_config(page_title="Portfolio Risk Engine", layout="centered")
+st.set_page_config(page_title="Meleona", layout="centered")
 
 # ---- Minimal institutional styling ----
 # Page background, slider color, and expander shade are set in .streamlit/config.toml.
@@ -76,6 +76,59 @@ h1, h2, h3 { color: #3F3B35; font-weight: 400; }
 /* Expander surface */
 [data-testid="stExpander"] { border: 1px solid #C4BDAE !important;
     border-radius: 6px !important; background: #ECE7DD !important; }
+
+/* ---- Presentation flow: hero, showcase, CTAs, scroll reveal ---- */
+html { scroll-behavior: smooth; }
+
+@keyframes meleona-rise { from { opacity: 0; transform: translateY(24px); }
+                          to   { opacity: 1; transform: translateY(0); } }
+.reveal { animation: meleona-rise linear both;
+          animation-timeline: view();
+          animation-range: entry 0% cover 30%; }
+
+.hero-section { min-height: 74vh; display: flex; flex-direction: column;
+    justify-content: center; align-items: center; text-align: center;
+    padding: 40px 16px; gap: 16px; }
+.hero-eyebrow { font-family: 'Helvetica Neue', sans-serif; font-size: 12px;
+    letter-spacing: 0.2em; text-transform: uppercase; color: #8A6E45; }
+.hero-title { font-size: 56px; color: #3F3B35; line-height: 1.05; margin: 4px 0; }
+.hero-sub { font-size: 19px; color: #54504A; max-width: 620px; line-height: 1.55; }
+
+.cta-btn { display: inline-block; margin-top: 10px; padding: 14px 30px;
+    background: #3F3B35; color: #F4F1EA !important; text-decoration: none !important;
+    border-radius: 4px; font-family: 'Helvetica Neue', sans-serif; font-size: 13px;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    transition: transform 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
+    box-shadow: 0 2px 8px rgba(63,59,53,0.18); }
+.cta-btn:hover { transform: translateY(-2px); background: #2E2B27;
+    box-shadow: 0 6px 16px rgba(63,59,53,0.28); }
+
+.showcase-section { padding: 56px 8px 40px; text-align: center; display: flex;
+    flex-direction: column; align-items: center; gap: 14px; }
+.showcase-eyebrow { font-family: 'Helvetica Neue', sans-serif; font-size: 12px;
+    letter-spacing: 0.2em; text-transform: uppercase; color: #8A6E45; }
+.showcase-title { font-size: 34px; color: #3F3B35; margin: 0; font-weight: 400; }
+.showcase-body { font-size: 16px; color: #54504A; max-width: 640px; line-height: 1.6; }
+
+.pillar-row { display: flex; gap: 18px; flex-wrap: wrap; justify-content: center;
+    margin-top: 8px; }
+.pillar-card { background: #F4F1EA; border: 1px solid #BFB8A9; border-radius: 8px;
+    padding: 20px 22px; width: 210px; text-align: left;
+    transition: transform 0.25s ease, box-shadow 0.25s ease; }
+.pillar-card:hover { transform: translateY(-4px); box-shadow: 0 8px 20px rgba(63,59,53,0.15); }
+.pillar-label { font-family: 'Helvetica Neue', sans-serif; font-size: 11px;
+    letter-spacing: 0.12em; text-transform: uppercase; color: #9A7B4F; margin-bottom: 6px; }
+.pillar-desc { font-size: 13.5px; color: #524E47; line-height: 1.5; }
+
+.section-divider { border: none; border-top: 1px solid #BFB8A9; margin: 8px 0 36px;
+    opacity: 0.6; }
+.engine-heading { text-align: center; padding: 4px 0 26px; }
+
+/* Tabs — quieter than a stack of accordions */
+[data-testid="stTabs"] [data-baseweb="tab-list"] { gap: 4px; }
+[data-testid="stTabs"] [data-baseweb="tab"] { font-family: 'Helvetica Neue', sans-serif;
+    font-size: 12.5px; letter-spacing: 0.04em; color: #7A6E5A; }
+[data-testid="stTabs"] [aria-selected="true"] { color: #3F3B35 !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -207,20 +260,63 @@ def grit_breakdown_fig(scores: pd.DataFrame):
     return fig
 
 
-# ---- Header: crest + wordmark ----
+# ---- Hero: the pitch, not the dashboard ----
 with open("assets/logo.svg", "r", encoding="utf-8") as f:
     logo_svg = f.read()
 
 st.markdown(f"""
-<div class="brand-row">
-  <div style="width:58px; height:58px;">{logo_svg}</div>
-  <div>
-    <div class="brand-title">Portfolio Risk Engine</div>
-    <div class="brand-tag">Pride &middot; Integrity</div>
+<div class="hero-section reveal" id="hero">
+  <div style="width:84px; height:84px;">{logo_svg}</div>
+  <div class="hero-eyebrow">Pride &middot; Integrity</div>
+  <h1 class="hero-title">Meleona</h1>
+  <div class="hero-sub">
+    A hedge-fund-grade portfolio risk engine — VaR, CVaR, Monte Carlo stress
+    testing, and named factor exposures, computed live from real market data.
+    But every stock has drawdowns. What sets a name apart is what happens
+    after one — that's what we call <strong>grit</strong>.
   </div>
+  <a href="#grit-showcase" class="cta-btn">Explore what we do &darr;</a>
 </div>
 """, unsafe_allow_html=True)
-st.caption("Stress-test any portfolio against thousands of simulated market paths.")
+
+# ---- Showcase: the Grit Zone innovation, explained before you touch a slider ----
+st.markdown("""
+<div class="showcase-section reveal" id="grit-showcase">
+  <div class="showcase-eyebrow">The Innovation</div>
+  <h2 class="showcase-title">Introducing the Grit Zone</h2>
+  <div class="showcase-body">
+    Fear &amp; Greed indices measure market MOOD. We measure something more
+    durable: whether an asset, when it gets knocked down, actually gets back
+    up &mdash; consistently, across real crises. There's no such thing as a
+    perfect stock. Grit isn't about avoiding setbacks &mdash; it's about what
+    happens after one.
+  </div>
+  <div class="pillar-row">
+    <div class="pillar-card">
+      <div class="pillar-label">Recovery</div>
+      <div class="pillar-desc">How fast and how completely a name claws
+        back from its own drawdowns.</div>
+    </div>
+    <div class="pillar-card">
+      <div class="pillar-label">Consistency</div>
+      <div class="pillar-desc">The share of rolling 1-year holding periods
+        that ended positive.</div>
+    </div>
+    <div class="pillar-card">
+      <div class="pillar-label">Resilience</div>
+      <div class="pillar-desc">How shallow the drawdown and how fast the
+        recovery across real historical crises.</div>
+    </div>
+  </div>
+  <a href="#engine" class="cta-btn">Work with an exceptional risk engine &darr;</a>
+</div>
+<hr class="section-divider">
+<div id="engine"></div>
+<div class="engine-heading reveal">
+  <div class="showcase-eyebrow">The Engine</div>
+  <h2 class="showcase-title" style="font-size:26px;">Stress-test any portfolio, live</h2>
+</div>
+""", unsafe_allow_html=True)
 
 # ---- Universe selection ----
 with st.container(border=True):
@@ -422,7 +518,12 @@ st.caption(
     "edge is the tail the CVaR above measures. Change any setting to watch the cone move."
 )
 
-with st.expander("3D outcome distribution (rotatable)", expanded=False):
+# ---- Supporting depth: one tab at a time, not five stacked accordions ----
+tab_3d, tab_breakdown, tab_grit, tab_liquidity, tab_provenance = st.tabs(
+    ["3D Distribution", "Risk Breakdown", "Grit Zone", "Liquidity", "Provenance"]
+)
+
+with tab_3d:
     st.plotly_chart(surface_chart(mc["path_density"]), width="stretch", config=PLOTLY_CFG)
     st.caption(
         "Simulated (Monte Carlo) distribution of portfolio value over the next "
@@ -430,8 +531,7 @@ with st.expander("3D outcome distribution (rotatable)", expanded=False):
         "Hypothetical, not historical."
     )
 
-# ---- Supporting context, only if you want it ----
-with st.expander("See the full risk breakdown"):
+with tab_breakdown:
     st.caption(f"Universe ({len(loaded)}): {', '.join(loaded)}")
 
     c1, c2, c3 = st.columns(3)
@@ -544,8 +644,7 @@ st.caption(
     f"{alloc_label.capitalize()} allocation{lev_txt}."
 )
 
-# ---- Grit Zone: resilience & perseverance, not market mood ----
-with st.expander("Grit Zone — resilience & perseverance"):
+with tab_grit:
     st.caption(
         "Fear & Greed measures market MOOD. Grit measures something different: "
         "when a name gets knocked down, does it get back up — consistently, "
@@ -609,7 +708,7 @@ def _fmt_days(d: float) -> str:
     return f"{d:.0f}d"
 
 
-with st.expander("Liquidity — how fast could you exit?"):
+with tab_liquidity:
     lc1, lc2 = st.columns(2)
     book = lc1.number_input(
         "Portfolio size ($)", min_value=10_000, max_value=5_000_000_000,
@@ -656,8 +755,7 @@ with st.expander("Liquidity — how fast could you exit?"):
     except Exception as exc:  # noqa: BLE001
         st.caption(f"Liquidity data unavailable: {exc}")
 
-# ---- Data source & provenance (traceability) ----
-with st.expander("Data source & provenance"):
+with tab_provenance:
     prov = provenance(tickers)
     if prov:
         st.markdown(

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-An institutional-grade **Portfolio Optimization & Risk Engine** with a live Streamlit dashboard, built to recruiter-facing / hedge-fund-interview standards (2nd-year Data Analytics student portfolio project, targeting a public live link on a resume, ship target Aug 23, 2026).
+**Meleona** is an institutional-grade **Portfolio Optimization & Risk Engine** with a live Streamlit dashboard, built to recruiter-facing / hedge-fund-interview standards (2nd-year Data Analytics student portfolio project, targeting a public live link on a resume, ship target Aug 23, 2026).
 
 ## Commands
 
@@ -22,7 +22,7 @@ Tests live in `tests/test_engine.py` — run `python -m tests.test_engine` (stan
 
 ## Architecture
 
-`main.py` is the entire Streamlit UI — a single linear script (no multi-page/component split) that renders top to bottom: **universe selection → data load → allocation → stress test → headline verdict → expandable risk breakdown → liquidity → provenance**. Streamlit reruns this script on every widget interaction, so ordering matters: each section's variables (`weights`, `returns`, `shocked_returns`, etc.) feed the sections below it.
+`main.py` is the entire Streamlit UI — a single linear script (no multi-page/component split) that renders top to bottom: **universe selection → data load → allocation → stress test → headline verdict → 3D outcome distribution → expandable risk breakdown → Grit Zone → liquidity → provenance**. Streamlit reruns this script on every widget interaction, so ordering matters: each section's variables (`weights`, `returns`, `shocked_returns`, etc.) feed the sections below it.
 
 `src/` holds pure computation, no Streamlit imports — every module here is a numpy/pandas library independent of the UI, which is what `main.py` composes:
 
@@ -33,6 +33,7 @@ Tests live in `tests/test_engine.py` — run `python -m tests.test_engine` (stan
 - **`strategies.py`** — risk-contribution decomposition, risk parity (ERC) weights, volatility targeting/leverage scaling.
 - **`scenarios.py`** — `HISTORICAL_REGIMES`: replays the *actual* historical daily returns of named crisis windows (dot-com, GFC, COVID, etc.) rather than a parametric shock, preserving real cross-asset correlation breakdown. Assets that didn't trade in a window are excluded and the UI discloses this.
 - **`liquidity.py`** — days-to-liquidate via a participation-rate model (`ADV = avg daily dollar volume`, capped participation rate, slowest leg determines the exit horizon), fed by `ingestion.average_dollar_volume`.
+- **`grit.py`** — Grit Zone: scores each asset on drawdown-recovery speed/completeness, rolling 1-year consistency, and drawdown/recovery behavior across `scenarios.HISTORICAL_REGIMES`. Pulls each ticker's OWN full price history (`fetch_prices(period="max", align=False)`, same unaligned pattern as `scenarios.py`) rather than the 2y window used elsewhere. Every component is percentile-ranked RELATIVE to the chosen universe (`_score01`), not an absolute scale — a different basket changes every ticker's score. Tickers with `< MIN_HISTORY_DAYS` are excluded from ranking, not scored on thin data.
 
 Two Monte Carlo engines are swappable in the UI (`monte_carlo` vs `jump_diffusion_mc` in `risk.py`), both consumed identically by `main.py` (same input signature: return series + weights + horizon).
 
