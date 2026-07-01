@@ -16,7 +16,9 @@ import numpy as np
 import pandas as pd
 
 from src.analytics import covariance_matrix, correlation_matrix
-from src.risk import var, cvar, monte_carlo, jump_diffusion_mc, calibrate_jump_diffusion
+from src.risk import (
+    var, cvar, monte_carlo, jump_diffusion_mc, calibrate_jump_diffusion, sharpe_ratio,
+)
 from src.strategies import (
     risk_parity_weights, risk_contributions, vol_target, portfolio_vol,
 )
@@ -82,6 +84,17 @@ def test_monte_carlo_engines_finite_and_coherent():
         assert mc["cvar"] >= mc["var"] - 1e-9
         assert 0.0 <= mc["prob_loss"] <= 1.0
         assert mc["worst_case"] <= mc["best_case"]
+
+
+def test_sharpe_ratio_behaves():
+    pr = _synthetic_returns().mean(axis=1)
+    base = sharpe_ratio(pr, 0.0)
+    assert np.isfinite(base)
+    # a higher risk-free rate must lower the Sharpe ratio
+    assert sharpe_ratio(pr, 0.05) < base
+    # zero-volatility series -> undefined (nan), not a divide-by-zero crash
+    flat = pd.Series([0.001] * 100)
+    assert np.isnan(sharpe_ratio(flat, 0.0))
 
 
 def test_liquidity_monotonic_and_zero_adv_flagged():

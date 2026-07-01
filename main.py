@@ -17,10 +17,12 @@ import streamlit as st
 
 from src.ingestion import (
     fetch_prices, get_returns, data_health, provenance, clear_cache,
-    average_dollar_volume, PRESETS,
+    average_dollar_volume, fetch_risk_free_rate, PRESETS,
 )
 from src.analytics import correlation_matrix, covariance_matrix
-from src.risk import monte_carlo, jump_diffusion_mc, parametric_var, var_backtest
+from src.risk import (
+    monte_carlo, jump_diffusion_mc, parametric_var, var_backtest, sharpe_ratio,
+)
 from src.factors import factor_exposures
 from src.strategies import risk_contributions, risk_parity_weights, vol_target
 from src.scenarios import HISTORICAL_REGIMES, replay_returns
@@ -124,6 +126,12 @@ def load_universe(tickers_tuple: tuple[str, ...], period: str = "2y"):
 def load_adv(tickers_tuple: tuple[str, ...]):
     """Average daily dollar volume per ticker (recent 3-month lookback)."""
     return average_dollar_volume(list(tickers_tuple))
+
+
+@st.cache_data(ttl=3600)
+def load_risk_free_rate():
+    """Latest 13-week T-bill yield (^IRX) as an annual decimal, or None."""
+    return fetch_risk_free_rate()
 
 
 try:
@@ -277,6 +285,22 @@ with st.expander("See the full risk breakdown"):
     c1.metric("Median 1-year return", f"{mc['median_return']:+.1%}")
     c2.metric("Probability of loss", f"{mc['prob_loss']:.1%}")
     c3.metric("Worst simulated year", f"{mc['worst_case']:+.1%}")
+
+    # --- Risk-adjusted performance (Sharpe vs a real risk-free rate) ---
+    rf = load_risk_free_rate()
+    ann_ret = float(port_returns.mean()) * 252
+    ann_vol = float(port_returns.std()) * np.sqrt(252)
+    sharpe = sharpe_ratio(port_returns, rf if rf is not None else 0.0)
+    s1, s2, s3 = st.columns(3)
+    s1.metric("Sharpe ratio", f"{sharpe:.2f}")
+    s2.metric("Annualized return", f"{ann_ret:+.1%}")
+    s3.metric("Annualized volatility", f"{ann_vol:.1%}")
+    rf_txt = (f"{rf:.2%} (13-week T-bill, ^IRX)" if rf is not None
+              else "unavailable — Sharpe computed against 0%")
+    st.caption(
+        f"Sharpe = (annualized return − risk-free) / annualized volatility, on "
+        f"the real (unshocked) portfolio. Risk-free rate: {rf_txt}."
+    )
 
     # --- Risk-contribution decomposition (where the risk actually lives) ---
     st.markdown("###### Risk contribution by asset")

@@ -44,6 +44,24 @@ def cvar(port_returns: pd.Series, confidence: float = 0.95) -> float:
     return float(-tail.mean())
 
 
+def sharpe_ratio(port_returns: pd.Series, risk_free_rate: float = 0.0,
+                 periods: int = 252) -> float:
+    """
+    Annualized Sharpe ratio: excess return per unit of volatility.
+
+    Sharpe = (annualized return - risk_free_rate) / annualized volatility
+
+    `risk_free_rate` is an annual decimal (e.g. 0.05). Daily returns are
+    annualized by 252 (return) and sqrt(252) (volatility). The single most
+    common one-line summary of risk-adjusted performance on a desk.
+    """
+    mu = float(port_returns.mean()) * periods
+    sigma = float(port_returns.std()) * np.sqrt(periods)
+    if sigma < 1e-12:            # (near-)zero vol: Sharpe undefined, don't explode
+        return float("nan")
+    return (mu - risk_free_rate) / sigma
+
+
 def parametric_var(port_returns: pd.Series, confidence: float = 0.95) -> float:
     """
     Variance-covariance (parametric) VaR: assumes returns are normal and reads
