@@ -132,6 +132,36 @@ def fan_chart(bands: dict):
     return _style_fig(fig, height=300)
 
 
+def surface_chart(density: dict):
+    """
+    3D surface of how the simulated outcome distribution evolves over the
+    horizon — the fan chart's cone re-expressed as a probability surface
+    (day x return-bin x density) instead of percentile lines.
+    """
+    fig = go.Figure(go.Surface(
+        x=density["days"], y=density["returns"], z=density["density"].T,
+        colorscale=[[0, "#EDE9E3"], [0.5, BRONZE], [1, CHARCOAL]],
+        showscale=False,
+        hovertemplate="Day %{x} · Return %{y:.0%} · density %{z:.3f}<extra></extra>",
+    ))
+    scene_axis = dict(gridcolor=GRID, zerolinecolor=AXIS_LINE, linecolor=AXIS_LINE,
+                      showbackground=True, backgroundcolor="rgba(237,233,227,0.35)")
+    fig.update_layout(
+        height=480,
+        margin=dict(l=0, r=0, t=10, b=0),
+        paper_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="Georgia, 'Times New Roman', serif", color=CHARCOAL, size=12),
+        scene=dict(
+            bgcolor="rgba(0,0,0,0)",
+            xaxis=dict(title="Trading day", **scene_axis),
+            yaxis=dict(title="1-year outcome", tickformat=".0%", **scene_axis),
+            zaxis=dict(title="Density", **scene_axis),
+        ),
+        hoverlabel=dict(bgcolor="#F4F1EA", font=dict(family="Georgia, serif", color=CHARCOAL)),
+    )
+    return fig
+
+
 def outcome_hist(total_returns, cvar: float):
     """Themed histogram of simulated 1-year outcomes with the CVaR line marked."""
     fig = go.Figure(go.Histogram(x=np.asarray(total_returns) * 100, nbinsx=48,
@@ -361,6 +391,14 @@ st.caption(
     "median outcome; the shaded cones are the 25–75% and 5–95% ranges — the lower "
     "edge is the tail the CVaR above measures. Change any setting to watch the cone move."
 )
+
+with st.expander("3D outcome distribution (rotatable)", expanded=False):
+    st.plotly_chart(surface_chart(mc["path_density"]), width="stretch", config=PLOTLY_CFG)
+    st.caption(
+        "Simulated (Monte Carlo) distribution of portfolio value over the next "
+        "year — the fan chart's cone shown as a probability surface. "
+        "Hypothetical, not historical."
+    )
 
 # ---- Supporting context, only if you want it ----
 with st.expander("See the full risk breakdown"):

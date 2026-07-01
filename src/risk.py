@@ -158,6 +158,7 @@ def monte_carlo(
         "final_values": final_values,
         "total_returns": total_returns,
         "path_bands": _path_bands(value_paths, horizon_days),
+        "path_density": path_density(value_paths),
         "median_return": float(np.median(total_returns)),
         "mean_return": float(np.mean(total_returns)),
         "var": sim_var,
@@ -184,6 +185,45 @@ def _path_bands(value_paths: np.ndarray, horizon_days: int) -> dict:
     return {
         "days": np.arange(1, horizon_days + 1),
         "p5": pct[0], "p25": pct[1], "p50": pct[2], "p75": pct[3], "p95": pct[4],
+    }
+
+
+def path_density(value_paths: np.ndarray, n_day_steps: int = 40,
+                 n_return_bins: int = 60) -> dict:
+    """
+    Downsample the full simulated-path matrix into a (day, return-bin) density
+    surface, for a 3D view of how the outcome distribution evolves over the
+    horizon — the fan chart's cone, but as a probability surface instead of
+    percentile lines.
+
+    Args:
+        value_paths: (n_simulations, horizon_days) cumulative-value matrix,
+            the same array _path_bands() is built from (start = $1).
+        n_day_steps: number of horizon days to sample (evenly spaced) —
+            plotting all 252 days makes the surface noisy and slow to rotate.
+        n_return_bins: number of return histogram bins per day.
+
+    Returns:
+        dict with `days` (n_day_steps,), `returns` (n_return_bins, bin
+        centers as decimals), and `density` (n_day_steps, n_return_bins)
+        where each row integrates to 1 (a proper density, not a raw count —
+        comparable across days regardless of simulation count).
+    """
+    n_sims, horizon_days = value_paths.shape
+    day_idx = np.unique(np.linspace(0, horizon_days - 1, n_day_steps, dtype=int))
+    edges = np.linspace(-0.80, 1.50, n_return_bins + 1)
+    centers = (edges[:-1] + edges[1:]) / 2
+
+    density = np.empty((len(day_idx), n_return_bins))
+    for row, di in enumerate(day_idx):
+        returns_at_day = value_paths[:, di] - 1.0
+        counts, _ = np.histogram(returns_at_day, bins=edges)
+        density[row] = counts / (n_sims * np.diff(edges))  # normalize to a density
+
+    return {
+        "days": day_idx + 1,      # 1-indexed trading days, matching path_bands
+        "returns": centers,
+        "density": density,
     }
 
 
@@ -279,6 +319,7 @@ def jump_diffusion_mc(
         "final_values": final_values,
         "total_returns": total_returns,
         "path_bands": _path_bands(value_paths, horizon_days),
+        "path_density": path_density(value_paths),
         "median_return": float(np.median(total_returns)),
         "mean_return": float(np.mean(total_returns)),
         "var": sim_var,
