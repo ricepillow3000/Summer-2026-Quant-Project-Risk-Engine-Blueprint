@@ -28,6 +28,7 @@ from src.factors import factor_exposures
 from src.strategies import risk_contributions, risk_parity_weights, vol_target
 from src.scenarios import HISTORICAL_REGIMES, replay_returns
 from src.liquidity import days_to_liquidate, liquidity_profile
+from src.grit import grit_scores, MIN_HISTORY_DAYS
 
 st.set_page_config(page_title="Portfolio Risk Engine", layout="centered")
 
@@ -184,6 +185,28 @@ def hbar(series: pd.Series, color=BRONZE, pct: bool = False, title_x: str = ""):
     return _style_fig(fig, height=max(160, 30 * len(series) + 40))
 
 
+def grit_breakdown_fig(scores: pd.DataFrame):
+    """Grouped bar: recovery / consistency / resilience sub-scores per ticker."""
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        y=list(scores.index), x=scores["recovery_score"].values, orientation="h",
+        name="recovery", marker=dict(color="#CBBB94"),
+        hovertemplate="%{y} recovery: %{x:.0f}<extra></extra>"))
+    fig.add_trace(go.Bar(
+        y=list(scores.index), x=scores["consistency_score"].values, orientation="h",
+        name="consistency", marker=dict(color=BRONZE),
+        hovertemplate="%{y} consistency: %{x:.0f}<extra></extra>"))
+    fig.add_trace(go.Bar(
+        y=list(scores.index), x=scores["resilience_score"].values, orientation="h",
+        name="resilience", marker=dict(color=BRONZE_DK),
+        hovertemplate="%{y} resilience: %{x:.0f}<extra></extra>"))
+    fig = _style_fig(fig, height=max(220, 50 * len(scores)))
+    fig.update_layout(
+        barmode="group", xaxis_title="score (0–100, relative to this universe)",
+        showlegend=True, legend=dict(orientation="h", y=1.12, x=0, font=dict(size=11)))
+    return fig
+
+
 # ---- Header: crest + wordmark ----
 with open("assets/logo.svg", "r", encoding="utf-8") as f:
     logo_svg = f.read()
@@ -239,6 +262,13 @@ def load_adv(tickers_tuple: tuple[str, ...]):
 def load_risk_free_rate():
     """Latest 13-week T-bill yield (^IRX) as an annual decimal, or None."""
     return fetch_risk_free_rate()
+
+
+@st.cache_data(ttl=3600, show_spinner="Scoring the Grit Zone…")
+def load_grit(tickers_tuple: tuple[str, ...]):
+    """Grit scores need each asset's FULL price history, not just the 2y window
+    used for VaR — grit_scores() pulls it separately (see src.grit)."""
+    return grit_scores(list(tickers_tuple))
 
 
 try:
@@ -513,6 +543,59 @@ st.caption(
     f"Methodology: 10,000-path {engine_txt} {source_txt}, over a 252-day horizon. "
     f"{alloc_label.capitalize()} allocation{lev_txt}."
 )
+
+# ---- Grit Zone: resilience & perseverance, not market mood ----
+with st.expander("Grit Zone — resilience & perseverance"):
+    st.caption(
+        "Fear & Greed measures market MOOD. Grit measures something different: "
+        "when a name gets knocked down, does it get back up — consistently, "
+        "across real crises? There's no such thing as a perfect stock; every "
+        "name here has drawdowns. This ranks your chosen universe by how much "
+        "perseverance each name's OWN price history has actually shown."
+    )
+    try:
+        grit = load_grit(tuple(loaded))
+        gscores = grit["scores"]
+        if gscores.empty:
+            st.caption(
+                "Not enough price history in this universe to score grit "
+                f"(need ≥{MIN_HISTORY_DAYS} trading days per name)."
+            )
+        else:
+            st.plotly_chart(
+                hbar(gscores["grit_score"], color=BRONZE_DK, title_x="Grit Score (0–100)"),
+                width="stretch", config=PLOTLY_CFG,
+            )
+            grittiest = gscores.index[0]
+            g = gscores.loc[grittiest]
+            st.caption(
+                f"**{grittiest}** ranks grittiest here: recovered "
+                f"{g['pct_recovered']:.0%} of its own drawdowns "
+                f"(median {g['median_recovery_days']:.0f} trading days to claw "
+                f"back), stayed positive over {g['consistency']:.0%} of rolling "
+                f"1-year holding periods, and lived through "
+                f"{g['n_regimes_survived']:.0f} of the named crisis windows above."
+            )
+
+            st.markdown("###### Grit breakdown: recovery, consistency, resilience")
+            st.plotly_chart(grit_breakdown_fig(gscores), width="stretch", config=PLOTLY_CFG)
+            st.caption(
+                "Recovery: speed and completeness of clawing back from its own "
+                "drawdowns (≥5%). Consistency: share of rolling 1-year holding "
+                "periods that ended positive. Resilience: how shallow the "
+                "drawdown and how fast the recovery across the real historical "
+                "crisis windows this name actually traded through. Each bar is "
+                "RANKED RELATIVE to the other names in this universe, not an "
+                "absolute score — swap in a different basket and the numbers move."
+            )
+
+            if grit["excluded"]:
+                st.caption(
+                    f"*Excluded for insufficient history (<{MIN_HISTORY_DAYS} "
+                    f"trading days): {', '.join(grit['excluded'])}.*"
+                )
+    except Exception as exc:  # noqa: BLE001
+        st.caption(f"Grit Zone unavailable: {exc}")
 
 # ---- Liquidity: how fast could you actually get out? ----
 def _fmt_days(d: float) -> str:
