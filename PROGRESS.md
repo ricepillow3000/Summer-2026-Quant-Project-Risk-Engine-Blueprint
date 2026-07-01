@@ -77,6 +77,22 @@ risk-engine/
   length and regimes-survived per ticker line up with real IPO dates).
 - ✅ **Rebrand to Meleona** — page title, header wordmark, logo alt text, and
   docs updated from "Portfolio Risk Engine"
+- ✅ **Presentation-style redesign** — the app used to open as one long stack
+  of controls plus five nested expanders (a wall of information before you'd
+  touched a slider). Restructured into a scroll-driven flow: hero pitch →
+  dedicated "Grit Zone" showcase section (with anchor-scroll CTA buttons) →
+  "the engine" (the existing interactive dashboard). The five supporting
+  expanders (3D distribution, risk breakdown, Grit Zone detail, liquidity,
+  provenance) are now one `st.tabs()` strip instead of stacked accordions.
+  Added CSS scroll-reveal animation, smooth-scroll CTAs, hover-lift cards —
+  pure CSS, no new toolchain, `streamlit run main.py` deploy story unchanged.
+- ⬜ **"Living" 3D particle effect** (requested, not yet built) — make the 3D
+  outcome-distribution surface feel animated/alive (drifting particles, not
+  just rotatable). Needs a custom `st.components.v1.html` component (raw
+  plotly.js + a small JS animation loop restyling a particle overlay trace),
+  since `st.plotly_chart`'s embedding doesn't expose that. Scoped out of this
+  pass — check in on approach before building (novel, harder to iterate on
+  than CSS).
 - ⬜ **Phase V polish remaining** — optional auto "executive summary";
   further UI refinement
 - ⬜ **Phase VI** — deploy to Railway/Render for the live recruiter link
@@ -92,7 +108,8 @@ risk-engine/
    Scenarios "replay actual returns," exclusions are disclosed. Overclaiming is
    the #1 thing that fails a quant interview.
 3. **Lead with one number.** Design philosophy: one headline CVaR verdict +
-   one sentence; all depth collapsed in expanders. Simplicity is a feature.
+   one sentence; all depth collapsed a click away (tabs, as of the redesign
+   below). Simplicity is a feature.
 4. **Defensible in an interview.** Every feature needs a "Quant Deep Dive"
    explanation. Methodology depth > visual complexity > latency.
 5. **Aesthetic:** Citadel-style — beige `#EDE9E3`/`#D4CDBF`, bronze `#9A7B4F`/
@@ -106,12 +123,50 @@ risk-engine/
 - Cache files (`data/*.parquet`, `*.meta.json`) are gitignored.
 - The user is new to Git/GitHub — explain steps plainly, do the git work for them.
 
+## Data-engineering domain roadmap (requested, scoped as backlog)
+
+A broader "resume checklist" of hedge-fund-grade data-engineering capabilities
+was requested alongside the redesign above. Deliberately scoped OUT of the
+redesign pass — each item below is substantial on its own, and a couple
+directly interact with this project's own honesty principles or need a paid
+vendor decision from the user before implementation can start:
+
+1. **Risk fundamentals (VaR/ES/vol/stress testing)** — largely already built:
+   `src/risk.py` (historical + parametric VaR, CVaR, Kupiec backtest, bootstrap
+   + Merton jump-diffusion Monte Carlo), `src/scenarios.py` (historical-regime
+   stress replay), `src/grit.py` (drawdown/resilience scoring). If "understand
+   it deeply" means more explanatory depth (more Quant Deep Dive copy, worked
+   examples), that's a smaller, low-risk follow-up.
+2. **Corporate actions & security master** (ISIN/SEDOL cross-referencing,
+   dividend/split/merger handling) — NOT built. `yfinance` with
+   `auto_adjust=True` (already used) silently folds splits/dividends into
+   adjusted close, but there's no explicit corporate-actions ledger, no
+   merger/ticker-change handling, and no identifier cross-reference layer.
+   OpenFIGI (free) can map identifiers; structured corporate-actions calendars
+   are usually a paid vendor. Needs a data-source decision before scoping.
+3. **Regulatory awareness (data lineage, audit trails)** — partially built:
+   `ingestion.py`'s `.meta.json` provenance record covers source/timestamp/
+   coverage, but there's no formal lineage graph or audit log of what was
+   queried/computed/shown when.
+4. **Real-time / low-latency streaming** — NOT built, and in tension with
+   constraint #2 above (honest "live end-of-day," not "real-time"). `yfinance`
+   is a polling scraper, not a streaming API. Fast honest polling (e.g. every
+   15-60s during market hours, clearly labeled "refreshed Xs ago") is
+   achievable for free; true tick-level streaming needs a paid vendor
+   (Polygon.io, Alpaca, IEX Cloud) and an API key.
+5. **Automated data-quality validation framework** — partially built
+   (`data_health()` staleness/gap/row-count checks, various "excluded, not
+   estimated" honesty patterns throughout); no formal schema-validation or
+   anomaly-detection gate on ingest/egress yet.
+
 ## Good next steps to offer
 
 1. **Phase VI deployment** to a live URL (the resume link — the whole point).
    Streamlit Community Cloud is the fastest free path; Procfile + requirements
    are already set for Railway/Render too.
-2. UI polish / optional auto-generated executive-summary paragraph (built from
-   the engine's own numbers — no LLM data).
-3. Extend liquidity: per-asset liquidity-adjusted VaR, or a book-size slider
+2. The "living" 3D particle effect (see Status above) — highest-novelty piece
+   of the redesign ask, worth a design check-in before building.
+3. Pick one item from the data-engineering roadmap above to scope properly
+   (start with #2 or #5 — they don't need a paid vendor decision first).
+4. Extend liquidity: per-asset liquidity-adjusted VaR, or a book-size slider
    preset that showcases a small/mid-cap basket where days-to-liquidate bites.
