@@ -42,6 +42,32 @@ def test_cvar_at_least_var():
     assert cvar(pr) >= var(pr) - 1e-12
 
 
+def test_cvar_matches_gaussian_closed_form():
+    """
+    Validation, not just a smoke test: our empirical CVaR must match the PUBLISHED
+    closed-form Gaussian Expected Shortfall. For X ~ N(mu, sigma),
+
+        ES_c = -mu + sigma * phi(Phi^-1(1-c)) / (1-c)
+
+    (Rockafellar & Uryasev). Our cvar() is a pure empirical estimator (percentile
+    + tail mean), so agreement with the analytical formula on a large normal
+    sample confirms the tail math is real, not approximated from memory.
+    """
+    from scipy import stats
+    mu, sigma, c = 0.0004, 0.011, 0.95
+    r = pd.Series(np.random.default_rng(7).normal(mu, sigma, size=2_000_000))
+    analytical = -mu + sigma * stats.norm.pdf(stats.norm.ppf(1 - c)) / (1 - c)
+    assert abs(cvar(r, c) - analytical) < 0.0003          # < 3 bps on 2M samples
+
+
+def test_sharpe_matches_first_principles():
+    """Sharpe from the engine equals a hand-rolled annualized computation."""
+    pr = _synthetic_returns().mean(axis=1)
+    rf = 0.03
+    manual = (pr.mean() * 252 - rf) / (pr.std() * np.sqrt(252))
+    assert abs(sharpe_ratio(pr, rf) - manual) < 1e-12
+
+
 def test_covariance_symmetric_and_correlation_unit_diagonal():
     r = _synthetic_returns()
     cov = covariance_matrix(r)
