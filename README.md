@@ -1,6 +1,6 @@
 # Institutional-Grade Portfolio Optimization & Risk Engine
 
-A production-ready quantitative risk dashboard targeting the QQQ universe and the "Magnificent Seven" (AAPL, MSFT, GOOGL, AMZN, NVDA, META, TSLA). Built by a 2nd-year Data Analytics student to recruiter-ready, hedge-fund standards.
+A quantitative risk dashboard that lets anyone load a portfolio — equities, ETFs, FX, or futures — and stress-test it against thousands of simulated and historical market paths, live. Built by a 2nd-year Data Analytics student to recruiter-facing, quant-interview standards.
 
 **Live demo:** _coming August 2026_
 
@@ -8,9 +8,22 @@ A production-ready quantitative risk dashboard targeting the QQQ universe and th
 
 ## What This Is
 
-Most student finance projects pull data and plot a chart. This is not that.
+Most student finance projects pull data and plot a chart. This one is built to the standard a quant desk would actually defend: modular Python, statistically rigorous math, honest data provenance, and a Streamlit dashboard that leads with **one number** — a headline CVaR verdict — with all the depth a step behind it.
 
-This engine is being built to the standard a quant desk would actually deploy: modular Python, statistically rigorous math, and a live Streamlit dashboard a recruiter or PM can open from a resume link and stress-test in real time — no cold starts, no slow math.
+Every market figure is fetched from Yahoo Finance at runtime and computed by the engine's own `numpy`/`scipy` code. **No value is ever hardcoded, estimated, or model-generated** — the provenance panel makes that auditable.
+
+---
+
+## Features (shipped)
+
+- **Configurable universe** — one-click preset baskets (mega-cap tech, 13F-popular names, sector ETFs, FX majors, futures) or type any Yahoo symbol.
+- **Freshness-aware data engine** — per-universe parquet cache with a UTC provenance record on every pull; a data-health check flags staleness, gaps, and insufficient history.
+- **Two allocation methods** — equal weight and risk parity (equal-risk-contribution), with an optional volatility-targeting overlay (leverage up/down to a target annual vol).
+- **Two Monte Carlo engines** — bootstrap resampling *and* a Merton jump-diffusion process (Poisson jumps on Gaussian diffusion) for a fatter, more honest tail. Swappable live.
+- **Tail risk** — historical & parametric VaR, CVaR (expected shortfall), and a Kupiec proportion-of-failures backtest that validates the VaR model rather than just reporting it.
+- **Stress testing** — custom parametric shocks (drawdown + volatility) *or* replay of the actual daily returns of real crisis windows (dot-com, GFC, COVID, 2022, SVB, …), preserving real correlation breakdown.
+- **Risk decomposition** — per-asset risk-contribution vs. dollar-weight, named factor exposures (market/size/value/momentum via ETF proxies), and a correlation matrix.
+- **Liquidity modeling** — days-to-liquidate via a participation-rate model on average daily dollar volume; names with no volume feed are flagged, not faked.
 
 ---
 
@@ -18,55 +31,74 @@ This engine is being built to the standard a quant desk would actually deploy: m
 
 | Layer | Tools |
 |---|---|
-| Data | `yfinance`, `pandas`, custom caching layer |
-| Math | `numpy`, `scipy` (eigen-decomposition, CVaR, Monte Carlo) |
-| Optimization | Mean-Variance, Black-Litterman |
+| Data | `yfinance`, `pandas`, freshness-aware parquet cache (`pyarrow`) |
+| Math | `numpy`, `scipy` — covariance/eigen-decomposition, CVaR, Monte Carlo, jump-diffusion |
+| Allocation | Risk parity (ERC), volatility targeting |
 | Dashboard | `streamlit`, `plotly` |
-| Deployment | Railway / Render, custom domain + SSL |
+| Deployment | Streamlit Community Cloud / Railway / Render (`Procfile` ready) |
+
+---
+
+## Run It
+
+```powershell
+python -m pip install -r requirements.txt
+python -m streamlit run main.py
+```
+Opens at http://localhost:8501.
+
+### Tests
+
+```powershell
+python -m tests.test_engine      # standalone, no extra deps
+# or, if you have pytest installed:
+pytest
+```
+Deterministic math-invariant tests (CVaR ≥ VaR, risk parity equalizes contributions, the jump-diffusion mean-consistency identity, vol targeting hits its target, liquidity monotonic in book size) plus a full-app boot test that self-skips when offline.
 
 ---
 
 ## Project Structure
 
 ```
-portfolio_engine/
-├── .streamlit/
-│   └── config.toml       # Dark-mode theme, no footer
-├── data/                 # Cached price data
+risk-engine/
+├── .streamlit/config.toml   # Institutional beige/bronze theme
+├── assets/logo.svg          # Lion-crest wordmark
+├── data/                    # Cached prices + provenance (gitignored)
 ├── src/
-│   ├── ingestion.py      # DataEngine with rate-limit protection
-│   ├── analytics.py      # Covariance, eigen-decomposition
-│   └── risk.py           # CVaR, Monte Carlo, tail risk
-├── requirements.txt
-├── Procfile              # Railway/Heroku deployment config
-└── main.py               # Streamlit entry point
+│   ├── ingestion.py         # DataEngine: fetch, cache, provenance, dollar volume
+│   ├── analytics.py         # Covariance, correlation, eigen-decomposition
+│   ├── risk.py              # VaR, CVaR, Kupiec backtest, bootstrap + jump-diffusion MC
+│   ├── factors.py           # Named factor exposures (ETF-proxy regression)
+│   ├── strategies.py        # Risk parity, vol targeting, risk contribution
+│   ├── scenarios.py         # Historical regime replay (real crisis windows)
+│   └── liquidity.py         # Days-to-liquidate (participation-rate model)
+├── tests/test_engine.py     # Regression suite
+├── requirements.txt · Procfile · main.py
 ```
-
----
-
-## Build Roadmap (Summer 2026)
-
-| Phase | Weeks | What Gets Built | What I Learn |
-|---|---|---|---|
-| I | 1–2 | DataEngine with caching | Normality & stationarity testing (Shapiro-Wilk) |
-| II | 3 | Covariance mapping, eigen-decomposition | Multicollinearity & concentration risk |
-| III | 4–5 | Mean-Variance & Black-Litterman optimizer | Bayesian math, the Oracle Problem |
-| IV | 6 | CVaR & Monte Carlo risk guardrails | Tail risk, Black Swan visualization |
-| V | 7 | Streamlit dashboard (session state, fragments) | Active Share: skill vs. luck in the Mag 7 |
-| VI | 8 | Cloud deploy, custom domain, SSL | The Pitch: walking an MD through the live link |
-
-**Target ship date: August 23, 2026**
 
 ---
 
 ## Design Principles
 
-- **No retail logic.** Every architectural choice is defensible in a quant interview.
-- **Recruiter-ready at all times.** The live link must handle a PM clicking it cold.
-- **Teach as we build.** Every module comes with a "Quant Deep Dive" explaining the math behind it.
+- **No LLM-originated data, ever.** Every number traces to Yahoo Finance at runtime; the provenance panel proves it.
+- **Honest labeling.** "Live end-of-day," not "real-time." Scenarios "replay actual returns." Excluded assets are disclosed, not silently dropped.
+- **Lead with one number.** One headline CVaR verdict; all depth collapsed into expanders.
+- **Defensible in an interview.** Every feature carries a "Quant Deep Dive" explaining the math — methodology depth over visual complexity.
 
 ---
 
-## Status
+## Roadmap
 
-> Week 1 — Project initialized. Data engineering sprint starting now.
+| Status | Milestone |
+|---|---|
+| ✅ | Data engine, caching, provenance, data-integrity checks |
+| ✅ | Covariance / correlation / eigen-decomposition |
+| ✅ | CVaR + bootstrap Monte Carlo; VaR methods + Kupiec backtest |
+| ✅ | Streamlit dashboard, institutional theme, crest |
+| ✅ | Risk parity, vol targeting, risk contribution, named factors |
+| ✅ | Historical regime replay, liquidity modeling, jump-diffusion engine |
+| ⬜ | **Live deployment to a public URL** (the recruiter link) |
+| ⬜ | Optional: auto executive-summary, further UI polish |
+
+**Target ship date: August 23, 2026**
