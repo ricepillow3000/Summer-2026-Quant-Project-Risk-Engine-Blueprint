@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Second brain (read first)
+
+John's vault at `C:\Users\john4\Claude\Vault` is the cross-session memory for this project. **At session start:** read `90-System\Memory-Bridge.md` (~1 page, current state of everything) and the Active table in `90-System\Lessons.md` (binding rules from past collaboration) — then work; don't re-explore for context those already provide. **At session end / after milestones:** update both, and commit+push the vault (it is its own private git repo, separate from this one). Vault notes summarize; this repo's `CLAUDE.md`/`PROGRESS.md` stay authoritative for repo detail. Never copy vault content into this public repo.
+
 ## What this is
 
 **Meleona** is an institutional-grade **Portfolio Optimization & Risk Engine** with a live Streamlit dashboard, built to recruiter-facing / hedge-fund-interview standards (2nd-year Data Analytics student portfolio project, targeting a public live link on a resume, ship target Aug 23, 2026).
