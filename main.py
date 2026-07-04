@@ -40,99 +40,120 @@ st.set_page_config(page_title="Meleona", layout="centered")
 # Page background, slider color, and expander shade are set in .streamlit/config.toml.
 st.markdown("""
 <style>
+/* ============================================================
+   "THE TEARSHEET" — private-bank editorial design language.
+   Doctrine: sharp edges (no rounded pills), hairline bronze rules,
+   extreme type contrast (huge serif numerals vs tiny tracked labels),
+   numbered ruled sections. Numbers are king; craft gives it soul.
+   ============================================================ */
 html, body, [class*="css"] { font-family: Georgia, 'Times New Roman', serif; }
-h1, h2, h3 { color: #3F3B35; font-weight: 400; }
-/* Captions: larger + darker so the fine print is actually readable */
+h1, h2, h3 { color: #3F3B35; font-weight: 400; letter-spacing: -0.01em; }
+/* Sharpen the whole app — kill Streamlit's default rounded corners */
+[data-testid="stExpander"], [data-baseweb="tab"], .stButton>button,
+[data-testid="stMetric"], div[data-baseweb="select"]>div { border-radius: 0 !important; }
 .stCaption, [data-testid="stCaptionContainer"],
 [data-testid="stCaptionContainer"] p, [data-testid="stCaptionContainer"] div {
     font-size: 13.5px !important; color: #524E47 !important; line-height: 1.5 !important; }
-[data-testid="stMetricLabel"] p { font-size: 13px !important; color: #6A645A !important; }
+[data-testid="stMetricLabel"] p { font-size: 11px !important; color: #8A8172 !important;
+    letter-spacing: 0.14em !important; text-transform: uppercase !important; }
+[data-testid="stMetricValue"] { font-family: Georgia, serif !important;
+    color: #3F3B35 !important; letter-spacing: -0.01em; }
 
 /* Header crest + wordmark */
 .brand-row { display: flex; align-items: center; gap: 16px; margin-bottom: 2px; }
-.brand-title { font-size: 32px; color: #3F3B35; line-height: 1.1; }
+.brand-title { font-size: 32px; color: #3F3B35; line-height: 1.1; letter-spacing: -0.015em; }
 .brand-tag { font-family: 'Helvetica Neue', sans-serif; font-size: 11px;
-             letter-spacing: 0.16em; text-transform: uppercase; color: #8A6E45; }
+             letter-spacing: 0.2em; text-transform: uppercase; color: #8A6E45; }
 
-/* Hero verdict card */
-.verdict-box { background: #F4F1EA; border: 1px solid #BFB8A9; border-radius: 6px;
-               padding: 28px 32px; margin-bottom: 24px;
-               box-shadow: 0 2px 6px rgba(63,59,53,0.10); }
+/* HERO VERDICT — the editorial centerpiece. No card: a stat framed by
+   bronze hairlines, the one number that owns the page. */
+.verdict-box { background: transparent; border: none;
+    border-top: 2px solid #9A7B4F; border-bottom: 1px solid #C4BDAE;
+    padding: 22px 4px 26px; margin: 8px 0 30px; }
 .verdict-label { font-family: 'Helvetica Neue', sans-serif; font-size: 11px;
-                  letter-spacing: 0.12em; text-transform: uppercase; color: #9A8E7C; }
-.verdict-number { font-size: 48px; color: #3F3B35; margin: 4px 0; }
-.verdict-sentence { font-size: 17px; color: #54504A; line-height: 1.5; }
+    letter-spacing: 0.22em; text-transform: uppercase; color: #9A7B4F; }
+.verdict-number { font-size: 76px; color: #3F3B35; margin: 6px 0 2px;
+    line-height: 1; letter-spacing: -0.03em; font-weight: 400; }
+.verdict-sentence { font-size: 17px; color: #54504A; line-height: 1.55; max-width: 560px; }
 
-/* Control panels — distinct cream blocks with a bronze top accent */
-.panel-label { font-family: 'Helvetica Neue', sans-serif; font-size: 12px;
-               letter-spacing: 0.12em; text-transform: uppercase; color: #7A6E5A;
-               margin-bottom: 4px; }
+/* Numbered section eyebrow — editorial ledger markers (01 — UNIVERSE) */
+.sec-mark { font-family: 'Helvetica Neue', sans-serif; font-size: 12px;
+    letter-spacing: 0.2em; text-transform: uppercase; color: #9A7B4F;
+    border-top: 1px solid #C4BDAE; padding-top: 8px; margin: 8px 0 10px;
+    display: flex; align-items: baseline; gap: 12px; }
+.sec-mark b { color: #B7A98E; font-weight: 400; }
+.panel-label { font-family: 'Helvetica Neue', sans-serif; font-size: 11px;
+    letter-spacing: 0.16em; text-transform: uppercase; color: #8A7E6A;
+    margin-bottom: 4px; }
 
-/* Refined slider */
+/* Slider — squared thumb, hairline track */
 [data-testid="stSlider"] [data-baseweb="slider"] > div > div { background: #C4BDAE !important; }
 [data-testid="stSlider"] [role="slider"] {
-    background: #9A7B4F !important; border: 2px solid #F4F1EA !important;
+    background: #9A7B4F !important; border-radius: 0 !important;
+    border: 2px solid #F4F1EA !important;
     box-shadow: 0 1px 3px rgba(63,59,53,0.25) !important; }
 [data-testid="stSlider"] [data-testid="stThumbValue"] {
     color: #3F3B35 !important; font-family: 'Helvetica Neue', sans-serif !important;
     font-size: 12px !important; }
 
-/* Expander surface */
+/* Expander — flat cream, sharp, hairline */
 [data-testid="stExpander"] { border: 1px solid #C4BDAE !important;
-    border-radius: 6px !important; background: #ECE7DD !important; }
+    background: #ECE7DD !important; }
 
 /* ---- Presentation flow: hero, showcase, CTAs, scroll reveal ---- */
 html { scroll-behavior: smooth; }
-
 @keyframes meleona-rise { from { opacity: 0; transform: translateY(24px); }
                           to   { opacity: 1; transform: translateY(0); } }
 .reveal { animation: meleona-rise linear both;
-          animation-timeline: view();
-          animation-range: entry 0% cover 30%; }
+          animation-timeline: view(); animation-range: entry 0% cover 30%; }
 
-.hero-section { min-height: 74vh; display: flex; flex-direction: column;
-    justify-content: center; align-items: center; text-align: center;
-    padding: 40px 16px; gap: 16px; }
+.hero-section { min-height: 78vh; display: flex; flex-direction: column;
+    justify-content: center; align-items: flex-start; text-align: left;
+    padding: 40px 8px; gap: 14px; border-bottom: 1px solid #C4BDAE; }
 .hero-eyebrow { font-family: 'Helvetica Neue', sans-serif; font-size: 12px;
-    letter-spacing: 0.2em; text-transform: uppercase; color: #8A6E45; }
-.hero-title { font-size: 56px; color: #3F3B35; line-height: 1.05; margin: 4px 0; }
-.hero-sub { font-size: 19px; color: #54504A; max-width: 620px; line-height: 1.55; }
+    letter-spacing: 0.28em; text-transform: uppercase; color: #9A7B4F; }
+.hero-title { font-size: 72px; color: #3F3B35; line-height: 1.0; margin: 2px 0;
+    letter-spacing: -0.03em; }
+.hero-sub { font-size: 19px; color: #54504A; max-width: 600px; line-height: 1.55; }
 
-.cta-btn { display: inline-block; margin-top: 10px; padding: 14px 30px;
+/* CTA — sharp charcoal slab, bronze on hover */
+.cta-btn { display: inline-block; margin-top: 14px; padding: 15px 34px;
     background: #3F3B35; color: #F4F1EA !important; text-decoration: none !important;
-    border-radius: 4px; font-family: 'Helvetica Neue', sans-serif; font-size: 13px;
-    letter-spacing: 0.1em; text-transform: uppercase;
-    transition: transform 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
-    box-shadow: 0 2px 8px rgba(63,59,53,0.18); }
-.cta-btn:hover { transform: translateY(-2px); background: #2E2B27;
-    box-shadow: 0 6px 16px rgba(63,59,53,0.28); }
+    border-radius: 0; font-family: 'Helvetica Neue', sans-serif; font-size: 12px;
+    letter-spacing: 0.16em; text-transform: uppercase;
+    transition: background 0.25s ease, letter-spacing 0.25s ease; }
+.cta-btn:hover { background: #9A7B4F; letter-spacing: 0.2em; }
 
-.showcase-section { padding: 56px 8px 40px; text-align: center; display: flex;
-    flex-direction: column; align-items: center; gap: 14px; }
+.showcase-section { padding: 60px 8px 40px; text-align: left; display: flex;
+    flex-direction: column; align-items: flex-start; gap: 14px; }
 .showcase-eyebrow { font-family: 'Helvetica Neue', sans-serif; font-size: 12px;
-    letter-spacing: 0.2em; text-transform: uppercase; color: #8A6E45; }
-.showcase-title { font-size: 34px; color: #3F3B35; margin: 0; font-weight: 400; }
-.showcase-body { font-size: 16px; color: #54504A; max-width: 640px; line-height: 1.6; }
+    letter-spacing: 0.28em; text-transform: uppercase; color: #9A7B4F; }
+.showcase-title { font-size: 40px; color: #3F3B35; margin: 0; font-weight: 400;
+    letter-spacing: -0.02em; }
+.showcase-body { font-size: 16px; color: #54504A; max-width: 620px; line-height: 1.6; }
 
-.pillar-row { display: flex; gap: 18px; flex-wrap: wrap; justify-content: center;
-    margin-top: 8px; }
-.pillar-card { background: #F4F1EA; border: 1px solid #BFB8A9; border-radius: 8px;
-    padding: 20px 22px; width: 210px; text-align: left;
-    transition: transform 0.25s ease, box-shadow 0.25s ease; }
-.pillar-card:hover { transform: translateY(-4px); box-shadow: 0 8px 20px rgba(63,59,53,0.15); }
+/* Pillars — no cards: ledger columns divided by bronze hairlines */
+.pillar-row { display: flex; gap: 0; flex-wrap: wrap; margin-top: 16px;
+    border-top: 1px solid #C4BDAE; }
+.pillar-card { background: transparent; border: none;
+    border-left: 1px solid #C4BDAE; padding: 18px 24px 8px; width: 220px;
+    text-align: left; transition: border-color 0.25s ease; }
+.pillar-card:first-child { border-left: none; padding-left: 4px; }
+.pillar-card:hover { border-left-color: #9A7B4F; }
 .pillar-label { font-family: 'Helvetica Neue', sans-serif; font-size: 11px;
-    letter-spacing: 0.12em; text-transform: uppercase; color: #9A7B4F; margin-bottom: 6px; }
+    letter-spacing: 0.16em; text-transform: uppercase; color: #9A7B4F; margin-bottom: 6px; }
 .pillar-desc { font-size: 13.5px; color: #524E47; line-height: 1.5; }
 
-.section-divider { border: none; border-top: 1px solid #BFB8A9; margin: 8px 0 36px;
-    opacity: 0.6; }
-.engine-heading { text-align: center; padding: 4px 0 26px; }
+.section-divider { border: none; border-top: 1px solid #C4BDAE; margin: 8px 0 36px; }
+.engine-heading { text-align: left; padding: 4px 0 22px; }
 
-/* Tabs — quieter than a stack of accordions */
-[data-testid="stTabs"] [data-baseweb="tab-list"] { gap: 4px; }
+/* Tabs — flat editorial rule, bronze underline on active */
+[data-testid="stTabs"] [data-baseweb="tab-list"] { gap: 2px;
+    border-bottom: 1px solid #C4BDAE; }
 [data-testid="stTabs"] [data-baseweb="tab"] { font-family: 'Helvetica Neue', sans-serif;
-    font-size: 12.5px; letter-spacing: 0.04em; color: #7A6E5A; }
-[data-testid="stTabs"] [aria-selected="true"] { color: #3F3B35 !important; }
+    font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: #8A7E6A; }
+[data-testid="stTabs"] [aria-selected="true"] { color: #3F3B35 !important;
+    border-bottom: 2px solid #9A7B4F !important; }
 </style>
 """, unsafe_allow_html=True)
 
