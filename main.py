@@ -77,17 +77,17 @@ h1, h2, h3 { color: #3F3B35; font-weight: 400; letter-spacing: -0.01em; }
    bronze hairlines, the one number that owns the page. */
 .verdict-box { background: transparent; border: none;
     border-top: 2px solid #9A7B4F; border-bottom: 1px solid #C4BDAE;
-    padding: 22px 4px 26px; margin: 8px 0 30px; }
+    padding: 30px 4px 36px; margin: 12px 0 44px; }
 .verdict-label { font-family: 'Helvetica Neue', sans-serif; font-size: 11px;
     letter-spacing: 0.22em; text-transform: uppercase; color: #9A7B4F; }
-.verdict-number { font-size: 76px; color: #3F3B35; margin: 6px 0 2px;
-    line-height: 1; letter-spacing: -0.03em; font-weight: 400; }
-.verdict-sentence { font-size: 17px; color: #54504A; line-height: 1.55; max-width: 560px; }
+.verdict-number { font-size: 96px; color: #3F3B35; margin: 8px 0 4px;
+    line-height: 1; letter-spacing: -0.035em; font-weight: 400; }
+.verdict-sentence { font-size: 18px; color: #54504A; line-height: 1.6; max-width: 580px; }
 
 /* Numbered section eyebrow — editorial ledger markers (01 — UNIVERSE) */
 .sec-mark { font-family: 'Helvetica Neue', sans-serif; font-size: 12px;
-    letter-spacing: 0.2em; text-transform: uppercase; color: #9A7B4F;
-    border-top: 1px solid #C4BDAE; padding-top: 8px; margin: 8px 0 10px;
+    letter-spacing: 0.24em; text-transform: uppercase; color: #9A7B4F;
+    border-top: 1px solid #C4BDAE; padding-top: 14px; margin: 36px 0 14px;
     display: flex; align-items: baseline; gap: 12px; }
 .sec-mark b { color: #B7A98E; font-weight: 400; }
 .panel-label { font-family: 'Helvetica Neue', sans-serif; font-size: 11px;
@@ -115,14 +115,14 @@ html { scroll-behavior: smooth; }
 .reveal { animation: meleona-rise linear both;
           animation-timeline: view(); animation-range: entry 0% cover 30%; }
 
-.hero-section { min-height: 78vh; display: flex; flex-direction: column;
+.hero-section { min-height: 88vh; display: flex; flex-direction: column;
     justify-content: center; align-items: flex-start; text-align: left;
-    padding: 40px 8px; gap: 14px; border-bottom: 1px solid #C4BDAE; }
+    padding: 56px 8px; gap: 18px; border-bottom: 1px solid #C4BDAE; }
 .hero-eyebrow { font-family: 'Helvetica Neue', sans-serif; font-size: 12px;
-    letter-spacing: 0.28em; text-transform: uppercase; color: #9A7B4F; }
-.hero-title { font-size: 72px; color: #3F3B35; line-height: 1.0; margin: 2px 0;
-    letter-spacing: -0.03em; }
-.hero-sub { font-size: 19px; color: #54504A; max-width: 600px; line-height: 1.55; }
+    letter-spacing: 0.32em; text-transform: uppercase; color: #9A7B4F; }
+.hero-title { font-size: 96px !important; color: #3F3B35;
+    line-height: 0.98 !important; margin: 2px 0; letter-spacing: -0.035em; }
+.hero-sub { font-size: 21px; color: #54504A; max-width: 640px; line-height: 1.6; }
 
 /* CTA — sharp charcoal slab, bronze on hover */
 .cta-btn { display: inline-block; margin-top: 14px; padding: 15px 34px;
@@ -132,19 +132,19 @@ html { scroll-behavior: smooth; }
     transition: background 0.25s ease, letter-spacing 0.25s ease; }
 .cta-btn:hover { background: #9A7B4F; letter-spacing: 0.2em; }
 
-.showcase-section { padding: 60px 8px 40px; text-align: left; display: flex;
-    flex-direction: column; align-items: flex-start; gap: 14px; }
+.showcase-section { padding: 96px 8px 64px; text-align: left; display: flex;
+    flex-direction: column; align-items: flex-start; gap: 18px; }
 .showcase-eyebrow { font-family: 'Helvetica Neue', sans-serif; font-size: 12px;
     letter-spacing: 0.28em; text-transform: uppercase; color: #9A7B4F; }
-.showcase-title { font-size: 40px; color: #3F3B35; margin: 0; font-weight: 400;
-    letter-spacing: -0.02em; }
+.showcase-title { font-size: 52px; color: #3F3B35; margin: 0; font-weight: 400;
+    letter-spacing: -0.025em; line-height: 1.05; }
 .showcase-body { font-size: 16px; color: #54504A; max-width: 620px; line-height: 1.6; }
 
 /* Pillars — no cards: ledger columns divided by bronze hairlines */
 .pillar-row { display: flex; gap: 0; flex-wrap: wrap; margin-top: 16px;
     border-top: 1px solid #C4BDAE; }
 .pillar-card { background: transparent; border: none;
-    border-left: 1px solid #C4BDAE; padding: 18px 24px 8px; width: 220px;
+    border-left: 1px solid #C4BDAE; padding: 26px 30px 14px; width: 220px;
     text-align: left; transition: border-color 0.25s ease; }
 .pillar-card:first-child { border-left: none; padding-left: 4px; }
 .pillar-card:hover { border-left-color: #9A7B4F; }
