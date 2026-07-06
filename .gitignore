@@ -9,3 +9,5 @@ data/*.json
 
 # Local logs
 streamlit.log
+
+graphify-out/
