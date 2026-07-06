@@ -665,14 +665,14 @@ if scenario_label:
     verdict = (
         f"Replaying the actual returns of {scenario_label} "
         f"({len(shocked_returns)} trading days), a {alloc_label} portfolio{lev_txt} "
-        f"loses an average of **{mc['cvar']:.1%}** in the worst 5% of simulated years."
+        f"loses an average of <b>{mc['cvar']:.1%}</b> in the worst 5% of simulated years."
     )
     if excluded:
         verdict += f" *(Excludes {', '.join(excluded)} — not trading in that period.)*"
 else:
     verdict = (
         f"In the worst 5% of simulated years, a {alloc_label} portfolio of these "
-        f"{len(loaded)} assets{lev_txt} loses an average of **{mc['cvar']:.1%}**."
+        f"{len(loaded)} assets{lev_txt} loses an average of <b>{mc['cvar']:.1%}</b>."
     )
     if is_shocked:
         verdict += " *(under the stress scenario applied above)*"
