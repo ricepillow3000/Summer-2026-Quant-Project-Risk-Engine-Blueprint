@@ -372,6 +372,94 @@ def test_full_app_boots():
     assert len(at.error) == 0, f"app rendered errors: {[e.value for e in at.error]}"
 
 
+# ---- Signal Lab (src/signals.py) — appended; existing tests above untouched ----
+
+from src.signals import (
+    momentum_signal, forward_returns, daily_ic, ic_summary,
+    fundamental_law_ir, effective_breadth,
+)
+
+
+def _monotone_universe(n_days: int = 140, n_assets: int = 5) -> pd.DataFrame:
+    """
+    Deterministic prices where each ticker compounds at its own constant rate
+    (rates strictly increasing across tickers). On every date the momentum
+    ranking and the forward-return ranking are the same permutation, so a
+    correct Spearman IC must be exactly +1 daily.
+    """
+    idx = pd.bdate_range("2022-01-03", periods=n_days)
+    rates = np.linspace(0.0005, 0.0045, n_assets)
+    t = np.arange(n_days)[:, None]
+    vals = 100.0 * np.exp(t * rates[None, :])
+    return pd.DataFrame(vals, index=idx, columns=[f"A{i}" for i in range(n_assets)])
+
+
+def test_signal_perfect_momentum_ic_is_one():
+    prices = _monotone_universe()
+    sig = momentum_signal(prices, lookback=60, skip=5)
+    fwd = forward_returns(prices, horizon=5)
+
+    # NaN until enough history: first lookback+skip rows have no signal
+    assert sig.iloc[:65].isna().all().all()
+    assert sig.iloc[65:].notna().all().all()
+    # forward_returns alignment: row t = return from t to t+horizon
+    manual = prices.iloc[75, 0] / prices.iloc[70, 0] - 1.0
+    assert abs(fwd.iloc[70, 0] - manual) < 1e-12
+    # last `horizon` rows have no forward return yet
+    assert fwd.iloc[-5:].isna().all().all()
+
+    ic = daily_ic(sig, fwd)
+    assert len(ic) > 0
+    assert np.allclose(ic.values, 1.0)
+
+
+def test_signal_anti_signal_ic_is_minus_one():
+    prices = _monotone_universe()
+    sig = -momentum_signal(prices, lookback=60, skip=5)   # deliberately inverted
+    fwd = forward_returns(prices, horizon=5)
+    ic = daily_ic(sig, fwd)
+    assert len(ic) > 0
+    assert np.allclose(ic.values, -1.0)
+
+
+def test_signal_ic_summary_t_stat_first_principles():
+    """t_stat must equal mean/(std/sqrt(n)) computed by hand on a fixed series."""
+    idx = pd.bdate_range("2023-01-02", periods=5)
+    ic = pd.Series([0.02, 0.05, -0.01, 0.04, 0.10], index=idx)
+    summ = ic_summary(ic)
+    assert summ["n_days"] == 5
+    assert abs(summ["mean_ic"] - ic.mean()) < 1e-15
+    assert abs(summ["std_ic"] - ic.std(ddof=1)) < 1e-15
+    manual_t = ic.mean() / (ic.std(ddof=1) / np.sqrt(5))
+    assert abs(summ["t_stat"] - manual_t) < 1e-12
+    assert abs(summ["hit_rate"] - 0.8) < 1e-15     # 4 of 5 days positive
+
+
+def test_signal_fundamental_law_hand_worked():
+    """Grinold: IC 0.05 on 400 independent bets/yr -> IR = 0.05 * 20 = 1.0 exactly."""
+    assert abs(fundamental_law_ir(0.05, 400.0) - 1.0) < 1e-12
+
+
+def test_signal_effective_breadth_correlation_adjusted():
+    idx = pd.bdate_range("2022-01-03", periods=800)
+    rng = np.random.default_rng(3)
+
+    # Perfectly correlated: four copies of one series is ~1 independent bet.
+    base = rng.normal(0.0, 0.01, 800)
+    perf = pd.DataFrame({f"A{i}": base for i in range(4)}, index=idx)
+    assert abs(effective_breadth(perf) - 1.0) < 1e-6
+
+    # Independent draws: close to all N bets (sample correlation noise only,
+    # and the [0, 1) clamp means breadth can never exceed N).
+    uncorr = pd.DataFrame(rng.normal(0.0, 0.01, size=(800, 4)),
+                          index=idx, columns=[f"B{i}" for i in range(4)])
+    be = effective_breadth(uncorr)
+    assert 3.3 <= be <= 4.0 + 1e-9
+
+    # Single asset: trivially one bet.
+    assert effective_breadth(perf[["A0"]]) == 1.0
+
+
 if __name__ == "__main__":
     import sys
 

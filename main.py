@@ -33,6 +33,10 @@ from src.liquidity import days_to_liquidate, liquidity_profile
 from src.grit import grit_scores, MIN_HISTORY_DAYS
 from src.security_master import security_master
 from src.data_quality import validate_prices
+from src.signals import (
+    momentum_signal, forward_returns, daily_ic, ic_summary,
+    fundamental_law_ir, effective_breadth,
+)
 
 st.set_page_config(page_title="Meleona", layout="centered")
 
@@ -687,9 +691,9 @@ st.caption(
 
 # ---- Supporting depth: one tab at a time, not stacked accordions ----
 (tab_3d, tab_breakdown, tab_grit, tab_liquidity,
- tab_secmaster, tab_dq, tab_lineage) = st.tabs([
+ tab_secmaster, tab_dq, tab_lineage, tab_signals) = st.tabs([
     "3D Distribution", "Risk Breakdown", "Grit Zone", "Liquidity",
-    "Security Master", "Data Quality", "Lineage & Audit",
+    "Security Master", "Data Quality", "Lineage & Audit", "Signal Lab",
 ])
 
 with tab_3d:
@@ -989,3 +993,101 @@ with tab_lineage:
         "the scale this engine actually operates at."
     )
     st.dataframe(pd.DataFrame(audit_log), width="stretch", hide_index=True)
+
+# ---- Signal Lab: does a simple signal actually carry information? ----
+with tab_signals:
+    st.caption(
+        "The information coefficient (IC) is the daily cross-sectional Spearman "
+        "rank correlation between a signal's ranking of this universe and the "
+        "forward returns that actually followed. Demo signal: 60-day momentum "
+        "skipping the most recent 5 days (to avoid short-term reversal), scored "
+        "against 5-day forward returns — computed from the same live price "
+        "history as everything above."
+    )
+    try:
+        SIG_HORIZON = 5
+        ic = daily_ic(momentum_signal(prices),
+                      forward_returns(prices, horizon=SIG_HORIZON))
+        summ = ic_summary(ic)
+
+        if summ["n_days"] < 30 or not np.isfinite(summ["t_stat"]):
+            st.caption(
+                "Not enough overlapping history in this universe to evaluate "
+                f"the signal ({summ['n_days']} usable days — need at least 30)."
+            )
+        else:
+            i1, i2, i3, i4 = st.columns(4)
+            i1.metric("Mean daily IC", f"{summ['mean_ic']:+.3f}")
+            i2.metric("t-statistic", f"{summ['t_stat']:.2f}")
+            i3.metric("Hit rate (IC > 0)", f"{summ['hit_rate']:.0%}")
+            i4.metric("Days scored", f"{summ['n_days']}")
+
+            t = summ["t_stat"]
+            if t >= 3:
+                bar_txt = ("clears both the textbook t > 2 bar and the stricter "
+                           "t > 3 multiple-testing bar of Harvey, Liu & Zhu (2016)")
+            elif t >= 2:
+                bar_txt = ("clears the textbook t > 2 bar but NOT the t > 3 bar "
+                           "Harvey, Liu & Zhu (2016) argue for once you account "
+                           "for the thousands of signals the industry has already "
+                           "tested — by that stricter standard, unproven")
+            else:
+                bar_txt = ("clears neither the textbook t > 2 bar nor the "
+                           "stricter t > 3 multiple-testing bar of Harvey, Liu "
+                           "& Zhu (2016) — statistically indistinguishable from "
+                           "no skill on this sample")
+            st.caption(
+                f"In-sample, this momentum signal's mean IC of "
+                f"{summ['mean_ic']:+.3f} (t = {t:.2f}) **{bar_txt}**."
+            )
+
+            roll = ic.rolling(63).mean()
+            ic_fig = go.Figure()
+            ic_fig.add_trace(go.Scatter(
+                x=ic.index, y=ic.values, mode="lines", name="daily IC",
+                line=dict(color="#CBBB94", width=1),
+                hovertemplate="%{x|%b %d, %Y}: IC %{y:+.2f}<extra>daily</extra>"))
+            ic_fig.add_trace(go.Scatter(
+                x=roll.index, y=roll.values, mode="lines", name="63-day mean",
+                line=dict(color=BRONZE_DK, width=2.2),
+                hovertemplate="%{x|%b %d, %Y}: %{y:+.3f}<extra>63-day mean</extra>"))
+            ic_fig.add_hline(y=0, line=dict(color=AXIS_LINE, width=1, dash="dot"))
+            ic_fig = _style_fig(ic_fig, height=280)
+            ic_fig.update_layout(
+                yaxis_title="Spearman IC", showlegend=True,
+                legend=dict(orientation="h", y=1.14, x=0, font=dict(size=11)))
+            st.plotly_chart(ic_fig, width="stretch", config=PLOTLY_CFG)
+            st.caption(
+                "Daily IC is noisy by nature — the 63-day rolling mean is the "
+                "signal's actual pulse. Above zero: the ranking carried "
+                "information that quarter; below: it was actively wrong."
+            )
+
+            st.markdown("###### Grinold's fundamental law: IR = IC × √breadth")
+            rebalances = 252 / SIG_HORIZON
+            raw_breadth = len(loaded) * rebalances
+            n_eff = effective_breadth(returns)
+            eff_breadth = n_eff * rebalances
+            g1, g2 = st.columns(2)
+            g1.metric(f"IR at raw breadth ({raw_breadth:.0f} bets/yr)",
+                      f"{fundamental_law_ir(summ['mean_ic'], raw_breadth):.2f}")
+            g2.metric(f"IR at effective breadth ({eff_breadth:.0f} bets/yr)",
+                      f"{fundamental_law_ir(summ['mean_ic'], eff_breadth):.2f}")
+            st.caption(
+                f"Raw breadth counts {len(loaded)} names × {rebalances:.0f} "
+                f"rebalances a year as independent bets, but average pairwise "
+                f"correlation collapses these {len(loaded)} names to about "
+                f"**{n_eff:.1f} independent bets** — correlated stocks are "
+                f"largely the same bet taken twice, so the honest IR is the "
+                f"smaller one."
+            )
+
+            st.caption(
+                "*Disclosures: everything here is IN-SAMPLE on the loaded "
+                "history — the signal is scored on the same data used to "
+                "evaluate it. Momentum is a demo signal, not a recommendation. "
+                "No transaction costs or market impact. Published signals decay "
+                "out of sample. Educational analysis, not investment advice.*"
+            )
+    except Exception as exc:  # noqa: BLE001
+        st.caption(f"Signal Lab unavailable: {exc}")
