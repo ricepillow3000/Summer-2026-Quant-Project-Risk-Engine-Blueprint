@@ -460,6 +460,67 @@ def test_signal_effective_breadth_correlation_adjusted():
     assert effective_breadth(perf[["A0"]]) == 1.0
 
 
+from src.regimes import (
+    rolling_windows, wasserstein_distance_1d, wasserstein_kmeans,
+    regime_stats, vol_ordered_labels, transition_matrix,
+)
+
+
+def test_regime_wasserstein_hand_worked():
+    """W2 of sorted [0,1] vs [1,2] is exactly 1 (every quantile shifts by 1)."""
+    assert abs(wasserstein_distance_1d(np.array([0.0, 1.0]),
+                                       np.array([1.0, 2.0])) - 1.0) < 1e-12
+    # and against itself, exactly zero
+    a = np.sort(np.random.default_rng(0).normal(size=20))
+    assert wasserstein_distance_1d(a, a) == 0.0
+
+
+def test_regime_kmeans_separates_synthetic_regimes():
+    """Calm half N(0, 0.005) vs turbulent half N(0, 0.03): k=2 recovers the split."""
+    rng = np.random.default_rng(7)
+    idx = pd.bdate_range("2020-01-01", periods=800)
+    r = pd.Series(np.concatenate([rng.normal(0, 0.005, 400),
+                                  rng.normal(0, 0.03, 400)]), index=idx)
+    Q, ends = rolling_windows(r, window=20, step=5)
+    labels = vol_ordered_labels(Q, wasserstein_kmeans(Q, k=2)[0])
+    # windows fully inside each half (skip the straddle zone around index 400)
+    calm = labels[ends <= idx[380]]
+    wild = labels[ends >= idx[420]]
+    assert (calm == 0).mean() > 0.9, "calm half should be regime 0"
+    assert (wild == 1).mean() > 0.9, "turbulent half should be regime 1"
+
+
+def test_regime_stats_vol_ordered():
+    rng = np.random.default_rng(11)
+    idx = pd.bdate_range("2020-01-01", periods=900)
+    r = pd.Series(np.concatenate([rng.normal(0, 0.004, 300),
+                                  rng.normal(0, 0.015, 300),
+                                  rng.normal(0, 0.04, 300)]), index=idx)
+    Q, _ = rolling_windows(r)
+    labels = wasserstein_kmeans(Q, k=3)[0]
+    stats = regime_stats(Q, labels)
+    vols = [s["ann_vol"] for s in stats]
+    assert vols == sorted(vols), "regime_stats must be vol-ordered ascending"
+    assert all(s["cvar_95"] >= 0 for s in stats), "cvar reported as positive loss"
+
+
+def test_regime_transition_matrix_rows_sum_to_one():
+    labels = np.array([0, 0, 1, 1, 2, 1, 0, 2, 2, 0])
+    P = transition_matrix(labels, 3)
+    assert P.shape == (3, 3)
+    assert np.allclose(P.sum(axis=1), 1.0)
+
+
+def test_regime_kmeans_deterministic():
+    rng = np.random.default_rng(5)
+    idx = pd.bdate_range("2021-01-01", periods=500)
+    r = pd.Series(rng.normal(0, 0.01, 500), index=idx)
+    Q, _ = rolling_windows(r)
+    l1 = wasserstein_kmeans(Q, k=3, seed=42)[0]
+    l2 = wasserstein_kmeans(Q, k=3, seed=42)[0]
+    assert (l1 == l2).all()
+
+
 if __name__ == "__main__":
     import sys
 

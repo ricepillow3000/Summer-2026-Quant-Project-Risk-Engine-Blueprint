@@ -33,6 +33,10 @@ from src.liquidity import days_to_liquidate, liquidity_profile
 from src.grit import grit_scores, MIN_HISTORY_DAYS
 from src.security_master import security_master
 from src.data_quality import validate_prices
+from src.regimes import (
+    rolling_windows, wasserstein_kmeans, vol_ordered_labels,
+    regime_stats, transition_matrix,
+)
 from src.signals import (
     momentum_signal, forward_returns, daily_ic, ic_summary,
     fundamental_law_ir, effective_breadth,
@@ -691,9 +695,10 @@ st.caption(
 
 # ---- Supporting depth: one tab at a time, not stacked accordions ----
 (tab_3d, tab_breakdown, tab_grit, tab_liquidity,
- tab_secmaster, tab_dq, tab_lineage, tab_signals) = st.tabs([
+ tab_secmaster, tab_dq, tab_lineage, tab_signals, tab_regimes) = st.tabs([
     "3D Distribution", "Risk Breakdown", "Grit Zone", "Liquidity",
     "Security Master", "Data Quality", "Lineage & Audit", "Signal Lab",
+    "Regime Atlas",
 ])
 
 with tab_3d:
@@ -1062,7 +1067,95 @@ with tab_signals:
                 "signal's actual pulse. Above zero: the ranking carried "
                 "information that quarter; below: it was actively wrong."
             )
+    except Exception as exc:  # noqa: BLE001
+        st.caption(f"Signal Lab unavailable: {exc}")
 
+# ---- Regime Atlas: Wasserstein k-means on full return distributions ----
+with tab_regimes:
+    st.caption(
+        "Reproduces Horvath, Issa & Muguruza (2021), *Clustering Market "
+        "Regimes using the Wasserstein Distance*: every 20-day window of this "
+        "portfolio's daily returns becomes an empirical distribution, and "
+        "k-means clusters those whole distributions (via the 1-D optimal-"
+        "transport closed form) rather than summary features — so regimes "
+        "that share volatility but differ in tails or skew still separate."
+    )
+    try:
+        REG_WINDOW, REG_STEP = 20, 5
+        k_reg = st.selectbox("Number of regimes (k)", [2, 3, 4], index=1)
+        Q_reg, reg_ends = rolling_windows(port_returns,
+                                          window=REG_WINDOW, step=REG_STEP)
+        if Q_reg.shape[0] < max(30, k_reg * 5):
+            st.caption(
+                f"Not enough portfolio history to cluster regimes "
+                f"({Q_reg.shape[0]} windows — need at least {max(30, k_reg * 5)})."
+            )
+        else:
+            reg_labels = vol_ordered_labels(
+                Q_reg, wasserstein_kmeans(Q_reg, k=k_reg)[0])
+            reg_rows = regime_stats(Q_reg, reg_labels)
+            cur = reg_rows[int(reg_labels[-1])]
+            REGIME_WORDS = {2: ["calm", "turbulent"],
+                            3: ["calm", "transitional", "turbulent"],
+                            4: ["calm", "mild", "stressed", "turbulent"]}
+            word = REGIME_WORDS[k_reg][cur["label"]]
+            r1, r2, r3 = st.columns(3)
+            r1.metric("Current regime",
+                      f"{cur['label'] + 1} of {k_reg} — {word}")
+            r2.metric("Regime ann. vol", f"{cur['ann_vol']:.1%}")
+            r3.metric("Regime CVaR (95%)", f"{cur['cvar_95']:.2%}")
+
+            # regime timeline: one dot per window end-date, shaded by regime
+            REG_COLORS = ["#CBBB94", "#B8946A", "#8A6A3C", "#5A4526"][:k_reg]
+            reg_fig = go.Figure()
+            for j in range(k_reg):
+                mask = reg_labels == j
+                reg_fig.add_trace(go.Scatter(
+                    x=reg_ends[mask], y=reg_labels[mask] + 1, mode="markers",
+                    name=f"regime {j + 1} ({REGIME_WORDS[k_reg][j]})",
+                    marker=dict(color=REG_COLORS[j], size=7, symbol="square"),
+                    hovertemplate="%{x|%b %d, %Y}<extra>regime "
+                                  f"{j + 1}</extra>"))
+            reg_fig = _style_fig(reg_fig, height=220)
+            reg_fig.update_layout(
+                yaxis=dict(title="regime", dtick=1,
+                           range=[0.5, k_reg + 0.5]),
+                showlegend=True,
+                legend=dict(orientation="h", y=1.2, x=0, font=dict(size=11)))
+            st.plotly_chart(reg_fig, width="stretch", config=PLOTLY_CFG)
+
+            reg_table = pd.DataFrame(reg_rows).set_index("label")
+            reg_table.index = [f"regime {i + 1}" for i in reg_table.index]
+            reg_table.columns = ["windows", "ann. vol", "mean daily",
+                                 "skew", "CVaR 95%"]
+            st.dataframe(reg_table.style.format({
+                "ann. vol": "{:.1%}", "mean daily": "{:+.4%}",
+                "skew": "{:+.2f}", "CVaR 95%": "{:.2%}"}),
+                width="stretch")
+
+            P_reg = transition_matrix(reg_labels, k_reg)
+            pt = pd.DataFrame(
+                P_reg,
+                index=[f"from {i + 1}" for i in range(k_reg)],
+                columns=[f"to {i + 1}" for i in range(k_reg)])
+            st.dataframe(pt.style.format("{:.0%}"), width="stretch")
+            stay = float(np.mean(np.diag(P_reg)))
+            st.caption(
+                f"Transition matrix, estimated from consecutive windows: "
+                f"regimes are sticky — on average a {stay:.0%} chance the "
+                f"next window stays in the current regime. Labels are "
+                f"in-sample statistical clusters over {Q_reg.shape[0]} "
+                f"windows ({REG_WINDOW}-day, step {REG_STEP}), ordered "
+                f"calm→turbulent by volatility; k is a user choice, not "
+                f"estimated. Educational reproduction of published research, "
+                f"not investment advice."
+            )
+    except Exception as exc:  # graceful, like the other tabs
+        st.caption(f"Regime Atlas unavailable for this universe: {exc}")
+
+with tab_signals:
+    try:
+        if 'summ' in dir() and summ["n_days"] >= 30 and np.isfinite(summ["t_stat"]):
             st.markdown("###### Grinold's fundamental law: IR = IC × √breadth")
             rebalances = 252 / SIG_HORIZON
             raw_breadth = len(loaded) * rebalances
