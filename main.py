@@ -1067,6 +1067,33 @@ with tab_signals:
                 "signal's actual pulse. Above zero: the ranking carried "
                 "information that quarter; below: it was actively wrong."
             )
+
+            st.markdown("###### Grinold's fundamental law: IR = IC × √breadth")
+            rebalances = 252 / SIG_HORIZON
+            raw_breadth = len(loaded) * rebalances
+            n_eff = effective_breadth(returns)
+            eff_breadth = n_eff * rebalances
+            g1, g2 = st.columns(2)
+            g1.metric(f"IR at raw breadth ({raw_breadth:.0f} bets/yr)",
+                      f"{fundamental_law_ir(summ['mean_ic'], raw_breadth):.2f}")
+            g2.metric(f"IR at effective breadth ({eff_breadth:.0f} bets/yr)",
+                      f"{fundamental_law_ir(summ['mean_ic'], eff_breadth):.2f}")
+            st.caption(
+                f"Raw breadth counts {len(loaded)} names × {rebalances:.0f} "
+                f"rebalances a year as independent bets, but average pairwise "
+                f"correlation collapses these {len(loaded)} names to about "
+                f"**{n_eff:.1f} independent bets** — correlated stocks are "
+                f"largely the same bet taken twice, so the honest IR is the "
+                f"smaller one."
+            )
+
+            st.caption(
+                "*Disclosures: everything here is IN-SAMPLE on the loaded "
+                "history — the signal is scored on the same data used to "
+                "evaluate it. Momentum is a demo signal, not a recommendation. "
+                "No transaction costs or market impact. Published signals decay "
+                "out of sample. Educational analysis, not investment advice.*"
+            )
     except Exception as exc:  # noqa: BLE001
         st.caption(f"Signal Lab unavailable: {exc}")
 
@@ -1152,35 +1179,3 @@ with tab_regimes:
             )
     except Exception as exc:  # graceful, like the other tabs
         st.caption(f"Regime Atlas unavailable for this universe: {exc}")
-
-with tab_signals:
-    try:
-        if 'summ' in dir() and summ["n_days"] >= 30 and np.isfinite(summ["t_stat"]):
-            st.markdown("###### Grinold's fundamental law: IR = IC × √breadth")
-            rebalances = 252 / SIG_HORIZON
-            raw_breadth = len(loaded) * rebalances
-            n_eff = effective_breadth(returns)
-            eff_breadth = n_eff * rebalances
-            g1, g2 = st.columns(2)
-            g1.metric(f"IR at raw breadth ({raw_breadth:.0f} bets/yr)",
-                      f"{fundamental_law_ir(summ['mean_ic'], raw_breadth):.2f}")
-            g2.metric(f"IR at effective breadth ({eff_breadth:.0f} bets/yr)",
-                      f"{fundamental_law_ir(summ['mean_ic'], eff_breadth):.2f}")
-            st.caption(
-                f"Raw breadth counts {len(loaded)} names × {rebalances:.0f} "
-                f"rebalances a year as independent bets, but average pairwise "
-                f"correlation collapses these {len(loaded)} names to about "
-                f"**{n_eff:.1f} independent bets** — correlated stocks are "
-                f"largely the same bet taken twice, so the honest IR is the "
-                f"smaller one."
-            )
-
-            st.caption(
-                "*Disclosures: everything here is IN-SAMPLE on the loaded "
-                "history — the signal is scored on the same data used to "
-                "evaluate it. Momentum is a demo signal, not a recommendation. "
-                "No transaction costs or market impact. Published signals decay "
-                "out of sample. Educational analysis, not investment advice.*"
-            )
-    except Exception as exc:  # noqa: BLE001
-        st.caption(f"Signal Lab unavailable: {exc}")
