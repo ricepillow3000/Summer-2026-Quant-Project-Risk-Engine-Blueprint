@@ -217,6 +217,14 @@ html { scroll-behavior: smooth; }
     line-height: 1.6; }
 .read-me b { color: #3F3B35; font-weight: 400; }
 
+/* Ruled panel header inside a tab — the lintel over each block */
+.panel-head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+    border-top: 1px solid #C4BDAE; padding-top: 13px; margin: 34px 0 14px; }
+.panel-head .t { font-family: 'Helvetica Neue', sans-serif; font-size: 11.5px;
+    letter-spacing: 0.2em; text-transform: uppercase; color: #3F3B35;
+    white-space: nowrap; }
+.panel-head .s { font-size: 13px; color: #8A8172; line-height: 1.5; }
+
 /* Charts glide in with the panel instead of popping */
 [data-testid="stPlotlyChart"], [data-testid="stIFrame"] {
     animation: panel-settle .5s cubic-bezier(.16,1,.3,1) both;
@@ -434,7 +442,8 @@ def living_surface_html(density: dict, height: int = 520, n_particles: int = 220
       window.addEventListener('mouseup', resume);
       window.addEventListener('touchend', resume);
 
-      setInterval(function() {{
+      /* One animation step: drift the particles, ease the camera round. */
+      const step = function() {{
         t += 1;
         const n = data.px.length;
         const nx = new Array(n), ny = new Array(n), nz = new Array(n);
@@ -451,11 +460,55 @@ def living_surface_html(density: dict, height: int = 520, n_particles: int = 220
             'scene.camera.eye.y': 1.6 * Math.sin(angle),
           }});
         }}
-      }}, 150);
+      }};
+
+      /* Only animate while this scene is actually on screen. Streamlit keeps
+         inactive tab panels mounted, so an ungated interval would repaint the
+         surface forever on every other tab — burning CPU and never letting the
+         renderer idle. Gate on both intersection and page visibility. */
+      /* Respect the OS reduced-motion setting — draw once, hold still. This is
+         a hard gate, checked inside shouldRun, because the IntersectionObserver
+         callback fires asynchronously and would otherwise restart the loop. */
+      const reduced = !!(window.matchMedia &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+      let timer = null;
+      const running = () => timer !== null;
+      const start = function() {{ if (!running()) timer = setInterval(step, 150); }};
+      const stop = function() {{ if (running()) {{ clearInterval(timer); timer = null; }} }};
+      const shouldRun = function(visible) {{
+        (!reduced && visible && document.visibilityState === 'visible') ? start() : stop();
+      }};
+
+      if ('IntersectionObserver' in window) {{
+        new IntersectionObserver(function(entries) {{
+          shouldRun(entries[0].isIntersecting);
+        }}, {{ threshold: 0 }}).observe(gd);
+      }} else {{
+        shouldRun(true);   /* no observer support: run whenever page is visible */
+      }}
+      document.addEventListener('visibilitychange', function() {{
+        shouldRun(gd.getBoundingClientRect().height > 0);
+      }});
     }});
 }})();
 </script>
 """
+
+
+def panel_head(title: str, subtitle: str = "") -> None:
+    """Ruled section lintel inside a tab — replaces bare `###### ` markdown
+    headers so every block reads as a titled stone panel, not a run-on wall."""
+    sub = f'<span class="s">{subtitle}</span>' if subtitle else ""
+    st.markdown(f'<div class="panel-head"><span class="t">{title}</span>{sub}</div>',
+                unsafe_allow_html=True)
+
+
+def read_me(html: str) -> None:
+    """Plain-language 'how to read this' block under a chart. Bold key words
+    with <b>…</b>. Keeps the honest, defensible captions but makes the
+    explanation impossible to miss."""
+    st.markdown(f'<div class="read-me">{html}</div>', unsafe_allow_html=True)
 
 
 def outcome_hist(total_returns, cvar: float):
@@ -848,7 +901,7 @@ with tab_breakdown:
     )
 
     # --- Risk-contribution decomposition (where the risk actually lives) ---
-    st.markdown("###### Risk contribution by asset")
+    panel_head("Risk contribution by asset", "Where the risk actually lives")
     rc = risk_contributions(weights, cov)
     rc_fig = go.Figure()
     rc_fig.add_trace(go.Bar(
@@ -871,7 +924,11 @@ with tab_breakdown:
         "switch Allocation to Risk parity to flatten these bars."
     )
 
-    st.markdown("###### Correlation matrix")
+    panel_head("Correlation matrix", "Do these names move together?")
+    read_me(
+        "Each cell is how tightly two names move together, from <b>0</b> (independent) "
+        "to <b>1</b> (lockstep). <b>Darker = more correlated.</b> A book full of dark "
+        "cells has little real diversification — everything falls at once.")
     corr = correlation_matrix(shocked_returns)
 
     def beige_scale(val):
@@ -882,7 +939,8 @@ with tab_breakdown:
 
     st.dataframe(corr.style.format("{:.2f}").map(beige_scale))
 
-    st.markdown("###### Distribution of simulated 1-year outcomes")
+    panel_head("Distribution of simulated 1-year outcomes",
+               "Every simulated year, sorted into buckets")
     st.plotly_chart(outcome_hist(mc["total_returns"], mc["cvar"]),
                     width="stretch", config=PLOTLY_CFG)
     if mc.get("engine") == "jump-diffusion":
@@ -896,7 +954,7 @@ with tab_breakdown:
         )
 
     # --- VaR methods + backtest (validates the model, not just reports it) ---
-    st.markdown("###### Value at Risk — methods & backtest")
+    panel_head("Value at Risk — methods & backtest", "The daily loss line, and whether it holds up")
     hist_var = float(-np.percentile(port_returns, 5))
     bt = var_backtest(port_returns)
     v1, v2, v3 = st.columns(3)
@@ -911,7 +969,7 @@ with tab_breakdown:
     )
 
     # --- Named factor exposures ---
-    st.markdown("###### Factor exposures")
+    panel_head("Factor exposures", "What systematic bets is this book taking?")
     try:
         fx = factor_exposures(port_returns)
         st.plotly_chart(hbar(pd.Series(fx["betas"]), color=BRONZE, title_x="beta"),
@@ -968,7 +1026,7 @@ with tab_grit:
                 f"{g['n_regimes_survived']:.0f} of the named crisis windows above."
             )
 
-            st.markdown("###### Grit breakdown: recovery, consistency, resilience")
+            panel_head("Grit breakdown", "Recovery · consistency · resilience")
             st.plotly_chart(grit_breakdown_fig(gscores), width="stretch", config=PLOTLY_CFG)
             st.caption(
                 "Recovery: speed and completeness of clawing back from its own "
@@ -1103,7 +1161,7 @@ with tab_lineage:
     else:
         st.caption("Provenance record appears after the first live fetch.")
 
-    st.markdown("###### This run's audit trail")
+    panel_head("This run's audit trail", "Every step this session actually took, in order")
     st.caption(
         "Every step this run took, in order — session-scoped (rebuilt fresh "
         "each rerun, not persisted across sessions). A full compliance system "
@@ -1181,7 +1239,7 @@ with tab_signals:
                 "information that quarter; below: it was actively wrong."
             )
 
-            st.markdown("###### Grinold's fundamental law: IR = IC × √breadth")
+            panel_head("Grinold's fundamental law", "IR = IC × √breadth")
             rebalances = 252 / SIG_HORIZON
             raw_breadth = len(loaded) * rebalances
             n_eff = effective_breadth(returns)
