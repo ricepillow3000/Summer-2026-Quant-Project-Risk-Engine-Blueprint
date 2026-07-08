@@ -155,13 +155,89 @@ html { scroll-behavior: smooth; }
 .section-divider { border: none; border-top: 1px solid #C4BDAE; margin: 8px 0 36px; }
 .engine-heading { text-align: left; padding: 4px 0 22px; }
 
-/* Tabs — flat editorial rule, bronze underline on active */
-[data-testid="stTabs"] [data-baseweb="tab-list"] { gap: 2px;
-    border-bottom: 1px solid #C4BDAE; }
-[data-testid="stTabs"] [data-baseweb="tab"] { font-family: 'Helvetica Neue', sans-serif;
-    font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; color: #8A7E6A; }
-[data-testid="stTabs"] [aria-selected="true"] { color: #3F3B35 !important;
-    border-bottom: 2px solid #9A7B4F !important; }
+/* ============================================================
+   TABS — "the gatehouse". Each label is a stone lintel: generous
+   breathing room, wide tracking, a bronze rule that slides in.
+   The previous rule tracked the type but gave it NO horizontal
+   padding, so uppercase labels collided into one another.
+   ============================================================ */
+[data-testid="stTabs"] [data-baseweb="tab-list"] {
+    gap: 4px; border-bottom: 1px solid #C4BDAE;
+    overflow-x: auto; scrollbar-width: none; }
+[data-testid="stTabs"] [data-baseweb="tab-list"]::-webkit-scrollbar { display: none; }
+[data-testid="stTabs"] [data-baseweb="tab"] {
+    font-family: 'Helvetica Neue', sans-serif;
+    font-size: 11.5px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: #8A7E6A; white-space: nowrap;             /* never wrap a label */
+    padding: 15px 26px !important;                    /* the missing air */
+    background: transparent; position: relative;
+    transition: color .28s ease, background .28s ease; }
+[data-testid="stTabs"] [data-baseweb="tab"] * { letter-spacing: inherit; }
+[data-testid="stTabs"] [data-baseweb="tab"]:hover {
+    color: #3F3B35; background: rgba(154,123,79,0.06); }
+/* bronze rule grows from the centre — no jump, no flash */
+[data-testid="stTabs"] [data-baseweb="tab"]::after {
+    content: ''; position: absolute; left: 50%; right: 50%; bottom: -1px;
+    height: 2px; background: #9A7B4F;
+    transition: left .3s cubic-bezier(.16,1,.3,1), right .3s cubic-bezier(.16,1,.3,1); }
+[data-testid="stTabs"] [aria-selected="true"] { color: #3F3B35 !important; }
+[data-testid="stTabs"] [aria-selected="true"]::after { left: 0; right: 0; }
+[data-testid="stTabs"] [data-baseweb="tab-highlight"] { display: none; }
+
+/* Panel swap: content settles in rather than snapping */
+@keyframes panel-settle {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); } }
+[data-testid="stTabs"] [data-baseweb="tab-panel"] {
+    animation: panel-settle .42s cubic-bezier(.16,1,.3,1) both;
+    padding-top: 22px; }
+
+/* ============================================================
+   THE KEEP — stone-slab surfaces. Sharp corners, hairline mortar,
+   one soft shadow so a panel reads as a cut block, not a web card.
+   Same palette; only the structure is new.
+   ============================================================ */
+.slab { background: #F1EDE5; border: 1px solid #D4CDBF;
+    border-top: 2px solid #9A7B4F; padding: 22px 24px 18px; height: 100%;
+    box-shadow: 0 1px 2px rgba(63,59,53,.05), 0 8px 24px -18px rgba(63,59,53,.35);
+    transition: transform .3s cubic-bezier(.16,1,.3,1),
+                box-shadow .3s ease, border-color .3s ease; }
+.slab:hover { transform: translateY(-2px); border-color: #9A7B4F;
+    box-shadow: 0 2px 4px rgba(63,59,53,.06), 0 16px 34px -20px rgba(63,59,53,.45); }
+.slab-label { font-family: 'Helvetica Neue', sans-serif; font-size: 10.5px;
+    letter-spacing: 0.2em; text-transform: uppercase; color: #9A7B4F;
+    margin-bottom: 10px; }
+.slab-num { font-size: 40px; color: #3F3B35; line-height: 1;
+    letter-spacing: -0.03em; margin-bottom: 6px; }
+.slab-note { font-size: 13px; color: #6B6459; line-height: 1.55; }
+
+/* Plain-language read-out under every chart: what am I looking at? */
+.read-me { border-left: 2px solid #9A7B4F; background: rgba(154,123,79,0.05);
+    padding: 12px 16px; margin: 10px 0 4px; font-size: 14px; color: #524E47;
+    line-height: 1.6; }
+.read-me b { color: #3F3B35; font-weight: 400; }
+
+/* Charts glide in with the panel instead of popping */
+[data-testid="stPlotlyChart"], [data-testid="stIFrame"] {
+    animation: panel-settle .5s cubic-bezier(.16,1,.3,1) both;
+    animation-delay: .06s; }
+
+/* Metric slabs pick up the same masonry */
+[data-testid="stMetric"] { background: #F1EDE5; border: 1px solid #D4CDBF;
+    border-top: 2px solid #9A7B4F; padding: 16px 18px 12px;
+    transition: transform .3s cubic-bezier(.16,1,.3,1), border-color .3s ease; }
+[data-testid="stMetric"]:hover { transform: translateY(-2px); border-color: #9A7B4F; }
+
+/* Buttons: cut stone, bronze on press */
+.stButton>button { font-family: 'Helvetica Neue', sans-serif; font-size: 11.5px;
+    letter-spacing: 0.16em; text-transform: uppercase; border: 1px solid #C4BDAE;
+    background: #F1EDE5; color: #3F3B35;
+    transition: background .25s ease, border-color .25s ease, letter-spacing .25s ease; }
+.stButton>button:hover { background: #3F3B35; color: #F4F1EA;
+    border-color: #3F3B35; letter-spacing: 0.2em; }
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::after { animation: none !important; transition: none !important; } }
 </style>
 """, unsafe_allow_html=True)
 
@@ -196,27 +272,54 @@ def _style_fig(fig, height: int = 300):
 
 
 def fan_chart(bands: dict):
-    """Monte Carlo outcome cone: median path + 25–75 and 5–95 percentile bands."""
+    """
+    Monte Carlo outcome cone, rendered as a wind-tunnel envelope: median path
+    + 25–75 and 5–95 percentile bands.
+
+    Rendering note: the percentile paths are drawn as splines. Every plotted
+    point is a real computed percentile from the simulation — the spline only
+    interpolates *between* those points instead of connecting them with jagged
+    straight segments. Hover reports the true underlying value, so nothing is
+    smoothed away from the numbers themselves; only the ink between them.
+    """
     d = bands["days"]
 
     def p(a):
         return np.asarray(a) * 100.0
 
+    # One curve style for every edge of the cone — laminar, not stair-stepped.
+    edge = dict(width=0, shape="spline", smoothing=1.0)
+
     fig = go.Figure()
     # Outer 5–95 cone (draw upper first, then lower with fill-to-previous)
-    fig.add_trace(go.Scatter(x=d, y=p(bands["p95"]), line=dict(width=0), hoverinfo="skip"))
+    fig.add_trace(go.Scatter(x=d, y=p(bands["p95"]), line=edge, hoverinfo="skip"))
     fig.add_trace(go.Scatter(x=d, y=p(bands["p5"]), fill="tonexty", fillcolor=BAND_OUTER,
-                             line=dict(width=0), hoverinfo="skip"))
+                             line=edge, hoverinfo="skip"))
     # Inner 25–75 cone
-    fig.add_trace(go.Scatter(x=d, y=p(bands["p75"]), line=dict(width=0), hoverinfo="skip"))
+    fig.add_trace(go.Scatter(x=d, y=p(bands["p75"]), line=edge, hoverinfo="skip"))
     fig.add_trace(go.Scatter(x=d, y=p(bands["p25"]), fill="tonexty", fillcolor=BAND_INNER,
-                             line=dict(width=0), hoverinfo="skip"))
-    # Median path
-    fig.add_trace(go.Scatter(x=d, y=p(bands["p50"]), line=dict(color=CHARCOAL, width=2.2),
-                             hovertemplate="Day %{x}: %{y:.1f}%<extra>median</extra>"))
+                             line=edge, hoverinfo="skip"))
+    # Hairline edges trace the envelope — the silhouette of the airflow
+    for key in ("p95", "p5"):
+        fig.add_trace(go.Scatter(x=d, y=p(bands[key]), hoverinfo="skip",
+                                 line=dict(color="rgba(154,123,79,0.45)", width=1,
+                                           shape="spline", smoothing=1.0)))
+    # Median path — the centreline, drawn last so it sits on top
+    fig.add_trace(go.Scatter(
+        x=d, y=p(bands["p50"]), name="median",
+        line=dict(color=CHARCOAL, width=2.4, shape="spline", smoothing=1.0),
+        hovertemplate="Day %{x}<br><b>%{y:.1f}%</b> median<extra></extra>"))
     fig.add_hline(y=0, line=dict(color=AXIS_LINE, width=1, dash="dot"))
-    fig.update_layout(xaxis_title="Trading days", yaxis_title="Cumulative return (%)")
-    return _style_fig(fig, height=300)
+    fig.update_layout(
+        xaxis_title="Trading days", yaxis_title="Cumulative return (%)",
+        hovermode="x unified",                 # one clean readout, not five
+        transition=dict(duration=420, easing="cubic-in-out"),
+    )
+    fig = _style_fig(fig, height=340)
+    # Aerodynamic axes: no tick spikes, breathing gridlines only
+    fig.update_xaxes(ticks="", showspikes=False)
+    fig.update_yaxes(ticks="", ticksuffix="%")
+    return fig
 
 
 def surface_chart(density: dict):
@@ -687,10 +790,20 @@ st.markdown(f"""
 
 # ---- Hero visual: the cone of simulated outcomes ----
 st.plotly_chart(fan_chart(mc["path_bands"]), width="stretch", config=PLOTLY_CFG)
+st.markdown(
+    '<div class="read-me">'
+    '<b>How to read this.</b> Time runs left to right — one year of trading days. '
+    'The dark centreline is the <b>middle outcome</b>: half the simulations landed '
+    'above it, half below. The dark inner cone holds the <b>middle 50%</b> of '
+    'outcomes; the pale outer cone holds <b>90%</b>. The cone widens because '
+    'uncertainty compounds the further out you look. Its <b>bottom edge is the '
+    'tail</b> the CVaR headline above measures. Change any setting and watch the '
+    'cone breathe.'
+    '</div>', unsafe_allow_html=True)
 st.caption(
-    "Each simulated path compounds a year of daily returns. The dark line is the "
-    "median outcome; the shaded cones are the 25–75% and 5–95% ranges — the lower "
-    "edge is the tail the CVaR above measures. Change any setting to watch the cone move."
+    "Each simulated path compounds a year of daily returns. Hypothetical "
+    "distribution, not a forecast — the curves interpolate between real computed "
+    "percentiles."
 )
 
 # ---- Supporting depth: one tab at a time, not stacked accordions ----
