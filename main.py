@@ -80,7 +80,7 @@ h1, h2, h3 { color: #3F3B35; font-weight: 400; letter-spacing: -0.01em; }
    bronze hairlines, the one number that owns the page. */
 .verdict-box { background: transparent; border: none;
     border-top: 2px solid #9A7B4F; border-bottom: 1px solid #C4BDAE;
-    padding: 30px 4px 36px; margin: 12px 0 44px; }
+    padding: 26px 4px 30px; margin: 12px 0 30px; }
 .verdict-label { font-family: 'Helvetica Neue', sans-serif; font-size: 11px;
     letter-spacing: 0.22em; text-transform: uppercase; color: #9A7B4F; }
 .verdict-number { font-size: 96px; color: #3F3B35; margin: 8px 0 4px;
@@ -90,7 +90,7 @@ h1, h2, h3 { color: #3F3B35; font-weight: 400; letter-spacing: -0.01em; }
 /* Numbered section eyebrow — editorial ledger markers (01 — UNIVERSE) */
 .sec-mark { font-family: 'Helvetica Neue', sans-serif; font-size: 12px;
     letter-spacing: 0.24em; text-transform: uppercase; color: #9A7B4F;
-    border-top: 1px solid #C4BDAE; padding-top: 14px; margin: 36px 0 14px;
+    border-top: 1px solid #C4BDAE; padding-top: 14px; margin: 26px 0 12px;
     display: flex; align-items: baseline; gap: 12px; }
 .sec-mark b { color: #B7A98E; font-weight: 400; }
 .panel-label { font-family: 'Helvetica Neue', sans-serif; font-size: 11px;
@@ -118,24 +118,59 @@ html { scroll-behavior: smooth; }
 .reveal { animation: meleona-rise linear both;
           animation-timeline: view(); animation-range: entry 0% cover 30%; }
 
-.hero-section { min-height: 88vh; display: flex; flex-direction: column;
+/* HERO — the great hall. Fuller welcome: framed crest, trust badges,
+   a stat lintel row, and a faint watermark crest filling the void on
+   the right. Height trimmed (88vh → 74vh): space earns its keep now. */
+.hero-section { min-height: 74vh; display: flex; flex-direction: column;
     justify-content: center; align-items: flex-start; text-align: left;
-    padding: 56px 8px; gap: 18px; border-bottom: 1px solid #C4BDAE; }
+    padding: 44px 8px 48px; gap: 16px; border-bottom: 1px solid #C4BDAE;
+    position: relative; overflow: hidden; }
+.hero-watermark { position: absolute; right: -4%; top: 50%;
+    transform: translateY(-50%); width: 560px; height: 560px;
+    opacity: 0.055; pointer-events: none; }
+.hero-watermark svg { width: 100%; height: 100%; }
+.hero-crest { width: 132px; height: 132px; padding: 20px;
+    border: 1px solid #C4BDAE; background: rgba(154,123,79,0.05);
+    box-shadow: 0 0 0 1px rgba(154,123,79,.12),
+                0 24px 60px -34px rgba(63,59,53,.55); }
+.hero-crest svg { width: 100%; height: 100%; }
+.hero-badges { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+.badge { font-family: 'Helvetica Neue', sans-serif; font-size: 10px;
+    letter-spacing: 0.18em; text-transform: uppercase; padding: 6px 13px;
+    border: 1px solid #C4BDAE; color: #6B6459; background: rgba(241,237,229,.72);
+    transition: border-color .25s ease, color .25s ease; }
+.badge:hover { border-color: #9A7B4F; color: #3F3B35; }
+.badge.gold { border-color: #9A7B4F; color: #8A6A3C; }
 .hero-eyebrow { font-family: 'Helvetica Neue', sans-serif; font-size: 12px;
     letter-spacing: 0.32em; text-transform: uppercase; color: #9A7B4F; }
 .hero-title { font-size: 96px !important; color: #3F3B35;
     line-height: 0.98 !important; margin: 2px 0; letter-spacing: -0.035em; }
 .hero-sub { font-size: 21px; color: #54504A; max-width: 640px; line-height: 1.6; }
+.hero-stats { display: flex; flex-wrap: wrap; gap: 0; margin-top: 20px;
+    border-top: 1px solid #C4BDAE; }
+.hstat { border-left: 1px solid #C4BDAE; padding: 16px 30px 4px;
+    transition: border-color .3s ease; }
+.hstat:hover { border-left-color: #9A7B4F; }
+.hstat:first-child { border-left: none; padding-left: 4px; }
+.hstat .n { font-size: 36px; color: #3F3B35; line-height: 1.05;
+    letter-spacing: -0.02em; }
+.hstat .l { font-family: 'Helvetica Neue', sans-serif; font-size: 10px;
+    letter-spacing: 0.2em; text-transform: uppercase; color: #9A7B4F;
+    margin-top: 5px; }
 
-/* CTA — sharp charcoal slab, bronze on hover */
+/* CTA — sharp charcoal slab, bronze on hover, alive to the touch */
 .cta-btn { display: inline-block; margin-top: 14px; padding: 15px 34px;
     background: #3F3B35; color: #F4F1EA !important; text-decoration: none !important;
     border-radius: 0; font-family: 'Helvetica Neue', sans-serif; font-size: 12px;
     letter-spacing: 0.16em; text-transform: uppercase;
-    transition: background 0.25s ease, letter-spacing 0.25s ease; }
-.cta-btn:hover { background: #9A7B4F; letter-spacing: 0.2em; }
+    transition: background .25s ease, letter-spacing .25s ease,
+                transform .25s cubic-bezier(.16,1,.3,1), box-shadow .25s ease; }
+.cta-btn:hover { background: #9A7B4F; letter-spacing: 0.2em;
+    transform: translateY(-2px);
+    box-shadow: 0 16px 30px -18px rgba(63,59,53,.6); }
+.cta-btn:active { transform: translateY(0) scale(.985); }
 
-.showcase-section { padding: 96px 8px 64px; text-align: left; display: flex;
+.showcase-section { padding: 56px 8px 44px; text-align: left; display: flex;
     flex-direction: column; align-items: flex-start; gap: 18px; }
 .showcase-eyebrow { font-family: 'Helvetica Neue', sans-serif; font-size: 12px;
     letter-spacing: 0.28em; text-transform: uppercase; color: #9A7B4F; }
@@ -239,16 +274,63 @@ html { scroll-behavior: smooth; }
     transition: transform .3s cubic-bezier(.16,1,.3,1), border-color .3s ease; }
 [data-testid="stMetric"]:hover { transform: translateY(-2px); border-color: #9A7B4F; }
 
-/* Buttons: cut stone, bronze on press */
+/* Buttons: cut stone, bronze on press, alive to the touch */
 .stButton>button { font-family: 'Helvetica Neue', sans-serif; font-size: 11.5px;
     letter-spacing: 0.16em; text-transform: uppercase; border: 1px solid #C4BDAE;
     background: #F1EDE5; color: #3F3B35;
-    transition: background .25s ease, border-color .25s ease, letter-spacing .25s ease; }
+    transition: background .25s ease, border-color .25s ease,
+                letter-spacing .25s ease, transform .25s cubic-bezier(.16,1,.3,1),
+                box-shadow .25s ease; }
 .stButton>button:hover { background: #3F3B35; color: #F4F1EA;
-    border-color: #3F3B35; letter-spacing: 0.2em; }
+    border-color: #3F3B35; letter-spacing: 0.2em; transform: translateY(-1px);
+    box-shadow: 0 10px 22px -14px rgba(63,59,53,.55); }
+.stButton>button:active { transform: translateY(0) scale(.985); }
+
+/* Inputs breathe too: bronze focus, soft glow — nothing snaps */
+div[data-baseweb="select"] > div, .stNumberInput input,
+[data-testid="stTextInput"] input, .stMultiSelect [data-baseweb="select"] > div {
+    transition: border-color .25s ease, box-shadow .25s ease; }
+div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
+.stNumberInput input:focus, [data-testid="stTextInput"] input:focus {
+    box-shadow: 0 0 0 1px #9A7B4F !important; }
+
+/* ============================================================
+   SKELETON LOADING — the scaffold shows before the stone.
+   1) Boot veil: a full-page skeleton of the hero (crest block,
+      title bars, a chart slab) that shimmers, then lifts.
+   2) Scroll skeletons: charts entering the viewport wear a
+      shimmer plate that dissolves as they arrive.
+   ============================================================ */
+@keyframes sk-sheen { from { background-position: 200% 0; }
+                      to   { background-position: -200% 0; } }
+.sk { background: linear-gradient(90deg, #E2DCD0 25%, #EFEAE0 45%, #E2DCD0 65%);
+    background-size: 200% 100%; animation: sk-sheen 1.15s linear infinite; }
+#boot-skel { position: fixed; inset: 0; z-index: 999; background: #EDE9E3;
+    display: flex; flex-direction: column; gap: 18px; padding: 14vh 10vw;
+    pointer-events: none; animation: boot-off .55s ease 1.5s forwards; }
+@keyframes boot-off { to { opacity: 0; visibility: hidden; } }
+#boot-skel .sk.crest { width: 132px; height: 132px; }
+#boot-skel .sk.title { height: 64px; width: 42%; }
+#boot-skel .sk.line  { height: 15px; width: 58%; }
+#boot-skel .sk.line.short { width: 32%; }
+#boot-skel .sk.chart { height: 200px; width: 100%; margin-top: 24px; }
+
+@supports (animation-timeline: view()) {
+  [data-testid="stPlotlyChart"] { position: relative; }
+  [data-testid="stPlotlyChart"]::before { content: ''; position: absolute;
+      inset: 0; z-index: 2; pointer-events: none; opacity: 0;
+      background: linear-gradient(90deg, #E2DCD0 25%, #EFEAE0 45%, #E2DCD0 65%);
+      background-size: 200% 100%;
+      animation: sk-sheen 1.15s linear infinite, sk-dissolve linear both;
+      animation-timeline: auto, view();
+      animation-range: normal, entry 0% cover 40%; }
+  @keyframes sk-dissolve { from { opacity: 1; } 80% { opacity: 1; }
+                           to { opacity: 0; visibility: hidden; } }
+}
 
 @media (prefers-reduced-motion: reduce) {
-    *, *::after { animation: none !important; transition: none !important; } }
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+    #boot-skel { display: none !important; } }
 </style>
 """, unsafe_allow_html=True)
 
@@ -562,9 +644,32 @@ def grit_breakdown_fig(scores: pd.DataFrame):
 with open("assets/logo.svg", "r", encoding="utf-8") as f:
     logo_svg = f.read()
 
+# Boot veil renders ONLY on the first script run of a session. Streamlit
+# reruns the whole script on every interaction (and the freshness ticker),
+# which would re-create the veil and restart its fade forever — so after
+# the first run it is simply never rendered again.
+if not st.session_state.get("_booted"):
+    st.session_state["_booted"] = True
+    st.markdown("""
+<div id="boot-skel">
+  <div class="sk crest"></div>
+  <div class="sk title"></div>
+  <div class="sk line"></div>
+  <div class="sk line short"></div>
+  <div class="sk chart"></div>
+  <div class="sk line"></div>
+</div>
+""", unsafe_allow_html=True)
+
 st.markdown(f"""
 <div class="hero-section reveal" id="hero">
-  <div style="width:84px; height:84px;">{logo_svg}</div>
+  <div class="hero-watermark">{logo_svg}</div>
+  <div class="hero-crest">{logo_svg}</div>
+  <div class="hero-badges">
+    <span class="badge gold">Live data &middot; Yahoo Finance</span>
+    <span class="badge">No fabricated numbers</span>
+    <span class="badge">38 automated tests</span>
+  </div>
   <div class="hero-eyebrow">Pride &middot; Integrity</div>
   <h1 class="hero-title">Meleona</h1>
   <div class="hero-sub">
@@ -574,6 +679,12 @@ st.markdown(f"""
     after one — that's what we call <strong>grit</strong>.
   </div>
   <a href="#grit-showcase" class="cta-btn">Explore what we do &darr;</a>
+  <div class="hero-stats">
+    <div class="hstat"><div class="n">10,000</div><div class="l">Simulated paths</div></div>
+    <div class="hstat"><div class="n">10</div><div class="l">Crises replayed</div></div>
+    <div class="hstat"><div class="n">2</div><div class="l">Monte Carlo engines</div></div>
+    <div class="hstat"><div class="n">4</div><div class="l">Factor exposures</div></div>
+  </div>
 </div>
 """, unsafe_allow_html=True)
 
