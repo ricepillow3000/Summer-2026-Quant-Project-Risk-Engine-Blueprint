@@ -137,8 +137,7 @@ html { scroll-behavior: smooth; }
 #engine { scroll-margin-top: 28px; }
 @keyframes section-arrive { from { opacity: .25; transform: translateY(26px); }
                             to   { opacity: 1; transform: none; } }
-#grit-showcase:target, #conviction:target,
-#engine:target + .engine-heading {
+#grit-showcase:target, #conviction:target, #engine:target {
     animation: section-arrive .85s cubic-bezier(.16,1,.3,1); }
 
 /* HERO — the great hall, now a two-column court: the pitch on the
@@ -227,7 +226,30 @@ html { scroll-behavior: smooth; }
     letter-spacing: 0.16em; text-transform: uppercase; color: #9A7B4F; margin-bottom: 6px; }
 .pillar-desc { font-size: 13.5px; color: #524E47; line-height: 1.5; }
 
-.section-divider { border: none; border-top: 1px solid #C4BDAE; margin: 8px 0 36px; }
+/* Apple-fine hairline: bronze breathes in the centre, fades at the edges */
+.section-divider { border: none; height: 1px; margin: 8px 0 30px;
+    background: linear-gradient(90deg, transparent,
+        rgba(154,123,79,.55) 18%, rgba(154,123,79,.55) 82%, transparent); }
+
+/* ENGRAVINGS — crest fragments carved into the stone at low relief.
+   Pure ornament: pointer-events none, behind everything. */
+[data-testid="stColumn"] { position: relative; }   /* engrave anchor */
+.engrave { position: absolute; pointer-events: none; z-index: 0;
+    opacity: .075; }
+.engrave svg { width: 100%; height: 100%; }
+.engrave.scale { left: -70px; top: 34px; width: 340px; height: 340px;
+    transform: rotate(-6deg); }
+.engrave.line { right: -46px; bottom: -34px; width: 460px; height: 400px;
+    transform: rotate(-8deg); }
+
+/* Tables read as cut slabs too */
+[data-testid="stDataFrame"] { border: 1px solid #D4CDBF;
+    border-top: 2px solid #9A7B4F; }
+
+/* Keyboard focus carries the same bronze — prestige includes a11y */
+a.cta-btn:focus-visible, .stButton>button:focus-visible,
+[data-baseweb="tab"]:focus-visible {
+    outline: 2px solid #9A7B4F; outline-offset: 2px; }
 .engine-heading { text-align: left; padding: 4px 0 22px; }
 
 /* ============================================================
@@ -767,7 +789,19 @@ st.markdown(f"""
 # ---- Showcase: the Grit Zone innovation, explained before you touch a slider ----
 st.markdown("""
 <div class="showcase-row reveal">
-  <div class="showcase-section" id="grit-showcase">
+  <div class="showcase-section" id="grit-showcase" style="position:relative;">
+    <div class="engrave scale"><svg viewBox="22 36 28 26" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <g fill="none" stroke="#9A7B4F" stroke-width="1.1" stroke-linecap="round">
+        <circle cx="35" cy="46" r="9"/>
+        <line x1="30" y1="45" x2="40" y2="45"/>
+        <line x1="35" y1="42.5" x2="35" y2="50"/>
+        <path d="M28.5,46.5 Q30,49 31.5,46.5"/>
+        <path d="M38.5,46.5 Q40,49 41.5,46.5"/>
+        <line x1="28.5" y1="46.5" x2="30" y2="44.5"/><line x1="31.5" y1="46.5" x2="30" y2="44.5"/>
+        <line x1="38.5" y1="46.5" x2="40" y2="44.5"/><line x1="41.5" y1="46.5" x2="40" y2="44.5"/>
+        <circle cx="35" cy="45" r="1.1"/>
+      </g>
+    </svg></div>
     <div class="showcase-eyebrow">The Innovation</div>
     <h2 class="showcase-title">Introducing the Grit Zone</h2>
     <div class="showcase-body">
@@ -870,8 +904,7 @@ st.markdown("""
   <a href="#engine" class="cta-btn">Work with an exceptional risk engine &darr;</a>
 </div>
 <hr class="section-divider">
-<div id="engine"></div>
-<div class="engine-heading reveal">
+<div class="engine-heading reveal" id="engine">
   <div class="showcase-eyebrow">The Engine</div>
   <h2 class="showcase-title" style="font-size:26px;">Stress-test any portfolio, live</h2>
 </div>
@@ -1119,6 +1152,16 @@ with v_col:
         'cone breathe.'
         '</div>', unsafe_allow_html=True)
 with f_col:
+    st.markdown("""
+<div class="engrave line" aria-hidden="true"><svg viewBox="28 40 66 60" xmlns="http://www.w3.org/2000/svg">
+  <g fill="none" stroke="#9A7B4F" stroke-linecap="round">
+    <path stroke-width="2.4" d="M86,83 C72,90 54,92 44,84 C37,79 34,70 35,58"/>
+    <path stroke-width="1.5" d="M35,58 C35,54 34,50 36,47"/>
+    <path stroke-width="1" d="M38,52 L33,50 L39,48"/>
+    <path stroke-width="1" d="M36,55 L31,55 L37,51"/>
+  </g>
+</svg></div>
+""", unsafe_allow_html=True)
     st.plotly_chart(fan_chart(mc["path_bands"]), width="stretch", config=PLOTLY_CFG)
     st.caption(
         "Each simulated path compounds a year of daily returns. Hypothetical "
@@ -1773,12 +1816,22 @@ components.html("""
     }
     return P.scrollingElement;
   }
-  function glide(scroller, targetY, dur) {
-    const y0 = scroller.scrollTop, d = targetY - y0, t0 = performance.now();
+  function targetY(scroller, el) {
+    return el.getBoundingClientRect().top -
+           scroller.getBoundingClientRect().top + scroller.scrollTop - 26;
+  }
+  function glide(scroller, el, dur, settled) {
+    const y0 = scroller.scrollTop, d = targetY(scroller, el) - y0,
+          t0 = performance.now();
     (function f(now) {
       const p = Math.min(1, (now - t0) / dur);
       scroller.scrollTo(0, y0 + d * ease(p));
-      if (p < 1) requestAnimationFrame(f);
+      if (p < 1) { requestAnimationFrame(f); return; }
+      /* landing check: if the page shifted mid-flight (a chart mounted,
+         a rerun repainted), re-aim once with a short corrective glide —
+         the reader always ends ON the section the button promised. */
+      const drift = targetY(scroller, el) - scroller.scrollTop;
+      if (!settled && Math.abs(drift) > 4) glide(scroller, el, 320, true);
     })(t0);
   }
   P.addEventListener('click', function(e) {
@@ -1789,9 +1842,7 @@ components.html("""
     const scroller = findScroller(el);
     if (!scroller) return;               // nothing scrolls: let native run
     e.preventDefault(); e.stopPropagation();
-    const y = el.getBoundingClientRect().top -
-              scroller.getBoundingClientRect().top + scroller.scrollTop - 26;
-    glide(scroller, y, 1100);
+    glide(scroller, el, 1100, false);
     // destination rises into place as the glide lands
     const dest = el.clientHeight === 0 ? el.nextElementSibling : el;
     if (dest) {
