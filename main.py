@@ -45,7 +45,7 @@ from src.conviction import (
     load_conviction, AI_CAPEX_BASKET, RECOVERY_HORIZON_DAYS,
 )
 
-st.set_page_config(page_title="Meleona", layout="centered")
+st.set_page_config(page_title="Meleona", layout="wide")
 
 # ---- Minimal institutional styling ----
 # Page background, slider color, and expander shade are set in .streamlit/config.toml.
@@ -118,13 +118,35 @@ html { scroll-behavior: smooth; }
 .reveal { animation: meleona-rise linear both;
           animation-timeline: view(); animation-range: entry 0% cover 30%; }
 
-/* HERO — the great hall. Fuller welcome: framed crest, trust badges,
-   a stat lintel row, and a faint watermark crest filling the void on
-   the right. Height trimmed (88vh → 74vh): space earns its keep now. */
-.hero-section { min-height: 74vh; display: flex; flex-direction: column;
-    justify-content: center; align-items: flex-start; text-align: left;
-    padding: 44px 8px 48px; gap: 16px; border-bottom: 1px solid #C4BDAE;
+/* WIDE COURT — the whole page works now, capped for taste. Layout is
+   `wide`; this rules the court width and the gutter rhythm. */
+.block-container { max-width: 1600px !important;
+    padding-left: 56px !important; padding-right: 56px !important;
+    padding-top: 2.4rem !important; }
+
+/* Presentation arrivals — CTA anchors land like a slide change: the
+   target section rises into place under a smooth scroll. */
+.hero-section, .showcase-section, .showcase-row, .engine-heading,
+#engine { scroll-margin-top: 28px; }
+@keyframes section-arrive { from { opacity: .25; transform: translateY(26px); }
+                            to   { opacity: 1; transform: none; } }
+#grit-showcase:target, #conviction:target,
+#engine:target + .engine-heading {
+    animation: section-arrive .85s cubic-bezier(.16,1,.3,1); }
+
+/* HERO — the great hall, now a two-column court: the pitch on the
+   left, a 2x2 deck of engine-fact tiles on the right (reference:
+   dashboard stat cards), watermark crest behind. 58vh, not 88. */
+.hero-section { min-height: 58vh; display: grid;
+    grid-template-columns: minmax(0, 1.45fr) minmax(300px, 1fr);
+    gap: 56px; align-items: center; text-align: left;
+    padding: 40px 8px 44px; border-bottom: 1px solid #C4BDAE;
     position: relative; overflow: hidden; }
+.hero-left { display: flex; flex-direction: column; align-items: flex-start;
+    gap: 16px; min-width: 0; }
+@media (max-width: 1100px) {
+  .hero-section { grid-template-columns: 1fr; }
+  .showcase-row { grid-template-columns: 1fr !important; } }
 .hero-watermark { position: absolute; right: -4%; top: 50%;
     transform: translateY(-50%); width: 560px; height: 560px;
     opacity: 0.055; pointer-events: none; }
@@ -146,17 +168,25 @@ html { scroll-behavior: smooth; }
 .hero-title { font-size: 96px !important; color: #3F3B35;
     line-height: 0.98 !important; margin: 2px 0; letter-spacing: -0.035em; }
 .hero-sub { font-size: 21px; color: #54504A; max-width: 640px; line-height: 1.6; }
-.hero-stats { display: flex; flex-wrap: wrap; gap: 0; margin-top: 20px;
-    border-top: 1px solid #C4BDAE; }
-.hstat { border-left: 1px solid #C4BDAE; padding: 16px 30px 4px;
-    transition: border-color .3s ease; }
-.hstat:hover { border-left-color: #9A7B4F; }
-.hstat:first-child { border-left: none; padding-left: 4px; }
-.hstat .n { font-size: 36px; color: #3F3B35; line-height: 1.05;
+.hero-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+    position: relative; z-index: 1; }
+.hstat { border: 1px solid #C4BDAE; border-top: 2px solid #9A7B4F;
+    background: #F1EDE5; padding: 20px 22px 16px;
+    box-shadow: 0 1px 2px rgba(63,59,53,.05), 0 8px 24px -18px rgba(63,59,53,.35);
+    transition: transform .3s cubic-bezier(.16,1,.3,1), border-color .3s ease,
+                box-shadow .3s ease; }
+.hstat:hover { transform: translateY(-2px); border-color: #9A7B4F;
+    box-shadow: 0 2px 4px rgba(63,59,53,.06), 0 16px 34px -20px rgba(63,59,53,.45); }
+.hstat .n { font-size: 38px; color: #3F3B35; line-height: 1.05;
     letter-spacing: -0.02em; }
 .hstat .l { font-family: 'Helvetica Neue', sans-serif; font-size: 10px;
     letter-spacing: 0.2em; text-transform: uppercase; color: #9A7B4F;
-    margin-top: 5px; }
+    margin-top: 6px; }
+
+/* Twin showcases share one row — half the scroll, none of the clutter */
+.showcase-row { display: grid; grid-template-columns: 1fr 1fr; gap: 64px;
+    padding: 48px 8px 20px; }
+.showcase-row .showcase-section { padding: 0; }
 
 /* CTA — sharp charcoal slab, bronze on hover, alive to the touch */
 .cta-btn { display: inline-block; margin-top: 14px; padding: 15px 34px;
@@ -527,23 +557,33 @@ def living_surface_html(density: dict, height: int = 520, n_particles: int = 220
       window.addEventListener('mouseup', resume);
       window.addEventListener('touchend', resume);
 
-      /* One animation step: drift the particles, ease the camera round. */
-      const step = function() {{
-        t += 1;
-        const n = data.px.length;
-        const nx = new Array(n), ny = new Array(n), nz = new Array(n);
-        for (let i = 0; i < n; i++) {{
-          nx[i] = data.px[i] + Math.sin(t * 0.2 + i * 1.7) * 3;
-          ny[i] = data.py[i] + Math.cos(t * 0.25 + i * 2.3) * 0.01;
-          nz[i] = Math.max(0, data.pz[i] + Math.sin(t * 0.35 + i) * 0.012);
-        }}
-        Plotly.restyle('living3d', {{x: [nx], y: [ny], z: [nz]}}, [1]);
+      /* Animation, split by cost: the CAMERA glides every frame via
+         requestAnimationFrame (60fps — the old 150ms interval stepped it
+         at ~7fps, which is exactly what read as choppy), while the
+         particle field re-uploads on a slower ~140ms budget. Delta-time
+         based, so speed is identical on any refresh rate. */
+      let lastT = null, acc = 0, angle = 0;
+      const step = function(now) {{
+        if (lastT === null) lastT = now;
+        const dt = Math.min(now - lastT, 100); lastT = now;
         if (!userInteracting) {{
-          const angle = t * 0.01;
+          angle += dt * 0.00010;                 // one lap ≈ 63s, silk-smooth
           Plotly.relayout('living3d', {{
             'scene.camera.eye.x': 1.6 * Math.cos(angle),
             'scene.camera.eye.y': 1.6 * Math.sin(angle),
           }});
+        }}
+        acc += dt;
+        if (acc >= 140) {{                        // particle drift, budgeted
+          acc = 0; t += 1;
+          const n = data.px.length;
+          const nx = new Array(n), ny = new Array(n), nz = new Array(n);
+          for (let i = 0; i < n; i++) {{
+            nx[i] = data.px[i] + Math.sin(t * 0.2 + i * 1.7) * 3;
+            ny[i] = data.py[i] + Math.cos(t * 0.25 + i * 2.3) * 0.01;
+            nz[i] = Math.max(0, data.pz[i] + Math.sin(t * 0.35 + i) * 0.012);
+          }}
+          Plotly.restyle('living3d', {{x: [nx], y: [ny], z: [nz]}}, [1]);
         }}
       }};
 
@@ -557,10 +597,13 @@ def living_surface_html(density: dict, height: int = 520, n_particles: int = 220
       const reduced = !!(window.matchMedia &&
         window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 
-      let timer = null;
-      const running = () => timer !== null;
-      const start = function() {{ if (!running()) timer = setInterval(step, 150); }};
-      const stop = function() {{ if (running()) {{ clearInterval(timer); timer = null; }} }};
+      let rafId = null;
+      const loop = function(now) {{ step(now); rafId = requestAnimationFrame(loop); }};
+      const running = () => rafId !== null;
+      const start = function() {{
+        if (!running()) {{ lastT = null; rafId = requestAnimationFrame(loop); }} }};
+      const stop = function() {{
+        if (running()) {{ cancelAnimationFrame(rafId); rafId = null; }} }};
       const shouldRun = function(visible) {{
         (!reduced && visible && document.visibilityState === 'visible') ? start() : stop();
       }};
@@ -664,21 +707,23 @@ if not st.session_state.get("_booted"):
 st.markdown(f"""
 <div class="hero-section reveal" id="hero">
   <div class="hero-watermark">{logo_svg}</div>
-  <div class="hero-crest">{logo_svg}</div>
-  <div class="hero-badges">
-    <span class="badge gold">Live data &middot; Yahoo Finance</span>
-    <span class="badge">No fabricated numbers</span>
-    <span class="badge">38 automated tests</span>
+  <div class="hero-left">
+    <div class="hero-crest">{logo_svg}</div>
+    <div class="hero-badges">
+      <span class="badge gold">Live data &middot; Yahoo Finance</span>
+      <span class="badge">No fabricated numbers</span>
+      <span class="badge">38 automated tests</span>
+    </div>
+    <div class="hero-eyebrow">Pride &middot; Integrity</div>
+    <h1 class="hero-title">Meleona</h1>
+    <div class="hero-sub">
+      A hedge-fund-grade portfolio risk engine — VaR, CVaR, Monte Carlo stress
+      testing, and named factor exposures, computed live from real market data.
+      But every stock has drawdowns. What sets a name apart is what happens
+      after one — that's what we call <strong>grit</strong>.
+    </div>
+    <a href="#grit-showcase" class="cta-btn">Explore what we do &darr;</a>
   </div>
-  <div class="hero-eyebrow">Pride &middot; Integrity</div>
-  <h1 class="hero-title">Meleona</h1>
-  <div class="hero-sub">
-    A hedge-fund-grade portfolio risk engine — VaR, CVaR, Monte Carlo stress
-    testing, and named factor exposures, computed live from real market data.
-    But every stock has drawdowns. What sets a name apart is what happens
-    after one — that's what we call <strong>grit</strong>.
-  </div>
-  <a href="#grit-showcase" class="cta-btn">Explore what we do &darr;</a>
   <div class="hero-stats">
     <div class="hstat"><div class="n">10,000</div><div class="l">Simulated paths</div></div>
     <div class="hstat"><div class="n">10</div><div class="l">Crises replayed</div></div>
@@ -690,34 +735,48 @@ st.markdown(f"""
 
 # ---- Showcase: the Grit Zone innovation, explained before you touch a slider ----
 st.markdown("""
-<div class="showcase-section reveal" id="grit-showcase">
-  <div class="showcase-eyebrow">The Innovation</div>
-  <h2 class="showcase-title">Introducing the Grit Zone</h2>
-  <div class="showcase-body">
-    Fear &amp; Greed indices measure market MOOD. We measure something more
-    durable: whether an asset, when it gets knocked down, actually gets back
-    up &mdash; consistently, across real crises. There's no such thing as a
-    perfect stock. Grit isn't about avoiding setbacks &mdash; it's about what
-    happens after one.
+<div class="showcase-row reveal">
+  <div class="showcase-section" id="grit-showcase">
+    <div class="showcase-eyebrow">The Innovation</div>
+    <h2 class="showcase-title">Introducing the Grit Zone</h2>
+    <div class="showcase-body">
+      Fear &amp; Greed indices measure market MOOD. We measure something more
+      durable: whether an asset, when it gets knocked down, actually gets back
+      up &mdash; consistently, across real crises. There's no such thing as a
+      perfect stock. Grit isn't about avoiding setbacks &mdash; it's about what
+      happens after one.
+    </div>
+    <div class="pillar-row">
+      <div class="pillar-card">
+        <div class="pillar-label">Recovery</div>
+        <div class="pillar-desc">How fast and how completely a name claws
+          back from its own drawdowns.</div>
+      </div>
+      <div class="pillar-card">
+        <div class="pillar-label">Consistency</div>
+        <div class="pillar-desc">The share of rolling 1-year holding periods
+          that ended positive.</div>
+      </div>
+      <div class="pillar-card">
+        <div class="pillar-label">Resilience</div>
+        <div class="pillar-desc">How shallow the drawdown and how fast the
+          recovery across real historical crises.</div>
+      </div>
+    </div>
+    <a href="#conviction" class="cta-btn">See the hardest trade &rarr;</a>
   </div>
-  <div class="pillar-row">
-    <div class="pillar-card">
-      <div class="pillar-label">Recovery</div>
-      <div class="pillar-desc">How fast and how completely a name claws
-        back from its own drawdowns.</div>
-    </div>
-    <div class="pillar-card">
-      <div class="pillar-label">Consistency</div>
-      <div class="pillar-desc">The share of rolling 1-year holding periods
-        that ended positive.</div>
-    </div>
-    <div class="pillar-card">
-      <div class="pillar-label">Resilience</div>
-      <div class="pillar-desc">How shallow the drawdown and how fast the
-        recovery across real historical crises.</div>
+  <div class="showcase-section" id="conviction">
+    <div class="showcase-eyebrow">The Conviction</div>
+    <h2 class="showcase-title">The hardest trade is the one history rewards</h2>
+    <div class="showcase-body">
+      Your brain treats a falling portfolio the way it treats a physical threat
+      &mdash; the panic you feel in a crash is wiring, not weakness. That is the
+      emotional problem this engine exists to solve. Not with a slogan: with the
+      actual record of every named crisis it stress-tests, computed live from
+      market data. Below, what really happened to a buyer on the scariest day of
+      each crisis &mdash; and on the worst-timed day, the pre-crash peak.
     </div>
   </div>
-  <a href="#conviction" class="cta-btn">See the hardest trade &darr;</a>
 </div>
 """, unsafe_allow_html=True)
 
@@ -727,22 +786,6 @@ st.markdown("""
 def load_conviction_data():
     """Benchmark crisis record + AI-capex recovery race, live from Yahoo."""
     return load_conviction()
-
-
-st.markdown("""
-<div class="showcase-section reveal" id="conviction" style="padding-bottom:24px;">
-  <div class="showcase-eyebrow">The Conviction</div>
-  <h2 class="showcase-title">The hardest trade is the one history rewards</h2>
-  <div class="showcase-body">
-    Your brain treats a falling portfolio the way it treats a physical threat
-    &mdash; the panic you feel in a crash is wiring, not weakness. That is the
-    emotional problem this engine exists to solve. Not with a slogan: with the
-    actual record of every named crisis it stress-tests, computed live from
-    market data. Below, what really happened to a buyer on the scariest day of
-    each crisis &mdash; and on the worst-timed day, the pre-crash peak.
-  </div>
-</div>
-""", unsafe_allow_html=True)
 
 try:
     _conv = load_conviction_data()
@@ -909,9 +952,10 @@ if refresh_col.button("Refresh", help="Clear cache and re-pull the latest prices
     st.cache_data.clear()      # drop Streamlit's in-memory cache
     st.rerun()
 
-# ---- Allocation: equal-weight vs risk parity, optional vol target ----
+# ---- Allocation + stress test: one control deck, side by side ----
 cov = covariance_matrix(returns)  # annualized covariance for risk math
-with st.container(border=True):
+deck_alloc, deck_stress = st.columns(2, gap="medium")
+with deck_alloc, st.container(border=True):
     st.markdown('<div class="panel-label">Allocation</div>', unsafe_allow_html=True)
     acol1, acol2 = st.columns(2)
     method = acol1.radio(
@@ -942,7 +986,7 @@ _audit("Allocation", f"{method}" + (f", vol-targeted to {target_vol:.0%} "
 alloc_label = "risk-parity" if method == "Risk parity" else "equal-weight"
 lev_txt = f", levered {leverage:.2f}×" if use_vt else ""
 
-with st.container(border=True):
+with deck_stress, st.container(border=True):
     st.markdown('<div class="panel-label">Stress test</div>', unsafe_allow_html=True)
     engine = st.radio(
         "Return model", ["Bootstrap (empirical)", "Jump-diffusion (Merton)"],
@@ -1023,31 +1067,33 @@ else:
     if is_shocked:
         verdict += " *(under the stress scenario applied above)*"
 
-st.markdown(f"""
+# ---- Verdict + the cone of simulated outcomes: one wide row ----
+v_col, f_col = st.columns([5, 7], gap="large")
+with v_col:
+    st.markdown(f"""
 <div class="verdict-box">
   <div class="verdict-label">1-Year CVaR (95% confidence)</div>
   <div class="verdict-number">{mc['cvar']:.1%}</div>
   <div class="verdict-sentence">{verdict}</div>
 </div>
 """, unsafe_allow_html=True)
-
-# ---- Hero visual: the cone of simulated outcomes ----
-st.plotly_chart(fan_chart(mc["path_bands"]), width="stretch", config=PLOTLY_CFG)
-st.markdown(
-    '<div class="read-me">'
-    '<b>How to read this.</b> Time runs left to right — one year of trading days. '
-    'The dark centreline is the <b>middle outcome</b>: half the simulations landed '
-    'above it, half below. The dark inner cone holds the <b>middle 50%</b> of '
-    'outcomes; the pale outer cone holds <b>90%</b>. The cone widens because '
-    'uncertainty compounds the further out you look. Its <b>bottom edge is the '
-    'tail</b> the CVaR headline above measures. Change any setting and watch the '
-    'cone breathe.'
-    '</div>', unsafe_allow_html=True)
-st.caption(
-    "Each simulated path compounds a year of daily returns. Hypothetical "
-    "distribution, not a forecast — the curves interpolate between real computed "
-    "percentiles."
-)
+    st.markdown(
+        '<div class="read-me">'
+        '<b>How to read the cone.</b> Time runs left to right — one year of '
+        'trading days. The dark centreline is the <b>middle outcome</b>: half '
+        'the simulations landed above it, half below. The dark inner cone holds '
+        'the <b>middle 50%</b> of outcomes; the pale outer cone holds <b>90%</b>. '
+        'It widens because uncertainty compounds. Its <b>bottom edge is the '
+        'tail</b> the CVaR headline measures. Change any setting and watch the '
+        'cone breathe.'
+        '</div>', unsafe_allow_html=True)
+with f_col:
+    st.plotly_chart(fan_chart(mc["path_bands"]), width="stretch", config=PLOTLY_CFG)
+    st.caption(
+        "Each simulated path compounds a year of daily returns. Hypothetical "
+        "distribution, not a forecast — the curves interpolate between real "
+        "computed percentiles."
+    )
 
 # ---- Supporting depth: one tab at a time, not stacked accordions ----
 (tab_3d, tab_breakdown, tab_grit, tab_conviction, tab_liquidity,
