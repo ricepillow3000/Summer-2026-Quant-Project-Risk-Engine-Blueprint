@@ -521,6 +521,73 @@ def test_regime_kmeans_deterministic():
     assert (l1 == l2).all()
 
 
+# ---- Crisis Conviction (src/conviction.py) — synthetic, deterministic ----
+
+def test_conviction_peak_trough_and_reclaim_hand_worked():
+    """Crash anatomy on a hand-built path: peak before trough, and the
+    reclaim counter measured in trading days from the trough."""
+    from src.conviction import _peak_trough, _days_to_reclaim
+
+    idx = pd.bdate_range("2020-01-01", periods=7)
+    px = pd.Series([100.0, 110.0, 90.0, 80.0, 85.0, 110.0, 111.0], index=idx)
+    peak_date, trough_date = _peak_trough(px)
+    assert peak_date == idx[1], "peak must be the running max BEFORE the trough"
+    assert trough_date == idx[3]
+    # From the trough (pos 3), 110 is first reclaimed at pos 5 -> 2 trading days.
+    assert _days_to_reclaim(px, trough_date, 110.0) == 2
+    # A level never reached within the horizon is None, not extrapolated.
+    assert _days_to_reclaim(px, trough_date, 500.0, horizon=10) is None
+
+
+def test_conviction_forward_returns_and_exclusion():
+    """Forward returns are point-to-point; horizons past the end of data are
+    excluded (None), never extrapolated."""
+    from src.conviction import _forward_return
+
+    idx = pd.bdate_range("2020-01-01", periods=50)
+    px = pd.Series(np.linspace(100.0, 149.0, 50), index=idx)
+    r = _forward_return(px, idx[0], 10)
+    assert abs(r - (px.iloc[10] / px.iloc[0] - 1.0)) < 1e-12
+    assert _forward_return(px, idx[45], 10) is None
+
+
+def test_crisis_forward_returns_on_synthetic_covid_window():
+    """A synthetic series crashing inside the COVID window produces one row
+    with the right depth; the 3y horizon (past end of data) stays NaN."""
+    from src.conviction import crisis_forward_returns, conviction_summary
+
+    idx = pd.bdate_range("2019-06-03", "2021-12-31")
+    px = pd.Series(100.0, index=idx)
+    px.loc["2020-02-19"] = 120.0            # pre-crisis peak, inside window
+    px.loc["2020-03-23"] = 60.0             # trough, inside window
+    px.loc["2020-03-24":] = 105.0           # partial recovery afterwards
+
+    table = crisis_forward_returns(px)
+    covid = table[table["crisis"].str.startswith("COVID")]
+    assert len(covid) == 1
+    assert abs(covid["depth"].iloc[0] - (60.0 / 120.0 - 1.0)) < 1e-12
+    assert covid["trough_1y later"].iloc[0] > 0          # 60 -> 105
+    assert pd.isna(covid["trough_3y later"].iloc[0])     # past end of data
+
+    summ = conviction_summary(table)
+    assert summ["trough_1y_later"]["n"] >= 1
+    assert 0.0 <= summ["trough_1y_later"]["pct_positive"] <= 1.0
+
+
+def test_conviction_composite_excludes_late_ipos():
+    """A member with no data at the window start is excluded from the
+    composite, not back-filled."""
+    from src.conviction import _composite
+
+    idx = pd.bdate_range("2020-01-01", periods=20)
+    a = pd.Series(np.linspace(10, 20, 20), index=idx)
+    b = pd.Series([np.nan] * 10 + list(np.linspace(50, 55, 10)), index=idx)
+    comp = _composite(pd.DataFrame({"A": a, "B": b}), idx[0])
+    # Only A is alive at the start: composite == A normalized to 1.0.
+    assert abs(comp.iloc[0] - 1.0) < 1e-12
+    assert abs(comp.iloc[-1] - (a.iloc[-1] / a.iloc[0])) < 1e-12
+
+
 if __name__ == "__main__":
     import sys
 

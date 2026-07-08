@@ -41,6 +41,9 @@ from src.signals import (
     momentum_signal, forward_returns, daily_ic, ic_summary,
     fundamental_law_ir, effective_breadth,
 )
+from src.conviction import (
+    load_conviction, AI_CAPEX_BASKET, RECOVERY_HORIZON_DAYS,
+)
 
 st.set_page_config(page_title="Meleona", layout="centered")
 
@@ -603,6 +606,82 @@ st.markdown("""
         recovery across real historical crises.</div>
     </div>
   </div>
+  <a href="#conviction" class="cta-btn">See the hardest trade &darr;</a>
+</div>
+""", unsafe_allow_html=True)
+
+
+# ---- Showcase: Crisis Conviction — the emotional problem, answered in numbers ----
+@st.cache_data(ttl=6 * 3600, show_spinner="Reading the crisis record…")
+def load_conviction_data():
+    """Benchmark crisis record + AI-capex recovery race, live from Yahoo."""
+    return load_conviction()
+
+
+st.markdown("""
+<div class="showcase-section reveal" id="conviction" style="padding-bottom:24px;">
+  <div class="showcase-eyebrow">The Conviction</div>
+  <h2 class="showcase-title">The hardest trade is the one history rewards</h2>
+  <div class="showcase-body">
+    Your brain treats a falling portfolio the way it treats a physical threat
+    &mdash; the panic you feel in a crash is wiring, not weakness. That is the
+    emotional problem this engine exists to solve. Not with a slogan: with the
+    actual record of every named crisis it stress-tests, computed live from
+    market data. Below, what really happened to a buyer on the scariest day of
+    each crisis &mdash; and on the worst-timed day, the pre-crash peak.
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+try:
+    _conv = load_conviction_data()
+    _s = _conv["summary"]
+    _t1, _t3 = _s["trough_1y_later"], _s["trough_3y_later"]
+    _p3 = _s["peak_3y_later"]
+    _race = _conv["race"]
+    # A race is decided when at least one side recovered; the basket wins a
+    # race the benchmark never finished (recovered vs. not within ~3y).
+    _decided = _race.dropna(subset=["basket_days", "bench_days"], how="all")
+    _bwin = int(((_decided["basket_days"].fillna(np.inf)
+                  < _decided["bench_days"].fillna(np.inf))).sum())
+    _nrace = int(len(_decided))
+
+    _sl1, _sl2, _sl3, _sl4 = st.columns(4)
+    with _sl1:
+        st.markdown(f"""<div class="slab"><div class="slab-label">Bought the scariest day</div>
+        <div class="slab-num">{round(_t1["pct_positive"] * _t1["n"])} of {_t1["n"]}</div>
+        <div class="slab-note">crises were positive one year after the trough
+        — median <b>{_t1["median"]:+.0%}</b>.</div></div>""", unsafe_allow_html=True)
+    with _sl2:
+        st.markdown(f"""<div class="slab"><div class="slab-label">Three years on</div>
+        <div class="slab-num">{_t3["median"]:+.0%}</div>
+        <div class="slab-note">median gain three years after the scariest day
+        ({round(_t3["pct_positive"] * _t3["n"])} of {_t3["n"]} positive).</div></div>""",
+                    unsafe_allow_html=True)
+    with _sl3:
+        st.markdown(f"""<div class="slab"><div class="slab-label">Worst possible timing</div>
+        <div class="slab-num">{round(_p3["pct_positive"] * _p3["n"])} of {_p3["n"]}</div>
+        <div class="slab-note">crises: even a buyer at the pre-crash <b>peak</b>
+        was whole within three years (median {_p3["median"]:+.0%}).</div></div>""",
+                    unsafe_allow_html=True)
+    with _sl4:
+        st.markdown(f"""<div class="slab"><div class="slab-label">The AI-capex race</div>
+        <div class="slab-num">{_bwin} of {_nrace}</div>
+        <div class="slab-note">crises where heavy compute investors reclaimed
+        their pre-crisis level <b>faster</b> than the S&amp;P 500.</div></div>""",
+                    unsafe_allow_html=True)
+    st.caption(
+        "Computed live from Yahoo Finance adjusted closes (S&P 500 via SPY; "
+        "AI-capex basket disclosed in the Crisis Conviction tab). Historical "
+        "record, not a forecast — full tables, definitions, and honest limits "
+        "in the tab below."
+    )
+except Exception as _exc:  # noqa: BLE001 — landing page must never crash on data
+    st.caption(f"Crisis record unavailable right now ({_exc}). "
+               "The Crisis Conviction tab retries on load.")
+
+st.markdown("""
+<div class="showcase-section reveal" style="padding-top:8px;">
   <a href="#engine" class="cta-btn">Work with an exceptional risk engine &darr;</a>
 </div>
 <hr class="section-divider">
@@ -860,11 +939,11 @@ st.caption(
 )
 
 # ---- Supporting depth: one tab at a time, not stacked accordions ----
-(tab_3d, tab_breakdown, tab_grit, tab_liquidity,
+(tab_3d, tab_breakdown, tab_grit, tab_conviction, tab_liquidity,
  tab_secmaster, tab_dq, tab_lineage, tab_signals, tab_regimes) = st.tabs([
-    "3D Distribution", "Risk Breakdown", "Grit Zone", "Liquidity",
-    "Security Master", "Data Quality", "Lineage & Audit", "Signal Lab",
-    "Regime Atlas",
+    "3D Distribution", "Risk Breakdown", "Grit Zone", "Crisis Conviction",
+    "Liquidity", "Security Master", "Data Quality", "Lineage & Audit",
+    "Signal Lab", "Regime Atlas",
 ])
 
 with tab_3d:
@@ -1045,6 +1124,121 @@ with tab_grit:
                 )
     except Exception as exc:  # noqa: BLE001
         st.caption(f"Grit Zone unavailable: {exc}")
+
+# ---- Crisis Conviction: the emotional problem, priced ----
+with tab_conviction:
+    st.caption(
+        "Buying during a crisis feels impossible because the brain treats "
+        "financial loss like a physical threat — that panic is wiring, not "
+        "weakness. This tab doesn't argue with the feeling. It prices it: "
+        "for every named crisis this engine stress-tests, here is what "
+        "actually happened next, computed live from market data."
+    )
+    try:
+        conv = load_conviction_data()
+        ctab, summ, race = conv["table"], conv["summary"], conv["race"]
+        t1 = summ["trough_1y_later"]
+
+        h1, h2, h3 = st.columns(3)
+        h1.metric("Positive 1y after the trough",
+                  f"{round(t1['pct_positive'] * t1['n'])} / {t1['n']} crises")
+        h2.metric("Median 1y gain from the trough", f"{t1['median']:+.0%}")
+        h3.metric("Median crash depth", f"{ctab['depth'].median():.0%}")
+
+        st.markdown("###### What a buyer actually got, crisis by crisis")
+        show = ctab.copy()
+        show.columns = ["Crisis", "Trough date", "Crash depth",
+                        "Peak buy, 1y later", "Trough buy, 1y later",
+                        "Peak buy, 3y later", "Trough buy, 3y later"]
+        show = show[["Crisis", "Trough date", "Crash depth",
+                     "Trough buy, 1y later", "Trough buy, 3y later",
+                     "Peak buy, 1y later", "Peak buy, 3y later"]]
+        pct_cols = [c for c in show.columns if c not in ("Crisis", "Trough date")]
+
+        def _tone(v):
+            if pd.isna(v):
+                return "color: #8A8172;"
+            return "color: #3F6B3F;" if v > 0 else "color: #8A3B2E;"
+
+        st.dataframe(
+            show.style.format({c: "{:+.0%}" for c in pct_cols}, na_rep="—")
+                .format({"Crash depth": "{:.0%}"})
+                .map(_tone, subset=pct_cols[1:]),
+            width="stretch", hide_index=True)
+        st.markdown(
+            '<div class="read-me">'
+            '<b>How to read this.</b> Each row is a real crisis. '
+            '<b>Trough buy</b>: you bought the S&amp;P 500 (SPY) on the single '
+            'scariest day — the exact bottom. <b>Peak buy</b>: you bought at '
+            'the pre-crash top — the worst-timed entry possible. The columns '
+            'show where that money stood 1 and 3 trading-years later. '
+            '“—” means the crisis is too recent for that horizon: excluded, '
+            'not estimated.'
+            '</div>', unsafe_allow_html=True)
+        st.caption(
+            "Nobody can time the exact trough — that row measures the "
+            "direction of the edge, not an executable strategy. That's why "
+            "the peak row sits beside it: even the worst-timed buyer was "
+            "usually whole within three years. The one honest exception is "
+            "the dot-com peak — three years wasn't enough."
+        )
+
+        # --- The AI-capex recovery race ---
+        st.markdown("###### The recovery race: heavy compute investors vs. the market")
+        st.caption(
+            f"The thesis: companies pouring capital into compute and AI "
+            f"infrastructure ({', '.join(AI_CAPEX_BASKET)}, equal-weight) "
+            f"recover from crises faster than the broad market. That is a "
+            f"HYPOTHESIS — here is the actual record, crisis by crisis: "
+            f"trading days from each side's trough back to its own "
+            f"pre-crisis level."
+        )
+        rr = race.dropna(subset=["basket_days", "bench_days"], how="all")
+        cap = RECOVERY_HORIZON_DAYS
+        race_fig = go.Figure()
+        race_fig.add_trace(go.Bar(
+            y=rr["crisis"], x=rr["bench_days"].fillna(cap), orientation="h",
+            name="S&P 500 (SPY)", marker=dict(color="#CBBB94"),
+            text=[("not within 3y" if pd.isna(v) else f"{v:.0f}d")
+                  for v in rr["bench_days"]],
+            textposition="outside", textfont=dict(size=11),
+            hovertemplate="%{y} — market: %{text}<extra></extra>"))
+        race_fig.add_trace(go.Bar(
+            y=rr["crisis"], x=rr["basket_days"].fillna(cap), orientation="h",
+            name="AI-capex basket", marker=dict(color=BRONZE_DK),
+            text=[("not within 3y" if pd.isna(v) else f"{v:.0f}d")
+                  for v in rr["basket_days"]],
+            textposition="outside", textfont=dict(size=11),
+            hovertemplate="%{y} — basket: %{text}<extra></extra>"))
+        race_fig = _style_fig(race_fig, height=max(300, 40 * len(rr) + 60))
+        race_fig.update_layout(
+            barmode="group", xaxis_title="trading days to reclaim pre-crisis level",
+            showlegend=True,
+            legend=dict(orientation="h", y=1.08, x=0, font=dict(size=11)))
+        st.plotly_chart(race_fig, width="stretch", config=PLOTLY_CFG)
+
+        decided = rr
+        bwin = int((decided["basket_days"].fillna(np.inf)
+                    < decided["bench_days"].fillna(np.inf)).sum())
+        st.markdown(
+            f'<div class="read-me"><b>How to read this.</b> Shorter bar = '
+            f'faster recovery. The basket got back up faster in '
+            f'<b>{bwin} of {len(decided)}</b> crises. Where a bar says '
+            f'"not within 3y", that side never reclaimed its pre-crisis '
+            f'level inside ~3 trading years — shown, not hidden.</div>',
+            unsafe_allow_html=True)
+        st.caption(
+            "*Honest limits: the basket carries today's \"AI capex\" label — "
+            "in 2008 these names were simply large-cap tech, and the record "
+            "shown is theirs regardless of the label. Members that hadn't "
+            "IPO'd by a crisis are excluded from that race, not back-filled "
+            "(member count varies by crisis). Survivorship is real: this "
+            "basket is named WITH hindsight. One benchmark, one basket, "
+            "hindsight throughout — evidence for a thesis, not proof. "
+            "Educational analysis, not investment advice.*"
+        )
+    except Exception as exc:  # noqa: BLE001
+        st.caption(f"Crisis Conviction unavailable: {exc}")
 
 # ---- Liquidity: how fast could you actually get out? ----
 def _fmt_days(d: float) -> str:
