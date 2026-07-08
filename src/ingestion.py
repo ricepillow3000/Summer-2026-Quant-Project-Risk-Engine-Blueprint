@@ -60,6 +60,17 @@ PRESETS = {
     "Futures (index & commodity)": [
         "ES=F", "NQ=F", "CL=F", "GC=F", "SI=F", "ZN=F",
     ],
+    # Institutional staples — what a rates/credit desk, a commodities book,
+    # or a global-macro fund actually watches, via liquid ETF proxies.
+    "Rates & credit (ETF proxies)": [
+        "TLT", "IEF", "SHY", "LQD", "HYG", "TIP",
+    ],
+    "Commodities & real assets": [
+        "GLD", "SLV", "USO", "UNG", "DBA", "DBC",
+    ],
+    "Global macro (multi-asset ETFs)": [
+        "SPY", "EFA", "EEM", "TLT", "GLD", "UUP",
+    ],
 }
 
 

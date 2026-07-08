@@ -16,6 +16,7 @@ import json
 import numpy as np
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 import plotly.graph_objects as go
 
 from src.ingestion import (
@@ -123,6 +124,12 @@ html { scroll-behavior: smooth; }
 .block-container { max-width: 1600px !important;
     padding-left: 56px !important; padding-right: 56px !important;
     padding-top: 2.4rem !important; }
+
+/* The page scrolls inside Streamlit's own <section>, NOT <html> — smooth
+   behavior must live on the real scroller or anchors hard-teleport. The
+   glide script (end of page) drives an eased scroll; this is the fallback. */
+[data-testid="stAppViewContainer"] section, section.main,
+[data-testid="stMain"] { scroll-behavior: smooth; }
 
 /* Presentation arrivals — CTA anchors land like a slide change: the
    target section rises into place under a smooth scroll. */
@@ -386,7 +393,9 @@ def _style_fig(fig, height: int = 300):
         font=dict(family="Georgia, 'Times New Roman', serif", color=CHARCOAL, size=13),
         showlegend=False,
         bargap=0.12,
-        hoverlabel=dict(bgcolor="#F4F1EA", font=dict(family="Georgia, serif", color=CHARCOAL)),
+        hoverlabel=dict(bgcolor="#F4F1EA", bordercolor=BRONZE,
+                        font=dict(family="Georgia, serif", color=CHARCOAL, size=13)),
+        transition=dict(duration=380, easing="cubic-in-out"),
     )
     fig.update_xaxes(gridcolor=GRID, zeroline=False, linecolor=AXIS_LINE, ticks="outside",
                      tickcolor=AXIS_LINE)
@@ -640,22 +649,44 @@ def read_me(html: str) -> None:
 
 
 def outcome_hist(total_returns, cvar: float):
-    """Themed histogram of simulated 1-year outcomes with the CVaR line marked."""
-    fig = go.Figure(go.Histogram(x=np.asarray(total_returns) * 100, nbinsx=48,
-                                 marker=dict(color=BRONZE, line=dict(width=0)), opacity=0.9))
-    fig.add_vline(x=-cvar * 100, line=dict(color=CHARCOAL, width=2, dash="dash"),
+    """Histogram of simulated 1-year outcomes. The tail the CVaR measures is
+    inked in oxblood so the eye lands on the danger, not the middle; every
+    bar is a real simulation count — color is annotation, not data."""
+    vals = np.asarray(total_returns) * 100.0
+    counts, edges = np.histogram(vals, bins=48)
+    mids = (edges[:-1] + edges[1:]) / 2
+    tail = -cvar * 100.0
+    colors = ["#8A3B2E" if m <= tail else BRONZE for m in mids]
+    fig = go.Figure(go.Bar(
+        x=mids, y=counts, width=(edges[1] - edges[0]) * 0.92,
+        marker=dict(color=colors, line=dict(width=0)), opacity=0.92,
+        hovertemplate="%{x:.0f}%: %{y} simulations<extra></extra>"))
+    fig.add_vline(x=tail, line=dict(color=CHARCOAL, width=2, dash="dash"),
                   annotation_text="CVaR", annotation_position="top left",
                   annotation_font=dict(color=CHARCOAL, size=12))
-    fig.update_layout(xaxis_title="1-year return (%)", yaxis_title="Simulations")
+    fig.add_vline(x=float(np.median(vals)),
+                  line=dict(color=BRONZE_DK, width=1, dash="dot"),
+                  annotation_text="median", annotation_position="top right",
+                  annotation_font=dict(color=BRONZE_DK, size=11))
+    fig.update_layout(xaxis_title="1-year return (%)", yaxis_title="Simulations",
+                      bargap=0.06)
     return _style_fig(fig, height=280)
 
 
 def hbar(series: pd.Series, color=BRONZE, pct: bool = False, title_x: str = ""):
-    """Themed horizontal bar chart for a single labeled series (factors, etc.)."""
+    """Themed horizontal bar chart. Bars deepen with magnitude — the biggest
+    value wears the darkest bronze — so ranking reads at a glance."""
     x = series.values * (100 if pct else 1)
+    span = float(np.max(np.abs(x))) or 1.0
+    def _shade(v):  # lerp #CBBB94 (light) -> #8A6A3C (deep) by |value|
+        f = abs(v) / span
+        r = int(0xCB + (0x8A - 0xCB) * f)
+        g = int(0xBB + (0x6A - 0xBB) * f)
+        b = int(0x94 + (0x3C - 0x94) * f)
+        return f"rgb({r},{g},{b})"
     fig = go.Figure(go.Bar(
         x=x, y=list(series.index), orientation="h",
-        marker=dict(color=color),
+        marker=dict(color=[_shade(v) for v in x], line=dict(width=0)),
         hovertemplate="%{y}: %{x:.2f}" + ("%" if pct else "") + "<extra></extra>"))
     fig.update_layout(xaxis_title=title_x)
     return _style_fig(fig, height=max(160, 30 * len(series) + 40))
@@ -1712,3 +1743,62 @@ with tab_regimes:
             )
     except Exception as exc:  # graceful, like the other tabs
         st.caption(f"Regime Atlas unavailable for this universe: {exc}")
+
+# ---- Book-glide: eased anchor scrolling on the REAL scroll container ----
+# Streamlit scrolls its own <section>, so `scroll-behavior` on <html> never
+# fires — anchor clicks teleported. This zero-height component reaches into
+# the parent document, intercepts CTA anchor clicks, and drives a 1.1s
+# eased glide (easeInOutCubic) with a mid-scroll arrival animation on the
+# destination — a page turn, not a teleport. Guarded so Streamlit reruns
+# never stack duplicate listeners.
+components.html("""
+<script>
+(function() {
+  const P = window.parent.document;
+  if (P.__meleonaGlide) return;          // rerun guard: bind once per page
+  P.__meleonaGlide = true;
+  const ease = t => t < .5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2;
+  /* Streamlit's scroll container has moved between releases — never trust
+     a hardcoded selector. Walk UP from the destination to the first
+     ancestor that really scrolls (proved by a nudge test). */
+  function findScroller(el) {
+    let n = el.parentElement;
+    while (n) {
+      if (n.scrollHeight > n.clientHeight + 10) {
+        const was = n.scrollTop;
+        n.scrollTop = was + 1;
+        if (n.scrollTop !== was) { n.scrollTop = was; return n; }
+      }
+      n = n.parentElement;
+    }
+    return P.scrollingElement;
+  }
+  function glide(scroller, targetY, dur) {
+    const y0 = scroller.scrollTop, d = targetY - y0, t0 = performance.now();
+    (function f(now) {
+      const p = Math.min(1, (now - t0) / dur);
+      scroller.scrollTo(0, y0 + d * ease(p));
+      if (p < 1) requestAnimationFrame(f);
+    })(t0);
+  }
+  P.addEventListener('click', function(e) {
+    const a = e.target.closest('a[href^="#"]');
+    if (!a) return;
+    const el = P.getElementById(a.getAttribute('href').slice(1));
+    if (!el) return;
+    const scroller = findScroller(el);
+    if (!scroller) return;               // nothing scrolls: let native run
+    e.preventDefault(); e.stopPropagation();
+    const y = el.getBoundingClientRect().top -
+              scroller.getBoundingClientRect().top + scroller.scrollTop - 26;
+    glide(scroller, y, 1100);
+    // destination rises into place as the glide lands
+    const dest = el.clientHeight === 0 ? el.nextElementSibling : el;
+    if (dest) {
+      dest.style.animation = 'none'; void dest.offsetWidth;
+      dest.style.animation = 'section-arrive .9s cubic-bezier(.16,1,.3,1) .45s both';
+    }
+  }, true);
+})();
+</script>
+""", height=0)
