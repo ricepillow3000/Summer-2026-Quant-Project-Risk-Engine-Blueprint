@@ -1094,6 +1094,11 @@ with tab_grit:
                 hbar(gscores["grit_score"], color=BRONZE_DK, title_x="Grit Score (0–100)"),
                 width="stretch", config=PLOTLY_CFG,
             )
+            read_me(
+                "<b>Longer bar = grittier.</b> The name at the top has, across its "
+                "own history, bounced back from drawdowns the fastest and most "
+                "reliably. Score is <b>0–100 relative to this basket</b> — it ranks "
+                "these names against each other, not against the whole market.")
             grittiest = gscores.index[0]
             g = gscores.loc[grittiest]
             st.caption(
@@ -1145,7 +1150,7 @@ with tab_conviction:
         h2.metric("Median 1y gain from the trough", f"{t1['median']:+.0%}")
         h3.metric("Median crash depth", f"{ctab['depth'].median():.0%}")
 
-        st.markdown("###### What a buyer actually got, crisis by crisis")
+        panel_head("What a buyer actually got", "Crisis by crisis, best day vs. worst day to buy")
         show = ctab.copy()
         show.columns = ["Crisis", "Trough date", "Crash depth",
                         "Peak buy, 1y later", "Trough buy, 1y later",
@@ -1184,7 +1189,7 @@ with tab_conviction:
         )
 
         # --- The AI-capex recovery race ---
-        st.markdown("###### The recovery race: heavy compute investors vs. the market")
+        panel_head("The recovery race", "Heavy-compute investors vs. the broad market")
         st.caption(
             f"The thesis: companies pouring capital into compute and AI "
             f"infrastructure ({', '.join(AI_CAPEX_BASKET)}, equal-weight) "
@@ -1279,6 +1284,12 @@ with tab_liquidity:
         if not chart_days.empty:
             st.plotly_chart(hbar(chart_days, color=BRONZE, title_x="days to liquidate"),
                             width="stretch", config=PLOTLY_CFG)
+            read_me(
+                "<b>Longer bar = harder to sell fast.</b> Each bar is how many "
+                "trading days it would take to fully exit that position without "
+                "being more than your chosen slice of its daily volume. Short bars "
+                "are liquid; a long bar is a name you could get stuck holding in a "
+                "rush for the door.")
 
         caption = (
             f"Days to unwind a **${book:,.0f}** {alloc_label} book at "
@@ -1333,7 +1344,7 @@ with tab_dq:
     for c in report["checks"]:
         st.caption(f"{icon[c['status']]} **{c['check']}** — {c['message']}")
     verdict_dq = "PASS" if report["passed"] else "FAIL"
-    st.markdown(f"###### Overall gate: **{verdict_dq}**")
+    panel_head("Overall data-quality gate", f"This feed: {verdict_dq}")
 
 with tab_lineage:
     prov = provenance(tickers)
