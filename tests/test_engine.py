@@ -22,7 +22,8 @@ from src.risk import (
 from src.strategies import (
     risk_parity_weights, risk_contributions, vol_target, portfolio_vol,
 )
-from src.liquidity import days_to_liquidate, liquidity_profile
+from src.liquidity import (days_to_liquidate, liquidity_profile,
+                           liquidity_adjusted_cvar)
 from src.grit import (
     drawdown_episodes, recovery_stats, rolling_consistency,
     regime_drawdown_and_recovery, grit_scores, _score01,
@@ -140,6 +141,22 @@ def test_liquidity_monotonic_and_zero_adv_flagged():
     assert "A" in prof["no_volume"]
     assert not np.isfinite(days_to_liquidate(w, adv0, book_value=1e6).loc["A", "days"])
     assert 0.0 <= prof["pct_exitable_1day"] <= 1.0
+
+
+def test_liquidity_adjusted_cvar_widens_tail_monotonically():
+    cv = 0.20
+    # An instantly-liquid book pays no liquidity penalty.
+    assert liquidity_adjusted_cvar(cv, 0.0)["multiplier"] == 1.0
+    # LVaR is never smaller than CVaR, and grows with days-to-unwind.
+    liquid = liquidity_adjusted_cvar(cv, 2.0)
+    stuck = liquidity_adjusted_cvar(cv, 60.0)
+    assert liquid["lvar"] >= cv
+    assert stuck["lvar"] > liquid["lvar"]                 # slower exit => fatter tail
+    # Closed-form check of the sqrt-of-time convention: sqrt(1 + 252/252) = sqrt(2).
+    one_year = liquidity_adjusted_cvar(cv, 252.0)
+    assert abs(one_year["multiplier"] - np.sqrt(2.0)) < 1e-12
+    # A book with no volume feed can't be exited -> unbounded, flagged not faked.
+    assert not np.isfinite(liquidity_adjusted_cvar(cv, np.inf)["lvar"])
 
 
 def test_drawdown_episodes_hand_worked():

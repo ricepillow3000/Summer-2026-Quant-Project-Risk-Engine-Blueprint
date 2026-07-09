@@ -32,7 +32,8 @@ from src.strategies import risk_contributions, risk_parity_weights, vol_target
 from src.hedge import min_variance_pair, rank_hedges
 from src.covariance import estimate_covariance
 from src.scenarios import HISTORICAL_REGIMES, replay_returns
-from src.liquidity import days_to_liquidate, liquidity_profile
+from src.liquidity import (days_to_liquidate, liquidity_profile,
+                           liquidity_adjusted_cvar)
 from src.grit import grit_scores, MIN_HISTORY_DAYS
 from src.security_master import security_master
 from src.data_quality import validate_prices
@@ -1139,6 +1140,19 @@ _audit("Stress scenario", scenario_label or
        if is_shocked else "None (base case)"))
 _audit("Monte Carlo", f"{engine}, 10,000 paths x 252 days -> CVaR {mc['cvar']:.2%}")
 
+# ---- Liquidity-adjusted tail ----
+# The CVaR above assumes you're out at the horizon. Widen it for the days it
+# actually takes to unwind at 20% of real daily volume (default $1M book). The
+# interactive version lives in the Liquidity tab; this is the headline default.
+try:
+    _adv = load_adv(tuple(tickers)).reindex(loaded).fillna(0.0)
+    _dtl = days_to_liquidate(weights, _adv, book_value=1_000_000,
+                             participation_rate=0.20)
+    lvar = liquidity_adjusted_cvar(mc["cvar"],
+                                   liquidity_profile(_dtl)["full_exit_days"])
+except Exception:  # noqa: BLE001 — headline must still render if volume feed is down
+    lvar = None
+
 # ---- Headline verdict ----
 if scenario_label:
     verdict = (
@@ -1155,6 +1169,15 @@ else:
     )
     if is_shocked:
         verdict += " *(under the stress scenario applied above)*"
+
+# Only surface the liquidity add-on when it materially fattens the tail
+# (multiplier > 1.005 ≈ more than ~2.5 trading days to fully exit).
+if lvar and np.isfinite(lvar["lvar"]) and lvar["multiplier"] > 1.005:
+    verdict += (
+        f" Adjusted for the ~<b>{lvar['full_exit_days']:.0f} trading days</b> "
+        f"it takes to fully unwind at 20% of daily volume, that tail widens to "
+        f"<b>{lvar['lvar']:.1%}</b>."
+    )
 
 # ---- Verdict + the cone of simulated outcomes: one wide row ----
 v_col, f_col = st.columns([5, 7], gap="large")
@@ -1630,6 +1653,24 @@ with tab_liquidity:
         m1.metric("Full-exit horizon", _fmt_days(prof["full_exit_days"]))
         m2.metric("Exitable in 1 day", f"{prof['pct_exitable_1day']:.0%}")
         m3.metric("Avg position horizon", _fmt_days(prof["weighted_avg_days"]))
+
+        # Liquidity-adjusted tail — how the headline CVaR fattens once the days
+        # it takes to unwind THIS book at THESE sliders are priced in.
+        lv = liquidity_adjusted_cvar(mc["cvar"], prof["full_exit_days"])
+        if np.isfinite(lv["lvar"]):
+            d1, d2 = st.columns(2)
+            d1.metric("Headline CVaR (95%)", f"{lv['cvar']:.1%}")
+            d2.metric("Liquidity-adjusted CVaR", f"{lv['lvar']:.1%}",
+                      delta=f"+{(lv['multiplier'] - 1):.0%} for the unwind",
+                      delta_color="inverse")
+            read_me(
+                "<b>The tail you can't trade out of.</b> The headline CVaR "
+                "assumes you're flat at the horizon. This widens it by "
+                "√(1 + exit-days/252) — the Basel liquidity-horizon convention — "
+                "to cover the extra days the market can move against you while "
+                "you're still unwinding. Prices market exposure over the unwind, "
+                "not the spread you pay to trade. A one-day-liquid book is barely "
+                "penalised; a name you'd be stuck holding carries a fatter tail.")
 
         chart_days = dtl["days"].replace([np.inf, -np.inf], np.nan).dropna().sort_values()
         if not chart_days.empty:

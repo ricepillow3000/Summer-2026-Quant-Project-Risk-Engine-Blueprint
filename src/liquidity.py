@@ -92,6 +92,48 @@ def liquidity_profile(dtl: pd.DataFrame) -> dict:
     }
 
 
+def liquidity_adjusted_cvar(cvar: float, full_exit_days: float,
+                            base_horizon_days: int = 252) -> dict:
+    """
+    Liquidity-adjusted CVaR: widen the tail to cover the days the book stays
+    exposed simply because it cannot be sold instantly.
+
+    The headline CVaR assumes the position is closed at the horizon. If fully
+    unwinding actually takes `full_exit_days` MORE trading days (the
+    participation-rate model above, driven by real volume), the book's true
+    exposure window is base_horizon + full_exit_days. Under square-root-of-time
+    scaling — the Basel / Bangia (1999) liquidity-horizon convention — risk
+    grows with the sqrt of the window, so:
+
+        multiplier = sqrt((base + full_exit) / base) = sqrt(1 + full_exit/base)
+        LVaR       = CVaR * multiplier
+
+    A book exitable in under a day is barely penalised (multiplier ~ 1.0); a
+    book that takes weeks to unwind carries a materially fatter tail. The
+    multiplier is monotonic in full_exit_days, so a less liquid portfolio can
+    never report a smaller liquidity-adjusted tail than a more liquid one with
+    the same CVaR.
+
+    Honest limit: sqrt-of-time assumes iid returns (no volatility clustering)
+    and prices market-EXPOSURE risk over the unwind, NOT the bid/ask impact
+    cost of trading. It answers "how much more can the market move against me
+    while I'm stuck holding?", not "what spread do I pay to get out?".
+    """
+    finite = np.isfinite(full_exit_days)
+    if not finite or full_exit_days <= 0:
+        # No-volume book (can't exit at all) -> unbounded; already-liquid -> none.
+        mult = float("inf") if not finite else 1.0
+    else:
+        mult = float(np.sqrt(1.0 + full_exit_days / base_horizon_days))
+    return {
+        "cvar": cvar,
+        "full_exit_days": full_exit_days,
+        "multiplier": mult,
+        "lvar": cvar * mult if np.isfinite(mult) else float("inf"),
+        "base_horizon_days": base_horizon_days,
+    }
+
+
 if __name__ == "__main__":
     from src.ingestion import fetch_prices, get_returns, average_dollar_volume
 
