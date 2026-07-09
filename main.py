@@ -1578,10 +1578,14 @@ with f_col:
 </svg></div>
 """, unsafe_allow_html=True)
     st.plotly_chart(fan_chart(mc["path_bands"]), width="stretch", config=PLOTLY_CFG)
+    _se_txt = (f" CVaR sampling error: ±{mc['cvar_se']:.2%} "
+               f"({mc['n_simulations']:,} paths — a simulated estimate, "
+               "not an exact truth)." if np.isfinite(mc.get("cvar_se", float("nan")))
+               else "")
     st.caption(
         "Each simulated path compounds a year of daily returns. Hypothetical "
         "distribution, not a forecast — the curves interpolate between real "
-        "computed percentiles."
+        "computed percentiles." + _se_txt
     )
 
 # ---- Supporting depth: one tab at a time, not stacked accordions ----

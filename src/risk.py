@@ -152,7 +152,8 @@ def monte_carlo(
     # Risk metrics on the simulated distribution
     sim_var = float(-np.percentile(total_returns, (1 - confidence) * 100))
     threshold = np.percentile(total_returns, (1 - confidence) * 100)
-    sim_cvar = float(-total_returns[total_returns <= threshold].mean())
+    tail = total_returns[total_returns <= threshold]
+    sim_cvar = float(-tail.mean())
 
     return {
         "final_values": final_values,
@@ -163,6 +164,7 @@ def monte_carlo(
         "mean_return": float(np.mean(total_returns)),
         "var": sim_var,
         "cvar": sim_cvar,
+        "cvar_se": _mc_standard_error(tail),
         "worst_case": float(total_returns.min()),
         "best_case": float(total_returns.max()),
         "prob_loss": float((total_returns < 0).mean()),
@@ -171,6 +173,22 @@ def monte_carlo(
         "confidence": confidence,
         "engine": "bootstrap",
     }
+
+
+def _mc_standard_error(tail: np.ndarray) -> float:
+    """
+    Monte Carlo sampling error of the CVaR estimate.
+
+    CVaR is the MEAN of the simulated tail sample, so its standard error is
+    the classic std/sqrt(n) of that sample — shrinking as 1/sqrt(N) with more
+    simulations. Reporting it makes the headline honest: a simulated 19.3%
+    CVaR at 10,000 paths is "19.3% ± se", not an exact truth. (This prices
+    SIMULATION noise only — model error, e.g. whether history resembles the
+    future, is disclosed separately and cannot be reduced by more paths.)
+    """
+    if tail.size < 2:
+        return float("nan")
+    return float(tail.std(ddof=1) / np.sqrt(tail.size))
 
 
 def _path_bands(value_paths: np.ndarray, horizon_days: int) -> dict:
@@ -313,7 +331,8 @@ def jump_diffusion_mc(
 
     sim_var = float(-np.percentile(total_returns, (1 - confidence) * 100))
     threshold = np.percentile(total_returns, (1 - confidence) * 100)
-    sim_cvar = float(-total_returns[total_returns <= threshold].mean())
+    tail = total_returns[total_returns <= threshold]
+    sim_cvar = float(-tail.mean())
 
     return {
         "final_values": final_values,
@@ -324,6 +343,7 @@ def jump_diffusion_mc(
         "mean_return": float(np.mean(total_returns)),
         "var": sim_var,
         "cvar": sim_cvar,
+        "cvar_se": _mc_standard_error(tail),
         "worst_case": float(total_returns.min()),
         "best_case": float(total_returns.max()),
         "prob_loss": float((total_returns < 0).mean()),

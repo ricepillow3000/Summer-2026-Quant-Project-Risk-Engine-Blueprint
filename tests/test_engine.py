@@ -146,6 +146,20 @@ def test_liquidity_monotonic_and_zero_adv_flagged():
     assert 0.0 <= prof["pct_exitable_1day"] <= 1.0
 
 
+def test_mc_cvar_standard_error_positive_and_shrinks_with_paths():
+    rng = np.random.default_rng(3)
+    rets = pd.DataFrame(rng.normal(0.0004, 0.012, (500, 3)),
+                        columns=["A", "B", "C"])
+    w = np.ones(3) / 3
+    small = monte_carlo(rets, w, n_simulations=2_000)
+    big = monte_carlo(rets, w, n_simulations=32_000)
+    for mc in (small, big):
+        assert np.isfinite(mc["cvar_se"]) and mc["cvar_se"] > 0
+        assert mc["cvar_se"] < mc["cvar"]          # error is a fraction of the estimate
+    # 16x the paths -> ~4x smaller sampling error (1/sqrt(N)); allow slack
+    assert big["cvar_se"] < small["cvar_se"] / 2.5
+
+
 def test_correlation_identity_matches_pandas_and_flags_zero_vol():
     rng = np.random.default_rng(7)
     df = pd.DataFrame(rng.normal(0, 0.01, (500, 3)), columns=["A", "B", "C"])
