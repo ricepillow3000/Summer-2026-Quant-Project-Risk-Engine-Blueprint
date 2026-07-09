@@ -640,6 +640,62 @@ def test_hedge_ranking_orders_most_negative_first():
     assert "A" not in ranked.index              # anchor excluded
 
 
+def test_ewma_reacts_to_recent_volatility_spike():
+    """EWMA must weight a recent vol spike far more than the calm history —
+    its whole reason for existing. Sample cov averages it away."""
+    from src.covariance import ewma_covariance, sample_covariance
+
+    idx = pd.bdate_range("2022-01-01", periods=400)
+    rng = np.random.default_rng(7)
+    r = rng.normal(0, 0.01, (400, 2))
+    r[-15:] *= 5.0                       # recent panic
+    df = pd.DataFrame(r, columns=["A", "B"], index=idx)
+    ewma_vol = np.sqrt(ewma_covariance(df).loc["A", "A"])
+    samp_vol = np.sqrt(sample_covariance(df).loc["A", "A"])
+    assert ewma_vol > samp_vol * 1.5     # reacts, not averages
+
+
+def test_ewma_rejects_bad_lambda():
+    from src.covariance import ewma_covariance
+    idx = pd.bdate_range("2022-01-01", periods=50)
+    df = pd.DataFrame(np.ones((50, 2)) * 0.01, columns=["A", "B"], index=idx)
+    for bad in (0.0, 1.0, 1.5, -0.1):
+        try:
+            ewma_covariance(df, lam=bad)
+        except ValueError:
+            continue
+        raise AssertionError(f"lambda={bad} should have raised")
+
+
+def test_ledoit_wolf_is_symmetric_psd_and_shrinks_in_range():
+    """Shrunk matrix must stay a valid covariance (symmetric, PSD) with an
+    intensity δ in [0,1]."""
+    from src.covariance import ledoit_wolf_covariance
+
+    idx = pd.bdate_range("2022-01-01", periods=120)
+    rng = np.random.default_rng(8)
+    df = pd.DataFrame(rng.normal(0, 0.01, (120, 5)),
+                      columns=list("ABCDE"), index=idx)
+    cov, delta = ledoit_wolf_covariance(df)
+    assert 0.0 <= delta <= 1.0
+    assert np.allclose(cov.values, cov.values.T)                 # symmetric
+    assert np.linalg.eigvalsh(cov.values).min() > -1e-10         # PSD
+
+
+def test_estimate_covariance_dispatch_keeps_labels():
+    """Every estimator returns a labeled matrix and a human info string."""
+    from src.covariance import estimate_covariance
+
+    idx = pd.bdate_range("2022-01-01", periods=100)
+    rng = np.random.default_rng(9)
+    df = pd.DataFrame(rng.normal(0, 0.01, (100, 3)),
+                      columns=["X", "Y", "Z"], index=idx)
+    for method in ("sample", "Ledoit-Wolf", "EWMA"):
+        cov, info = estimate_covariance(df, method)
+        assert list(cov.columns) == ["X", "Y", "Z"]
+        assert isinstance(info, str) and info
+
+
 if __name__ == "__main__":
     import sys
 

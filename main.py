@@ -30,6 +30,7 @@ from src.risk import (
 from src.factors import factor_exposures
 from src.strategies import risk_contributions, risk_parity_weights, vol_target
 from src.hedge import min_variance_pair, rank_hedges
+from src.covariance import estimate_covariance
 from src.scenarios import HISTORICAL_REGIMES, replay_returns
 from src.liquidity import days_to_liquidate, liquidity_profile
 from src.grit import grit_scores, MIN_HISTORY_DAYS
@@ -1018,10 +1019,18 @@ if refresh_col.button("Refresh", help="Clear cache and re-pull the latest prices
     st.rerun()
 
 # ---- Allocation + stress test: one control deck, side by side ----
-cov = covariance_matrix(returns)  # annualized covariance for risk math
 deck_alloc, deck_stress = st.columns(2, gap="medium")
 with deck_alloc, st.container(border=True):
     st.markdown('<div class="panel-label">Allocation</div>', unsafe_allow_html=True)
+    cov_method = st.selectbox(
+        "Covariance estimator", ["Sample", "Ledoit-Wolf", "EWMA"],
+        help="How the risk matrix itself is built — it feeds risk parity, "
+             "vol-targeting, and the Balance blend. Sample = plain history "
+             "(noisy). Ledoit-Wolf shrinks that noise toward a stable target "
+             "(steadier, always invertible). EWMA (RiskMetrics λ=0.94) weights "
+             "recent days more, so it reacts to a fresh volatility spike.")
+    cov, cov_info = estimate_covariance(returns, cov_method)  # annualized risk matrix
+    st.caption(f"Risk matrix: {cov_info}.")
     acol1, acol2 = st.columns(2)
     method = acol1.radio(
         "Weighting", ["Equal weight", "Risk parity"], label_visibility="collapsed",
