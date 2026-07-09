@@ -1134,7 +1134,7 @@ st.markdown(f"""
     <div class="hero-badges">
       <span class="badge gold">Live data &middot; Yahoo Finance</span>
       <span class="badge">No fabricated numbers</span>
-      <span class="badge">46 automated tests</span>
+      <span class="badge">49 automated tests</span>
     </div>
     <div class="hero-eyebrow">Meleona &middot; Portfolio Risk Engine</div>
     <h1 class="hero-title"><span class="hline">Grit.</span><span class="hline">Discipline.</span><span class="hline">Evidence.</span></h1>
