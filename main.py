@@ -1686,18 +1686,32 @@ with tab_breakdown:
 
     panel_head("Correlation matrix", "Do these names move together?")
     read_me(
-        "Each cell is how tightly two names move together, from <b>0</b> (independent) "
-        "to <b>1</b> (lockstep). <b>Darker = more correlated.</b> A book full of dark "
-        "cells has little real diversification — everything falls at once.")
+        "Each cell is how tightly two names move together: <b>bronze = lockstep "
+        "(+1)</b>, <b>beige = independent (0)</b>, <b>charcoal = seesaw (−1)</b>. "
+        "A book full of deep bronze has little real diversification — everything "
+        "falls at once; charcoal cells are the offsets. The empty upper half is "
+        "the same data mirrored, masked so the eye reads each pair once.")
     corr = correlation_matrix(shocked_returns)
 
-    def beige_scale(val):
-        # higher correlation -> deeper warm gray, no matplotlib needed
-        shade = int(245 - max(0.0, min(1.0, val)) * 90)
-        text = "#4A4640" if val < 0.7 else "#FFFFFF"
-        return f"background-color: rgb({shade},{shade-6},{shade-14}); color: {text};"
-
-    st.dataframe(corr.style.format("{:.2f}").map(beige_scale))
+    # Lower triangle only — the upper half is a mirror image, masked out.
+    cmat = corr.to_numpy(dtype=float, copy=True)
+    cmat[np.triu(np.ones_like(cmat, dtype=bool))] = np.nan
+    ctext = np.where(np.isnan(cmat), "", np.vectorize(lambda v: f"{v:.2f}")(
+        np.nan_to_num(cmat)))
+    hm = go.Figure(go.Heatmap(
+        z=cmat, x=list(corr.columns), y=list(corr.index),
+        zmin=-1, zmax=1,
+        colorscale=[[0.0, "#3F3B35"], [0.5, "#EDE9E3"], [1.0, "#8A6A3C"]],
+        text=ctext, texttemplate="%{text}", textfont=dict(size=11),
+        hoverongaps=False, xgap=2, ygap=2,
+        hovertemplate="%{y} × %{x}: %{z:.2f}<extra></extra>",
+        colorbar=dict(thickness=10, outlinewidth=0,
+                      tickvals=[-1, 0, 1], ticktext=["−1", "0", "+1"]),
+    ))
+    hm.update_layout(
+        height=max(300, 34 * len(corr) + 90),
+        yaxis=dict(autorange="reversed"), xaxis=dict(side="bottom"))
+    st.plotly_chart(hm, width="stretch", config=PLOTLY_CFG)
 
     panel_head("Distribution of simulated 1-year outcomes",
                "Every simulated year, sorted into buckets")
