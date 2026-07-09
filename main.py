@@ -686,6 +686,40 @@ st.markdown("""
 .showcase-row .cta-btn { background: transparent; border: 1px solid #B08A55;
     color: #EDE9E3 !important; box-shadow: none; }
 .showcase-row .cta-btn:hover { background: #9A7B4F; border-color: #9A7B4F; }
+
+/* Full-bleed bands overflow the court by design — never let that leak into
+   a horizontal scrollbar (it also seeded phantom mini-scrollers). */
+[data-testid="stAppViewContainer"] section, [data-testid="stMain"] {
+    overflow-x: clip; }
+
+/* The conviction slabs breathe below the dark band instead of touching it */
+.slab { margin-top: 48px; }
+
+/* --- MCAP FOOTER (private-equity-rebrand reference): the page closes on a
+   full-bleed charcoal band — a "where to next" rail of outlined link boxes,
+   then a thin copyright/disclaimer bar. Our twist: the rail is numbered like
+   a ledger and every claim on it stays honest. --- */
+.meleona-footer { background: #3F3B35;
+    margin: 84px calc(50% - 50vw) 0; padding: 56px max(7vw, calc(50vw - 744px)) 36px; }
+.meleona-footer .f-rail { display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 16px; margin-bottom: 44px; }
+@media (max-width: 1100px) { .meleona-footer .f-rail { grid-template-columns: 1fr; } }
+.meleona-footer .f-box { display: block; border: 1px solid rgba(196,189,174,.3);
+    padding: 20px 22px; color: #EDE9E3 !important; text-decoration: none !important;
+    font-family: 'Helvetica Neue', sans-serif; font-size: 11px;
+    letter-spacing: .18em; text-transform: uppercase;
+    transition: border-color .25s ease, background .25s ease; }
+.meleona-footer .f-box:hover { border-color: #B08A55;
+    background: rgba(154,123,79,.12); }
+.meleona-footer .f-box small { display: block; margin-top: 8px; color: #A89F8F;
+    font-family: Georgia, serif; font-size: 13px; letter-spacing: .02em;
+    text-transform: none; line-height: 1.5; }
+.meleona-footer .f-num { color: #B08A55; margin-right: 10px; }
+.meleona-footer .f-bar { border-top: 1px solid rgba(196,189,174,.25);
+    padding-top: 18px; display: flex; justify-content: space-between;
+    flex-wrap: wrap; gap: 8px; font-family: 'Helvetica Neue', sans-serif;
+    font-size: 10px; letter-spacing: .14em; text-transform: uppercase;
+    color: #A89F8F; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -2394,6 +2428,24 @@ with tab_regimes:
     except Exception as exc:  # graceful, like the other tabs
         st.caption(f"Regime Atlas unavailable for this universe: {exc}")
 
+# ---- MCAP-style closing band: where-to-next rail + honest copyright bar ----
+st.markdown("""
+<div class="meleona-footer">
+  <div class="f-rail">
+    <a class="f-box" href="#grit-showcase"><span class="f-num">01</span>The Grit Zone
+      <small>Resilience ranked from real drawdowns — recovery, consistency, crisis behavior.</small></a>
+    <a class="f-box" href="#conviction"><span class="f-num">02</span>Crisis Conviction
+      <small>The hardest trade, priced from the actual record of ten crises.</small></a>
+    <a class="f-box" href="#engine"><span class="f-num">03</span>The Engine
+      <small>Stress-test any universe live — allocation, scenarios, CVaR verdict.</small></a>
+  </div>
+  <div class="f-bar">
+    <div>Meleona &middot; Portfolio Risk Engine &middot; &copy; 2026 John Nguyen</div>
+    <div>Live end-of-day data: Yahoo Finance &middot; Educational analysis, not investment advice</div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
 # ---- Book-glide: eased anchor scrolling on the REAL scroll container ----
 # Streamlit scrolls its own <section>, so `scroll-behavior` on <html> never
 # fires — anchor clicks teleported. This zero-height component reaches into
@@ -2414,10 +2466,23 @@ components.html("""
   function findScroller(el) {
     let n = el.parentElement;
     while (n) {
-      if (n.scrollHeight > n.clientHeight + 10) {
+      /* Demand a REAL page scroller (hundreds of px of travel). A tiny
+         accidental overflow (e.g. a full-bleed band adding a few px to an
+         inner container) must not hijack the walk — that bug froze every
+         CTA at 1px of movement. */
+      if (n.scrollHeight > n.clientHeight + 120) {
+        /* The scroller carries `scroll-behavior: smooth` (our CSS fallback),
+           which makes a programmatic scrollTop ASYNC — an immediate read-back
+           sees no movement and this test wrongly rejected the real scroller.
+           Force instant behavior for the probe, restore after. */
+        const prevSB = n.style.scrollBehavior;
+        n.style.scrollBehavior = 'auto';
         const was = n.scrollTop;
         n.scrollTop = was + 1;
-        if (n.scrollTop !== was) { n.scrollTop = was; return n; }
+        const ok = n.scrollTop !== was;
+        n.scrollTop = was;
+        n.style.scrollBehavior = prevSB;
+        if (ok) return n;
       }
       n = n.parentElement;
     }
@@ -2428,12 +2493,18 @@ components.html("""
            scroller.getBoundingClientRect().top + scroller.scrollTop - 26;
   }
   function glide(scroller, el, dur, settled) {
+    /* Our rAF drives every frame — the scroller's own smooth behavior would
+       fight it (each scrollTo becoming its own animation). Instant while we
+       fly, restored when we land. */
+    const prevSB = scroller.style.scrollBehavior;
+    scroller.style.scrollBehavior = 'auto';
     const y0 = scroller.scrollTop, d = targetY(scroller, el) - y0,
           t0 = performance.now();
     (function f(now) {
       const p = Math.min(1, (now - t0) / dur);
       scroller.scrollTo(0, y0 + d * ease(p));
       if (p < 1) { requestAnimationFrame(f); return; }
+      scroller.style.scrollBehavior = prevSB;
       /* landing check: if the page shifted mid-flight (a chart mounted,
          a rerun repainted), re-aim once with a short corrective glide —
          the reader always ends ON the section the button promised. */
