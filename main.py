@@ -396,6 +396,112 @@ div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
 </style>
 """, unsafe_allow_html=True)
 
+# ---- GLOSS LAYER (2026-07-09) ----
+# Institutional sheen over the matte editorial base: specular highlights,
+# layered depth, and a few one-pass arrival glints. Same Citadel palette —
+# no new hues, no rounded pills. Every effect degrades to the matte base
+# under prefers-reduced-motion (guard at the end).
+st.markdown("""
+<style>
+/* Verdict numeral — brushed-bronze-to-charcoal specular fill with a single
+   sheen sweep on arrival. @supports-guarded so it stays solid charcoal where
+   background-clip:text is unsupported (the .verdict-number base keeps color). */
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  .verdict-number {
+    background: linear-gradient(100deg,
+        #3F3B35 0%, #46413A 30%, #C8A86E 50%, #46413A 70%, #3F3B35 100%);
+    background-size: 240% 100%;
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 1px 0 rgba(255,255,255,.28);
+    animation: verdict-sheen 2.6s cubic-bezier(.4,0,.2,1) .25s 1 both; }
+}
+@keyframes verdict-sheen { 0% { background-position: 160% 0; }
+                           62%, 100% { background-position: 0 0; } }
+
+/* Verdict frame — faint top glass + one light-glint pass across it on load. */
+.verdict-box { position: relative; overflow: hidden;
+    background: linear-gradient(180deg, rgba(255,253,248,.55), rgba(255,253,248,0) 62%); }
+.verdict-box::after { content: ""; position: absolute; top: 0; left: -45%;
+    width: 45%; height: 100%; pointer-events: none;
+    background: linear-gradient(100deg, transparent,
+        rgba(255,255,255,.5) 50%, transparent);
+    transform: skewX(-18deg); animation: gloss-glint 2.4s ease-out .2s 1 both; }
+@keyframes gloss-glint { from { left: -45%; } to { left: 150%; } }
+
+/* Hero stat tiles — frosted glass with an inner top highlight; the lift on
+   hover already exists, now it reads as a pane of glass catching light. */
+.hstat { background: linear-gradient(157deg, #F6F2EA 0%, #ECE6DA 100%);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.7),
+        0 1px 2px rgba(63,59,53,.05), 0 8px 24px -18px rgba(63,59,53,.35); }
+.hstat:hover { box-shadow: inset 0 1px 0 rgba(255,255,255,.85),
+        0 2px 4px rgba(63,59,53,.06), 0 18px 38px -20px rgba(63,59,53,.5); }
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  .hstat .n { background: linear-gradient(120deg, #3F3B35, #6E5B41);
+      -webkit-background-clip: text; background-clip: text;
+      -webkit-text-fill-color: transparent; }
+}
+
+/* CTA — was a matte charcoal slab; now polished bronze metal with a running
+   sheen band on hover. */
+.cta-btn { background: linear-gradient(180deg, #4A453D 0%, #3A362F 100%);
+    position: relative; overflow: hidden;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.14),
+                0 8px 20px -12px rgba(63,59,53,.55); }
+.cta-btn:hover { background: linear-gradient(180deg, #B08A55 0%, #8A6A3C 100%);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.32),
+                0 16px 32px -16px rgba(63,59,53,.65); }
+.cta-btn::before { content: ""; position: absolute; top: 0; left: -60%;
+    width: 40%; height: 100%; transform: skewX(-20deg); pointer-events: none;
+    background: linear-gradient(100deg, transparent,
+        rgba(255,255,255,.35), transparent); transition: none; }
+.cta-btn:hover::before { animation: gloss-glint 0.7s ease-out 1; }
+
+/* Streamlit metric readouts — lift the flat numbers onto small glass tiles,
+   consistent with the hero deck, with a hover lift for tactility. */
+[data-testid="stMetric"] {
+    background: linear-gradient(157deg, rgba(246,242,234,.92), rgba(233,227,215,.62));
+    border: 1px solid #D3CBBA; padding: 15px 18px !important;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.6),
+                0 10px 26px -20px rgba(63,59,53,.5);
+    transition: transform .35s cubic-bezier(.16,1,.3,1), box-shadow .35s ease; }
+[data-testid="stMetric"]:hover { transform: translateY(-3px);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.75),
+                0 18px 40px -22px rgba(63,59,53,.6); }
+
+/* Charts float on soft depth so the surfaces read as glossy panes, not
+   flat ink on paper. */
+[data-testid="stPlotlyChart"], [data-testid="stImage"] {
+    box-shadow: 0 18px 44px -32px rgba(63,59,53,.5);
+    transition: box-shadow .4s ease; }
+[data-testid="stPlotlyChart"]:hover { box-shadow: 0 22px 52px -30px rgba(63,59,53,.6); }
+
+/* Expanders + dataframes — a whisper of gradient + inner highlight so panels
+   catch light instead of sitting dead flat. */
+[data-testid="stExpander"] {
+    background: linear-gradient(160deg, #EFEAE0, #E6E0D4) !important;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.5),
+                0 8px 22px -18px rgba(63,59,53,.4) !important; }
+[data-testid="stDataFrame"] {
+    box-shadow: 0 12px 30px -24px rgba(63,59,53,.45); }
+
+/* Section hairline draws itself in — a bronze line unspooling left-to-right. */
+.section-divider { background-size: 200% 100%;
+    animation: divider-draw 1.1s cubic-bezier(.16,1,.3,1) both; }
+@keyframes divider-draw { from { background-size: 0% 100%; opacity: 0; }
+                          to   { background-size: 200% 100%; opacity: 1; } }
+
+/* Badges pick up the same frosted glass as the tiles. */
+.badge { background: linear-gradient(160deg, rgba(246,242,234,.85), rgba(233,227,215,.6));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.55); }
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+    .verdict-box::after, .cta-btn::before { display: none !important; }
+    .section-divider { background-size: 200% 100% !important; opacity: 1 !important; } }
+</style>
+""", unsafe_allow_html=True)
+
 # ---- Themed Plotly palette + chart helpers (institutional beige/bronze) ----
 BRONZE = "#9A7B4F"
 BRONZE_DK = "#8A6A3C"
