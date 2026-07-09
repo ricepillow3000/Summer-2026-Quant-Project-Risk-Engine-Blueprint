@@ -645,24 +645,9 @@ st.markdown("""
                   0 12px 30px -24px rgba(63,59,53,.4); }
 }
 
-/* --- NORDIC RUNES: engraved sigils scattered through the stone.
-   Tiwaz = honesty (Tyr, god of oaths) · Dagaz = breakthrough/problem-solving
-   · Ingwaz = integrity/completion · Ansuz = wisdom. Encoded as low-alpha
-   background engravings — ornament, never content. --- */
-.hero-section { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><path d='M50 10 V90 M50 10 L26 34 M50 10 L74 34' stroke='rgba(154,123,79,0.13)' stroke-width='5' fill='none' stroke-linecap='round'/></svg>");
-    background-repeat: no-repeat; background-position: 92% 88%;
-    background-size: 120px 120px; }
-.showcase-section { position: relative; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><path d='M25 15 V85 M75 15 V85 M25 15 L75 85 M75 15 L25 85' stroke='rgba(154,123,79,0.10)' stroke-width='5' fill='none' stroke-linecap='round'/></svg>");
-    background-repeat: no-repeat; background-position: 96% 8%;
-    background-size: 100px 100px; }
-.verdict-box { background-image:
-      linear-gradient(180deg, rgba(255,253,248,.55), rgba(255,253,248,0) 62%),
-      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><path d='M50 10 L84 50 L50 90 L16 50 Z' stroke='rgba(154,123,79,0.11)' stroke-width='5' fill='none' stroke-linejoin='round'/></svg>");
-    background-repeat: no-repeat; background-position: 0 0, 97% 78%;
-    background-size: auto, 92px 92px; }
-.engine-heading { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><path d='M38 10 V90 M38 20 L70 40 M38 42 L70 62' stroke='rgba(154,123,79,0.10)' stroke-width='5' fill='none' stroke-linecap='round'/></svg>");
-    background-repeat: no-repeat; background-position: 88% 50%;
-    background-size: 96px 96px; }
+/* (Nordic rune engravings removed 2026-07-09 at John's call — read as
+   ornament noise against the institutional register. Crest-fragment
+   engravings stay; they are the brand.) */
 
 /* --- ROUND 5: precision numerals + one-pass ignite ---
    Tabular figures on every metric so columns of numbers align like a
@@ -676,6 +661,31 @@ st.markdown("""
                         to   { opacity: 1; transform: none; filter: none; } }
 [data-testid="stPlotlyChart"] {
     animation: heat-bloom .9s cubic-bezier(.25,1,.5,1) both; }
+
+/* --- ROUND 6: reference-layout lifts (Sculptor / RiverNorth), our palette ---
+   Sculptor: the hero display element is a stack of period-terminated serif
+   words; the brand recedes to the eyebrow. RiverNorth: section rhythm comes
+   from full-width alternating color bands — here the twin showcases sit on
+   one full-bleed charcoal band between beige fields. */
+.hero-title .hline { display: block; }
+.hero-title { font-size: 84px !important; }
+
+.showcase-row { background: #3F3B35;
+    margin-left: calc(50% - 50vw); margin-right: calc(50% - 50vw);
+    padding: 64px max(7vw, calc(50vw - 744px)) 56px; }
+.showcase-row .showcase-title { color: #EDE9E3; }
+.showcase-row .showcase-body { color: #C4BDAE; }
+.showcase-row .showcase-eyebrow { color: #B08A55; }
+.showcase-row .pillar-row { border-top-color: rgba(196,189,174,.28); }
+.showcase-row .pillar-card { border-left-color: rgba(196,189,174,.28); }
+.showcase-row .pillar-card:hover { border-left-color: #B08A55; }
+.showcase-row .pillar-label { color: #B08A55; }
+.showcase-row .pillar-desc { color: #A89F8F; }
+.showcase-row .engrave { opacity: .12; }
+/* Sculptor's outlined CTA, at home on the dark band */
+.showcase-row .cta-btn { background: transparent; border: 1px solid #B08A55;
+    color: #EDE9E3 !important; box-shadow: none; }
+.showcase-row .cta-btn:hover { background: #9A7B4F; border-color: #9A7B4F; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -1071,8 +1081,8 @@ st.markdown(f"""
       <span class="badge">No fabricated numbers</span>
       <span class="badge">46 automated tests</span>
     </div>
-    <div class="hero-eyebrow">Pride &middot; Integrity</div>
-    <h1 class="hero-title">Meleona</h1>
+    <div class="hero-eyebrow">Meleona &middot; Portfolio Risk Engine</div>
+    <h1 class="hero-title"><span class="hline">Grit.</span><span class="hline">Discipline.</span><span class="hline">Evidence.</span></h1>
     <div class="hero-sub">
       A hedge-fund-grade portfolio risk engine — VaR, CVaR, Monte Carlo stress
       testing, and named factor exposures, computed live from real market data.
