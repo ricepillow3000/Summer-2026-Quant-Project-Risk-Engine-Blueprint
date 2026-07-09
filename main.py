@@ -26,6 +26,11 @@ from src.ingestion import (
 from src.analytics import correlation_matrix, covariance_matrix
 from src.risk import (
     monte_carlo, jump_diffusion_mc, parametric_var, var_backtest, sharpe_ratio,
+    var, cvar, portfolio_daily_returns,
+)
+from src.comovement import (
+    correlation_from_cov, rolling_correlation, most_correlated_pair,
+    defensive_shift, least_correlated_to_pair,
 )
 from src.factors import factor_exposures
 from src.strategies import risk_contributions, risk_parity_weights, vol_target
@@ -1501,12 +1506,126 @@ with f_col:
     )
 
 # ---- Supporting depth: one tab at a time, not stacked accordions ----
-(tab_3d, tab_breakdown, tab_balance, tab_grit, tab_conviction, tab_liquidity,
- tab_secmaster, tab_dq, tab_lineage, tab_signals, tab_regimes) = st.tabs([
-    "3D Distribution", "Risk Breakdown", "Balance", "Grit Zone",
-    "Crisis Conviction", "Liquidity", "Security Master", "Data Quality",
-    "Lineage & Audit", "Signal Lab", "Regime Atlas",
+(tab_3d, tab_breakdown, tab_watch, tab_balance, tab_grit, tab_conviction,
+ tab_liquidity, tab_secmaster, tab_dq, tab_lineage, tab_signals,
+ tab_regimes) = st.tabs([
+    "3D Distribution", "Risk Breakdown", "Correlation Watch", "Balance",
+    "Grit Zone", "Crisis Conviction", "Liquidity", "Security Master",
+    "Data Quality", "Lineage & Audit", "Signal Lab", "Regime Atlas",
 ])
+
+with tab_watch:
+    # Correlation as a moving picture. A static matrix answers "are these
+    # two related on average?" — this tab answers "are they related NOW,
+    # and is that relationship eating my diversification?"
+    corr_now = correlation_from_cov(covariance_matrix(returns))
+    try:
+        def_a, def_b, _ = most_correlated_pair(corr_now)
+    except Exception:  # noqa: BLE001 — degenerate universe; fall back to first two
+        def_a, def_b = loaded[0], loaded[1]
+
+    wc1, wc2, wc3, wc4 = st.columns([2, 2, 2, 2])
+    pick_a = wc1.selectbox("Asset A", loaded, index=loaded.index(def_a),
+                           key="watch_a")
+    pick_b = wc2.selectbox("Asset B", loaded, index=loaded.index(def_b),
+                           key="watch_b")
+    win = wc3.slider("Rolling window (days)", 10, 63, 21, step=1, key="watch_w",
+                     help="21 trading days ≈ one month. Shorter reacts faster "
+                          "but is noisier.")
+    thresh = wc4.slider("Concentration threshold", 0.50, 0.95, 0.75, step=0.05,
+                        key="watch_t",
+                        help="Above this, the pair is close to one bet — "
+                             "diversification between them is thinning.")
+
+    if pick_a == pick_b:
+        st.warning("Pick two different assets — a name is always +1.00 "
+                   "correlated with itself.")
+    else:
+        roll = rolling_correlation(returns, pick_a, pick_b, window=win).dropna()
+        static_corr = float(corr_now.loc[pick_a, pick_b])
+        latest = float(roll.iloc[-1]) if len(roll) else float("nan")
+
+        m1, m2, m3 = st.columns(3)
+        m1.metric(f"{pick_a} × {pick_b} now ({win}d)", f"{latest:+.2f}")
+        m2.metric("Full-period average", f"{static_corr:+.2f}")
+        m3.metric("Range over history",
+                  f"{roll.min():+.2f} … {roll.max():+.2f}" if len(roll) else "—")
+
+        if latest > thresh:
+            st.warning(f"**Concentration reading:** {pick_a} and {pick_b} are "
+                     f"moving at {latest:+.2f} over the last {win} trading "
+                     f"days — above your {thresh:.2f} threshold. Right now "
+                     "they are closer to one bet than two.")
+        else:
+            st.success(f"**Stable:** {pick_a} × {pick_b} at {latest:+.2f} over "
+                       f"the last {win} trading days, below your "
+                       f"{thresh:.2f} threshold.")
+
+        wfig = go.Figure()
+        wfig.add_hrect(y0=thresh, y1=1.0, fillcolor="rgba(154,123,79,0.10)",
+                       line_width=0)
+        wfig.add_hline(y=thresh, line=dict(color="#8A6A3C", width=1, dash="dot"),
+                       annotation_text=f"threshold {thresh:.2f}",
+                       annotation_font=dict(size=11, color="#8A6A3C"))
+        wfig.add_hline(y=0, line=dict(color="#C4BDAE", width=1))
+        wfig.add_trace(go.Scatter(
+            x=roll.index, y=roll.values, mode="lines",
+            line=dict(color=BRONZE, width=2.2),
+            hovertemplate="%{x|%Y-%m-%d}: %{y:+.2f}<extra></extra>",
+            name=f"{pick_a} × {pick_b}"))
+        wfig.update_layout(yaxis=dict(range=[-1, 1], title="correlation"),
+                           showlegend=False, height=360)
+        st.plotly_chart(wfig, width="stretch", config=PLOTLY_CFG)
+
+        read_me(
+            "<b>Covariance vs correlation — same sign, different units.</b> "
+            "Both tell you the <i>direction</i> two assets move together. "
+            "Covariance is in squared-return units, so its size is unreadable "
+            "alone; correlation is covariance divided by both volatilities — "
+            "co-movement per unit of risk, locked to −1…+1. The engine "
+            "computes it by the matrix identity R = D⁻¹ΣD⁻¹. And it is not a "
+            "constant: this line is the relationship <i>moving</i>. Pairs "
+            "that average +0.4 can run above +0.9 inside a stress regime — "
+            "which is exactly when you need them not to.")
+
+        # --- Defensive simulation: measured, not promised ---
+        others = [t for t in loaded if t not in (pick_a, pick_b)]
+        if latest > thresh and others:
+            dest, dest_corr = least_correlated_to_pair(corr_now,
+                                                       (pick_a, pick_b))
+            w_shift = defensive_shift(weights, loaded, (pick_a, pick_b),
+                                      dest, cut=0.15)
+            pr_before = portfolio_daily_returns(returns, weights)
+            pr_after = portfolio_daily_returns(returns, w_shift)
+            cv_b, cv_a = cvar(pr_before), cvar(pr_after)
+            vol_b = float(pr_before.std() * np.sqrt(252))
+            vol_a = float(pr_after.std() * np.sqrt(252))
+
+            panel_head("Defensive simulation",
+                       f"Cut {pick_a} & {pick_b} by up to 15pts each, "
+                       f"move the freed weight into {dest}")
+            d1, d2 = st.columns(2)
+            d1.metric("Daily CVaR (95%)", f"{cv_a:.2%}",
+                      delta=f"{cv_a - cv_b:+.2%} vs current",
+                      delta_color="inverse")
+            d2.metric("Annualized vol", f"{vol_a:.1%}",
+                      delta=f"{vol_a - vol_b:+.1%} vs current",
+                      delta_color="inverse")
+            verdict_shift = ("reduced" if cv_a < cv_b else
+                             "did NOT reduce")
+            st.caption(
+                f"Measured through the same engine: the shift **{verdict_shift}** "
+                f"tail risk on this history. {dest} was chosen as the name "
+                f"least correlated to the pair — but its own average "
+                f"correlation to them is **{dest_corr:+.2f}**, not zero: "
+                "inside one equity universe there is no truly independent "
+                "asset, only less-dependent ones. Simulation on historical "
+                "returns, not advice; correlations converge toward +1 in "
+                "crashes, so measured diversification is a fair-weather "
+                "number.")
+        elif latest > thresh:
+            st.caption("No third asset in this universe to shift into — "
+                       "a two-asset book has nowhere defensive to go.")
 
 with tab_3d:
     st.iframe(living_surface_html(mc["path_density"]), height=540)

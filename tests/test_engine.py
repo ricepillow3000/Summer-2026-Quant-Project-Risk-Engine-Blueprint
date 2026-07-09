@@ -24,6 +24,9 @@ from src.strategies import (
 )
 from src.liquidity import (days_to_liquidate, liquidity_profile,
                            liquidity_adjusted_cvar)
+from src.comovement import (correlation_from_cov, rolling_correlation,
+                            most_correlated_pair, defensive_shift,
+                            least_correlated_to_pair)
 from src.grit import (
     drawdown_episodes, recovery_stats, rolling_consistency,
     regime_drawdown_and_recovery, grit_scores, _score01,
@@ -141,6 +144,44 @@ def test_liquidity_monotonic_and_zero_adv_flagged():
     assert "A" in prof["no_volume"]
     assert not np.isfinite(days_to_liquidate(w, adv0, book_value=1e6).loc["A", "days"])
     assert 0.0 <= prof["pct_exitable_1day"] <= 1.0
+
+
+def test_correlation_identity_matches_pandas_and_flags_zero_vol():
+    rng = np.random.default_rng(7)
+    df = pd.DataFrame(rng.normal(0, 0.01, (500, 3)), columns=["A", "B", "C"])
+    df["B"] = 0.6 * df["A"] + 0.4 * df["B"]          # plant real correlation
+    r = correlation_from_cov(df.cov())
+    # R = D^-1 Sigma D^-1 must reproduce pandas .corr() to float precision
+    assert np.allclose(r.values, df.corr().values, atol=1e-12)
+    assert np.allclose(np.diag(r.values), 1.0)
+    # Zero-variance asset: correlation undefined -> NaN, never faked
+    rz = correlation_from_cov(df.assign(Z=0.0).cov())
+    assert np.isnan(rz.loc["Z", "A"]) and np.isnan(rz.loc["Z", "Z"])
+
+
+def test_comovement_pair_shift_and_destination_hand_worked():
+    # A and B identical => corr exactly 1; C independent noise
+    rng = np.random.default_rng(11)
+    a = rng.normal(0, 0.01, 400)
+    df = pd.DataFrame({"A": a, "B": a, "C": rng.normal(0, 0.01, 400)})
+    corr = correlation_from_cov(df.cov())
+    pa, pb, top = most_correlated_pair(corr)
+    assert {pa, pb} == {"A", "B"} and abs(top - 1.0) < 1e-12
+    # Least-correlated destination must be the only outside name
+    dest, dcorr = least_correlated_to_pair(corr, (pa, pb))
+    assert dest == "C" and abs(dcorr) < 0.2
+    # Rolling correlation of identical series is 1 everywhere post-window
+    roll = rolling_correlation(df, "A", "B", window=21).dropna()
+    assert np.allclose(roll.values, 1.0)
+    assert roll.index[0] == 20                        # first 20 rows NaN
+
+    # Defensive shift: exposure preserved, never negative, cut capped at holding
+    w = np.array([0.40, 0.10, 0.50])                  # B holds only 10%
+    shifted = defensive_shift(w, ["A", "B", "C"], ("A", "B"), "C", cut=0.15)
+    assert abs(shifted.sum() - w.sum()) < 1e-12       # nothing created/destroyed
+    assert (shifted >= 0).all()                        # no silent short
+    assert abs(shifted[1]) < 1e-12                     # B cut to zero, not -5%
+    assert abs(shifted[2] - 0.75) < 1e-12              # C got 0.15 + 0.10
 
 
 def test_liquidity_adjusted_cvar_widens_tail_monotonically():
