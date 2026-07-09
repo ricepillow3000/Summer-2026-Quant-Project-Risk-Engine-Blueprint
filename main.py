@@ -1349,39 +1349,68 @@ with tab_balance:
                 index=loaded.index(default_anchor))
             ranked = rank_hedges(corr_b, anchor)
 
-            panel_head("Best natural hedges",
-                       f"How every other name moves against {anchor}")
+            # Classify by correlation STRENGTH, not just sign: a name at −0.01
+            # is independent, not a hedge, and must not be painted as one.
+            HEDGE, INDEP = -0.20, 0.20   # bands: <−0.2 offsets · ±0.2 independent
+
+            def _hedge_color(v):
+                if v < HEDGE:
+                    return "#3F6B3F"          # green — genuinely moves against
+                if v > INDEP:
+                    return "#8A3B2E"          # red — moves with, no protection
+                return "#9A7B4F"              # bronze — independent, not a hedge
+
+            panel_head("Balancers",
+                       f"How every other name moves relative to {anchor}")
             hedge_fig = go.Figure(go.Bar(
                 x=ranked.values, y=list(ranked.index), orientation="h",
-                marker=dict(color=["#3F6B3F" if v < 0 else "#8A3B2E"
-                                   for v in ranked.values], line=dict(width=0)),
+                marker=dict(color=[_hedge_color(v) for v in ranked.values],
+                            line=dict(width=0)),
                 hovertemplate="%{y}: correlation %{x:.2f}<extra></extra>"))
             hedge_fig.add_vline(x=0, line=dict(color=AXIS_LINE, width=1))
             hedge_fig = _style_fig(hedge_fig, height=max(160, 34 * len(ranked) + 40))
             hedge_fig.update_layout(xaxis_title="correlation with " + anchor)
             st.plotly_chart(hedge_fig, width="stretch", config=PLOTLY_CFG)
             st.markdown(
-                '<div class="read-me"><b>Green bars move against your anchor</b> '
-                '(negative correlation) — those are the balancers. Red bars move '
-                '<b>with</b> it and add no protection. The greenest, leftmost bar is '
-                'the strongest natural hedge in this universe.</div>',
+                '<div class="read-me"><b>Green</b> = moves <b>against</b> the anchor '
+                '(correlation below −0.2) — a true offset. <b>Bronze</b> = roughly '
+                '<b>independent</b> (±0.2): it diversifies but does not cancel the '
+                "anchor's moves. <b>Red</b> = moves <b>with</b> it — no protection. "
+                'In a single-sector basket (all tech, say) you often find no green at '
+                'all — everything rises and falls together.</div>',
                 unsafe_allow_html=True)
 
             best = ranked.index[0]
+            best_corr = float(ranked.iloc[0])
             pair = min_variance_pair(cov, anchor, best)
+            # Honest verdict: is this actually a hedge, or just the least-bad?
+            if best_corr < HEDGE:
+                kind = (f"**{best}** genuinely moves against {anchor} "
+                        f"(correlation {best_corr:+.2f}) — a real hedge.")
+            elif best_corr <= INDEP:
+                kind = (f"No true hedge in this universe: **{best}** is the most "
+                        f"**independent** name (correlation {best_corr:+.2f}), not a "
+                        f"mirror. Blending it *diversifies* {anchor} — it does not "
+                        f"offset it. A genuine hedge would need an asset from outside "
+                        f"this basket (bonds, gold, cash).")
+            else:
+                kind = (f"Everything here moves **together**: even the least-correlated "
+                        f"name (**{best}**, {best_corr:+.2f}) still rises and falls with "
+                        f"{anchor}. This basket cannot hedge itself — a real offset "
+                        f"needs an asset from a different sector or asset class.")
+
             panel_head("The balanced pair",
-                       f"{anchor} offset by {best}, at minimum-variance weights")
+                       f"{anchor} paired with {best}, at minimum-variance weights")
             b1, b2, b3 = st.columns(3)
             b1.metric(f"Hold {anchor}", f"{pair['w_anchor']:.0%}")
             b2.metric(f"Hold {best}", f"{pair['w_hedge']:.0%}")
             b3.metric("Volatility cut", f"−{pair['vol_reduction']:.0%}")
             st.caption(
-                f"Blending **{pair['w_anchor']:.0%} {anchor}** with "
-                f"**{pair['w_hedge']:.0%} {best}** (their correlation: "
-                f"{pair['correlation']:+.2f}) takes the pair's annual volatility from "
-                f"**{pair['anchor_vol']:.1%}** ({anchor} alone) down to "
+                f"{kind} Blending **{pair['w_anchor']:.0%} {anchor}** with "
+                f"**{pair['w_hedge']:.0%} {best}** takes the pair's annual volatility "
+                f"from **{pair['anchor_vol']:.1%}** ({anchor} alone) down to "
                 f"**{pair['blended_vol']:.1%}** — a {pair['vol_reduction']:.0%} "
-                "reduction. These are the long-only minimum-variance weights."
+                "reduction, from diversification. Long-only minimum-variance weights."
             )
             st.markdown(
                 '<div class="read-me"><b>The honest limit — read this.</b> '
