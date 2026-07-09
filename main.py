@@ -551,15 +551,6 @@ div[data-baseweb="select"]>div, .stNumberInput input,
 [data-testid="stPlotlyChart"] g.bars path {
     filter: drop-shadow(0 0 5px rgba(154,123,79,.55)); }
 
-/* --- SCROLL LIFE: decorative layers take a whisper of motion-blur while the
-   page moves, snapping sharp the instant it settles. Text never blurs. --- */
-.hstat, [data-testid="stMetric"], .hero-crest { transition: filter .18s ease,
-    transform .3s cubic-bezier(.16,1,.3,1), box-shadow .35s ease; }
-body.meleona-scrolling [data-testid="stPlotlyChart"],
-body.meleona-scrolling .hstat,
-body.meleona-scrolling [data-testid="stMetric"],
-body.meleona-scrolling .hero-crest { filter: blur(1.3px); }
-
 /* --- UFO ARRIVAL: intro tiles drop from above with a light settle. Trigger
    is injected only on first load (boot block), so reruns never replay it. --- */
 @keyframes ufo-drop {
@@ -582,11 +573,91 @@ body.meleona-scrolling .hero-crest { filter: blur(1.3px); }
 @keyframes sk-pulse { 0%,100%{opacity:.45;} 50%{opacity:1;} }
 
 @media (prefers-reduced-motion: reduce) {
-    .hero-section::before, .hero-section::after { display:none !important; }
-    body.meleona-scrolling [data-testid="stPlotlyChart"],
-    body.meleona-scrolling .hstat,
-    body.meleona-scrolling [data-testid="stMetric"],
-    body.meleona-scrolling .hero-crest { filter:none !important; } }
+    .hero-section::before, .hero-section::after { display:none !important; } }
+</style>
+""", unsafe_allow_html=True)
+
+# ---- ROUND 4 (2026-07-09): THE THREE FINISHES + RUNES ----
+# One material system, three finishes, each with a job:
+#   MATTE  — the reading surface: body text, sections, pillars, expanders,
+#            tables. Paper. (Rebalanced back from round 2's gloss.)
+#   GLOSSY — the trophies: verdict numeral, CTA, hero tiles, chart halos.
+#   GLASS  — the instruments you touch: buttons, selects + their dropdown
+#            menus, read-me panels. Real translucency (backdrop-filter),
+#            inner light, react on hover. (Liquid-glass principles in CSS.)
+# Plus: lacquered page background, and Nordic runes engraved in the stone —
+# Tiwaz (Tyr's arrow: honesty/justice), Dagaz (daybreak: clarity/problem-
+# solving), Ingwaz (completion: integrity), Ansuz (wisdom).
+st.markdown("""
+<style>
+/* --- LACQUER: light falls on the page from above; corners hold shade --- */
+[data-testid="stAppViewContainer"] {
+    background:
+      radial-gradient(1100px 520px at 50% -140px, rgba(255,253,247,.95), rgba(255,253,247,0) 65%),
+      radial-gradient(760px 480px at 88% 12%, rgba(154,123,79,.06), transparent 70%),
+      radial-gradient(820px 520px at 6% 92%, rgba(63,59,53,.05), transparent 72%),
+      #EDE9E3 !important;
+    background-attachment: fixed; }
+
+/* --- MATTE REBALANCE: expanders and tables go back to paper --- */
+[data-testid="stExpander"] { background: #ECE7DD !important;
+    box-shadow: none !important; }
+[data-testid="stDataFrame"] { box-shadow: none; }
+
+/* --- GLASS: the instruments --- */
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .stButton>button { background: rgba(246,242,234,.5);
+      -webkit-backdrop-filter: blur(14px) saturate(1.2);
+      backdrop-filter: blur(14px) saturate(1.2);
+      border: 1px solid rgba(154,123,79,.4);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.65),
+                  inset 0 -8px 14px -12px rgba(154,123,79,.35),
+                  0 8px 22px -16px rgba(63,59,53,.4); }
+  div[data-baseweb="select"] > div, .stNumberInput input,
+  [data-testid="stTextInput"] input,
+  .stMultiSelect [data-baseweb="select"] > div {
+      background: rgba(246,242,234,.48) !important;
+      -webkit-backdrop-filter: blur(12px) saturate(1.15);
+      backdrop-filter: blur(12px) saturate(1.15);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.55); }
+  /* Dropdown menus float as true glass panes over the page */
+  [data-baseweb="popover"] [data-baseweb="menu"],
+  [data-baseweb="popover"] ul[role="listbox"] {
+      background: rgba(244,240,232,.72) !important;
+      -webkit-backdrop-filter: blur(20px) saturate(1.3);
+      backdrop-filter: blur(20px) saturate(1.3);
+      border: 1px solid rgba(154,123,79,.35); border-radius: 14px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.6),
+                  0 24px 52px -22px rgba(63,59,53,.5); overflow: hidden; }
+  [data-baseweb="menu"] li[role="option"]:hover,
+  ul[role="listbox"] li:hover { background: rgba(154,123,79,.16) !important; }
+  /* Read-me panels: frosted glass slabs, the briefing cards you lean on */
+  .read-me { background: rgba(246,242,234,.5) !important;
+      -webkit-backdrop-filter: blur(16px) saturate(1.15);
+      backdrop-filter: blur(16px) saturate(1.15);
+      border: 1px solid rgba(154,123,79,.3) !important; border-radius: 14px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.55),
+                  0 12px 30px -24px rgba(63,59,53,.4); }
+}
+
+/* --- NORDIC RUNES: engraved sigils scattered through the stone.
+   Tiwaz = honesty (Tyr, god of oaths) · Dagaz = breakthrough/problem-solving
+   · Ingwaz = integrity/completion · Ansuz = wisdom. Encoded as low-alpha
+   background engravings — ornament, never content. --- */
+.hero-section { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><path d='M50 10 V90 M50 10 L26 34 M50 10 L74 34' stroke='rgba(154,123,79,0.13)' stroke-width='5' fill='none' stroke-linecap='round'/></svg>");
+    background-repeat: no-repeat; background-position: 92% 88%;
+    background-size: 120px 120px; }
+.showcase-section { position: relative; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><path d='M25 15 V85 M75 15 V85 M25 15 L75 85 M75 15 L25 85' stroke='rgba(154,123,79,0.10)' stroke-width='5' fill='none' stroke-linecap='round'/></svg>");
+    background-repeat: no-repeat; background-position: 96% 8%;
+    background-size: 100px 100px; }
+.verdict-box { background-image:
+      linear-gradient(180deg, rgba(255,253,248,.55), rgba(255,253,248,0) 62%),
+      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><path d='M50 10 L84 50 L50 90 L16 50 Z' stroke='rgba(154,123,79,0.11)' stroke-width='5' fill='none' stroke-linejoin='round'/></svg>");
+    background-repeat: no-repeat; background-position: 0 0, 97% 78%;
+    background-size: auto, 92px 92px; }
+.engine-heading { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><path d='M38 10 V90 M38 20 L70 40 M38 42 L70 62' stroke='rgba(154,123,79,0.10)' stroke-width='5' fill='none' stroke-linecap='round'/></svg>");
+    background-repeat: no-repeat; background-position: 88% 50%;
+    background-size: 96px 96px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -980,7 +1051,7 @@ st.markdown(f"""
     <div class="hero-badges">
       <span class="badge gold">Live data &middot; Yahoo Finance</span>
       <span class="badge">No fabricated numbers</span>
-      <span class="badge">38 automated tests</span>
+      <span class="badge">46 automated tests</span>
     </div>
     <div class="hero-eyebrow">Pride &middot; Integrity</div>
     <h1 class="hero-title">Meleona</h1>
@@ -2223,21 +2294,6 @@ components.html("""
       dest.style.animation = 'section-arrive .9s cubic-bezier(.16,1,.3,1) .45s both';
     }
   }, true);
-
-  /* SCROLL LIFE: while the page moves, tag <body> so decorative layers take a
-     whisper of motion-blur (CSS: body.meleona-scrolling). Clears ~130ms after
-     the last scroll tick, so it reads as momentum, not a permanent smear.
-     Skipped entirely under reduced-motion. */
-  if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    let blurT;
-    P.addEventListener('scroll', function() {
-      if (!P.body.classList.contains('meleona-scrolling'))
-        P.body.classList.add('meleona-scrolling');
-      clearTimeout(blurT);
-      blurT = setTimeout(function() {
-        P.body.classList.remove('meleona-scrolling'); }, 130);
-    }, true);
-  }
 })();
 </script>
 """, height=0)

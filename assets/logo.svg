@@ -1,43 +1,52 @@
-<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Meleona — heraldic rampant lion and scale crest">
-  <polygon points="60,6 113,111 7,111" fill="#F2EFE9" stroke="#9A7B4F" stroke-width="2.5" stroke-linejoin="round"/>
-  <polygon points="60,14 105,105 15,105" fill="none" stroke="#9A7B4F" stroke-width="0.5" opacity="0.45"/>
-  <g fill="#8A6A3C">
-    <path d="M80,48 C84,50 86,56 85,64 C84,72 82,80 79,87 C77,92 75,96 74,100 L70,103 L72,98 C73,94 75,90 76,85 C78,78 79,72 82,69 C86,66 90,68 91,73 C92,79 90,84 86,84 C83,83 82,78 81,72 C80,64 79,55 80,48 Z"/>
-    <path d="M82,50 C88,47 95,47 101,50 C104,51 105,54 103,56 C98,54 92,55 88,57 C85,55 83,53 82,50 Z"/>
-    <polygon points="101,49 106,50 102,53"/><polygon points="102,53 107,55 102,56"/><polygon points="99,47 104,46 102,50"/>
-    <path d="M83,56 C90,56 97,59 102,64 C104,66 104,69 102,70 C97,67 91,66 87,66 C84,63 83,59 83,56 Z"/>
-    <polygon points="102,63 107,64 103,67"/><polygon points="103,67 108,69 103,70"/>
-    <path d="M80,76 C85,78 90,82 93,88 C95,90 95,93 93,94 C89,90 84,88 80,87 C78,84 78,79 80,76 Z"/>
-    <polygon points="93,88 98,89 94,92"/><polygon points="93,92 97,95 92,94"/>
-    <path d="M83,31 C87,30 92,31 96,33 L99,35 C97,37 95,38 92,38 C90,40 88,42 87,43 C85,44 84,42 84,40 C83,37 83,34 83,31 Z"/>
-    <path d="M82,31 Q83,24 84,19 Q86,25 86,31 Z"/>
-    <path d="M78,31 Q77,23 79,18 Q82,24 82,31 Z"/>
-    <path d="M75,34 Q71,27 73,22 Q78,28 79,34 Z"/>
-    <path d="M74,39 Q67,34 67,29 Q74,33 77,39 Z"/>
-    <path d="M74,44 Q66,43 64,39 Q72,40 78,44 Z"/>
-    <path d="M76,49 Q69,51 65,49 Q73,46 80,48 Z"/>
-    <path d="M79,53 Q74,58 70,59 Q76,52 81,51 Z"/>
+<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Meleona — heraldic rampant lion, tail encircling a balance scale, triangle crest">
+  <defs>
+    <linearGradient id="triFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F8F5EF"/>
+      <stop offset="1" stop-color="#ECE5D8"/>
+    </linearGradient>
+    <linearGradient id="triStroke" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#B08A55"/>
+      <stop offset="1" stop-color="#8A6A3C"/>
+    </linearGradient>
+  </defs>
+  <!-- Triangle crest: gradient stone, twin inner hairlines, corner marks -->
+  <polygon points="60,6 113,111 7,111" fill="url(#triFill)" stroke="url(#triStroke)" stroke-width="2.8" stroke-linejoin="round"/>
+  <polygon points="60,15 106,106 14,106" fill="none" stroke="#9A7B4F" stroke-width="0.6" opacity="0.45"/>
+  <polygon points="60,24 99,101 21,101" fill="none" stroke="#9A7B4F" stroke-width="0.4" opacity="0.22"/>
+  <path d="M60,2 L62.5,6 L60,10 L57.5,6 Z" fill="#9A7B4F"/>
+  <path d="M4,111 h8 M7,108 v6" stroke="#9A7B4F" stroke-width="0.9" fill="none"/>
+  <path d="M108,111 h8 M113,108 v6" stroke="#9A7B4F" stroke-width="0.9" fill="none"/>
+  <!-- RAMPANT LION: one continuous silhouette — ear, crown, muzzle, open jaw,
+       beard, chest, two raised clawed forelegs, belly, raised hind leg,
+       standing hind leg, rump, flame-jagged mane climbing back to the ear -->
+  <path fill="#8A6A3C" d="M74,16 L79,23 C82,21 86,22 88,25 L96,29 L95,32 L88,33 L94,38 L87,41 L84,45 C86,49 87,52 87,55 L93,49 L99,41 C100,38 102,34 103,30 L104,21 L107,26 L110,23 L111,29 L114,28 L112,34 C110,38 107,42 104,45 L98,51 L94,55 L100,52 L106,50 L111,45 L113,50 L116,49 L114,55 L117,57 L112,60 C108,62 103,63 99,63 L94,63 C92,68 90,74 88,79 L96,82 L102,86 L108,83 L110,88 L114,88 L111,93 L114,97 L108,97 C104,97 100,95 97,93 L90,89 L86,96 L82,103 L88,104 L92,107 L86,109 L80,108 L74,109 L70,106 L74,102 L77,95 L79,88 C74,90 68,90 63,88 L58,84 C56,80 55,75 56,70 L58,62 L52,64 L57,57 L60,50 L54,52 L59,45 L62,39 L56,40 L62,33 L65,27 L60,27 L66,21 L70,17 Z"/>
+  <!-- Eye + nostril cut in cream; tongue in the open jaw -->
+  <path d="M84,26.5 L88,27.5 L85,29.5 Z" fill="#F5F1E9"/>
+  <circle cx="93.6" cy="30.6" r="0.8" fill="#F5F1E9"/>
+  <path d="M89,35 C91,35.4 92.2,36.6 91,38 C89.8,38.2 88.6,36.6 89,35 Z" fill="#A8634C"/>
+  <!-- Muscle engravings, low relief -->
+  <g stroke="#6B5026" stroke-width="0.7" fill="none" opacity="0.5" stroke-linecap="round">
+    <path d="M83,52 C81,58 80,64 81,70"/>
+    <path d="M83,76 C81,82 80,88 78,93"/>
+    <path d="M88,58 C90,60 92,60 94,59"/>
   </g>
-  <path d="M96,35 L92,37 L94,40 L91,39 Z" fill="#F2EFE9"/>
-  <polygon points="93,37 92.6,39.4 94.2,38.9" fill="#8A6A3C"/>
-  <polygon points="91.5,39 91.2,41 92.6,40.4" fill="#8A6A3C"/>
-  <path d="M95,38 C97,38.5 98,40 96.5,41 C95.5,41 94.5,39.5 95,38 Z" fill="#A8634C"/>
-  <g stroke="#6B5026" stroke-width="0.7" fill="none" opacity="0.55" stroke-linecap="round">
-    <path d="M82,54 C80,60 80,67 82,73"/>
-    <path d="M83,78 C81,84 80,89 78,93"/>
-  </g>
-  <path d="M86,83 C72,90 54,92 44,84 C37,79 34,70 35,58" fill="none" stroke="#8A6A3C" stroke-width="5" stroke-linecap="round"/>
-  <path d="M35,58 C35,54 34,50 36,47" fill="none" stroke="#8A6A3C" stroke-width="3.5" stroke-linecap="round"/>
-  <polygon points="38,52 33,50 39,48" fill="#8A6A3C"/>
-  <polygon points="36,55 31,55 37,51" fill="#8A6A3C"/>
-  <polygon points="40,50 36,46 42,47" fill="#8A6A3C"/>
-  <circle cx="35" cy="46" r="9" fill="none" stroke="#8A6A3C" stroke-width="5"/>
+  <!-- TAIL: thick sweep off the rump, arcing left and up, ENCIRCLING the
+       balance scale; brush tuft flicks out where the loop closes -->
+  <path d="M57,86 C46,94 34,94 27,86 C21,79 20,68 24,58" fill="none" stroke="#8A6A3C" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="31" cy="42" r="13.5" fill="none" stroke="#8A6A3C" stroke-width="4.5" stroke-dasharray="70 15" stroke-dashoffset="-38" transform="rotate(118 31 42)"/>
+  <polygon points="21,55 14,56 20,50" fill="#8A6A3C"/>
+  <polygon points="23,58 16,61 21,53" fill="#8A6A3C"/>
+  <polygon points="25,53 19,50 26,49" fill="#8A6A3C"/>
+  <!-- BALANCE SCALE, held inside the tail loop -->
   <g stroke="#3F3B35" stroke-width="1" fill="none" stroke-linecap="round">
-    <line x1="30" y1="45" x2="40" y2="45"/>
-    <line x1="35" y1="42.5" x2="35" y2="50"/>
-    <path d="M28.5,46.5 Q30,49 31.5,46.5"/>
-    <path d="M38.5,46.5 Q40,49 41.5,46.5"/>
+    <line x1="25" y1="41" x2="37" y2="41"/>
+    <line x1="31" y1="38" x2="31" y2="47"/>
+    <path d="M23.5,42.5 Q25,45.5 26.5,42.5"/>
+    <path d="M35.5,42.5 Q37,45.5 38.5,42.5"/>
   </g>
-  <circle cx="35" cy="45" r="1.1" fill="#9A7B4F"/>
-  <g stroke="#3F3B35" stroke-width="0.8"><line x1="28.5" y1="46.5" x2="30" y2="44.5"/><line x1="31.5" y1="46.5" x2="30" y2="44.5"/><line x1="38.5" y1="46.5" x2="40" y2="44.5"/><line x1="41.5" y1="46.5" x2="40" y2="44.5"/></g>
+  <g stroke="#3F3B35" stroke-width="0.8">
+    <line x1="23.5" y1="42.5" x2="25" y2="40.5"/><line x1="26.5" y1="42.5" x2="25" y2="40.5"/>
+    <line x1="35.5" y1="42.5" x2="37" y2="40.5"/><line x1="38.5" y1="42.5" x2="37" y2="40.5"/>
+  </g>
+  <circle cx="31" cy="41" r="1.1" fill="#9A7B4F"/>
 </svg>
