@@ -29,6 +29,7 @@ from src.risk import (
 )
 from src.factors import factor_exposures
 from src.strategies import risk_contributions, risk_parity_weights, vol_target
+from src.hedge import min_variance_pair, rank_hedges
 from src.scenarios import HISTORICAL_REGIMES, replay_returns
 from src.liquidity import days_to_liquidate, liquidity_profile
 from src.grit import grit_scores, MIN_HISTORY_DAYS
@@ -1170,11 +1171,11 @@ with f_col:
     )
 
 # ---- Supporting depth: one tab at a time, not stacked accordions ----
-(tab_3d, tab_breakdown, tab_grit, tab_conviction, tab_liquidity,
+(tab_3d, tab_breakdown, tab_balance, tab_grit, tab_conviction, tab_liquidity,
  tab_secmaster, tab_dq, tab_lineage, tab_signals, tab_regimes) = st.tabs([
-    "3D Distribution", "Risk Breakdown", "Grit Zone", "Crisis Conviction",
-    "Liquidity", "Security Master", "Data Quality", "Lineage & Audit",
-    "Signal Lab", "Regime Atlas",
+    "3D Distribution", "Risk Breakdown", "Balance", "Grit Zone",
+    "Crisis Conviction", "Liquidity", "Security Master", "Data Quality",
+    "Lineage & Audit", "Signal Lab", "Regime Atlas",
 ])
 
 with tab_3d:
@@ -1303,6 +1304,72 @@ st.caption(
     f"Methodology: 10,000-path {engine_txt} {source_txt}, over a 252-day horizon. "
     f"{alloc_label.capitalize()} allocation{lev_txt}."
 )
+
+with tab_balance:
+    st.caption(
+        "The second solution. Crisis Conviction argues you shouldn't panic-sell; "
+        "this argues you shouldn't have to bet the outcome on being right. Pick an "
+        "asset you hold, and the engine ranks every other name in your universe by "
+        "how it moves against it — a negatively-correlated partner offsets part of "
+        "the anchor's swings. This is diversification, computed from real covariance, "
+        "not a story about the future."
+    )
+    if len(loaded) < 2:
+        st.caption("Balance needs at least two assets in the universe.")
+    else:
+        try:
+            corr_b = correlation_matrix(returns)
+            default_anchor = loaded[int(np.argmax(weights))]  # your biggest position
+            anchor = st.selectbox(
+                "Anchor (the position you want to balance)", loaded,
+                index=loaded.index(default_anchor))
+            ranked = rank_hedges(corr_b, anchor)
+
+            panel_head("Best natural hedges",
+                       f"How every other name moves against {anchor}")
+            hedge_fig = go.Figure(go.Bar(
+                x=ranked.values, y=list(ranked.index), orientation="h",
+                marker=dict(color=["#3F6B3F" if v < 0 else "#8A3B2E"
+                                   for v in ranked.values], line=dict(width=0)),
+                hovertemplate="%{y}: correlation %{x:.2f}<extra></extra>"))
+            hedge_fig.add_vline(x=0, line=dict(color=AXIS_LINE, width=1))
+            hedge_fig = _style_fig(hedge_fig, height=max(160, 34 * len(ranked) + 40))
+            hedge_fig.update_layout(xaxis_title="correlation with " + anchor)
+            st.plotly_chart(hedge_fig, width="stretch", config=PLOTLY_CFG)
+            st.markdown(
+                '<div class="read-me"><b>Green bars move against your anchor</b> '
+                '(negative correlation) — those are the balancers. Red bars move '
+                '<b>with</b> it and add no protection. The greenest, leftmost bar is '
+                'the strongest natural hedge in this universe.</div>',
+                unsafe_allow_html=True)
+
+            best = ranked.index[0]
+            pair = min_variance_pair(cov, anchor, best)
+            panel_head("The balanced pair",
+                       f"{anchor} offset by {best}, at minimum-variance weights")
+            b1, b2, b3 = st.columns(3)
+            b1.metric(f"Hold {anchor}", f"{pair['w_anchor']:.0%}")
+            b2.metric(f"Hold {best}", f"{pair['w_hedge']:.0%}")
+            b3.metric("Volatility cut", f"−{pair['vol_reduction']:.0%}")
+            st.caption(
+                f"Blending **{pair['w_anchor']:.0%} {anchor}** with "
+                f"**{pair['w_hedge']:.0%} {best}** (their correlation: "
+                f"{pair['correlation']:+.2f}) takes the pair's annual volatility from "
+                f"**{pair['anchor_vol']:.1%}** ({anchor} alone) down to "
+                f"**{pair['blended_vol']:.1%}** — a {pair['vol_reduction']:.0%} "
+                "reduction. These are the long-only minimum-variance weights."
+            )
+            st.markdown(
+                '<div class="read-me"><b>The honest limit — read this.</b> '
+                'Correlations are historical and <b>unstable</b>. In a real crash '
+                'they converge toward +1: almost everything falls together, and a '
+                'hedge that worked in calm markets fades exactly when you need it '
+                'most. This tab lowers <b>ordinary</b> volatility; it does not make a '
+                'portfolio crisis-proof. It is the counterweight to Crisis Conviction '
+                '— hold your nerve, and structure so being wrong costs less.</div>',
+                unsafe_allow_html=True)
+        except Exception as exc:  # noqa: BLE001 — never crash the tab
+            st.caption(f"Balance unavailable for this universe: {exc}")
 
 with tab_grit:
     st.caption(

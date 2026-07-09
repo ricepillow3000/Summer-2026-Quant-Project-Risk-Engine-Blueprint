@@ -588,6 +588,58 @@ def test_conviction_composite_excludes_late_ipos():
     assert abs(comp.iloc[-1] - (a.iloc[-1] / a.iloc[0])) < 1e-12
 
 
+def test_hedge_negative_correlation_cuts_vol():
+    """A near-mirror asset should roughly halve to near-zero the blended vol,
+    at a ~50/50 minimum-variance weight — the whole point of a hedge."""
+    from src.analytics import covariance_matrix
+    from src.hedge import min_variance_pair
+
+    idx = pd.bdate_range("2020-01-01", periods=400)
+    rng = np.random.default_rng(1)
+    a = rng.normal(0, 0.01, 400)
+    df = pd.DataFrame({"A": a, "B": -a}, index=idx)   # exact mirror
+    cov = covariance_matrix(df)
+    r = min_variance_pair(cov, "A", "B")
+    assert r["correlation"] < -0.99
+    assert 0.4 < r["w_anchor"] < 0.6            # near-even split
+    assert r["vol_reduction"] > 0.9            # mirror kills almost all vol
+    assert r["blended_vol"] < r["anchor_vol"]
+
+
+def test_hedge_identical_asset_no_reduction():
+    """Hedging an asset with a perfect copy of itself buys nothing — the
+    blended vol must equal the anchor vol (corr = +1, no diversification)."""
+    from src.analytics import covariance_matrix
+    from src.hedge import min_variance_pair
+
+    idx = pd.bdate_range("2020-01-01", periods=300)
+    rng = np.random.default_rng(2)
+    a = rng.normal(0, 0.01, 300)
+    df = pd.DataFrame({"A": a, "B": a}, index=idx)     # identical
+    cov = covariance_matrix(df)
+    r = min_variance_pair(cov, "A", "B")
+    assert r["correlation"] > 0.99
+    assert abs(r["blended_vol"] - r["anchor_vol"]) < 1e-9
+    assert abs(r["vol_reduction"]) < 1e-6
+
+
+def test_hedge_ranking_orders_most_negative_first():
+    """rank_hedges lists the most negatively-correlated partner first."""
+    from src.analytics import correlation_matrix
+    from src.hedge import rank_hedges
+
+    idx = pd.bdate_range("2020-01-01", periods=400)
+    rng = np.random.default_rng(3)
+    a = rng.normal(0, 0.01, 400)
+    df = pd.DataFrame({"A": a, "MIRROR": -a,
+                       "INDEP": rng.normal(0, 0.01, 400)}, index=idx)
+    corr = correlation_matrix(df)
+    ranked = rank_hedges(corr, "A")
+    assert ranked.index[0] == "MIRROR"          # most negative first
+    assert ranked.iloc[0] < ranked.iloc[-1]
+    assert "A" not in ranked.index              # anchor excluded
+
+
 if __name__ == "__main__":
     import sys
 
