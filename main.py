@@ -663,6 +663,19 @@ st.markdown("""
 .engine-heading { background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><path d='M38 10 V90 M38 20 L70 40 M38 42 L70 62' stroke='rgba(154,123,79,0.10)' stroke-width='5' fill='none' stroke-linecap='round'/></svg>");
     background-repeat: no-repeat; background-position: 88% 50%;
     background-size: 96px 96px; }
+
+/* --- ROUND 5: precision numerals + one-pass ignite ---
+   Tabular figures on every metric so columns of numbers align like a
+   ledger — precision feel, serif untouched. Charts arrive with a single
+   ignite bloom (their one good easing token, cubic-bezier(.25,1,.5,1)) —
+   one pass, never looping, killed under reduced-motion by the global guard. */
+[data-testid="stMetricValue"], .verdict-number, .hstat .n {
+    font-variant-numeric: tabular-nums; }
+@keyframes heat-bloom { from { opacity: 0; transform: scale(.985);
+                               filter: saturate(.55) brightness(.92); }
+                        to   { opacity: 1; transform: none; filter: none; } }
+[data-testid="stPlotlyChart"] {
+    animation: heat-bloom .9s cubic-bezier(.25,1,.5,1) both; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -1696,12 +1709,19 @@ with tab_breakdown:
     # Lower triangle only — the upper half is a mirror image, masked out.
     cmat = corr.to_numpy(dtype=float, copy=True)
     cmat[np.triu(np.ones_like(cmat, dtype=bool))] = np.nan
-    ctext = np.where(np.isnan(cmat), "", np.vectorize(lambda v: f"{v:.2f}")(
+    # Hot cells (|corr| >= 0.75, the Watch tab's default threshold) print bold —
+    # the eye lands on concentration first.
+    ctext = np.where(np.isnan(cmat), "", np.vectorize(
+        lambda v: f"<b>{v:.2f}</b>" if abs(v) >= 0.75 else f"{v:.2f}")(
         np.nan_to_num(cmat)))
     hm = go.Figure(go.Heatmap(
         z=cmat, x=list(corr.columns), y=list(corr.index),
         zmin=-1, zmax=1,
-        colorscale=[[0.0, "#3F3B35"], [0.5, "#EDE9E3"], [1.0, "#8A6A3C"]],
+        # Furnace ramp, palette-native: charcoal seesaw -> beige independent ->
+        # bronze warming -> deep molten bronze at lockstep. Heat = concentration,
+        # driven by the real correlation value, nothing simulated.
+        colorscale=[[0.0, "#3F3B35"], [0.5, "#EDE9E3"], [0.775, "#C9B48A"],
+                    [0.875, "#9A7B4F"], [0.95, "#7A5426"], [1.0, "#5C3D14"]],
         text=ctext, texttemplate="%{text}", textfont=dict(size=11),
         hoverongaps=False, xgap=2, ygap=2,
         hovertemplate="%{y} × %{x}: %{z:.2f}<extra></extra>",
