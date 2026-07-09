@@ -11,6 +11,7 @@ preset basket (equities, sector ETFs, FX, futures) or type their own symbols,
 so the engine speaks to any audience — not just one watchlist.
 """
 
+import base64
 import json
 
 import numpy as np
@@ -161,10 +162,18 @@ html { scroll-behavior: smooth; }
 @media (max-width: 1100px) {
   .hero-section { grid-template-columns: 1fr; }
   .showcase-row { grid-template-columns: 1fr !important; } }
-.hero-watermark { position: absolute; right: -4%; top: 50%;
-    transform: translateY(-50%); width: 560px; height: 560px;
-    opacity: 0.055; pointer-events: none; }
-.hero-watermark svg { width: 100%; height: 100%; }
+/* Architectural plate: the stat deck sits on a duotoned building photograph
+   (reference: architecture matching the palette — integrity in stone, not an
+   enlarged logo). The filter pulls any photo into the beige/bronze register;
+   the scrim keeps the glass tiles legible. */
+.hero-stats { position: relative; padding: 30px; overflow: hidden;
+    border: 1px solid #C4BDAE; }
+.hero-stats::before { content: ""; position: absolute; inset: 0;
+    background-size: cover; background-position: center;
+    filter: grayscale(.5) sepia(.34) saturate(.8) brightness(.88) contrast(.97); }
+.hero-stats::after { content: ""; position: absolute; inset: 0;
+    background: linear-gradient(160deg, rgba(63,59,53,.16), rgba(63,59,53,.44)); }
+.hero-stats .hstat { position: relative; z-index: 1; }
 .hero-crest { width: 132px; height: 132px; padding: 20px;
     border: 1px solid #C4BDAE; background: rgba(154,123,79,0.05);
     box-shadow: 0 0 0 1px rgba(154,123,79,.12),
@@ -1070,6 +1079,19 @@ def grit_breakdown_fig(scores: pd.DataFrame):
 with open("assets/logo.svg", "r", encoding="utf-8") as f:
     logo_svg = f.read()
 
+# Architectural plate behind the hero stat deck (replaces the watermark crest).
+# assets/facade.jpg — Unsplash (free commercial license, no attribution
+# required). Duotoned toward the palette in CSS, so the photo can never clash.
+try:
+    with open("assets/facade.jpg", "rb") as f:
+        _facade_b64 = base64.b64encode(f.read()).decode()
+    st.markdown(
+        f"<style>.hero-stats::before {{ background-image: "
+        f"url(data:image/jpeg;base64,{_facade_b64}); }}</style>",
+        unsafe_allow_html=True)
+except OSError:
+    pass  # no photo on disk -> tiles render on the plain field, nothing breaks
+
 # Boot veil renders ONLY on the first script run of a session. Streamlit
 # reruns the whole script on every interaction (and the freshness ticker),
 # which would re-create the veil and restart its fade forever — so after
@@ -1107,7 +1129,6 @@ if not st.session_state.get("_booted"):
 
 st.markdown(f"""
 <div class="hero-section reveal" id="hero">
-  <div class="hero-watermark">{logo_svg}</div>
   <div class="hero-left">
     <div class="hero-crest">{logo_svg}</div>
     <div class="hero-badges">
@@ -1258,9 +1279,10 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# ---- Universe selection ----
-with st.container(border=True):
-    st.markdown('<div class="panel-label">Universe</div>', unsafe_allow_html=True)
+# ---- The cockpit: controls fold into three numbered drawers so the verdict
+# leads the section. Widgets still execute when collapsed — zero logic change,
+# the reader just isn't bombarded with every dial at once. ----
+with st.expander("01 · Universe — which assets", expanded=False):
     preset = st.selectbox("Preset basket", list(PRESETS.keys()), label_visibility="collapsed")
 
     # Keying the multiselect on the preset name makes it re-initialize with the
@@ -1366,8 +1388,8 @@ if refresh_col.button("Refresh", help="Clear cache and re-pull the latest prices
 
 # ---- Allocation + stress test: one control deck, side by side ----
 deck_alloc, deck_stress = st.columns(2, gap="medium")
-with deck_alloc, st.container(border=True):
-    st.markdown('<div class="panel-label">Allocation</div>', unsafe_allow_html=True)
+with deck_alloc, st.expander("02 · Allocation — how capital is weighted",
+                             expanded=False):
     COV_LABELS = {
         "Ledoit-Wolf": "Ledoit-Wolf — steady (default)",
         "Sample": "Sample — plain history",
@@ -1421,8 +1443,8 @@ _audit("Allocation", f"{method}" + (f", vol-targeted to {target_vol:.0%} "
 alloc_label = "risk-parity" if method == "Risk parity" else "equal-weight"
 lev_txt = f", levered {leverage:.2f}×" if use_vt else ""
 
-with deck_stress, st.container(border=True):
-    st.markdown('<div class="panel-label">Stress test</div>', unsafe_allow_html=True)
+with deck_stress, st.expander("03 · Stress test — shock or replay a crisis",
+                              expanded=False):
     engine = st.radio(
         "Return model", ["Bootstrap (empirical)", "Jump-diffusion (Merton)"],
         horizontal=True,
