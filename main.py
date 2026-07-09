@@ -1022,15 +1022,30 @@ if refresh_col.button("Refresh", help="Clear cache and re-pull the latest prices
 deck_alloc, deck_stress = st.columns(2, gap="medium")
 with deck_alloc, st.container(border=True):
     st.markdown('<div class="panel-label">Allocation</div>', unsafe_allow_html=True)
+    COV_LABELS = {
+        "Ledoit-Wolf": "Ledoit-Wolf — steady (default)",
+        "Sample": "Sample — plain history",
+        "EWMA": "EWMA — reactive / panic lens",
+    }
     cov_method = st.selectbox(
-        "Covariance estimator", ["Sample", "Ledoit-Wolf", "EWMA"],
-        help="How the risk matrix itself is built — it feeds risk parity, "
-             "vol-targeting, and the Balance blend. Sample = plain history "
-             "(noisy). Ledoit-Wolf shrinks that noise toward a stable target "
-             "(steadier, always invertible). EWMA (RiskMetrics λ=0.94) weights "
-             "recent days more, so it reacts to a fresh volatility spike.")
+        "Covariance estimator", ["Ledoit-Wolf", "Sample", "EWMA"],
+        format_func=lambda m: COV_LABELS[m],
+        help="How the risk matrix is built — it feeds risk parity, vol-targeting, "
+             "and the Balance blend. Ledoit-Wolf (default) shrinks noisy history "
+             "toward a stable target: steady, always invertible. Sample is plain "
+             "history. EWMA (RiskMetrics λ=0.94) weights the last ~2 weeks heavily "
+             "and forgets the calm quarter — it flinches at a single bad day. It is "
+             "the reactive lens the rest of this product argues against; reach for it "
+             "to SEE the panic view, not as your default.")
     cov, cov_info = estimate_covariance(returns, cov_method)  # annualized risk matrix
     st.caption(f"Risk matrix: {cov_info}.")
+    if cov_method == "EWMA":
+        st.caption(
+            "⚠️ **Reactive lens.** EWMA spikes on one bad day (≈11-day half-life, "
+            "~90% of its weight in the last month). It embodies exactly the panic "
+            "[Crisis Conviction] argues against — shown for contrast, so you can see "
+            "how twitchy risk looks, not because the engine recommends reacting."
+        )
     acol1, acol2 = st.columns(2)
     method = acol1.radio(
         "Weighting", ["Equal weight", "Risk parity"], label_visibility="collapsed",

@@ -90,7 +90,9 @@ def estimate_covariance(returns: pd.DataFrame, method: str = "sample",
         cov, delta = ledoit_wolf_covariance(returns)
         return cov, f"Ledoit-Wolf shrinkage (δ = {delta:.2f} toward constant-correlation)"
     if method == "EWMA":
-        return ewma_covariance(returns, lam), f"EWMA, RiskMetrics λ = {lam:.2f} (recent days weighted more)"
+        return ewma_covariance(returns, lam), (
+            f"EWMA reactive lens, RiskMetrics λ = {lam:.2f} "
+            "(~11-day half-life — flinches at today, forgets the calm quarter)")
     return sample_covariance(returns), "Sample covariance (equal weight, full window)"
 
 
