@@ -369,7 +369,7 @@ div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
     background-size: 200% 100%; animation: sk-sheen 1.15s linear infinite; }
 #boot-skel { position: fixed; inset: 0; z-index: 999; background: #EDE9E3;
     display: flex; flex-direction: column; gap: 18px; padding: 14vh 10vw;
-    pointer-events: none; animation: boot-off .55s ease 1.5s forwards; }
+    pointer-events: none; animation: boot-off .55s ease 2.1s forwards; }
 @keyframes boot-off { to { opacity: 0; visibility: hidden; } }
 #boot-skel .sk.crest { width: 132px; height: 132px; }
 #boot-skel .sk.title { height: 64px; width: 42%; }
@@ -499,6 +499,94 @@ st.markdown("""
     *, *::before, *::after { animation: none !important; transition: none !important; }
     .verdict-box::after, .cta-btn::before { display: none !important; }
     .section-divider { background-size: 200% 100% !important; opacity: 1 !important; } }
+</style>
+""", unsafe_allow_html=True)
+
+# ---- ROUND 3 (2026-07-09) ----
+# Softened geometry (loosen the border-radius:0 doctrine into a restrained
+# radius scale + organic/circular accents), glossy chart halos + glowing bars,
+# a whisper of scroll-motion-blur on decorative layers, and UFO tile arrivals.
+# Still institutional: radii are gentle (10-26px), one pill (badges), no candy.
+st.markdown("""
+<style>
+/* --- Radius scale: unblock the corners the base pinned to 0 --- */
+[data-testid="stExpander"], [data-testid="stMetric"],
+div[data-baseweb="select"]>div, .stNumberInput input,
+[data-testid="stTextInput"] input, .stMultiSelect [data-baseweb="select"]>div,
+[data-testid="stDataFrame"], [data-baseweb="tab"] { border-radius: 14px !important; }
+.stButton>button { border-radius: 12px !important; }
+[data-testid="stPlotlyChart"] { border-radius: 16px !important; }
+.verdict-box { border-radius: 20px; }
+.cta-btn { border-radius: 40px !important; }        /* CTA becomes a soft capsule */
+.hero-crest { border-radius: 26px; }                /* squircle, not a hard square */
+.badge { border-radius: 999px !important; }         /* full pills */
+
+/* Diversify: each hero tile carries a different corner profile so the deck
+   reads as a composition, not a grid of identical boxes. */
+.hstat { border-radius: 16px; }
+.hstat:nth-child(1) { border-radius: 22px 22px 22px 6px; }
+.hstat:nth-child(2) { border-radius: 22px 6px 22px 22px; }
+.hstat:nth-child(3) { border-radius: 6px 22px 22px 22px; }
+.hstat:nth-child(4) { border-radius: 22px 22px 6px 22px; }
+
+/* Organic bronze light — soft radial glows behind the hero. Not flat blobs:
+   low-opacity, no hard edge, palette-only. */
+.hero-section::before, .hero-section::after { content:""; position:absolute;
+    border-radius:50%; pointer-events:none; z-index:0; filter: blur(48px); }
+.hero-section::before { width:340px; height:340px; left:-90px; top:-40px;
+    background: radial-gradient(circle, rgba(154,123,79,.16), transparent 68%); }
+.hero-section::after { width:420px; height:420px; right:5%; bottom:-150px;
+    background: radial-gradient(circle, rgba(154,123,79,.12), transparent 70%); }
+.hero-left, .hero-stats { position: relative; z-index: 1; }
+
+/* --- CHARTS: glossy finish — a bronze halo behind, glow on the bars --- */
+[data-testid="stPlotlyChart"] {
+    box-shadow: 0 0 42px -6px rgba(154,123,79,.30),
+                0 18px 44px -30px rgba(63,59,53,.5);
+    transition: filter .18s ease, box-shadow .4s ease; }
+[data-testid="stPlotlyChart"]:hover {
+    box-shadow: 0 0 52px -4px rgba(154,123,79,.38),
+                0 22px 52px -28px rgba(63,59,53,.6); }
+[data-testid="stPlotlyChart"] g.bars .point path,
+[data-testid="stPlotlyChart"] g.bars path {
+    filter: drop-shadow(0 0 5px rgba(154,123,79,.55)); }
+
+/* --- SCROLL LIFE: decorative layers take a whisper of motion-blur while the
+   page moves, snapping sharp the instant it settles. Text never blurs. --- */
+.hstat, [data-testid="stMetric"], .hero-crest { transition: filter .18s ease,
+    transform .3s cubic-bezier(.16,1,.3,1), box-shadow .35s ease; }
+body.meleona-scrolling [data-testid="stPlotlyChart"],
+body.meleona-scrolling .hstat,
+body.meleona-scrolling [data-testid="stMetric"],
+body.meleona-scrolling .hero-crest { filter: blur(1.3px); }
+
+/* --- UFO ARRIVAL: intro tiles drop from above with a light settle. Trigger
+   is injected only on first load (boot block), so reruns never replay it. --- */
+@keyframes ufo-drop {
+    0%   { opacity:0; transform: translateY(-52px) scale(.96); }
+    60%  { opacity:1; transform: translateY(6px)  scale(1.005); }
+    100% { opacity:1; transform: translateY(0)    scale(1); } }
+
+/* Skeleton bones + tiles pick up the softer radii */
+#boot-skel .sk { border-radius: 14px; }
+#boot-skel .sk.crest { border-radius: 26px; }
+#boot-skel .sk-head { display:flex; gap:24px; align-items:flex-start; }
+#boot-skel .sk-titles { display:flex; flex-direction:column; gap:14px;
+    flex:1; padding-top:6px; }
+#boot-skel .sk-tiles { display:grid; grid-template-columns:repeat(4,1fr);
+    gap:16px; margin-top:10px; }
+#boot-skel .sk.tile { height:96px; border-radius:16px; }
+#boot-skel .sk-load { font-family:'Helvetica Neue',sans-serif; font-size:11px;
+    letter-spacing:.24em; text-transform:uppercase; color:#9A7B4F;
+    margin-top:8px; animation: sk-pulse 1.3s ease-in-out infinite; }
+@keyframes sk-pulse { 0%,100%{opacity:.45;} 50%{opacity:1;} }
+
+@media (prefers-reduced-motion: reduce) {
+    .hero-section::before, .hero-section::after { display:none !important; }
+    body.meleona-scrolling [data-testid="stPlotlyChart"],
+    body.meleona-scrolling .hstat,
+    body.meleona-scrolling [data-testid="stMetric"],
+    body.meleona-scrolling .hero-crest { filter:none !important; } }
 </style>
 """, unsafe_allow_html=True)
 
@@ -857,13 +945,31 @@ if not st.session_state.get("_booted"):
     st.session_state["_booted"] = True
     st.markdown("""
 <div id="boot-skel">
-  <div class="sk crest"></div>
-  <div class="sk title"></div>
-  <div class="sk line"></div>
-  <div class="sk line short"></div>
+  <div class="sk-head">
+    <div class="sk crest"></div>
+    <div class="sk-titles">
+      <div class="sk title"></div>
+      <div class="sk line"></div>
+      <div class="sk line short"></div>
+    </div>
+  </div>
+  <div class="sk-tiles">
+    <div class="sk tile"></div><div class="sk tile"></div>
+    <div class="sk tile"></div><div class="sk tile"></div>
+  </div>
   <div class="sk chart"></div>
-  <div class="sk line"></div>
+  <div class="sk-load">Loading market data</div>
 </div>
+<style>
+  /* First-load only: the intro tiles fly in top-to-down (UFO settle). This
+     style block renders solely on the un-booted first pass, so Streamlit
+     reruns never replay the arrival. */
+  .hero-stats .hstat { animation: ufo-drop .6s cubic-bezier(.2,.9,.25,1) both; }
+  .hero-stats .hstat:nth-child(1) { animation-delay: .05s; }
+  .hero-stats .hstat:nth-child(2) { animation-delay: .13s; }
+  .hero-stats .hstat:nth-child(3) { animation-delay: .21s; }
+  .hero-stats .hstat:nth-child(4) { animation-delay: .29s; }
+</style>
 """, unsafe_allow_html=True)
 
 st.markdown(f"""
@@ -2117,6 +2223,21 @@ components.html("""
       dest.style.animation = 'section-arrive .9s cubic-bezier(.16,1,.3,1) .45s both';
     }
   }, true);
+
+  /* SCROLL LIFE: while the page moves, tag <body> so decorative layers take a
+     whisper of motion-blur (CSS: body.meleona-scrolling). Clears ~130ms after
+     the last scroll tick, so it reads as momentum, not a permanent smear.
+     Skipped entirely under reduced-motion. */
+  if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    let blurT;
+    P.addEventListener('scroll', function() {
+      if (!P.body.classList.contains('meleona-scrolling'))
+        P.body.classList.add('meleona-scrolling');
+      clearTimeout(blurT);
+      blurT = setTimeout(function() {
+        P.body.classList.remove('meleona-scrolling'); }, 130);
+    }, true);
+  }
 })();
 </script>
 """, height=0)
