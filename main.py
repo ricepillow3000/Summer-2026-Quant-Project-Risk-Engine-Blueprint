@@ -726,21 +726,25 @@ st.markdown("""
 }
 
 /* "See the hardest trade" arrival — no earthquake twice. The conviction
-   section gets an ENGRAVER'S RING instead: a thin beige-bronze rounded
-   ring with a faint outer halo that draws in around the copy, holds a
-   beat so the eye lands, then dissolves. An annotation, not an arcade. */
-#conviction { position: relative; }
-#conviction.ring-arrive::after { content: ""; position: absolute;
-    inset: -22px -30px; border: 1.5px solid rgba(201,184,146,.7);
-    border-radius: 22px; pointer-events: none;
-    box-shadow: 0 0 0 7px rgba(237,233,227,.05),
-                inset 0 0 34px rgba(237,233,227,.05);
-    animation: ring-hold 2.6s cubic-bezier(.25,1,.5,1) .55s both; }
+   PARAGRAPH (not the whole section) gets the highlight: a bronze ring in
+   the band-border color, filled with LATE SUN — a warm gold wash blooming
+   from the upper corner across the text, the way evening light falls
+   through a childhood window onto a wall. It draws in, holds a beat so
+   the eye lands on the paragraph, then the light leaves the room. */
+#conviction .showcase-body { position: relative; }
+#conviction.ring-arrive .showcase-body::after { content: ""; position: absolute;
+    inset: -14px -20px; border: 1.5px solid rgba(176,138,85,.8);
+    border-radius: 16px; pointer-events: none;
+    background: radial-gradient(130% 140% at 84% 4%,
+        rgba(201,162,39,.17), rgba(154,123,79,.08) 46%, transparent 74%);
+    box-shadow: 0 0 26px rgba(201,162,39,.13),
+                inset 0 0 32px rgba(201,162,39,.07);
+    animation: ring-hold 2.8s cubic-bezier(.25,1,.5,1) .55s both; }
 @keyframes ring-hold {
-  0%   { opacity: 0; transform: scale(1.045); }
+  0%   { opacity: 0; transform: scale(1.05); }
   22%  { opacity: 1; transform: scale(1); }
-  72%  { opacity: 1; }
-  100% { opacity: 0; transform: scale(1.008); }
+  70%  { opacity: 1; }
+  100% { opacity: 0; transform: scale(1.006); }
 }
 .showcase-row .showcase-title { color: #EDE9E3; }
 .showcase-row .showcase-body { color: #C4BDAE; }
