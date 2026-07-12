@@ -704,6 +704,15 @@ st.markdown("""
       linear-gradient(180deg, rgba(237,233,227,.16), rgba(237,233,227,0) 120px),
       linear-gradient(0deg, rgba(30,27,23,.5), rgba(30,27,23,0) 140px); }
 .showcase-row > * { position: relative; z-index: 1; }
+/* CTA arrival: the buildings RISE into the band as the glide lands — the
+   glide script stamps .band-arrive on the row; the photo layer travels up
+   from below with a slow settle. One pass, clipped by the row, killed by
+   the global reduced-motion guard. */
+.showcase-row { overflow: hidden; }
+.showcase-row.band-arrive::before {
+    animation: band-rise 1.6s cubic-bezier(.16,1,.3,1) both; }
+@keyframes band-rise { from { transform: translateY(10%) scale(1.09); }
+                       to   { transform: none; } }
 .showcase-row .showcase-title { color: #EDE9E3; }
 .showcase-row .showcase-body { color: #C4BDAE; }
 .showcase-row .showcase-eyebrow { color: #B08A55; }
@@ -907,7 +916,12 @@ def living_surface_html(density: dict, height: int = 520, n_particles: int = 220
     })
 
     return f"""
-<div id="living3d" style="width:100%;height:{height}px;"></div>
+<div style="background:
+      radial-gradient(120% 90% at 50% 0%, #423C33 0%, #2E2A24 58%, #262320 100%);
+    border: 1px solid #9A7B4F; border-radius: 14px; padding: 10px 8px 4px;
+    box-shadow: inset 0 1px 0 rgba(237,233,227,.08);">
+  <div id="living3d" style="width:100%;height:{height - 16}px;"></div>
+</div>
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 <script>
 (function() {{
@@ -924,17 +938,17 @@ def living_surface_html(density: dict, height: int = 520, n_particles: int = 220
     hoverinfo: 'skip',
   }};
   const layout = {{
-    height: {height}, margin: {{l:0,r:0,t:10,b:0}},
+    height: {height - 16}, margin: {{l:0,r:0,t:10,b:0}},
     paper_bgcolor: 'rgba(0,0,0,0)',
-    font: {{ family: "Georgia, 'Times New Roman', serif", color: '#3F3B35', size: 12 }},
+    font: {{ family: "Georgia, 'Times New Roman', serif", color: '#D9D2C4', size: 12 }},
     scene: {{
       bgcolor: 'rgba(0,0,0,0)',
-      xaxis: {{ title: 'Trading day', gridcolor: 'rgba(63,59,53,0.12)',
-               backgroundcolor: 'rgba(237,233,227,0.35)', showbackground: true }},
-      yaxis: {{ title: '1-year outcome', tickformat: '.0%', gridcolor: 'rgba(63,59,53,0.12)',
-               backgroundcolor: 'rgba(237,233,227,0.35)', showbackground: true }},
-      zaxis: {{ title: 'Density', gridcolor: 'rgba(63,59,53,0.12)',
-               backgroundcolor: 'rgba(237,233,227,0.35)', showbackground: true }},
+      xaxis: {{ title: 'Trading day', gridcolor: 'rgba(237,233,227,0.14)',
+               backgroundcolor: 'rgba(24,21,18,0.45)', showbackground: true }},
+      yaxis: {{ title: '1-year outcome', tickformat: '.0%', gridcolor: 'rgba(237,233,227,0.14)',
+               backgroundcolor: 'rgba(24,21,18,0.45)', showbackground: true }},
+      zaxis: {{ title: 'Density', gridcolor: 'rgba(237,233,227,0.14)',
+               backgroundcolor: 'rgba(24,21,18,0.45)', showbackground: true }},
       camera: {{ eye: {{x: 1.6, y: 1.6, z: 0.9}} }},
     }},
   }};
@@ -2589,6 +2603,12 @@ components.html("""
     if (dest) {
       dest.style.animation = 'none'; void dest.offsetWidth;
       dest.style.animation = 'section-arrive .9s cubic-bezier(.16,1,.3,1) .45s both';
+    }
+    /* landing on the dark band: the buildings rise with the arrival */
+    const row = el.closest('.showcase-row');
+    if (row) {
+      row.classList.remove('band-arrive'); void row.offsetWidth;
+      row.classList.add('band-arrive');
     }
   }, true);
 })();
