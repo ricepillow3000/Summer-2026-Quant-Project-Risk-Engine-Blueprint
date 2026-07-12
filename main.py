@@ -725,21 +725,28 @@ st.markdown("""
          filter: grayscale(.4) sepia(.42) brightness(.54) contrast(1.03); }
 }
 
-/* "See the hardest trade" arrival — no earthquake twice. The conviction
-   PARAGRAPH (not the whole section) gets the highlight: a bronze ring in
-   the band-border color, filled with LATE SUN — a warm gold wash blooming
-   from the upper corner across the text, the way evening light falls
-   through a childhood window onto a wall. It draws in, holds a beat so
-   the eye lands on the paragraph, then the light leaves the room. */
-#conviction .showcase-body { position: relative; }
-#conviction.ring-arrive .showcase-body::after { content: ""; position: absolute;
-    inset: -14px -20px; border: 1.5px solid rgba(176,138,85,.8);
-    border-radius: 16px; pointer-events: none;
+/* "See the hardest trade" arrival — no earthquake twice. The whole
+   conviction text stack (eyebrow + title + paragraph, wrapped in
+   .conv-core) gets the highlight: a DOUBLE FRAME in the band-border
+   bronze — 2px outer rule, 1px inner hairline set 8px in, near-square
+   corners to match the pillar boxes — filled with LATE SUN, a warm gold
+   wash blooming from the upper corner the way evening light falls
+   through a childhood window onto a wall. Draws in, holds so the eye
+   lands, then the light leaves the room. */
+.conv-core { position: relative; display: flex;
+    flex-direction: column; gap: 18px; }
+#conviction.ring-arrive .conv-core::after { content: ""; position: absolute;
+    inset: -18px -24px; border: 2px solid rgba(176,138,85,.85);
+    border-radius: 4px; pointer-events: none;
     background: radial-gradient(130% 140% at 84% 4%,
-        rgba(201,162,39,.17), rgba(154,123,79,.08) 46%, transparent 74%);
+        rgba(201,162,39,.16), rgba(154,123,79,.08) 46%, transparent 74%);
     box-shadow: 0 0 26px rgba(201,162,39,.13),
-                inset 0 0 32px rgba(201,162,39,.07);
+                inset 0 0 34px rgba(201,162,39,.07);
     animation: ring-hold 2.8s cubic-bezier(.25,1,.5,1) .55s both; }
+#conviction.ring-arrive .conv-core::before { content: ""; position: absolute;
+    inset: -10px -16px; border: 1px solid rgba(176,138,85,.45);
+    border-radius: 2px; pointer-events: none;
+    animation: ring-hold 2.8s cubic-bezier(.25,1,.5,1) .62s both; }
 @keyframes ring-hold {
   0%   { opacity: 0; transform: scale(1.05); }
   22%  { opacity: 1; transform: scale(1); }
@@ -1156,7 +1163,16 @@ try:
         _facade_b64 = base64.b64encode(f.read()).decode()
     st.markdown(
         f"<style>.hero-stats::before {{ background-image: "
-        f"url(data:image/jpeg;base64,{_facade_b64}); }}</style>",
+        f"url(data:image/jpeg;base64,{_facade_b64}); }}"
+        # The plate's architecture also washes across the WHOLE hero,
+        # melting into beige toward the text side — the building emerges
+        # from the page's own color instead of sitting in a box alone.
+        f".hero-section {{ background-image: linear-gradient(90deg, "
+        f"#EDE9E3 0%, rgba(237,233,227,.96) 42%, rgba(237,233,227,.72) 70%, "
+        f"rgba(237,233,227,.5) 100%), "
+        f"url(data:image/jpeg;base64,{_facade_b64}); "
+        f"background-size: auto, cover; "
+        f"background-position: left, right 78%; }}</style>",
         unsafe_allow_html=True)
 except OSError:
     pass  # no photo on disk -> tiles render on the plain field, nothing breaks
@@ -1284,15 +1300,17 @@ st.markdown("""
     <a href="#conviction" class="cta-btn">See the hardest trade &rarr;</a>
   </div>
   <div class="showcase-section" id="conviction">
-    <div class="showcase-eyebrow">The Conviction</div>
-    <h2 class="showcase-title">The hardest trade is the one history rewards</h2>
-    <div class="showcase-body">
-      Your brain treats a falling portfolio the way it treats a physical threat
-      &mdash; the panic you feel in a crash is wiring, not weakness. That is the
-      emotional problem this engine exists to solve. Not with a slogan: with the
-      actual record of every named crisis it stress-tests, computed live from
-      market data. Below, what really happened to a buyer on the scariest day of
-      each crisis &mdash; and on the worst-timed day, the pre-crash peak.
+    <div class="conv-core">
+      <div class="showcase-eyebrow">The Conviction</div>
+      <h2 class="showcase-title">The hardest trade is the one history rewards</h2>
+      <div class="showcase-body">
+        Your brain treats a falling portfolio the way it treats a physical threat
+        &mdash; the panic you feel in a crash is wiring, not weakness. That is the
+        emotional problem this engine exists to solve. Not with a slogan: with the
+        actual record of every named crisis it stress-tests, computed live from
+        market data. Below, what really happened to a buyer on the scariest day of
+        each crisis &mdash; and on the worst-timed day, the pre-crash peak.
+      </div>
     </div>
   </div>
 </div>
