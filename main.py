@@ -704,15 +704,26 @@ st.markdown("""
       linear-gradient(180deg, rgba(237,233,227,.16), rgba(237,233,227,0) 120px),
       linear-gradient(0deg, rgba(30,27,23,.5), rgba(30,27,23,0) 140px); }
 .showcase-row > * { position: relative; z-index: 1; }
-/* CTA arrival: the buildings RISE into the band as the glide lands — the
-   glide script stamps .band-arrive on the row; the photo layer travels up
-   from below with a slow settle. One pass, clipped by the row, killed by
-   the global reduced-motion guard. */
+/* CTA arrival — THE EARTHBENDER: the towers launch from their foundations
+   (buried 70% below the frame, dim as underground rock), shoot up hard,
+   overshoot the rest position a hair — the slam — flare bright as they
+   crest into the light, then settle into the skyline. "Built from the
+   ground up," literally. Delayed ~0.35s so the launch detonates just as
+   the glide delivers the reader onto the band. One pass, clipped by the
+   row's frame, killed by the global reduced-motion guard. */
 .showcase-row { overflow: hidden; }
 .showcase-row.band-arrive::before {
-    animation: band-rise 1.6s cubic-bezier(.16,1,.3,1) both; }
-@keyframes band-rise { from { transform: translateY(10%) scale(1.09); }
-                       to   { transform: none; } }
+    animation: band-rise 1.45s cubic-bezier(.22,.9,.24,1) .35s both; }
+@keyframes band-rise {
+  0%   { transform: translateY(70%) scale(1.14);
+         filter: grayscale(.4) sepia(.42) brightness(.3) contrast(1.05); }
+  55%  { transform: translateY(-2.6%) scale(1.04);
+         filter: grayscale(.4) sepia(.42) brightness(.68) contrast(1.03); }
+  74%  { transform: translateY(1.1%) scale(1.01);
+         filter: grayscale(.4) sepia(.42) brightness(.5) contrast(1.03); }
+  100% { transform: none;
+         filter: grayscale(.4) sepia(.42) brightness(.54) contrast(1.03); }
+}
 .showcase-row .showcase-title { color: #EDE9E3; }
 .showcase-row .showcase-body { color: #C4BDAE; }
 .showcase-row .showcase-eyebrow { color: #B08A55; }
