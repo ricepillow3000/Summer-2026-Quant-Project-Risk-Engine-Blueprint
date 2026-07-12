@@ -724,6 +724,24 @@ st.markdown("""
   100% { transform: none;
          filter: grayscale(.4) sepia(.42) brightness(.54) contrast(1.03); }
 }
+
+/* "See the hardest trade" arrival — no earthquake twice. The conviction
+   section gets an ENGRAVER'S RING instead: a thin beige-bronze rounded
+   ring with a faint outer halo that draws in around the copy, holds a
+   beat so the eye lands, then dissolves. An annotation, not an arcade. */
+#conviction { position: relative; }
+#conviction.ring-arrive::after { content: ""; position: absolute;
+    inset: -22px -30px; border: 1.5px solid rgba(201,184,146,.7);
+    border-radius: 22px; pointer-events: none;
+    box-shadow: 0 0 0 7px rgba(237,233,227,.05),
+                inset 0 0 34px rgba(237,233,227,.05);
+    animation: ring-hold 2.6s cubic-bezier(.25,1,.5,1) .55s both; }
+@keyframes ring-hold {
+  0%   { opacity: 0; transform: scale(1.045); }
+  22%  { opacity: 1; transform: scale(1); }
+  72%  { opacity: 1; }
+  100% { opacity: 0; transform: scale(1.008); }
+}
 .showcase-row .showcase-title { color: #EDE9E3; }
 .showcase-row .showcase-body { color: #C4BDAE; }
 .showcase-row .showcase-eyebrow { color: #B08A55; }
@@ -2615,11 +2633,18 @@ components.html("""
       dest.style.animation = 'none'; void dest.offsetWidth;
       dest.style.animation = 'section-arrive .9s cubic-bezier(.16,1,.3,1) .45s both';
     }
-    /* landing on the dark band: the buildings rise with the arrival */
+    /* Arrival theatrics, one per destination: the EARTHBENDER launch fires
+       only for the first CTA (#grit-showcase); #conviction gets the quiet
+       engraver's ring instead — same band, different gesture. */
+    const href = a.getAttribute('href');
     const row = el.closest('.showcase-row');
-    if (row) {
+    if (row && href === '#grit-showcase') {
       row.classList.remove('band-arrive'); void row.offsetWidth;
       row.classList.add('band-arrive');
+    }
+    if (href === '#conviction') {
+      el.classList.remove('ring-arrive'); void el.offsetWidth;
+      el.classList.add('ring-arrive');
     }
   }, true);
 })();
