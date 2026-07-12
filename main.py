@@ -170,7 +170,7 @@ html { scroll-behavior: smooth; }
     border: 1px solid #C4BDAE; }
 .hero-stats::before { content: ""; position: absolute; inset: 0;
     background-size: cover; background-position: center;
-    filter: grayscale(.5) sepia(.34) saturate(.8) brightness(.88) contrast(.97); }
+    filter: grayscale(.88) sepia(.26) saturate(.75) brightness(.9) contrast(.96); }
 .hero-stats::after { content: ""; position: absolute; inset: 0;
     background: linear-gradient(160deg, rgba(63,59,53,.16), rgba(63,59,53,.44)); }
 .hero-stats .hstat { position: relative; z-index: 1; }
@@ -1167,12 +1167,16 @@ try:
         # The plate's architecture also washes across the WHOLE hero,
         # melting into beige toward the text side — the building emerges
         # from the page's own color instead of sitting in a box alone.
-        f".hero-section {{ background-image: linear-gradient(90deg, "
+        # luminosity blend: the photo keeps only its LIGHT — hue comes from
+        # the page's own beige-gray beneath it. Kills the orange dead.
+        f".hero-section {{ background-color: #DDD7CB; "
+        f"background-image: linear-gradient(90deg, "
         f"#EDE9E3 0%, rgba(237,233,227,.96) 42%, rgba(237,233,227,.72) 70%, "
         f"rgba(237,233,227,.5) 100%), "
         f"url(data:image/jpeg;base64,{_facade_b64}); "
         f"background-size: auto, cover; "
-        f"background-position: left, right 78%; }}</style>",
+        f"background-position: left, right 78%; "
+        f"background-blend-mode: normal, luminosity; }}</style>",
         unsafe_allow_html=True)
 except OSError:
     pass  # no photo on disk -> tiles render on the plain field, nothing breaks
@@ -1274,7 +1278,7 @@ st.markdown("""
     <div class="showcase-eyebrow">The Innovation</div>
     <h2 class="showcase-title">Introducing the Grit Zone</h2>
     <div class="showcase-body">
-      Fear &amp; Greed indices measure market MOOD. We measure something more
+      Fear &amp; Greed indices measure market mood. We measure something more
       durable: whether an asset, when it gets knocked down, actually gets back
       up &mdash; consistently, across real crises. There's no such thing as a
       perfect stock. Grit isn't about avoiding setbacks &mdash; it's about what
