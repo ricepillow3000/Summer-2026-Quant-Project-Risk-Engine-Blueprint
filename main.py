@@ -162,13 +162,10 @@ html { scroll-behavior: smooth; }
 @media (max-width: 1100px) {
   .hero-section { grid-template-columns: 1fr; }
   .showcase-row { grid-template-columns: 1fr !important; } }
-/* The stat deck no longer sits on its own plate — it lives IN Casper's
-   wash: the glass tiles fade with the background, fully present at the
-   right edge, dissolving toward the statement side, so the deck reads as
-   part of the architecture instead of a box floating on it. */
-.hero-stats { position: relative;
-    -webkit-mask-image: linear-gradient(90deg, rgba(0,0,0,.55), #000 58%);
-    mask-image: linear-gradient(90deg, rgba(0,0,0,.55), #000 58%); }
+/* The stat deck lives in Casper's wash with no plate — but the TILES stay
+   fully solid (John: fading them read unprofessional). The background does
+   the fading; the instruments never do. */
+.hero-stats { position: relative; }
 .hero-crest { width: 132px; height: 132px; padding: 20px;
     border: 1px solid #C4BDAE; background: rgba(154,123,79,0.05);
     box-shadow: 0 0 0 1px rgba(154,123,79,.12),
@@ -684,7 +681,7 @@ st.markdown("""
    not cold fog. Text sits above on its own layer. */
 .showcase-row::before { content: ""; position: absolute; inset: 0;
     background-size: cover; background-position: center 30%;
-    filter: grayscale(.4) sepia(.42) brightness(.54) contrast(1.03); }
+    filter: grayscale(.4) sepia(.42) brightness(.6) contrast(1.03); }
 /* The band's dressed edges — no more naked ribbon: outside, a 2px bronze
    rule (border above); inside, a 1px bronze hairline set 14px in (the
    classic double-rule ledger frame), plus soft gradient eases at top and
@@ -1162,14 +1159,18 @@ try:
         # color. Luminosity blend: the photo keeps only its LIGHT — its hue
         # comes entirely from the base color beneath, which is CITY-STONE
         # BEIGE in the crest's own warm family (not gray, not orange).
-        f"<style>.hero-section {{ background-color: #D9CAAD; "
+        f"<style>.hero-section {{ background-color: #C9AF87; "
         f"background-image: linear-gradient(90deg, "
-        f"#EDE9E3 0%, rgba(237,233,227,.96) 42%, rgba(237,233,227,.72) 70%, "
-        f"rgba(237,233,227,.5) 100%), "
+        f"#EDE9E3 0%, rgba(237,233,227,.96) 40%, rgba(237,233,227,.62) 66%, "
+        f"rgba(237,233,227,.22) 100%), "
         f"url(data:image/jpeg;base64,{_facade_b64}); "
         f"background-size: auto, cover; "
         f"background-position: left, right 78%; "
-        f"background-blend-mode: normal, luminosity; }}</style>",
+        f"background-blend-mode: normal, luminosity; "
+        # Full-bleed: Casper fills the page edge-to-edge and reaches the top;
+        # the bottom keeps its hairline + beige gap, the seam before Gotham.
+        f"margin: -2.4rem calc(50% - 50vw) 0; "
+        f"padding: 64px max(7vw, calc(50vw - 744px)) 48px; }}</style>",
         unsafe_allow_html=True)
 except OSError:
     pass  # no photo on disk -> tiles render on the plain field, nothing breaks
@@ -1183,7 +1184,7 @@ try:
         _band_b64 = base64.b64encode(f.read()).decode()
     st.markdown(
         f"<style>.showcase-row::before {{ background-image: "
-        f"linear-gradient(165deg, rgba(59,50,40,.55), rgba(45,39,32,.8)), "
+        f"linear-gradient(165deg, rgba(59,50,40,.42), rgba(45,39,32,.68)), "
         f"url(data:image/jpeg;base64,{_band_b64}); }}</style>",
         unsafe_allow_html=True)
 except OSError:
