@@ -679,9 +679,16 @@ st.markdown("""
 .hero-title .hline { display: block; }
 .hero-title { font-size: 84px !important; }
 
-.showcase-row { background: #3F3B35;
+.showcase-row { background: #3F3B35; position: relative;
     margin-left: calc(50% - 50vw); margin-right: calc(50% - 50vw);
     padding: 64px max(7vw, calc(50vw - 744px)) 56px; }
+/* Architectural plate behind the band — photo arrives via a small injected
+   style (base64) layered UNDER a charcoal scrim; this rule holds geometry
+   and the near-charcoal duotone. Text sits above on its own layer. */
+.showcase-row::before { content: ""; position: absolute; inset: 0;
+    background-size: cover; background-position: center 30%;
+    filter: grayscale(.55) sepia(.22) brightness(.5) contrast(1.02); }
+.showcase-row > * { position: relative; z-index: 1; }
 .showcase-row .showcase-title { color: #EDE9E3; }
 .showcase-row .showcase-body { color: #C4BDAE; }
 .showcase-row .showcase-eyebrow { color: #B08A55; }
@@ -1091,6 +1098,21 @@ try:
         unsafe_allow_html=True)
 except OSError:
     pass  # no photo on disk -> tiles render on the plain field, nothing breaks
+
+# Dark-band plate: the charcoal showcase band gets its own architectural
+# photograph (assets/band.jpg — Unsplash, free commercial license): fog-bound
+# towers, duotoned near-charcoal in CSS with a scrim baked in so the beige
+# text stays the loudest thing on the band. Same graceful fallback.
+try:
+    with open("assets/band.jpg", "rb") as f:
+        _band_b64 = base64.b64encode(f.read()).decode()
+    st.markdown(
+        f"<style>.showcase-row::before {{ background-image: "
+        f"linear-gradient(165deg, rgba(63,59,53,.6), rgba(50,46,41,.82)), "
+        f"url(data:image/jpeg;base64,{_band_b64}); }}</style>",
+        unsafe_allow_html=True)
+except OSError:
+    pass  # band stays plain charcoal
 
 # Boot veil renders ONLY on the first script run of a session. Streamlit
 # reruns the whole script on every interaction (and the freshness ticker),
