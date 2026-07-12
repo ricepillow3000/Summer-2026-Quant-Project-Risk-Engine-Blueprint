@@ -162,18 +162,13 @@ html { scroll-behavior: smooth; }
 @media (max-width: 1100px) {
   .hero-section { grid-template-columns: 1fr; }
   .showcase-row { grid-template-columns: 1fr !important; } }
-/* Architectural plate: the stat deck sits on a duotoned building photograph
-   (reference: architecture matching the palette — integrity in stone, not an
-   enlarged logo). The filter pulls any photo into the beige/bronze register;
-   the scrim keeps the glass tiles legible. */
-.hero-stats { position: relative; padding: 30px; overflow: hidden;
-    border: 1px solid #C4BDAE; }
-.hero-stats::before { content: ""; position: absolute; inset: 0;
-    background-size: cover; background-position: center;
-    filter: grayscale(.88) sepia(.26) saturate(.75) brightness(.9) contrast(.96); }
-.hero-stats::after { content: ""; position: absolute; inset: 0;
-    background: linear-gradient(160deg, rgba(63,59,53,.16), rgba(63,59,53,.44)); }
-.hero-stats .hstat { position: relative; z-index: 1; }
+/* The stat deck no longer sits on its own plate — it lives IN Casper's
+   wash: the glass tiles fade with the background, fully present at the
+   right edge, dissolving toward the statement side, so the deck reads as
+   part of the architecture instead of a box floating on it. */
+.hero-stats { position: relative;
+    -webkit-mask-image: linear-gradient(90deg, rgba(0,0,0,.55), #000 58%);
+    mask-image: linear-gradient(90deg, rgba(0,0,0,.55), #000 58%); }
 .hero-crest { width: 132px; height: 132px; padding: 20px;
     border: 1px solid #C4BDAE; background: rgba(154,123,79,0.05);
     box-shadow: 0 0 0 1px rgba(154,123,79,.12),
@@ -1162,14 +1157,12 @@ try:
     with open("assets/facade.jpg", "rb") as f:
         _facade_b64 = base64.b64encode(f.read()).decode()
     st.markdown(
-        f"<style>.hero-stats::before {{ background-image: "
-        f"url(data:image/jpeg;base64,{_facade_b64}); }}"
-        # The plate's architecture also washes across the WHOLE hero,
-        # melting into beige toward the text side — the building emerges
-        # from the page's own color instead of sitting in a box alone.
-        # luminosity blend: the photo keeps only its LIGHT — hue comes from
-        # the page's own beige-gray beneath it. Kills the orange dead.
-        f".hero-section {{ background-color: #DDD7CB; "
+        # The architecture washes across the WHOLE hero, melting into beige
+        # toward the text side — the building emerges from the page's own
+        # color. Luminosity blend: the photo keeps only its LIGHT — its hue
+        # comes entirely from the base color beneath, which is CITY-STONE
+        # BEIGE in the crest's own warm family (not gray, not orange).
+        f"<style>.hero-section {{ background-color: #D9CAAD; "
         f"background-image: linear-gradient(90deg, "
         f"#EDE9E3 0%, rgba(237,233,227,.96) 42%, rgba(237,233,227,.72) 70%, "
         f"rgba(237,233,227,.5) 100%), "
