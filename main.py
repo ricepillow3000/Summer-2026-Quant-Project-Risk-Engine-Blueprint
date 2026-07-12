@@ -681,13 +681,28 @@ st.markdown("""
 
 .showcase-row { background: #3F3B35; position: relative;
     margin-left: calc(50% - 50vw); margin-right: calc(50% - 50vw);
-    padding: 64px max(7vw, calc(50vw - 744px)) 56px; }
+    padding: 72px max(7vw, calc(50vw - 744px)) 64px;
+    border-top: 2px solid #9A7B4F; border-bottom: 2px solid #9A7B4F; }
 /* Architectural plate behind the band — photo arrives via a small injected
    style (base64) layered UNDER a charcoal scrim; this rule holds geometry
-   and the near-charcoal duotone. Text sits above on its own layer. */
+   and the duotone, tuned WARM (dusk-bronze city, per John's references),
+   not cold fog. Text sits above on its own layer. */
 .showcase-row::before { content: ""; position: absolute; inset: 0;
     background-size: cover; background-position: center 30%;
-    filter: grayscale(.55) sepia(.22) brightness(.5) contrast(1.02); }
+    filter: grayscale(.4) sepia(.42) brightness(.54) contrast(1.03); }
+/* The band's dressed edges — no more naked ribbon: outside, a 2px bronze
+   rule (border above); inside, a 1px bronze hairline set 14px in (the
+   classic double-rule ledger frame), plus soft gradient eases at top and
+   bottom so beige melts into the dark instead of snapping. */
+.showcase-row::after { content: ""; position: absolute; inset: 0;
+    pointer-events: none;
+    background:
+      linear-gradient(rgba(176,138,85,.55), rgba(176,138,85,.55))
+        left 0 top 14px / 100% 1px no-repeat,
+      linear-gradient(rgba(176,138,85,.55), rgba(176,138,85,.55))
+        left 0 bottom 14px / 100% 1px no-repeat,
+      linear-gradient(180deg, rgba(237,233,227,.16), rgba(237,233,227,0) 120px),
+      linear-gradient(0deg, rgba(30,27,23,.5), rgba(30,27,23,0) 140px); }
 .showcase-row > * { position: relative; z-index: 1; }
 .showcase-row .showcase-title { color: #EDE9E3; }
 .showcase-row .showcase-body { color: #C4BDAE; }
@@ -1108,7 +1123,7 @@ try:
         _band_b64 = base64.b64encode(f.read()).decode()
     st.markdown(
         f"<style>.showcase-row::before {{ background-image: "
-        f"linear-gradient(165deg, rgba(63,59,53,.6), rgba(50,46,41,.82)), "
+        f"linear-gradient(165deg, rgba(59,50,40,.55), rgba(45,39,32,.8)), "
         f"url(data:image/jpeg;base64,{_band_b64}); }}</style>",
         unsafe_allow_html=True)
 except OSError:
