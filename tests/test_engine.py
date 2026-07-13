@@ -856,6 +856,46 @@ def test_eigen_pc1_dominates_and_exposure_in_range():
     assert 0 <= lo < hi                          # sane noise band
 
 
+def test_eigen_mp_bounds_hand_computed():
+    """MP formula pinned to hand-computed values: N=25, T=100, σ²=2 →
+    q=0.25, √q=0.5 → λ₋ = 2(0.5)² = 0.5, λ₊ = 2(1.5)² = 4.5."""
+    from src.eigenrisk import marcenko_pastur_bounds
+
+    lo, hi = marcenko_pastur_bounds(25, 100, sigma2=2.0)
+    assert np.isclose(lo, 0.5) and np.isclose(hi, 4.5)
+
+
+def test_eigen_edge_cases_no_crash():
+    """Edge cases: zero-variance asset → κ=∞ + pinv; spherical (all-noise)
+    matrix → clipping no-ops with n_clipped=0; single asset works."""
+    from src.eigenrisk import (clip_eigenvalues, condition_number,
+                               eigen_factors, safe_inverse)
+
+    # zero-variance asset (constant returns → all-zero cov row/column)
+    r = _eigen_test_returns()
+    r["FLAT"] = 0.0
+    cov = r.cov() * 252
+    assert condition_number(cov) == float("inf")
+    inv, used_pinv = safe_inverse(cov)
+    assert used_pinv and np.all(np.isfinite(inv))
+
+    # spherical matrix: independent equal-variance names — every eigenvalue
+    # sits in the noise band, clipping must no-op, not flatten
+    rng = np.random.default_rng(3)
+    iso = pd.DataFrame(rng.normal(0, 0.01, (500, 4)), columns=list("WXYZ"))
+    icov = iso.cov() * 252
+    cleaned, n_clipped = clip_eigenvalues(icov, n_obs=500)
+    assert n_clipped == 0
+    np.testing.assert_allclose(cleaned.values, icov.values)
+
+    # single asset: 100% variance explained, nothing to clip
+    solo = _eigen_test_returns()[["AAPL"]]
+    fac = eigen_factors(solo.cov() * 252)
+    assert np.isclose(fac["variance_explained"][0], 100.0)
+    _, n = clip_eigenvalues(solo.cov() * 252, n_obs=len(solo))
+    assert n == 0
+
+
 if __name__ == "__main__":
     import sys
 

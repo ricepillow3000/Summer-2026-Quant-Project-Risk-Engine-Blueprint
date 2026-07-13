@@ -118,9 +118,17 @@ def clip_eigenvalues(cov: pd.DataFrame, n_obs: int) -> tuple[pd.DataFrame, int]:
     across noise directions is flattened. That kills the 1/λ explosion
     when the matrix is later inverted.
 
-    σ̄² is estimated as the average variance not explained by the kept
-    (signal) eigenvalues. n_obs is T, the number of return observations
-    behind the covariance estimate.
+    σ̄² is estimated as the average of all eigenvalues EXCEPT the largest
+    (a one-shot, single-signal-factor assumption — a book with two or
+    more genuine factors folds the second into the noise average,
+    inflating σ̄²; iterative MP refitting is the scale-up path, overkill
+    at N ≤ 13). n_obs is T, the observations behind the estimate.
+
+    Degenerate no-op: if EVERY eigenvalue falls below the ceiling (a
+    spherical, structure-free matrix), flattening all of them would say
+    "all directions equal" — which they already are. The matrix is
+    returned untouched and n_clipped reports 0, meaning "no distinction
+    between signal and noise exists to act on."
     """
     if n_obs <= 0:
         raise ValueError("n_obs must be positive")

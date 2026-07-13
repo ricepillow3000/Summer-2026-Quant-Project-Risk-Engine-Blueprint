@@ -1233,7 +1233,7 @@ st.markdown(f"""
     <div class="hero-badges">
       <span class="badge gold">Live data &middot; Yahoo Finance</span>
       <span class="badge">No fabricated numbers</span>
-      <span class="badge">55 automated tests</span>
+      <span class="badge">57 automated tests</span>
     </div>
     <div class="hero-eyebrow">Meleona &middot; Portfolio Risk Engine</div>
     <h1 class="hero-title"><span class="hline">Grit.</span><span class="hline">Discipline.</span><span class="hline">Evidence.</span></h1>
@@ -1689,13 +1689,111 @@ with f_col:
         "computed percentiles." + _se_txt
     )
 
+def eigen_factor_panel(cov, weights, returns) -> None:
+    """Statistical risk factors panel (eigendecomposition / PCA).
+
+    Separate function so the tab can wrap it in one try/except and
+    degrade gracefully, matching the factor-exposures panel pattern.
+    """
+    fac = eigen_factors(cov)
+    pc1_pct = float(fac["variance_explained"][0])
+    port_pc1 = pc1_exposure(weights, fac)
+    kappa = fac["condition_number"]
+
+    e1, e2, e3 = st.columns(3)
+    e1.metric("PC1 — variance explained", f"{pc1_pct:.0f}%",
+              help="Share of total universe variance carried by the single "
+                   "dominant statistical factor. High = one wave moves "
+                   "everything.")
+    e2.metric("Your book riding PC1", f"{port_pc1:.0%}",
+              help="Share of THIS portfolio's variance on that dominant "
+                   "factor — the macro vs idiosyncratic split.")
+    e3.metric("Condition number κ", f"{kappa:,.0f}" if np.isfinite(kappa)
+              else "∞ (singular)",
+              help="λmax/λmin — numerical stability of the risk matrix "
+                   "before any inversion. Fragile above ~1e8.")
+
+    read_me(
+        "<b>The rubber sheet.</b> Stretch a rubber sheet and most directions "
+        "bend — but a few stretch <i>straight</i>. Those unbending directions "
+        "are the <b>eigenvectors</b>: the market's pure risk pathways. How "
+        "hard each is stretched is its <b>eigenvalue</b> — the variance that "
+        "factor carries. The decomposition untangles the correlation web into "
+        "independent (orthogonal) factors, ranked by strength. Honest limit: "
+        "these factors are <i>statistical and unlabeled</i> — PC1 with "
+        "all-positive loadings reads as the market wave, but naming later "
+        "factors is interpretation, not math. In a crisis, PC1's share spikes "
+        "toward 100% — the diversification illusion collapsing into one bet.")
+
+    # Scree chart: variance explained per factor + Marcenko-Pastur noise line
+    lam = fac["eigenvalues"]
+    # sigma2 excludes the top (signal) eigenvalue -- the SAME estimator
+    # clip_eigenvalues uses, so this ceiling matches the module logic.
+    sigma2 = float(lam[1:].mean()) if len(lam) > 1 else float(lam.mean())
+    _, mp_hi = marcenko_pastur_bounds(len(lam), len(returns), sigma2)
+    scree = go.Figure()
+    scree.add_trace(go.Bar(
+        x=[f"PC{i+1}" for i in range(len(lam))],
+        y=fac["variance_explained"],
+        marker=dict(color=[BRONZE_DK if v >= mp_hi else "#CBBB94"
+                           for v in lam]),
+        hovertemplate="%{x}: %{y:.1f}% of variance<extra></extra>"))
+    scree.add_hline(y=float(mp_hi / lam.sum() * 100) if lam.sum() > 0 else 0,
+                    line=dict(color="#8A6A3C", width=1, dash="dot"),
+                    annotation_text="noise ceiling (Marcenko-Pastur, heuristic)",
+                    annotation_font=dict(size=11, color="#8A6A3C"))
+    scree = _style_fig(scree, height=300)
+    scree.update_layout(yaxis_title="% of total variance", showlegend=False)
+    st.plotly_chart(scree, width="stretch", config=PLOTLY_CFG)
+    st.caption(
+        f"Factors above the dotted line carry more variance than pure noise "
+        f"would produce at this sample size (N={len(lam)}, T={len(returns)}). "
+        "Heuristic reference at this universe size, not a hard test — the "
+        "Ledoit-Wolf estimator is the production defense against inversion "
+        "noise. Flip the covariance estimator to EWMA in Engine controls to "
+        "see the CURRENT regime's factor structure instead of the 2-year "
+        "average.")
+
+    with st.expander("Factor loadings — how each name anchors onto each factor"):
+        ld = fac["loadings"]
+        lmax = float(np.abs(ld.values).max()) or 1.0
+        lfig = go.Figure(go.Heatmap(
+            z=ld.values, x=list(ld.columns), y=list(ld.index),
+            zmin=-lmax, zmax=lmax,
+            colorscale=[[0.0, "#3F3B35"], [0.5, "#EDE9E3"],
+                        [0.775, "#C9B48A"], [0.875, "#9A7B4F"],
+                        [0.95, "#7A5426"], [1.0, "#5C3D14"]],
+            xgap=2, ygap=2,
+            hovertemplate="%{y} on %{x}: %{z:+.3f}<extra></extra>",
+            colorbar=dict(thickness=10, outlinewidth=0)))
+        lfig.update_layout(height=max(260, 34 * len(ld) + 80),
+                           yaxis=dict(autorange="reversed"))
+        st.plotly_chart(lfig, width="stretch", config=PLOTLY_CFG)
+        st.caption(
+            "√λ-scaled eigenvectors, in return units: bronze = the name moves "
+            "WITH the factor, charcoal = against it. Sign convention is "
+            "deterministic (largest loading forced positive) so a factor "
+            "hedge can never silently invert between runs. Neutralizing PC1 "
+            "with an index overlay removes the dominant systematic wave "
+            "without selling a single position — that is the eigen-hedge "
+            "lens, shown here as exposure, not an execution engine.")
+
+
 # ---- Supporting depth: one tab at a time, not stacked accordions ----
-(tab_3d, tab_breakdown, tab_watch, tab_balance, tab_grit, tab_conviction,
- tab_liquidity, tab_secmaster, tab_dq, tab_lineage, tab_signals,
- tab_regimes) = st.tabs([
+# Twelve tabs on one strip overflow invisibly (the tab-list scrollbar is
+# hidden by design) — split into two ruled rows: risk analysis first,
+# research & housekeeping second. Nothing removed, everything reachable.
+panel_head("Risk & conviction", "The analysis — where the risk lives")
+(tab_3d, tab_breakdown, tab_watch, tab_balance, tab_grit,
+ tab_conviction) = st.tabs([
     "3D Distribution", "Risk Breakdown", "Correlation Watch", "Balance",
-    "Grit Zone", "Crisis Conviction", "Liquidity", "Security Master",
-    "Data Quality", "Lineage & Audit", "Signal Lab", "Regime Atlas",
+    "Grit Zone", "Crisis Conviction",
+])
+panel_head("Research & controls", "The workshop — signals, regimes, plumbing")
+(tab_signals, tab_regimes, tab_liquidity, tab_secmaster, tab_dq,
+ tab_lineage) = st.tabs([
+    "Signal Lab", "Regime Atlas", "Liquidity", "Security Master",
+    "Data Quality", "Lineage & Audit",
 ])
 
 with tab_watch:
@@ -1828,22 +1926,6 @@ with tab_breakdown:
     c2.metric("Probability of loss", f"{mc['prob_loss']:.1%}")
     c3.metric("Worst simulated year", f"{mc['worst_case']:+.1%}")
 
-    # --- Risk-adjusted performance (Sharpe vs a real risk-free rate) ---
-    rf = load_risk_free_rate()
-    ann_ret = float(port_returns.mean()) * 252
-    ann_vol = float(port_returns.std()) * np.sqrt(252)
-    sharpe = sharpe_ratio(port_returns, rf if rf is not None else 0.0)
-    s1, s2, s3 = st.columns(3)
-    s1.metric("Sharpe ratio", f"{sharpe:.2f}")
-    s2.metric("Annualized return", f"{ann_ret:+.1%}")
-    s3.metric("Annualized volatility", f"{ann_vol:.1%}")
-    rf_txt = (f"{rf:.2%} (13-week T-bill, ^IRX)" if rf is not None
-              else "unavailable — Sharpe computed against 0%")
-    st.caption(
-        f"Sharpe = (annualized return − risk-free) / annualized volatility, on "
-        f"the real (unshocked) portfolio. Risk-free rate: {rf_txt}."
-    )
-
     # --- Risk-contribution decomposition (where the risk actually lives) ---
     panel_head("Risk contribution by asset", "Where the risk actually lives")
     rc = risk_contributions(weights, cov)
@@ -1867,6 +1949,23 @@ with tab_breakdown:
         f"risk ({rc.loc[top, 'risk_pct']:.0%}). Equal dollar weight ≠ equal risk — "
         "switch Allocation to Risk parity to flatten these bars."
     )
+
+    panel_head("Risk-adjusted performance", "Sharpe vs the real T-bill rate")
+    rf = load_risk_free_rate()
+    ann_ret = float(port_returns.mean()) * 252
+    ann_vol = float(port_returns.std()) * np.sqrt(252)
+    sharpe = sharpe_ratio(port_returns, rf if rf is not None else 0.0)
+    s1, s2, s3 = st.columns(3)
+    s1.metric("Sharpe ratio", f"{sharpe:.2f}")
+    s2.metric("Annualized return", f"{ann_ret:+.1%}")
+    s3.metric("Annualized volatility", f"{ann_vol:.1%}")
+    rf_txt = (f"{rf:.2%} (13-week T-bill, ^IRX)" if rf is not None
+              else "unavailable — Sharpe computed against 0%")
+    st.caption(
+        f"Sharpe = (annualized return − risk-free) / annualized volatility, on "
+        f"the real (unshocked) portfolio. Risk-free rate: {rf_txt}."
+    )
+
 
     panel_head("Correlation matrix", "Do these names move together?")
     read_me(
@@ -1951,86 +2050,10 @@ with tab_breakdown:
     # --- Statistical risk factors (eigendecomposition / PCA) ---
     panel_head("Statistical risk factors",
                "Eigendecomposition — how many independent bets is this book?")
-    fac = eigen_factors(cov)
-    pc1_pct = float(fac["variance_explained"][0])
-    port_pc1 = pc1_exposure(weights, fac)
-    kappa = fac["condition_number"]
-
-    e1, e2, e3 = st.columns(3)
-    e1.metric("PC1 — variance explained", f"{pc1_pct:.0f}%",
-              help="Share of total universe variance carried by the single "
-                   "dominant statistical factor. High = one wave moves "
-                   "everything.")
-    e2.metric("Your book riding PC1", f"{port_pc1:.0%}",
-              help="Share of THIS portfolio's variance on that dominant "
-                   "factor — the macro vs idiosyncratic split.")
-    e3.metric("Condition number κ", f"{kappa:,.0f}" if np.isfinite(kappa)
-              else "∞ (singular)",
-              help="λmax/λmin — numerical stability of the risk matrix "
-                   "before any inversion. Fragile above ~1e8.")
-
-    read_me(
-        "<b>The rubber sheet.</b> Stretch a rubber sheet and most directions "
-        "bend — but a few stretch <i>straight</i>. Those unbending directions "
-        "are the <b>eigenvectors</b>: the market's pure risk pathways. How "
-        "hard each is stretched is its <b>eigenvalue</b> — the variance that "
-        "factor carries. The decomposition untangles the correlation web into "
-        "independent (orthogonal) factors, ranked by strength. Honest limit: "
-        "these factors are <i>statistical and unlabeled</i> — PC1 with "
-        "all-positive loadings reads as the market wave, but naming later "
-        "factors is interpretation, not math. In a crisis, PC1's share spikes "
-        "toward 100% — the diversification illusion collapsing into one bet.")
-
-    # Scree chart: variance explained per factor + Marcenko-Pastur noise line
-    lam = fac["eigenvalues"]
-    _, mp_hi = marcenko_pastur_bounds(len(lam), len(returns),
-                                      float(np.mean(lam)))
-    scree = go.Figure()
-    scree.add_trace(go.Bar(
-        x=[f"PC{i+1}" for i in range(len(lam))],
-        y=fac["variance_explained"],
-        marker=dict(color=[BRONZE_DK if v >= mp_hi else "#CBBB94"
-                           for v in lam]),
-        hovertemplate="%{x}: %{y:.1f}% of variance<extra></extra>"))
-    scree.add_hline(y=float(mp_hi / lam.sum() * 100) if lam.sum() > 0 else 0,
-                    line=dict(color="#8A6A3C", width=1, dash="dot"),
-                    annotation_text="noise ceiling (Marcenko-Pastur, heuristic)",
-                    annotation_font=dict(size=11, color="#8A6A3C"))
-    scree = _style_fig(scree, height=300)
-    scree.update_layout(yaxis_title="% of total variance", showlegend=False)
-    st.plotly_chart(scree, width="stretch", config=PLOTLY_CFG)
-    st.caption(
-        f"Factors above the dotted line carry more variance than pure noise "
-        f"would produce at this sample size (N={len(lam)}, T={len(returns)}). "
-        "Heuristic reference at this universe size, not a hard test — the "
-        "Ledoit-Wolf estimator is the production defense against inversion "
-        "noise. Flip the covariance estimator to EWMA in Engine controls to "
-        "see the CURRENT regime's factor structure instead of the 2-year "
-        "average.")
-
-    with st.expander("Factor loadings — how each name anchors onto each factor"):
-        ld = fac["loadings"]
-        lmax = float(np.abs(ld.values).max()) or 1.0
-        lfig = go.Figure(go.Heatmap(
-            z=ld.values, x=list(ld.columns), y=list(ld.index),
-            zmin=-lmax, zmax=lmax,
-            colorscale=[[0.0, "#3F3B35"], [0.5, "#EDE9E3"],
-                        [0.775, "#C9B48A"], [0.875, "#9A7B4F"],
-                        [0.95, "#7A5426"], [1.0, "#5C3D14"]],
-            xgap=2, ygap=2,
-            hovertemplate="%{y} on %{x}: %{z:+.3f}<extra></extra>",
-            colorbar=dict(thickness=10, outlinewidth=0)))
-        lfig.update_layout(height=max(260, 34 * len(ld) + 80),
-                           yaxis=dict(autorange="reversed"))
-        st.plotly_chart(lfig, width="stretch", config=PLOTLY_CFG)
-        st.caption(
-            "√λ-scaled eigenvectors, in return units: bronze = the name moves "
-            "WITH the factor, charcoal = against it. Sign convention is "
-            "deterministic (largest loading forced positive) so a factor "
-            "hedge can never silently invert between runs. Neutralizing PC1 "
-            "with an index overlay removes the dominant systematic wave "
-            "without selling a single position — that is the eigen-hedge "
-            "lens, shown here as exposure, not an execution engine.")
+    try:
+        eigen_factor_panel(cov, weights, returns)
+    except Exception as exc:  # noqa: BLE001 — degrade like the panel above
+        st.caption(f"Statistical risk factors unavailable: {exc}")
 
 source_txt = f"the {scenario_label} window" if scenario_label else \
     "2 years of daily historical returns"
@@ -2280,10 +2303,12 @@ with tab_conviction:
                   for v in rr["basket_days"]],
             textposition="outside", textfont=dict(size=11),
             hovertemplate="%{y} — basket: %{text}<extra></extra>"))
-        race_fig = _style_fig(race_fig, height=max(300, 40 * len(rr) + 60))
+        race_fig = _style_fig(race_fig, height=max(340, 56 * len(rr) + 70))
         race_fig.update_layout(
             barmode="group", xaxis_title="trading days to reclaim pre-crisis level",
             showlegend=True,
+            # headroom so "not within 3y" outside-labels never clip
+            xaxis=dict(range=[0, cap * 1.18]),
             legend=dict(orientation="h", y=1.08, x=0, font=dict(size=11)))
         st.plotly_chart(race_fig, width="stretch", config=PLOTLY_CFG)
 
@@ -2480,11 +2505,10 @@ with tab_signals:
                 f"the signal ({summ['n_days']} usable days — need at least 30)."
             )
         else:
-            i1, i2, i3, i4 = st.columns(4)
+            i1, i2, i3 = st.columns(3)
             i1.metric("Mean daily IC", f"{summ['mean_ic']:+.3f}")
             i2.metric("t-statistic", f"{summ['t_stat']:.2f}")
             i3.metric("Hit rate (IC > 0)", f"{summ['hit_rate']:.0%}")
-            i4.metric("Days scored", f"{summ['n_days']}")
 
             t = summ["t_stat"]
             if t >= 3:
@@ -2502,7 +2526,8 @@ with tab_signals:
                            "no skill on this sample")
             st.caption(
                 f"In-sample, this momentum signal's mean IC of "
-                f"{summ['mean_ic']:+.3f} (t = {t:.2f}) **{bar_txt}**."
+                f"{summ['mean_ic']:+.3f} (t = {t:.2f}, scored over "
+                f"{summ['n_days']} days) **{bar_txt}**."
             )
 
             roll = ic.rolling(63).mean()
@@ -2610,6 +2635,7 @@ with tab_regimes:
                 legend=dict(orientation="h", y=1.2, x=0, font=dict(size=11)))
             st.plotly_chart(reg_fig, width="stretch", config=PLOTLY_CFG)
 
+            panel_head("Regime profiles", "Vol, skew, tail per cluster")
             reg_table = pd.DataFrame(reg_rows).set_index("label")
             reg_table.index = [f"regime {i + 1}" for i in reg_table.index]
             reg_table.columns = ["windows", "ann. vol", "mean daily",
@@ -2619,6 +2645,7 @@ with tab_regimes:
                 "skew": "{:+.2f}", "CVaR 95%": "{:.2%}"}),
                 width="stretch")
 
+            panel_head("Transition matrix", "Where the next window goes")
             P_reg = transition_matrix(reg_labels, k_reg)
             pt = pd.DataFrame(
                 P_reg,
