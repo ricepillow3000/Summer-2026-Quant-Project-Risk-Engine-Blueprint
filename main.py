@@ -474,6 +474,18 @@ st.markdown("""
         0 1px 2px rgba(63,59,53,.05), 0 8px 24px -18px rgba(63,59,53,.35); }
 .hstat:hover { box-shadow: inset 0 1px 0 rgba(255,255,255,.85),
         0 2px 4px rgba(63,59,53,.06), 0 18px 38px -20px rgba(63,59,53,.5); }
+/* Specular sheen sweeps the hero tiles on hover — same trophy finish as
+   the metric slabs, so the brand's front door feels alive. Children sit
+   above the sweep (z-index 1) so the gradient numbers stay crisp. */
+.hstat { position: relative; overflow: hidden; }
+.hstat > div { position: relative; z-index: 1; }
+.hstat::before { content: ''; position: absolute; top: 0; left: -70%;
+    width: 45%; height: 100%; pointer-events: none; z-index: 0;
+    background: linear-gradient(100deg, transparent,
+        rgba(200,168,110,.25), transparent);
+    transform: skewX(-18deg);
+    transition: left .6s cubic-bezier(.16,1,.3,1); }
+.hstat:hover::before { left: 125%; }
 @supports ((-webkit-background-clip: text) or (background-clip: text)) {
   .hstat .n { background: linear-gradient(120deg, #3F3B35, #6E5B41);
       -webkit-background-clip: text; background-clip: text;
