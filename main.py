@@ -1657,16 +1657,19 @@ with v_col:
   <div class="verdict-sentence">{verdict}</div>
 </div>
 """, unsafe_allow_html=True)
-    st.markdown(
-        '<div class="read-me">'
-        '<b>How to read the cone.</b> Time runs left to right — one year of '
-        'trading days. The dark centreline is the <b>middle outcome</b>: half '
-        'the simulations landed above it, half below. The dark inner cone holds '
-        'the <b>middle 50%</b> of outcomes; the pale outer cone holds <b>90%</b>. '
-        'It widens because uncertainty compounds. Its <b>bottom edge is the '
-        'tail</b> the CVaR headline measures. Change any setting and watch the '
-        'cone breathe.'
-        '</div>', unsafe_allow_html=True)
+    # Legend folds away — the verdict number and chart lead; the tutorial
+    # is one click for whoever wants it (matches the hide-depth doctrine).
+    with st.expander("How to read the cone"):
+        st.markdown(
+            '<div class="read-me">'
+            '<b>How to read the cone.</b> Time runs left to right — one year of '
+            'trading days. The dark centreline is the <b>middle outcome</b>: half '
+            'the simulations landed above it, half below. The dark inner cone holds '
+            'the <b>middle 50%</b> of outcomes; the pale outer cone holds <b>90%</b>. '
+            'It widens because uncertainty compounds. Its <b>bottom edge is the '
+            'tail</b> the CVaR headline measures. Change any setting and watch the '
+            'cone breathe.'
+            '</div>', unsafe_allow_html=True)
 with f_col:
     st.markdown("""
 <div class="engrave line" aria-hidden="true"><svg viewBox="28 40 66 60" xmlns="http://www.w3.org/2000/svg">
@@ -2017,43 +2020,48 @@ with tab_breakdown:
             "deeper than any single historical day — a fatter, more honest crash."
         )
 
-    # --- VaR methods + backtest (validates the model, not just reports it) ---
-    panel_head("Value at Risk — methods & backtest", "The daily loss line, and whether it holds up")
-    hist_var = float(-np.percentile(port_returns, 5))
-    bt = var_backtest(port_returns)
-    v1, v2, v3 = st.columns(3)
-    v1.metric("Historical VaR (95%)", f"{hist_var:.2%}")
-    v2.metric("Parametric VaR (95%)", f"{parametric_var(port_returns):.2%}")
-    v3.metric("VaR breaches", f"{bt['breaches']} / {bt['expected_breaches']:.0f} exp.")
-    verdict_word = "passes" if bt["passed"] else "fails"
-    st.caption(
-        f"Daily VaR backtest {verdict_word} the Kupiec test "
-        f"(LR = {bt['kupiec_lr']}, 95% critical = 3.84): the model's breach rate "
-        f"of {bt['observed_rate']:.1%} is statistically consistent with the 5% it claims."
-    )
-
-    # --- Named factor exposures ---
-    panel_head("Factor exposures", "What systematic bets is this book taking?")
-    try:
-        fx = factor_exposures(port_returns)
-        st.plotly_chart(hbar(pd.Series(fx["betas"]), color=BRONZE, title_x="beta"),
-                        width="stretch", config=PLOTLY_CFG)
+    # --- Deep dive: the three statistical-test-heavy panels fold behind one
+    #     click so a cold viewer meets the intuitive charts (returns, risk
+    #     contribution, correlation) first, and the model-validation depth
+    #     second — "lead with one number", don't wall them with seven charts. ---
+    with st.expander("Deep dive — model validation & factor structure"):
+        # --- VaR methods + backtest (validates the model, not just reports it) ---
+        panel_head("Value at Risk — methods & backtest", "The daily loss line, and whether it holds up")
+        hist_var = float(-np.percentile(port_returns, 5))
+        bt = var_backtest(port_returns)
+        v1, v2, v3 = st.columns(3)
+        v1.metric("Historical VaR (95%)", f"{hist_var:.2%}")
+        v2.metric("Parametric VaR (95%)", f"{parametric_var(port_returns):.2%}")
+        v3.metric("VaR breaches", f"{bt['breaches']} / {bt['expected_breaches']:.0f} exp.")
+        verdict_word = "passes" if bt["passed"] else "fails"
         st.caption(
-            f"Market beta {fx['betas']['Market']:+.2f} · "
-            f"R-squared {fx['r_squared']:.0%} · "
-            f"annualized alpha {fx['alpha_annual']:+.1%}. "
-            "Size/Value/Momentum are tilts vs. broad market (ETF-proxy factors)."
+            f"Daily VaR backtest {verdict_word} the Kupiec test "
+            f"(LR = {bt['kupiec_lr']}, 95% critical = 3.84): the model's breach rate "
+            f"of {bt['observed_rate']:.1%} is statistically consistent with the 5% it claims."
         )
-    except Exception as exc:  # noqa: BLE001
-        st.caption(f"Factor exposures unavailable: {exc}")
 
-    # --- Statistical risk factors (eigendecomposition / PCA) ---
-    panel_head("Statistical risk factors",
-               "Eigendecomposition — how many independent bets is this book?")
-    try:
-        eigen_factor_panel(cov, weights, returns)
-    except Exception as exc:  # noqa: BLE001 — degrade like the panel above
-        st.caption(f"Statistical risk factors unavailable: {exc}")
+        # --- Named factor exposures ---
+        panel_head("Factor exposures", "What systematic bets is this book taking?")
+        try:
+            fx = factor_exposures(port_returns)
+            st.plotly_chart(hbar(pd.Series(fx["betas"]), color=BRONZE, title_x="beta"),
+                            width="stretch", config=PLOTLY_CFG)
+            st.caption(
+                f"Market beta {fx['betas']['Market']:+.2f} · "
+                f"R-squared {fx['r_squared']:.0%} · "
+                f"annualized alpha {fx['alpha_annual']:+.1%}. "
+                "Size/Value/Momentum are tilts vs. broad market (ETF-proxy factors)."
+            )
+        except Exception as exc:  # noqa: BLE001
+            st.caption(f"Factor exposures unavailable: {exc}")
+
+        # --- Statistical risk factors (eigendecomposition / PCA) ---
+        panel_head("Statistical risk factors",
+                   "Eigendecomposition — how many independent bets is this book?")
+        try:
+            eigen_factor_panel(cov, weights, returns)
+        except Exception as exc:  # noqa: BLE001 — degrade like the panel above
+            st.caption(f"Statistical risk factors unavailable: {exc}")
 
 source_txt = f"the {scenario_label} window" if scenario_label else \
     "2 years of daily historical returns"
@@ -2485,14 +2493,17 @@ with tab_lineage:
 
 # ---- Signal Lab: does a simple signal actually carry information? ----
 with tab_signals:
-    st.caption(
-        "The information coefficient (IC) is the daily cross-sectional Spearman "
-        "rank correlation between a signal's ranking of this universe and the "
-        "forward returns that actually followed. Demo signal: 60-day momentum "
-        "skipping the most recent 5 days (to avoid short-term reversal), scored "
-        "against 5-day forward returns — computed from the same live price "
-        "history as everything above."
-    )
+    # Method greeting folds to one line so a cold viewer meets the three
+    # headline numbers first, not a paragraph of academic definition.
+    with st.expander("What the Information Coefficient measures"):
+        st.caption(
+            "The information coefficient (IC) is the daily cross-sectional Spearman "
+            "rank correlation between a signal's ranking of this universe and the "
+            "forward returns that actually followed. Demo signal: 60-day momentum "
+            "skipping the most recent 5 days (to avoid short-term reversal), scored "
+            "against 5-day forward returns — computed from the same live price "
+            "history as everything above."
+        )
     try:
         SIG_HORIZON = 5
         ic = daily_ic(momentum_signal(prices),
@@ -2583,14 +2594,16 @@ with tab_signals:
 
 # ---- Regime Atlas: Wasserstein k-means on full return distributions ----
 with tab_regimes:
-    st.caption(
-        "Reproduces Horvath, Issa & Muguruza (2021), *Clustering Market "
-        "Regimes using the Wasserstein Distance*: every 20-day window of this "
-        "portfolio's daily returns becomes an empirical distribution, and "
-        "k-means clusters those whole distributions (via the 1-D optimal-"
-        "transport closed form) rather than summary features — so regimes "
-        "that share volatility but differ in tails or skew still separate."
-    )
+    # Method + citation fold to one line so the current-regime verdict leads.
+    with st.expander("Method & source — Wasserstein regime clustering"):
+        st.caption(
+            "Reproduces Horvath, Issa & Muguruza (2021), *Clustering Market "
+            "Regimes using the Wasserstein Distance*: every 20-day window of this "
+            "portfolio's daily returns becomes an empirical distribution, and "
+            "k-means clusters those whole distributions (via the 1-D optimal-"
+            "transport closed form) rather than summary features — so regimes "
+            "that share volatility but differ in tails or skew still separate."
+        )
     try:
         REG_WINDOW, REG_STEP = 20, 5
         k_reg = st.selectbox("Number of regimes (k)", [2, 3, 4], index=1)
