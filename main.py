@@ -326,7 +326,20 @@ a.cta-btn:focus-visible, .stButton>button:focus-visible,
 
 /* Ruled panel header inside a tab — the lintel over each block */
 .panel-head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
-    border-top: 1px solid #C4BDAE; padding-top: 13px; margin: 34px 0 14px; }
+    border-top: 1px solid #C4BDAE; padding-top: 13px; margin: 34px 0 14px;
+    position: relative; }
+/* A bronze accent draws itself across the lintel as the section scrolls
+   into view — one pass, scroll-driven. Where view-timeline is unsupported
+   or motion is reduced it stays scaleX(0) (invisible) and the 1px border
+   above is the base, so there is no regression. */
+.panel-head::before { content: ''; position: absolute; top: -1px; left: 0;
+    height: 2px; width: 100%; transform: scaleX(0); transform-origin: left;
+    background: linear-gradient(90deg, #9A7B4F, #C8A86E 55%, transparent); }
+@supports (animation-timeline: view()) {
+  .panel-head::before { animation: lintel-draw linear both;
+      animation-timeline: view(); animation-range: entry 0% cover 20%; }
+  @keyframes lintel-draw { to { transform: scaleX(1); } }
+}
 .panel-head .t { font-family: 'Helvetica Neue', sans-serif; font-size: 11.5px;
     letter-spacing: 0.2em; text-transform: uppercase; color: #3F3B35;
     white-space: nowrap; }
