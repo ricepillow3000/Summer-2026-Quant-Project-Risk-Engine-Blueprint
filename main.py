@@ -1542,6 +1542,7 @@ _audit("Allocation", f"{method}" + (f", vol-targeted to {target_vol:.0%} "
 
 # ---- Stress test: custom parametric shock OR historical regime replay ----
 alloc_label = "risk-parity" if method == "Risk parity" else "equal-weight"
+alloc_art = "an" if alloc_label[0] in "aeiou" else "a"  # "an equal-weight" / "a risk-parity"
 lev_txt = f", levered {leverage:.2f}×" if use_vt else ""
 
 with deck_stress, st.expander("03 · Stress test — shock or replay a crisis",
@@ -1625,14 +1626,14 @@ except Exception:  # noqa: BLE001 — headline must still render if volume feed 
 if scenario_label:
     verdict = (
         f"Replaying the actual returns of {scenario_label} "
-        f"({len(shocked_returns)} trading days), a {alloc_label} portfolio{lev_txt} "
+        f"({len(shocked_returns)} trading days), {alloc_art} {alloc_label} portfolio{lev_txt} "
         f"loses an average of <b>{mc['cvar']:.1%}</b> in the worst 5% of simulated years."
     )
     if excluded:
         verdict += f" *(Excludes {', '.join(excluded)} — not trading in that period.)*"
 else:
     verdict = (
-        f"In the worst 5% of simulated years, a {alloc_label} portfolio of these "
+        f"In the worst 5% of simulated years, {alloc_art} {alloc_label} portfolio of these "
         f"{len(loaded)} assets{lev_txt} loses an average of <b>{mc['cvar']:.1%}</b>."
     )
     if is_shocked:
