@@ -2164,15 +2164,18 @@ with tab_balance:
                 f"**{pair['blended_vol']:.1%}** — a {pair['vol_reduction']:.0%} "
                 "reduction, from diversification. Long-only minimum-variance weights."
             )
-            st.markdown(
-                '<div class="read-me"><b>The honest limit — read this.</b> '
-                'Correlations are historical and <b>unstable</b>. In a real crash '
-                'they converge toward +1: almost everything falls together, and a '
-                'hedge that worked in calm markets fades exactly when you need it '
-                'most. This tab lowers <b>ordinary</b> volatility; it does not make a '
-                'portfolio crisis-proof. It is the counterweight to Crisis Conviction '
-                '— hold your nerve, and structure so being wrong costs less.</div>',
-                unsafe_allow_html=True)
+            # Caveat kept one click away but signposted in the title, so the
+            # honesty is never buried — just not competing with the number.
+            with st.expander("The honest limit — what this does NOT do"):
+                st.markdown(
+                    '<div class="read-me"><b>The honest limit — read this.</b> '
+                    'Correlations are historical and <b>unstable</b>. In a real crash '
+                    'they converge toward +1: almost everything falls together, and a '
+                    'hedge that worked in calm markets fades exactly when you need it '
+                    'most. This tab lowers <b>ordinary</b> volatility; it does not make a '
+                    'portfolio crisis-proof. It is the counterweight to Crisis Conviction '
+                    '— hold your nerve, and structure so being wrong costs less.</div>',
+                    unsafe_allow_html=True)
         except Exception as exc:  # noqa: BLE001 — never crash the tab
             st.caption(f"Balance unavailable for this universe: {exc}")
 
@@ -2658,23 +2661,26 @@ with tab_regimes:
                 legend=dict(orientation="h", y=1.2, x=0, font=dict(size=11)))
             st.plotly_chart(reg_fig, width="stretch", config=PLOTLY_CFG)
 
-            panel_head("Regime profiles", "Vol, skew, tail per cluster")
-            reg_table = pd.DataFrame(reg_rows).set_index("label")
-            reg_table.index = [f"regime {i + 1}" for i in reg_table.index]
-            reg_table.columns = ["windows", "ann. vol", "mean daily",
-                                 "skew", "CVaR 95%"]
-            st.dataframe(reg_table.style.format({
-                "ann. vol": "{:.1%}", "mean daily": "{:+.4%}",
-                "skew": "{:+.2f}", "CVaR 95%": "{:.2%}"}),
-                width="stretch")
-
-            panel_head("Transition matrix", "Where the next window goes")
+            # Two dense grids fold together; the plain-English "sticky %"
+            # caption below stays visible as the actual takeaway.
             P_reg = transition_matrix(reg_labels, k_reg)
-            pt = pd.DataFrame(
-                P_reg,
-                index=[f"from {i + 1}" for i in range(k_reg)],
-                columns=[f"to {i + 1}" for i in range(k_reg)])
-            st.dataframe(pt.style.format("{:.0%}"), width="stretch")
+            with st.expander("Cluster detail — profiles & transition matrix"):
+                panel_head("Regime profiles", "Vol, skew, tail per cluster")
+                reg_table = pd.DataFrame(reg_rows).set_index("label")
+                reg_table.index = [f"regime {i + 1}" for i in reg_table.index]
+                reg_table.columns = ["windows", "ann. vol", "mean daily",
+                                     "skew", "CVaR 95%"]
+                st.dataframe(reg_table.style.format({
+                    "ann. vol": "{:.1%}", "mean daily": "{:+.4%}",
+                    "skew": "{:+.2f}", "CVaR 95%": "{:.2%}"}),
+                    width="stretch")
+
+                panel_head("Transition matrix", "Where the next window goes")
+                pt = pd.DataFrame(
+                    P_reg,
+                    index=[f"from {i + 1}" for i in range(k_reg)],
+                    columns=[f"to {i + 1}" for i in range(k_reg)])
+                st.dataframe(pt.style.format("{:.0%}"), width="stretch")
             stay = float(np.mean(np.diag(P_reg)))
             st.caption(
                 f"Transition matrix, estimated from consecutive windows: "
