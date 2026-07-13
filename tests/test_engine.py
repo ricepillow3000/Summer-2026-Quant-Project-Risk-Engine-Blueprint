@@ -768,6 +768,94 @@ def test_estimate_covariance_dispatch_keeps_labels():
         assert isinstance(info, str) and info
 
 
+def _eigen_test_returns(n_days: int = 500, seed: int = 7) -> pd.DataFrame:
+    """Four highly correlated names sharing one market wave (deterministic)."""
+    rng = np.random.default_rng(seed)
+    market = rng.normal(0, 0.012, n_days)
+    cols = ["AAPL", "MSFT", "GOOG", "NVDA"]
+    data = np.column_stack([market + rng.normal(0, 0.006, n_days)
+                            for _ in cols])
+    idx = pd.bdate_range("2022-01-03", periods=n_days)
+    return pd.DataFrame(data, index=idx, columns=cols)
+
+
+def test_eigen_orthogonality():
+    """Invariant 1: eigenvectors are perpendicular — QᵀQ = I."""
+    from src.eigenrisk import eigen_factors
+
+    cov = _eigen_test_returns().cov() * 252
+    q = eigen_factors(cov)["eigenvectors"].values
+    np.testing.assert_allclose(q.T @ q, np.eye(q.shape[1]), atol=1e-10)
+
+
+def test_eigen_reconstruction():
+    """Invariant 2: QΛQᵀ rebuilds the cleaned covariance exactly."""
+    from src.eigenrisk import clip_eigenvalues, eigen_factors
+
+    returns = _eigen_test_returns()
+    cleaned, _ = clip_eigenvalues(returns.cov() * 252, n_obs=len(returns))
+    fac = eigen_factors(cleaned)
+    q, lam = fac["eigenvectors"].values, fac["eigenvalues"]
+    np.testing.assert_allclose((q * lam) @ q.T, cleaned.values, atol=1e-10)
+
+
+def test_eigen_trace_invariant():
+    """Invariant 3: Σλ = Tr(Σ) — factorization loses zero risk. Clipping
+    also preserves the trace: total variance is reorganized, never lost."""
+    from src.eigenrisk import clip_eigenvalues, eigen_factors
+
+    returns = _eigen_test_returns()
+    cov = returns.cov() * 252
+    assert np.isclose(eigen_factors(cov)["eigenvalues"].sum(),
+                      np.trace(cov.values))
+    cleaned, n_clipped = clip_eigenvalues(cov, n_obs=len(returns))
+    assert n_clipped > 0                       # correlated basket → noise floor
+    assert np.isclose(np.trace(cleaned.values), np.trace(cov.values))
+
+
+def test_eigen_degenerate_matrix_pinv_fallback():
+    """Invariant 4: two 100%-correlated assets (singular matrix, λ=0) must
+    route through the pseudo-inverse, not crash."""
+    from src.eigenrisk import condition_number, safe_inverse
+
+    returns = _eigen_test_returns()
+    returns["AAPL2"] = returns["AAPL"]         # perfect duplicate → singular
+    cov = returns.cov() * 252
+    assert condition_number(cov) > 1e8
+    inv, used_pinv = safe_inverse(cov)
+    assert used_pinv
+    assert np.all(np.isfinite(inv))
+
+
+def test_eigen_sign_alignment_is_deterministic():
+    """v vs −v indeterminacy: largest-|entry| per eigenvector is forced
+    positive, so a factor hedge can never silently invert across runs."""
+    from src.eigenrisk import align_eigenvector_signs, eigen_factors
+
+    cov = _eigen_test_returns().cov() * 252
+    q = eigen_factors(cov)["eigenvectors"].values
+    anchors = np.argmax(np.abs(q), axis=0)
+    assert np.all(q[anchors, np.arange(q.shape[1])] > 0)
+    # aligning an already-aligned (or fully flipped) matrix is idempotent
+    np.testing.assert_allclose(align_eigenvector_signs(q), q)
+    np.testing.assert_allclose(align_eigenvector_signs(-q), q)
+
+
+def test_eigen_pc1_dominates_and_exposure_in_range():
+    """One shared market wave → PC1 must dominate variance explained, and
+    the equal-weight portfolio's PC1 share must be a valid ratio near 1."""
+    from src.eigenrisk import eigen_factors, marcenko_pastur_bounds, pc1_exposure
+
+    returns = _eigen_test_returns()
+    fac = eigen_factors(returns.cov() * 252)
+    assert fac["variance_explained"][0] > 60.0
+    w = np.ones(4) / 4
+    share = pc1_exposure(w, fac)
+    assert 0.0 <= share <= 1.0 and share > 0.9   # everything is one wave
+    lo, hi = marcenko_pastur_bounds(4, len(returns))
+    assert 0 <= lo < hi                          # sane noise band
+
+
 if __name__ == "__main__":
     import sys
 

@@ -37,6 +37,7 @@ from src.factors import factor_exposures
 from src.strategies import risk_contributions, risk_parity_weights, vol_target
 from src.hedge import min_variance_pair, rank_hedges
 from src.covariance import estimate_covariance
+from src.eigenrisk import eigen_factors, marcenko_pastur_bounds, pc1_exposure
 from src.scenarios import HISTORICAL_REGIMES, replay_returns
 from src.liquidity import (days_to_liquidate, liquidity_profile,
                            liquidity_adjusted_cvar)
@@ -1232,7 +1233,7 @@ st.markdown(f"""
     <div class="hero-badges">
       <span class="badge gold">Live data &middot; Yahoo Finance</span>
       <span class="badge">No fabricated numbers</span>
-      <span class="badge">49 automated tests</span>
+      <span class="badge">55 automated tests</span>
     </div>
     <div class="hero-eyebrow">Meleona &middot; Portfolio Risk Engine</div>
     <h1 class="hero-title"><span class="hline">Grit.</span><span class="hline">Discipline.</span><span class="hline">Evidence.</span></h1>
@@ -1946,6 +1947,90 @@ with tab_breakdown:
         )
     except Exception as exc:  # noqa: BLE001
         st.caption(f"Factor exposures unavailable: {exc}")
+
+    # --- Statistical risk factors (eigendecomposition / PCA) ---
+    panel_head("Statistical risk factors",
+               "Eigendecomposition — how many independent bets is this book?")
+    fac = eigen_factors(cov)
+    pc1_pct = float(fac["variance_explained"][0])
+    port_pc1 = pc1_exposure(weights, fac)
+    kappa = fac["condition_number"]
+
+    e1, e2, e3 = st.columns(3)
+    e1.metric("PC1 — variance explained", f"{pc1_pct:.0f}%",
+              help="Share of total universe variance carried by the single "
+                   "dominant statistical factor. High = one wave moves "
+                   "everything.")
+    e2.metric("Your book riding PC1", f"{port_pc1:.0%}",
+              help="Share of THIS portfolio's variance on that dominant "
+                   "factor — the macro vs idiosyncratic split.")
+    e3.metric("Condition number κ", f"{kappa:,.0f}" if np.isfinite(kappa)
+              else "∞ (singular)",
+              help="λmax/λmin — numerical stability of the risk matrix "
+                   "before any inversion. Fragile above ~1e8.")
+
+    read_me(
+        "<b>The rubber sheet.</b> Stretch a rubber sheet and most directions "
+        "bend — but a few stretch <i>straight</i>. Those unbending directions "
+        "are the <b>eigenvectors</b>: the market's pure risk pathways. How "
+        "hard each is stretched is its <b>eigenvalue</b> — the variance that "
+        "factor carries. The decomposition untangles the correlation web into "
+        "independent (orthogonal) factors, ranked by strength. Honest limit: "
+        "these factors are <i>statistical and unlabeled</i> — PC1 with "
+        "all-positive loadings reads as the market wave, but naming later "
+        "factors is interpretation, not math. In a crisis, PC1's share spikes "
+        "toward 100% — the diversification illusion collapsing into one bet.")
+
+    # Scree chart: variance explained per factor + Marcenko-Pastur noise line
+    lam = fac["eigenvalues"]
+    _, mp_hi = marcenko_pastur_bounds(len(lam), len(returns),
+                                      float(np.mean(lam)))
+    scree = go.Figure()
+    scree.add_trace(go.Bar(
+        x=[f"PC{i+1}" for i in range(len(lam))],
+        y=fac["variance_explained"],
+        marker=dict(color=[BRONZE_DK if v >= mp_hi else "#CBBB94"
+                           for v in lam]),
+        hovertemplate="%{x}: %{y:.1f}% of variance<extra></extra>"))
+    scree.add_hline(y=float(mp_hi / lam.sum() * 100) if lam.sum() > 0 else 0,
+                    line=dict(color="#8A6A3C", width=1, dash="dot"),
+                    annotation_text="noise ceiling (Marcenko-Pastur, heuristic)",
+                    annotation_font=dict(size=11, color="#8A6A3C"))
+    scree = _style_fig(scree, height=300)
+    scree.update_layout(yaxis_title="% of total variance", showlegend=False)
+    st.plotly_chart(scree, width="stretch", config=PLOTLY_CFG)
+    st.caption(
+        f"Factors above the dotted line carry more variance than pure noise "
+        f"would produce at this sample size (N={len(lam)}, T={len(returns)}). "
+        "Heuristic reference at this universe size, not a hard test — the "
+        "Ledoit-Wolf estimator is the production defense against inversion "
+        "noise. Flip the covariance estimator to EWMA in Engine controls to "
+        "see the CURRENT regime's factor structure instead of the 2-year "
+        "average.")
+
+    with st.expander("Factor loadings — how each name anchors onto each factor"):
+        ld = fac["loadings"]
+        lmax = float(np.abs(ld.values).max()) or 1.0
+        lfig = go.Figure(go.Heatmap(
+            z=ld.values, x=list(ld.columns), y=list(ld.index),
+            zmin=-lmax, zmax=lmax,
+            colorscale=[[0.0, "#3F3B35"], [0.5, "#EDE9E3"],
+                        [0.775, "#C9B48A"], [0.875, "#9A7B4F"],
+                        [0.95, "#7A5426"], [1.0, "#5C3D14"]],
+            xgap=2, ygap=2,
+            hovertemplate="%{y} on %{x}: %{z:+.3f}<extra></extra>",
+            colorbar=dict(thickness=10, outlinewidth=0)))
+        lfig.update_layout(height=max(260, 34 * len(ld) + 80),
+                           yaxis=dict(autorange="reversed"))
+        st.plotly_chart(lfig, width="stretch", config=PLOTLY_CFG)
+        st.caption(
+            "√λ-scaled eigenvectors, in return units: bronze = the name moves "
+            "WITH the factor, charcoal = against it. Sign convention is "
+            "deterministic (largest loading forced positive) so a factor "
+            "hedge can never silently invert between runs. Neutralizing PC1 "
+            "with an index overlay removes the dominant systematic wave "
+            "without selling a single position — that is the eigen-hedge "
+            "lens, shown here as exposure, not an execution engine.")
 
 source_txt = f"the {scenario_label} window" if scenario_label else \
     "2 years of daily historical returns"
