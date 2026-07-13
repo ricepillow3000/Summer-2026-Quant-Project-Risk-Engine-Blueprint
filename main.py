@@ -1716,6 +1716,13 @@ def eigen_factor_panel(cov, weights, returns) -> None:
               help="λmax/λmin — numerical stability of the risk matrix "
                    "before any inversion. Fragile above ~1e8.")
 
+    # Plain-English translation so a non-quant meets a sentence, not κ.
+    st.markdown(
+        f"**In plain terms:** one market wave drives about **{pc1_pct:.0f}%** of "
+        f"this universe's day-to-day swings, and **{port_pc1:.0%}** of *your* "
+        "book's risk rides that single wave. The higher that climbs, the less "
+        "your diversification is actually real — in a crash it heads toward 100%.")
+
     read_me(
         "<b>The rubber sheet.</b> Stretch a rubber sheet and most directions "
         "bend — but a few stretch <i>straight</i>. Those unbending directions "
@@ -2261,28 +2268,31 @@ with tab_conviction:
                 return "color: #8A8172;"
             return "color: #3F6B3F;" if v > 0 else "color: #8A3B2E;"
 
-        st.dataframe(
-            show.style.format({c: "{:+.0%}" for c in pct_cols}, na_rep="—")
-                .format({"Crash depth": "{:.0%}"})
-                .map(_tone, subset=pct_cols[1:]),
-            width="stretch", hide_index=True)
-        st.markdown(
-            '<div class="read-me">'
-            '<b>How to read this.</b> Each row is a real crisis. '
-            '<b>Trough buy</b>: you bought the S&amp;P 500 (SPY) on the single '
-            'scariest day — the exact bottom. <b>Peak buy</b>: you bought at '
-            'the pre-crash top — the worst-timed entry possible. The columns '
-            'show where that money stood 1 and 3 trading-years later. '
-            '“—” means the crisis is too recent for that horizon: excluded, '
-            'not estimated.'
-            '</div>', unsafe_allow_html=True)
-        st.caption(
-            "Nobody can time the exact trough — that row measures the "
-            "direction of the edge, not an executable strategy. That's why "
-            "the peak row sits beside it: even the worst-timed buyer was "
-            "usually whole within three years. The one honest exception is "
-            "the dot-com peak — three years wasn't enough."
-        )
+        # The 3 metrics above carry the message; the full 10x7 grid folds
+        # so a cold viewer isn't hit with 70 raw percentages up front.
+        with st.expander("Show the full table — every crisis, row by row"):
+            st.dataframe(
+                show.style.format({c: "{:+.0%}" for c in pct_cols}, na_rep="—")
+                    .format({"Crash depth": "{:.0%}"})
+                    .map(_tone, subset=pct_cols[1:]),
+                width="stretch", hide_index=True)
+            st.markdown(
+                '<div class="read-me">'
+                '<b>How to read this.</b> Each row is a real crisis. '
+                '<b>Trough buy</b>: you bought the S&amp;P 500 (SPY) on the single '
+                'scariest day — the exact bottom. <b>Peak buy</b>: you bought at '
+                'the pre-crash top — the worst-timed entry possible. The columns '
+                'show where that money stood 1 and 3 trading-years later. '
+                '“—” means the crisis is too recent for that horizon: excluded, '
+                'not estimated.'
+                '</div>', unsafe_allow_html=True)
+            st.caption(
+                "Nobody can time the exact trough — that row measures the "
+                "direction of the edge, not an executable strategy. That's why "
+                "the peak row sits beside it: even the worst-timed buyer was "
+                "usually whole within three years. The one honest exception is "
+                "the dot-com peak — three years wasn't enough."
+            )
 
         # --- The AI-capex recovery race ---
         panel_head("The recovery race", "Heavy-compute investors vs. the broad market")
