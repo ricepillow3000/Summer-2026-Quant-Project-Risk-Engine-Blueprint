@@ -337,11 +337,29 @@ a.cta-btn:focus-visible, .stButton>button:focus-visible,
     animation: panel-settle .5s cubic-bezier(.16,1,.3,1) both;
     animation-delay: .06s; }
 
-/* Metric slabs pick up the same masonry */
+/* Metric slabs pick up the same masonry — and a glossy specular sheen that
+   sweeps across on hover (three-finish "trophy" role). Hover-only, one pass;
+   the prefers-reduced-motion guard nulls the transition to a static tile. */
 [data-testid="stMetric"] { background: #F1EDE5; border: 1px solid #D4CDBF;
     border-top: 2px solid #9A7B4F; padding: 16px 18px 12px;
-    transition: transform .3s cubic-bezier(.16,1,.3,1), border-color .3s ease; }
-[data-testid="stMetric"]:hover { transform: translateY(-2px); border-color: #9A7B4F; }
+    position: relative; overflow: hidden;
+    transition: transform .3s cubic-bezier(.16,1,.3,1), border-color .3s ease,
+                box-shadow .3s ease; }
+[data-testid="stMetric"]::before { content: ''; position: absolute; top: 0;
+    left: -70%; width: 45%; height: 100%; pointer-events: none;
+    background: linear-gradient(100deg, transparent,
+        rgba(200,168,110,.22), transparent);
+    transform: skewX(-18deg);
+    transition: left .6s cubic-bezier(.16,1,.3,1); }
+[data-testid="stMetric"]:hover { transform: translateY(-3px); border-color: #9A7B4F;
+    box-shadow: 0 14px 28px -18px rgba(63,59,53,.5); }
+[data-testid="stMetric"]:hover::before { left: 125%; }
+
+/* The many fold-away expanders feel touchable: bronze border warms on hover */
+[data-testid="stExpander"] { transition: border-color .25s ease,
+    box-shadow .25s ease; }
+[data-testid="stExpander"]:hover { border-color: #9A7B4F !important;
+    box-shadow: 0 8px 20px -16px rgba(63,59,53,.4); }
 
 /* Buttons: cut stone, bronze on press, alive to the touch */
 .stButton>button { font-family: 'Helvetica Neue', sans-serif; font-size: 11.5px;
