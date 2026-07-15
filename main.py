@@ -1012,9 +1012,10 @@ def living_surface_html(density: dict, height: int = 520, n_particles: int = 220
   const data = {payload};
   const surface = {{
     type: 'surface', x: data.days, y: data.rets, z: data.z,
+    customdata: data.z,   /* pristine values: hover reads TRUTH, not the shimmer */
     colorscale: [[0, '#EDE9E3'], [0.5, '#9A7B4F'], [1, '#3F3B35']],
     showscale: false, opacity: 0.96,
-    hovertemplate: 'Day %{{x}} · Return %{{y:.0%}} · density %{{z:.3f}}<extra></extra>',
+    hovertemplate: 'Day %{{x}} · Return %{{y:.0%}} · density %{{customdata:.3f}}<extra></extra>',
   }};
   const particles = {{
     type: 'scatter3d', mode: 'markers', x: data.px, y: data.py, z: data.pz,
@@ -1047,12 +1048,20 @@ def living_surface_html(density: dict, height: int = 520, n_particles: int = 220
       window.addEventListener('mouseup', resume);
       window.addEventListener('touchend', resume);
 
-      /* Animation, split by cost: the CAMERA glides every frame via
-         requestAnimationFrame (60fps - the old 150ms interval stepped it
-         at ~7fps, which is exactly what read as choppy), while the
-         particle field re-uploads on a slower ~140ms budget. Delta-time
-         based, so speed is identical on any refresh rate. */
-      let lastT = null, acc = 0, angle = 0;
+      /* ONE organism, two budgets. The CAMERA glides every frame via
+         requestAnimationFrame (60fps, delta-time based - identical speed on
+         any refresh rate). The SURFACE and the particles breathe together on
+         a ~70ms budget as a single traveling wave rolling down the day axis
+         - a weather front, not a static sheet with loose dots. The wave is a
+         DECORATIVE ±4% shimmer around the true density (about the scale of
+         the Monte Carlo sampling error): geometry sways, but hover always
+         reads the pristine values via customdata. Particles ride the same
+         phase as the surface beneath them, so the whole scene moves as one. */
+      const baseZ = data.z.map(row => row.slice());   // pristine copy
+      const waveZ = data.z.map(row => row.slice());
+      const AMP = 0.04, WAVE_K = 0.55, WAVE_W = 2.1;
+      const dayN = data.days.length, daySpan = data.days[dayN - 1] - data.days[0];
+      let lastT = null, acc = 0, angle = 0, wt = 0;
       const step = function(now) {{
         if (lastT === null) lastT = now;
         const dt = Math.min(now - lastT, 100); lastT = now;
@@ -1064,15 +1073,26 @@ def living_surface_html(density: dict, height: int = 520, n_particles: int = 220
           }});
         }}
         acc += dt;
-        if (acc >= 140) {{                        // particle drift, budgeted
-          acc = 0; t += 1;
+        if (acc >= 70) {{                         // the breathing tide
+          acc = 0; wt += 0.07;
+          for (let i = 0; i < waveZ.length; i++) {{
+            const rowB = baseZ[i], rowW = waveZ[i];
+            for (let j = 0; j < rowW.length; j++) {{
+              rowW[j] = rowB[j] * (1 + AMP *
+                Math.sin(wt * WAVE_W - j * WAVE_K + i * 0.16));
+            }}
+          }}
           const n = data.px.length;
           const nx = new Array(n), ny = new Array(n), nz = new Array(n);
-          for (let i = 0; i < n; i++) {{
-            nx[i] = data.px[i] + Math.sin(t * 0.2 + i * 1.7) * 3;
-            ny[i] = data.py[i] + Math.cos(t * 0.25 + i * 2.3) * 0.01;
-            nz[i] = Math.max(0, data.pz[i] + Math.sin(t * 0.35 + i) * 0.012);
+          for (let k = 0; k < n; k++) {{
+            nx[k] = data.px[k] + Math.sin(wt * 1.3 + k * 1.7) * 3;
+            ny[k] = data.py[k] + Math.cos(wt * 1.5 + k * 2.3) * 0.01;
+            const jNear = daySpan > 0
+              ? (data.px[k] - data.days[0]) / daySpan * (dayN - 1) : 0;
+            nz[k] = Math.max(0, data.pz[k] * (1 + AMP *
+              Math.sin(wt * WAVE_W - jNear * WAVE_K)));
           }}
+          Plotly.restyle('living3d', {{z: [waveZ]}}, [0]);
           Plotly.restyle('living3d', {{x: [nx], y: [ny], z: [nz]}}, [1]);
         }}
       }};
@@ -2036,9 +2056,11 @@ with tab_3d:
     st.iframe(living_surface_html(mc["path_density"]), height=540)
     st.caption(
         "Simulated (Monte Carlo) distribution of portfolio value over the next "
-        "year - the fan chart's cone shown as a probability surface, with a "
-        "drifting particle overlay and slow auto-rotate (drag to take over). "
-        "Hypothetical, not historical."
+        "year - the fan chart's cone shown as a probability surface that "
+        "breathes as one slow wave (drag to take over the rotation). The "
+        "swell is a decorative shimmer of about ±4%, roughly the scale of the "
+        "Monte Carlo sampling error - hover any point and the readout shows "
+        "the true, unmoving density. Hypothetical, not historical."
     )
 
 with tab_breakdown:
@@ -2364,8 +2386,12 @@ with tab_balance:
             _bv_role_a = ("THE SHORT" if bearish else "THE HIGH-FLYER")
             _bv_role_b = ("SQUEEZE CUSHION" if bearish else "THE STEADY ANCHOR")
             st.markdown(
-                f'<div style="display:flex;align-items:center;gap:40px;padding:26px 10px 12px;flex-wrap:wrap;">'
-                f'<svg viewBox="0 0 420 300" width="400" height="286" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;">'
+                f'<div style="display:flex;align-items:center;gap:44px;padding:26px 10px 12px;flex-wrap:wrap;">'
+                f'<div style="flex:1 1 560px;max-width:720px;background:#F1EDE5;'
+                f'border:1px solid #C4BDAE;border-top:2px solid #9A7B4F;border-radius:14px;'
+                f'padding:26px 18px 14px;box-shadow:0 1px 2px rgba(63,59,53,.05),'
+                f'0 12px 30px -22px rgba(63,59,53,.4);">'
+                f'<svg viewBox="0 0 420 300" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;">'
                 # Ledger corner ticks - the same double-rule frame grammar as
                 # the section bands.
                 f'<path d="M8 30 V8 H30 M390 8 H412 V30 M412 270 V292 H390 M30 292 H8 V270" fill="none" stroke="rgba(154,123,79,.5)" stroke-width="1.5"/>'
@@ -2392,7 +2418,12 @@ with tab_balance:
                 f'<circle cx="166" cy="240" r="4" fill="{_ph_col}"/>'
                 f'<text x="216" y="244" text-anchor="middle" font-family="Helvetica Neue" font-size="10.5" letter-spacing="1.8" fill="{_ph_col}">{phase_now.upper()}</text>'
                 f'</svg>'
-                f'<div style="min-width:0;">'
+                f'<div style="font-family:\'Helvetica Neue\',sans-serif;font-size:10px;'
+                f'letter-spacing:.22em;text-transform:uppercase;color:#9A7B4F;'
+                f'text-align:center;margin-top:10px;">Bon Voyage &middot; '
+                f'{"the short and its squeeze cushion" if bearish else "what goes up must come down"}</div>'
+                f'</div>'
+                f'<div style="flex:1 1 380px;min-width:0;">'
                 f'<div style="font-family:Georgia;font-size:15px;color:#3F3B35;line-height:1.55;">'
                 f'In the loaded 2-year history, {"shorting" if bearish else "holding"} '
                 f'<b>{flyer}</b> alone fell <b>{bt["max_dd_solo"]:.0%}</b> at its worst'
