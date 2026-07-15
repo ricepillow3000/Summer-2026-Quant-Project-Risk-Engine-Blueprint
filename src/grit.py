@@ -1,14 +1,14 @@
 """
-Grit Zone — how much perseverance a name has shown, not how cheap or hot it is.
+Grit Zone - how much perseverance a name has shown, not how cheap or hot it is.
 
 Concept:
 Fear & Greed indices measure market MOOD. Grit measures something different:
-whether an asset, when it gets knocked down, actually gets back up — and does
+whether an asset, when it gets knocked down, actually gets back up - and does
 so consistently, across real crises, over its own history. There is no such
 thing as a perfect stock; every name in a basket has drawdowns. Grit is not
 about avoiding setbacks, it's about what happens after one.
 
-Quant Deep Dive — three real, computable components, no vibes:
+Quant Deep Dive - three real, computable components, no vibes:
   1. Recovery:    of this asset's own historical drawdowns (>=5%), how many
                   did it actually claw back from, and how fast?
   2. Consistency: what fraction of rolling 1-year holding periods ended
@@ -20,7 +20,7 @@ Quant Deep Dive — three real, computable components, no vibes:
                   price afterward?
 
 Honest limits:
-  - The Grit Score is RELATIVE to the universe you're analyzing right now —
+  - The Grit Score is RELATIVE to the universe you're analyzing right now -
     each component is percentile-ranked against the other assets you chose,
     not against some absolute universal scale. A different basket produces
     different scores for the same ticker. That's disclosed in the UI, not
@@ -28,7 +28,7 @@ Honest limits:
   - Assets with too little price history (< MIN_HISTORY_DAYS) are excluded
     from ranking rather than scored on thin data.
   - An asset that never traded through a given historical regime (later IPO)
-    simply contributes no observation for that regime — same "excluded, not
+    simply contributes no observation for that regime - same "excluded, not
     estimated" honesty as src.scenarios and src.liquidity.
   - Nothing here is a claim about a company's character. It's a description
     of its OWN historical price path: how it has behaved after past setbacks.
@@ -40,7 +40,7 @@ import pandas as pd
 from src.scenarios import HISTORICAL_REGIMES
 
 # Need enough history to say anything about multi-year drawdown recovery and
-# rolling-window consistency — much longer than the 60-row floor risk.py uses
+# rolling-window consistency - much longer than the 60-row floor risk.py uses
 # for day-to-day VaR/CVaR.
 MIN_HISTORY_DAYS = 400
 
@@ -163,7 +163,7 @@ def regime_drawdown_and_recovery(prices_full: pd.Series, start: str, end: str,
     and whether/how fast it reclaimed its pre-crisis price afterward.
 
     Returns None if the asset has no price history in the window at all
-    (later IPO, etc.) — same "excluded, not estimated" convention as
+    (later IPO, etc.) - same "excluded, not estimated" convention as
     src.scenarios.replay_returns.
     """
     window = prices_full.loc[start:end].dropna()
@@ -213,7 +213,7 @@ def regime_resilience(prices_full: pd.Series) -> dict:
 def _score01(raw: pd.Series, higher_is_better: bool = True) -> pd.Series:
     """
     Percentile-rank a metric to [0, 1] across the peer group; 1.0 = grittiest
-    on this metric. A NaN (couldn't be computed — e.g. no drawdown episodes
+    on this metric. A NaN (couldn't be computed - e.g. no drawdown episodes
     yet to time a recovery from) always scores 0.0: an unknown is never
     rewarded as if it were resilient.
     """
@@ -234,7 +234,7 @@ def grit_scores(tickers: list[str], prices: pd.DataFrame | None = None,
                 consistency_window: int = DEFAULT_CONSISTENCY_WINDOW) -> dict:
     """
     Composite Grit Score per ticker, ranked RELATIVE to the other tickers in
-    `tickers` (there's no universal "grit" scale — only relative perseverance
+    `tickers` (there's no universal "grit" scale - only relative perseverance
     within the peer group you're actually comparing).
 
     Args:
@@ -242,7 +242,7 @@ def grit_scores(tickers: list[str], prices: pd.DataFrame | None = None,
         prices: optional pre-fetched full-history price DataFrame (unaligned,
             NaN before each asset's inception is fine). If omitted, pulls
             full history via src.ingestion.fetch_prices(period="max",
-            align=False) — the same approach src.scenarios uses for regime
+            align=False) - the same approach src.scenarios uses for regime
             replay, so different IPO dates don't truncate everyone.
 
     Returns:

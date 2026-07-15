@@ -1,9 +1,9 @@
 """
-Risk-management strategies — institutional methodologies, no proprietary data.
+Risk-management strategies - institutional methodologies, no proprietary data.
 
 Everything here runs on the same public price returns the engine already
 fetches. These are published frameworks (risk parity, risk budgeting, managed
-volatility), not any firm's actual positions — the legal, defensible way to
+volatility), not any firm's actual positions - the legal, defensible way to
 make a student project look like a real risk desk.
 
 Quant Deep Dive:
@@ -11,7 +11,7 @@ Quant Deep Dive:
   can have equal dollar weight but wildly unequal *risk* weight if one is more
   volatile or more correlated with the rest.
 - Risk parity (Bridgewater All-Weather style) re-weights so every asset
-  contributes the SAME risk — no single name dominates.
+  contributes the SAME risk - no single name dominates.
 - Volatility targeting (AQR managed-vol style) scales total exposure up or down
   to hold a constant target volatility, using leverage when markets are calm.
 """
@@ -29,7 +29,7 @@ def risk_contributions(weights: np.ndarray, cov: pd.DataFrame) -> pd.DataFrame:
     Percent               = component / sigma_p (these sum to 100%)
 
     Returns a DataFrame indexed by ticker with weight, risk %, and the gap
-    between them — the gap is the concentration story.
+    between them - the gap is the concentration story.
     """
     w = np.asarray(weights, dtype=float)
     sigma = cov.values
@@ -95,7 +95,7 @@ def vol_target(weights: np.ndarray, cov: pd.DataFrame,
 
 # Historical stress scenarios as (drawdown %, volatility shock %) magnitudes.
 # Drawdown is the peak-to-trough equity move; vol shock scales daily dispersion.
-# Calibrated to the rough character of each episode — illustrative, not exact.
+# Calibrated to the rough character of each episode - illustrative, not exact.
 SCENARIOS = {
     "2008 Global Financial Crisis": {"drawdown": -50, "vol": 150},
     "COVID-19 crash (Mar 2020)": {"drawdown": -34, "vol": 200},

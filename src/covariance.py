@@ -1,5 +1,5 @@
 """
-Covariance estimators — how the risk matrix itself is built.
+Covariance estimators - how the risk matrix itself is built.
 
 The raw sample covariance is noisy and can be near-singular, which matters
 because everything downstream INVERTS or leans on it: risk-parity weights,
@@ -9,7 +9,7 @@ DataFrame with the same asset labels, so they are drop-in swappable.
 
 Quant Deep Dive
 ---------------
-1. **Sample** — the plain historical covariance (analytics.covariance_matrix).
+1. **Sample** - the plain historical covariance (analytics.covariance_matrix).
    Baseline; unbiased but high-variance, unstable as #assets approaches #days.
 
 2. **Ledoit-Wolf shrinkage** (Ledoit & Wolf, 2004):
@@ -23,7 +23,7 @@ Quant Deep Dive
         Σ_t = λ·Σ_{t−1} + (1−λ)·rₜrₜᵀ
    Recent days weigh exponentially more, so the matrix REACTS to a volatility
    spike instead of averaging it away over a long window. Note: it reacts to a
-   regime change already underway — it does not foresee one.
+   regime change already underway - it does not foresee one.
 
 Honest limit: none of these predict a crash. Shrinkage trades a little bias for
 much less variance; EWMA trades stability for responsiveness. They make the risk
@@ -92,7 +92,7 @@ def estimate_covariance(returns: pd.DataFrame, method: str = "sample",
     if method == "EWMA":
         return ewma_covariance(returns, lam), (
             f"EWMA reactive lens, RiskMetrics λ = {lam:.2f} "
-            "(~11-day half-life — flinches at today, forgets the calm quarter)")
+            "(~11-day half-life - flinches at today, forgets the calm quarter)")
     return sample_covariance(returns), "Sample covariance (equal weight, full window)"
 
 
@@ -100,7 +100,7 @@ if __name__ == "__main__":  # smoke test
     idx = pd.bdate_range("2022-01-01", periods=500)
     rng = np.random.default_rng(0)
     base = rng.normal(0, 0.01, (500, 3))
-    base[-20:] *= 4  # recent volatility spike — EWMA should catch it
+    base[-20:] *= 4  # recent volatility spike - EWMA should catch it
     df = pd.DataFrame(base, columns=["A", "B", "C"], index=idx)
     for m in ("sample", "Ledoit-Wolf", "EWMA"):
         cov, info = estimate_covariance(df, m)

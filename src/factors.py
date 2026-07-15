@@ -2,7 +2,7 @@
 Factor exposures: what systematic risks is this portfolio actually taking?
 
 Quant Deep Dive:
-- Eigen-decomposition (analytics.py) finds *statistical* factors — real but
+- Eigen-decomposition (analytics.py) finds *statistical* factors - real but
   unnamed. This module finds *named* exposures a PM actually talks about:
   market beta, plus size, value, and momentum tilts.
 - We build long-short style factors from liquid ETF proxies and run one OLS

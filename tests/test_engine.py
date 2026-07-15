@@ -4,7 +4,7 @@ Regression tests for the risk engine.
 Run standalone (no extra deps):   python -m tests.test_engine
 Or with pytest if installed:       pytest
 
-The pure-math tests use deterministic synthetic returns — no network, fast, and
+The pure-math tests use deterministic synthetic returns - no network, fast, and
 they assert real invariants (CVaR >= VaR, risk parity equalizes contributions,
 the jump-diffusion mean-consistency identity, vol targeting hits its target,
 liquidity is monotonic in book size). One optional test boots the full Streamlit
@@ -46,7 +46,7 @@ def _synthetic_returns(n_days: int = 500, n_assets: int = 5, seed: int = 0) -> p
 
 
 def test_cvar_at_least_var():
-    """Expected shortfall is never less than VaR — a definitional invariant."""
+    """Expected shortfall is never less than VaR - a definitional invariant."""
     pr = _synthetic_returns().mean(axis=1)
     assert cvar(pr) >= var(pr) - 1e-12
 
@@ -417,7 +417,7 @@ def test_security_master_live():
     try:
         from src.security_master import security_master
         sm = security_master(["AAPL", "MSFT"])
-    except Exception as exc:  # noqa: BLE001 — network hiccup, don't fail the suite
+    except Exception as exc:  # noqa: BLE001 - network hiccup, don't fail the suite
         print(f"[skip] security_master live check: {exc}")
         return
     assert set(sm.index) == {"AAPL", "MSFT"}
@@ -437,14 +437,14 @@ def test_full_app_boots():
     try:
         at = AppTest.from_file("main.py", default_timeout=120)
         at.run()
-    except Exception as exc:                        # network/data hiccup — don't fail suite
+    except Exception as exc:                        # network/data hiccup - don't fail suite
         print(f"[skip] app integration (data/network): {exc}")
         return
     assert not at.exception, f"app raised: {at.exception}"
     assert len(at.error) == 0, f"app rendered errors: {[e.value for e in at.error]}"
 
 
-# ---- Signal Lab (src/signals.py) — appended; existing tests above untouched ----
+# ---- Signal Lab (src/signals.py) - appended; existing tests above untouched ----
 
 from src.signals import (
     momentum_signal, forward_returns, daily_ic, ic_summary,
@@ -593,7 +593,7 @@ def test_regime_kmeans_deterministic():
     assert (l1 == l2).all()
 
 
-# ---- Crisis Conviction (src/conviction.py) — synthetic, deterministic ----
+# ---- Crisis Conviction (src/conviction.py) - synthetic, deterministic ----
 
 def test_conviction_peak_trough_and_reclaim_hand_worked():
     """Crash anatomy on a hand-built path: peak before trough, and the
@@ -662,7 +662,7 @@ def test_conviction_composite_excludes_late_ipos():
 
 def test_hedge_negative_correlation_cuts_vol():
     """A near-mirror asset should roughly halve to near-zero the blended vol,
-    at a ~50/50 minimum-variance weight — the whole point of a hedge."""
+    at a ~50/50 minimum-variance weight - the whole point of a hedge."""
     from src.analytics import covariance_matrix
     from src.hedge import min_variance_pair
 
@@ -679,7 +679,7 @@ def test_hedge_negative_correlation_cuts_vol():
 
 
 def test_hedge_identical_asset_no_reduction():
-    """Hedging an asset with a perfect copy of itself buys nothing — the
+    """Hedging an asset with a perfect copy of itself buys nothing - the
     blended vol must equal the anchor vol (corr = +1, no diversification)."""
     from src.analytics import covariance_matrix
     from src.hedge import min_variance_pair
@@ -713,7 +713,7 @@ def test_hedge_ranking_orders_most_negative_first():
 
 
 def test_ewma_reacts_to_recent_volatility_spike():
-    """EWMA must weight a recent vol spike far more than the calm history —
+    """EWMA must weight a recent vol spike far more than the calm history -
     its whole reason for existing. Sample cov averages it away."""
     from src.covariance import ewma_covariance, sample_covariance
 
@@ -780,7 +780,7 @@ def _eigen_test_returns(n_days: int = 500, seed: int = 7) -> pd.DataFrame:
 
 
 def test_eigen_orthogonality():
-    """Invariant 1: eigenvectors are perpendicular — QᵀQ = I."""
+    """Invariant 1: eigenvectors are perpendicular - QᵀQ = I."""
     from src.eigenrisk import eigen_factors
 
     cov = _eigen_test_returns().cov() * 252
@@ -800,7 +800,7 @@ def test_eigen_reconstruction():
 
 
 def test_eigen_trace_invariant():
-    """Invariant 3: Σλ = Tr(Σ) — factorization loses zero risk. Clipping
+    """Invariant 3: Σλ = Tr(Σ) - factorization loses zero risk. Clipping
     also preserves the trace: total variance is reorganized, never lost."""
     from src.eigenrisk import clip_eigenvalues, eigen_factors
 
@@ -879,7 +879,7 @@ def test_eigen_edge_cases_no_crash():
     inv, used_pinv = safe_inverse(cov)
     assert used_pinv and np.all(np.isfinite(inv))
 
-    # spherical matrix: independent equal-variance names — every eigenvalue
+    # spherical matrix: independent equal-variance names - every eigenvalue
     # sits in the noise band, clipping must no-op, not flatten
     rng = np.random.default_rng(3)
     iso = pd.DataFrame(rng.normal(0, 0.01, (500, 4)), columns=list("WXYZ"))

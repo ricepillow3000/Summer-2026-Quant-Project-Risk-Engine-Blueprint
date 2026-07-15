@@ -1,9 +1,9 @@
 """
-Hedge & Balance — the second solution.
+Hedge & Balance - the second solution.
 
 Crisis Conviction is the *emotional* answer (don't panic-sell). This is the
 *structural* one: pair a holding with a low- or negatively-correlated partner so
-a move in one is partly offset by the other — classic Markowitz diversification,
+a move in one is partly offset by the other - classic Markowitz diversification,
 computed from the real covariance matrix, never a narrative.
 
 Quant Deep Dive
@@ -15,10 +15,10 @@ covariance σab, the LONG-ONLY minimum-variance blend has closed-form weight
 
 and blended variance σp² = w_a²σa² + w_b²σb² + 2 w_a w_b σab. The lower σab (the
 more the two move against each other), the more the blend's volatility drops
-below the anchor's — that is the whole mechanism.
+below the anchor's - that is the whole mechanism.
 
 Honest limit (surfaced in the UI, not buried): correlations are historical and
-UNSTABLE. In a real crash they converge toward +1 — everything falls together —
+UNSTABLE. In a real crash they converge toward +1 - everything falls together -
 so a hedge softens ordinary risk but is not crisis-proof. Diversification fades
 exactly when it is needed most. This is the counterweight to the Conviction tab,
 not a contradiction of it.

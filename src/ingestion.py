@@ -15,8 +15,8 @@ Caching strategy for a live web app:
   so a deployed app never serves indefinitely-stale data. Manual refresh clears
   it on demand.
 
-Universe is fully configurable — equities, ETFs, FX (EURUSD=X), or futures
-(GC=F) — so the engine speaks to any audience, not just one watchlist.
+Universe is fully configurable - equities, ETFs, FX (EURUSD=X), or futures
+(GC=F) - so the engine speaks to any audience, not just one watchlist.
 """
 
 import os
@@ -41,7 +41,7 @@ MIN_ROWS = 60
 CACHE_MAX_AGE_HOURS = 6
 
 # One-click starting baskets for a wider audience. These are representative,
-# illustrative groupings — NOT any firm's actual holdings.
+# illustrative groupings - NOT any firm's actual holdings.
 PRESETS = {
     "Hedge-fund favorites (13F-popular)": [
         "MSFT", "AMZN", "META", "GOOGL", "NVDA", "AAPL",
@@ -60,7 +60,7 @@ PRESETS = {
     "Futures (index & commodity)": [
         "ES=F", "NQ=F", "CL=F", "GC=F", "SI=F", "ZN=F",
     ],
-    # Institutional staples — what a rates/credit desk, a commodities book,
+    # Institutional staples - what a rates/credit desk, a commodities book,
     # or a global-macro fund actually watches, via liquid ETF proxies.
     "Rates & credit (ETF proxies)": [
         "TLT", "IEF", "SHY", "LQD", "HYG", "TIP",
@@ -129,7 +129,7 @@ def _download_close_volume(tickers: list[str], period: str) -> tuple[pd.DataFram
 
     This is the single network round-trip that now feeds BOTH the price cache
     and the dollar-volume cache. yfinance returns a column MultiIndex for
-    multiple tickers and a flat index for one — we normalize both shapes here.
+    multiple tickers and a flat index for one - we normalize both shapes here.
     """
     raw = yf.download(tickers, period=period, auto_adjust=True, progress=False,
                       repair=True, timeout=30)
@@ -190,18 +190,18 @@ def fetch_prices(tickers: list[str] | None = None, period: str = "2y",
 
     Args:
         tickers: Yahoo Finance symbols. Defaults to DEFAULT_UNIVERSE if None.
-        period:  yfinance period string — "1y", "2y", "5y", "max", etc.
+        period:  yfinance period string - "1y", "2y", "5y", "max", etc.
         use_cache: read/write the disk cache.
         max_age_hours: how old a cache may be before re-pulling.
         align: if True, keep only common trading days across all assets (the
             right choice for current risk). Set False for historical replay,
             where assets have different inception dates and you slice a window
-            later — forcing common dates over full history would truncate
+            later - forcing common dates over full history would truncate
             everything to the youngest asset's IPO.
 
     Returns:
         DataFrame with dates as index and tickers as columns. Symbols that
-        return no data are dropped — check the columns to see what loaded.
+        return no data are dropped - check the columns to see what loaded.
     """
     tickers = _clean(tickers)
     if not tickers:
@@ -222,7 +222,7 @@ def fetch_prices(tickers: list[str] | None = None, period: str = "2y",
     if use_cache:
         prices.to_parquet(cache_path)
         # Provenance: stamp exactly where this data came from and when, so every
-        # downstream number is traceable to a real source — not the model.
+        # downstream number is traceable to a real source - not the model.
         meta = {
             "source": "Yahoo Finance (via yfinance)",
             "fetched_at_utc": datetime.datetime.now(datetime.timezone.utc)
@@ -263,14 +263,14 @@ def fetch_dollar_volume(tickers: list[str] | None = None, period: str = "2y",
     """
     Daily DOLLAR volume (adjusted close x share volume) per asset, from Yahoo.
 
-    Dollar volume — not share count — is the liquidity metric that matters: a
+    Dollar volume - not share count - is the liquidity metric that matters: a
     million shares of a $5 stock and a million shares of a $500 stock absorb
     wildly different amounts of capital. Normally this reads the cache that
     `fetch_prices` already populated from a shared download; it only hits the
     network if called standalone or the cache has aged out.
 
     Assets that report no volume (Yahoo returns 0 for FX pairs, for instance)
-    come back as columns of zeros — surfaced honestly downstream, never faked.
+    come back as columns of zeros - surfaced honestly downstream, never faked.
     """
     tickers = _clean(tickers)
     if not tickers:
@@ -300,7 +300,7 @@ def average_dollar_volume(tickers: list[str] | None = None, period: str = "2y",
     average, is what tells you how much a name can absorb *today*. The `period`
     matches `fetch_prices` so both share one cached download.
 
-    Assets with no volume data (e.g. Yahoo FX pairs) return 0.0 — a flag for the
+    Assets with no volume data (e.g. Yahoo FX pairs) return 0.0 - a flag for the
     caller to treat as "not liquidatable from this feed," never a fabricated fill.
     """
     dv = fetch_dollar_volume(tickers, period=period, **kwargs)
@@ -310,11 +310,11 @@ def average_dollar_volume(tickers: list[str] | None = None, period: str = "2y",
 def fetch_risk_free_rate(use_cache: bool = True,
                          max_age_hours: float = CACHE_MAX_AGE_HOURS) -> float | None:
     """
-    Latest US 13-week Treasury-bill yield (^IRX) as an annual decimal — e.g.
+    Latest US 13-week Treasury-bill yield (^IRX) as an annual decimal - e.g.
     0.0525 for 5.25%. Yahoo quotes ^IRX in percent, so we divide by 100.
 
     This is the risk-free leg of the Sharpe ratio. Returns None if the fetch
-    fails — we never fabricate a rate, so Sharpe hides rather than lying.
+    fails - we never fabricate a rate, so Sharpe hides rather than lying.
     Cached in a small JSON with the same freshness window as prices.
     """
     os.makedirs(DATA_DIR, exist_ok=True)
@@ -338,7 +338,7 @@ def fetch_risk_free_rate(use_cache: bool = True,
         if isinstance(close, pd.DataFrame):
             close = close.iloc[:, 0]
         rate = float(close.dropna().iloc[-1]) / 100.0
-    except Exception:  # noqa: BLE001 — no rate is better than a fake one
+    except Exception:  # noqa: BLE001 - no rate is better than a fake one
         return None
     if not np.isfinite(rate):
         return None
@@ -380,7 +380,7 @@ def data_health(prices: pd.DataFrame) -> dict:
 
 
 def get_returns(prices: pd.DataFrame) -> pd.DataFrame:
-    """Convert prices to daily returns — standard in quant finance."""
+    """Convert prices to daily returns - standard in quant finance."""
     return prices.pct_change().dropna()
 
 

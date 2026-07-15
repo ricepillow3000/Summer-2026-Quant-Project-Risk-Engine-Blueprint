@@ -4,9 +4,9 @@ Risk Engine: CVaR and Monte Carlo simulation.
 Quant Deep Dive:
 - VaR (Value at Risk) answers: "What's the most I lose on a bad day (95th pctile)?"
 - CVaR (Conditional VaR) answers: "When things ARE that bad, how bad on average?"
-  CVaR is strictly better — VaR ignores what happens in the tail, CVaR measures it.
+  CVaR is strictly better - VaR ignores what happens in the tail, CVaR measures it.
 - Monte Carlo: instead of assuming returns are normally distributed (they aren't),
-  we bootstrap from real historical returns. This captures actual fat tails —
+  we bootstrap from real historical returns. This captures actual fat tails -
   the real crash days that a normal distribution would say are "impossible."
 """
 
@@ -36,7 +36,7 @@ def cvar(port_returns: pd.Series, confidence: float = 0.95) -> float:
     Conditional Value at Risk (Expected Shortfall).
     Average loss on the worst (1 - confidence)% of days.
 
-    This is the number risk desks actually use — it captures tail severity,
+    This is the number risk desks actually use - it captures tail severity,
     not just where the tail begins.
     """
     threshold = np.percentile(port_returns, (1 - confidence) * 100)
@@ -66,7 +66,7 @@ def parametric_var(port_returns: pd.Series, confidence: float = 0.95) -> float:
     """
     Variance-covariance (parametric) VaR: assumes returns are normal and reads
     the loss off the fitted distribution. Faster than historical and smooth, but
-    understates tail risk when returns are fat-tailed — which is exactly why we
+    understates tail risk when returns are fat-tailed - which is exactly why we
     backtest it below and keep CVaR as the headline.
     """
     mu, sigma = port_returns.mean(), port_returns.std()
@@ -79,7 +79,7 @@ def var_backtest(port_returns: pd.Series, confidence: float = 0.95) -> dict:
     Backtest historical VaR against its own history (Kupiec POF test).
 
     A VaR model is only trustworthy if losses breach it about as often as it
-    claims — a 95% VaR should be exceeded ~5% of days. Too many breaches = the
+    claims - a 95% VaR should be exceeded ~5% of days. Too many breaches = the
     model understates risk; too few = it's needlessly conservative. The Kupiec
     proportion-of-failures test turns "is the breach rate acceptable?" into a
     formal hypothesis test (chi-square, 1 dof, 95% critical value 3.841).
@@ -126,7 +126,7 @@ def monte_carlo(
 
     For each simulation: randomly sample `horizon_days` daily returns
     (with replacement) from history and compound them into a final value.
-    No normality assumption — we use the real return distribution.
+    No normality assumption - we use the real return distribution.
 
     Args:
         returns: historical daily returns DataFrame.
@@ -180,10 +180,10 @@ def _mc_standard_error(tail: np.ndarray) -> float:
     Monte Carlo sampling error of the CVaR estimate.
 
     CVaR is the MEAN of the simulated tail sample, so its standard error is
-    the classic std/sqrt(n) of that sample — shrinking as 1/sqrt(N) with more
+    the classic std/sqrt(n) of that sample - shrinking as 1/sqrt(N) with more
     simulations. Reporting it makes the headline honest: a simulated 19.3%
     CVaR at 10,000 paths is "19.3% ± se", not an exact truth. (This prices
-    SIMULATION noise only — model error, e.g. whether history resembles the
+    SIMULATION noise only - model error, e.g. whether history resembles the
     future, is disclosed separately and cannot be reduced by more paths.)
     """
     if tail.size < 2:
@@ -211,20 +211,20 @@ def path_density(value_paths: np.ndarray, n_day_steps: int = 40,
     """
     Downsample the full simulated-path matrix into a (day, return-bin) density
     surface, for a 3D view of how the outcome distribution evolves over the
-    horizon — the fan chart's cone, but as a probability surface instead of
+    horizon - the fan chart's cone, but as a probability surface instead of
     percentile lines.
 
     Args:
         value_paths: (n_simulations, horizon_days) cumulative-value matrix,
             the same array _path_bands() is built from (start = $1).
-        n_day_steps: number of horizon days to sample (evenly spaced) —
+        n_day_steps: number of horizon days to sample (evenly spaced) -
             plotting all 252 days makes the surface noisy and slow to rotate.
         n_return_bins: number of return histogram bins per day.
 
     Returns:
         dict with `days` (n_day_steps,), `returns` (n_return_bins, bin
         centers as decimals), and `density` (n_day_steps, n_return_bins)
-        where each row integrates to 1 (a proper density, not a raw count —
+        where each row integrates to 1 (a proper density, not a raw count -
         comparable across days regardless of simulation count).
     """
     n_sims, horizon_days = value_paths.shape
@@ -250,14 +250,14 @@ def calibrate_jump_diffusion(port_returns, k: float = 3.0) -> dict:
     Split a daily return series into a Gaussian DIFFUSION part and a discrete
     JUMP part, then estimate Merton (1976) jump-diffusion parameters from data.
 
-    Method — transparent k-sigma thresholding, not a black box:
+    Method - transparent k-sigma thresholding, not a black box:
       1. Work in log-returns, so diffusion and jumps add cleanly.
       2. Flag any day more than k standard deviations from the mean as a JUMP.
       3. Diffusion mu/sigma come from the CALM (non-jump) days.
       4. Jump intensity lambda = jump-days / total-days; jump-size mean and std
          come from the excess move on JUMP days.
 
-    Every parameter is estimated from the real series — nothing is assumed. The
+    Every parameter is estimated from the real series - nothing is assumed. The
     split is mean-consistent by construction: mu_d + lambda*mu_j equals the
     empirical mean exactly. (Full Merton calibration uses MLE/EM; thresholding
     is the honest, reproducible version a reviewer can re-derive by hand.)
@@ -299,20 +299,20 @@ def jump_diffusion_mc(
     k: float = 3.0,
 ) -> dict:
     """
-    Merton jump-diffusion Monte Carlo — same signature and output dict as
+    Merton jump-diffusion Monte Carlo - same signature and output dict as
     monte_carlo(), so it drops into the dashboard as an interchangeable engine.
 
     Why it differs from the bootstrap: resampling can only ever replay tail days
-    it has already seen. A jump-diffusion process GENERATES new extreme paths —
+    it has already seen. A jump-diffusion process GENERATES new extreme paths -
     two jumps landing in the same week, or a crash deeper than any single day in
-    the sample — so VaR/CVaR reflect what the process can produce, not just what
+    the sample - so VaR/CVaR reflect what the process can produce, not just what
     happened to occur in the last two years.
 
     Each simulated daily log-return:
         r_t = mu_d + sigma_d * Z          (diffusion)
             + N_t*mu_j + sigma_j*sqrt(N_t)*Z'    (jumps, N_t ~ Poisson(lambda))
     using that a sum of N_t iid Normal(mu_j, sigma_j^2) is Normal(N_t*mu_j,
-    N_t*sigma_j^2) — which lets us vectorize the whole jump term.
+    N_t*sigma_j^2) - which lets us vectorize the whole jump term.
     """
     port_returns = portfolio_daily_returns(returns, weights).values
     params = calibrate_jump_diffusion(port_returns, k=k)
@@ -367,8 +367,8 @@ if __name__ == "__main__":
     h_var = var(port_returns)
     h_cvar = cvar(port_returns)
     print("--- Historical Risk (Equal-Weight Portfolio) ---")
-    print(f"  Daily VaR  (95%): {h_var:.2%}  — on a bad day, expect to lose at least this")
-    print(f"  Daily CVaR (95%): {h_cvar:.2%}  — when it's bad, this is the average loss")
+    print(f"  Daily VaR  (95%): {h_var:.2%}  - on a bad day, expect to lose at least this")
+    print(f"  Daily CVaR (95%): {h_cvar:.2%}  - when it's bad, this is the average loss")
 
     # Monte Carlo
     print("\n--- Running 10,000 Monte Carlo Simulations (1-Year Horizon) ---")
@@ -381,7 +381,7 @@ if __name__ == "__main__":
     print(f"  Best simulated year  : {mc['best_case']:+.1%}")
     print(f"  Probability of loss  : {mc['prob_loss']:.1%}")
 
-    # Jump-diffusion engine — fat-tailed alternative to the bootstrap
+    # Jump-diffusion engine - fat-tailed alternative to the bootstrap
     print("\n--- Merton Jump-Diffusion Monte Carlo (same portfolio) ---")
     jd = jump_diffusion_mc(returns, equal_weights)
     p = jd["jump_params"]

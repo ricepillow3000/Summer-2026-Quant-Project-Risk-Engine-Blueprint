@@ -1,4 +1,4 @@
-"""Market regime clustering on FULL return distributions — Wasserstein k-means.
+"""Market regime clustering on FULL return distributions - Wasserstein k-means.
 
 Quant Deep Dive
 ---------------
@@ -6,7 +6,7 @@ Reproduces the method of Horvath, Issa & Muguruza (2021), "Clustering Market
 Regimes using the Wasserstein Distance": instead of clustering summary
 features (mean, volatility), cluster the ENTIRE empirical return distribution
 of each rolling window. Two regimes can share volatility yet differ violently
-in skew and tail mass — a summary-feature clusterer cannot see that; a
+in skew and tail mass - a summary-feature clusterer cannot see that; a
 distributional one can.
 
 The optimal-transport machinery collapses beautifully in one dimension: the
@@ -22,7 +22,7 @@ SORTED sample vectors (their empirical quantile functions). So:
 
 Honest limits: k is a user choice, labels are in-sample statistical clusters
 (not causal market states), and window/step sizes shape what the clusterer
-can resolve. Educational reproduction of published research — not investment
+can resolve. Educational reproduction of published research - not investment
 advice.
 """
 from __future__ import annotations
@@ -64,7 +64,7 @@ def wasserstein_kmeans(Q: np.ndarray, k: int = 3, n_init: int = 8,
     """Lloyd's k-means where rows of Q are sorted quantile vectors.
 
     Distances are 1-D W2; centers are Wasserstein barycenters (element-wise
-    means of sorted member rows — the mean of sorted vectors is sorted, so
+    means of sorted member rows - the mean of sorted vectors is sorted, so
     every center remains a valid quantile function). Best of `n_init`
     seeded restarts by inertia. Deterministic for a given seed.
     """

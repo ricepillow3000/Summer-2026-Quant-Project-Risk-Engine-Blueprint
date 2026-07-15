@@ -1,8 +1,8 @@
 """
-Data quality — automated validation gate on ingest, not a one-time eyeball check.
+Data quality - automated validation gate on ingest, not a one-time eyeball check.
 
 Quant Deep Dive:
-A risk number computed on bad data is worse than no risk number — it's a wrong
+A risk number computed on bad data is worse than no risk number - it's a wrong
 answer with a confident-looking chart attached. Production data-engineering
 teams don't trust a feed just because it returned 200 OK; they run a schema
 and sanity gate on every pull and refuse to silently proceed if it fails. This
@@ -16,12 +16,12 @@ Checks run (each PASS / WARN / FAIL):
     MIN_ROWS floor as src.ingestion).
   - Staleness: last row not too old (reuses src.ingestion.data_health logic).
   - Extreme moves: single-day returns beyond a sanity threshold are FLAGGED
-    for review (WARN), not silently dropped or silently trusted — a real
+    for review (WARN), not silently dropped or silently trusted - a real
     circuit breaker day (e.g. COVID crash) SHOULD warn; that's the point.
   - Gaps: trading-day coverage vs. the full business-day calendar for the
     window, flagging unexplained holes distinct from normal weekends/holidays.
 
-Honest limits: this validates STRUCTURE and PLAUSIBILITY, not truth — it
+Honest limits: this validates STRUCTURE and PLAUSIBILITY, not truth - it
 cannot detect a wrong-but-plausible number, only a malformed or implausible
 one.
 """
@@ -41,7 +41,7 @@ def _check(name: str, status: str, message: str) -> dict:
 def validate_prices(prices: pd.DataFrame) -> dict:
     """
     Run the full validation gate on a price DataFrame (dates x tickers).
-    Returns {"checks": [...], "passed": bool} — passed is False only on a
+    Returns {"checks": [...], "passed": bool} - passed is False only on a
     hard FAIL; WARN checks surface issues without blocking the app.
     """
     checks = []
@@ -126,7 +126,7 @@ def validate_prices(prices: pd.DataFrame) -> dict:
                 "sanity.extreme_moves",
                 "WARN",
                 f"{n_extreme} single-day move(s) beyond ±{EXTREME_MOVE_THRESHOLD:.0%} "
-                f"(worst: {worst_val:.0%}) — could be a real crash day or a data glitch; "
+                f"(worst: {worst_val:.0%}) - could be a real crash day or a data glitch; "
                 "verify before trusting.",
             ))
         else:

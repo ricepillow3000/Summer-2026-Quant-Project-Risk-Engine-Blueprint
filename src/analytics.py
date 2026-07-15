@@ -3,9 +3,9 @@ Analytics: covariance mapping and eigen-decomposition.
 
 Quant Deep Dive:
 - The covariance matrix tells you how each asset moves relative to every other.
-  A high number between NVDA and TSLA means they tend to crash together — that
+  A high number between NVDA and TSLA means they tend to crash together - that
   is concentration risk. Owning both doesn't protect you.
-- Eigen-decomposition breaks the covariance matrix into "risk factors" —
+- Eigen-decomposition breaks the covariance matrix into "risk factors" -
   hidden forces driving the portfolio. The first eigenvector almost always
   turns out to be a "market factor" (everything goes up/down together).
   The second might be "growth vs value." These are the building blocks of PCA.
@@ -25,7 +25,7 @@ def covariance_matrix(returns: pd.DataFrame, annualize: bool = True) -> pd.DataF
     Args:
         returns: DataFrame of daily percent returns (assets as columns).
         annualize: If True, multiply by 252 (trading days/year) to express
-                   risk in annual terms — standard for quant reporting.
+                   risk in annual terms - standard for quant reporting.
 
     Returns:
         Covariance matrix as a DataFrame (tickers x tickers).
@@ -38,7 +38,7 @@ def covariance_matrix(returns: pd.DataFrame, annualize: bool = True) -> pd.DataF
 
 def correlation_matrix(returns: pd.DataFrame) -> pd.DataFrame:
     """
-    Pearson correlation matrix — covariance scaled to [-1, 1].
+    Pearson correlation matrix - covariance scaled to [-1, 1].
     Easier to read at a glance: 1.0 = move in lockstep, 0 = independent.
     """
     return returns.corr()
@@ -56,7 +56,7 @@ def eigen_decomposition(cov: pd.DataFrame) -> dict:
     """
     values, vectors = np.linalg.eigh(cov.values)
 
-    # eigh returns ascending order — reverse so the biggest factor is first
+    # eigh returns ascending order - reverse so the biggest factor is first
     idx = np.argsort(values)[::-1]
     values = values[idx]
     vectors = vectors[:, idx]

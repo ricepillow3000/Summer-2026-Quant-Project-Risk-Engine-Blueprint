@@ -1,29 +1,29 @@
 """
-Eigenrisk — eigendecomposition / PCA layer over the covariance estimators.
+Eigenrisk - eigendecomposition / PCA layer over the covariance estimators.
 
 The covariance matrix is a tangled web: N assets → N×(N−1)/2 pairwise
 relationships, none independent. Eigendecomposition untangles it into
-ORTHOGONAL risk factors — statistical directions that do not overlap.
+ORTHOGONAL risk factors - statistical directions that do not overlap.
 
 Quant Deep Dive (the rubber-sheet intuition)
 --------------------------------------------
 Picture returns as points on a rubber sheet the market stretches:
-- **Eigenvectors** are the straight, unbending directions of stretch —
+- **Eigenvectors** are the straight, unbending directions of stretch -
   the risk pathways. The first one is almost always a "market wave"
   (everything moves together); later ones are rotations between groups.
-- **Eigenvalues** are the stretch STRENGTH along each pathway — the
+- **Eigenvalues** are the stretch STRENGTH along each pathway - the
   variance that factor carries. Sorted descending, they rank the
   portfolio's leading risk drivers.
 
 Honest labeling: these factors are STATISTICAL, not named. Calling PC2
-"growth vs value" is an interpretation a human adds — the math only
+"growth vs value" is an interpretation a human adds - the math only
 guarantees the directions are orthogonal and variance-ranked.
 
 Why this layer exists (the inversion trap)
 ------------------------------------------
 Optimizers invert the covariance matrix. Inversion flips every
 eigenvalue to 1/λ, so the TINIEST noise eigenvalues become the BIGGEST
-weights — noise explodes, signal vanishes. Two defenses, both here:
+weights - noise explodes, signal vanishes. Two defenses, both here:
 1. **Ledoit-Wolf shrinkage** (src/covariance.py) pulls the whole matrix
    toward a stable target before decomposition.
 2. **Eigenvalue clipping** (Marcenko-Pastur flavor): eigenvalues below
@@ -45,8 +45,8 @@ Structural guardrails
   correlated → a zero eigenvalue) routes inversion through the
   Moore-Penrose pseudo-inverse instead of crashing.
 
-Uses np.linalg.eigh directly (symmetric-matrix solver) — no sklearn PCA
-wrapper — so the linear algebra is transparent and interview-defensible.
+Uses np.linalg.eigh directly (symmetric-matrix solver) - no sklearn PCA
+wrapper - so the linear algebra is transparent and interview-defensible.
 """
 from __future__ import annotations
 
@@ -78,7 +78,7 @@ def align_eigenvector_signs(vectors: np.ndarray) -> np.ndarray:
     """Force each eigenvector's largest-|entry| positive (v vs −v fix).
 
     eigh is free to return v or −v; without this, the same portfolio on
-    two runs could report a factor hedge with flipped sign — an
+    two runs could report a factor hedge with flipped sign - an
     inverted trade. Deterministic convention: anchor on the dominant
     asset in each factor and make its loading positive.
     """
@@ -97,7 +97,7 @@ def marcenko_pastur_bounds(n_assets: int, n_obs: int,
     Eigenvalues of a PURE-NOISE covariance matrix fall inside this band
     (asymptotically). λ₊ is the noise ceiling: an eigenvalue below it is
     statistically indistinguishable from noise for this N and T.
-    Council ruling: at this engine's N of 6–13 the asymptotics are weak —
+    Council ruling: at this engine's N of 6–13 the asymptotics are weak -
     use as a diagnostic overlay on the eigenvalue chart, captioned as a
     heuristic reference line, not a hard statistical test.
     """
@@ -111,22 +111,22 @@ def marcenko_pastur_bounds(n_assets: int, n_obs: int,
 def clip_eigenvalues(cov: pd.DataFrame, n_obs: int) -> tuple[pd.DataFrame, int]:
     """Marcenko-Pastur-style eigenvalue clipping. Returns (cleaned, n_clipped).
 
-    Eigenvalues below λ₊ = σ̄²(1+√(N/T))² — the ceiling a PURE-NOISE
-    correlation matrix would produce — carry no distinguishable signal.
+    Eigenvalues below λ₊ = σ̄²(1+√(N/T))² - the ceiling a PURE-NOISE
+    correlation matrix would produce - carry no distinguishable signal.
     They are replaced by their own average (not zero), which preserves
     the trace: total portfolio variance is untouched, only its split
     across noise directions is flattened. That kills the 1/λ explosion
     when the matrix is later inverted.
 
     σ̄² is estimated as the average of all eigenvalues EXCEPT the largest
-    (a one-shot, single-signal-factor assumption — a book with two or
+    (a one-shot, single-signal-factor assumption - a book with two or
     more genuine factors folds the second into the noise average,
     inflating σ̄²; iterative MP refitting is the scale-up path, overkill
     at N ≤ 13). n_obs is T, the observations behind the estimate.
 
     Degenerate no-op: if EVERY eigenvalue falls below the ceiling (a
     spherical, structure-free matrix), flattening all of them would say
-    "all directions equal" — which they already are. The matrix is
+    "all directions equal" - which they already are. The matrix is
     returned untouched and n_clipped reports 0, meaning "no distinction
     between signal and noise exists to act on."
     """
@@ -145,7 +145,7 @@ def clip_eigenvalues(cov: pd.DataFrame, n_obs: int) -> tuple[pd.DataFrame, int]:
         cleaned = values.copy()
         cleaned[noise] = values[noise].mean()      # flatten, preserve trace
     else:
-        cleaned = values                            # nothing clipped (or all —
+        cleaned = values                            # nothing clipped (or all -
         n_clipped = 0                               # degenerate; leave as-is)
     rebuilt = (vectors * cleaned) @ vectors.T
     rebuilt = (rebuilt + rebuilt.T) / 2.0           # enforce exact symmetry
@@ -159,13 +159,13 @@ def eigen_factors(cov: pd.DataFrame) -> dict:
     """Full eigendecomposition with guardrails applied.
 
     Returns dict:
-      eigenvalues          — descending np.ndarray
-      eigenvectors         — DataFrame (assets × PC1..PCn), sign-aligned
-      variance_explained   — % of total variance per factor (descending)
-      loadings             — eigenvectors scaled by √λ: how much each
+      eigenvalues          - descending np.ndarray
+      eigenvectors         - DataFrame (assets × PC1..PCn), sign-aligned
+      variance_explained   - % of total variance per factor (descending)
+      loadings             - eigenvectors scaled by √λ: how much each
                              asset anchors onto each risk factor, in
                              return units (interpretable heatmap matrix)
-      condition_number     — λmax/λmin of the input
+      condition_number     - λmax/λmin of the input
     """
     values, vectors = np.linalg.eigh(cov.values)
     order = np.argsort(values)[::-1]
@@ -203,10 +203,10 @@ def project_returns(returns: pd.DataFrame, eigenvectors: pd.DataFrame,
 def pc1_exposure(weights: np.ndarray, eigen: dict) -> float:
     """Share of portfolio variance carried by PC1 alone, in [0, 1].
 
-    Var(w) = Σ λᵢ (vᵢᵀw)² — the portfolio's variance split across the
+    Var(w) = Σ λᵢ (vᵢᵀw)² - the portfolio's variance split across the
     orthogonal factors. PC1's slice over the total is the macro-vs-
     idiosyncratic headline: how much of the book is ONE systematic wave.
-    In a crisis this ratio spikes toward 1 — the diversification the
+    In a crisis this ratio spikes toward 1 - the diversification the
     calm-period matrix showed collapses into a single stretch direction.
     """
     v = eigen["eigenvectors"].values
@@ -219,7 +219,7 @@ def pc1_exposure(weights: np.ndarray, eigen: dict) -> float:
 def safe_inverse(cov: pd.DataFrame) -> tuple[np.ndarray, bool]:
     """Invert with a pseudo-inverse fallback. Returns (inverse, used_pinv).
 
-    A singular or near-singular matrix (κ > CONDITION_LIMIT — e.g. two
+    A singular or near-singular matrix (κ > CONDITION_LIMIT - e.g. two
     assets perfectly correlated) routes through np.linalg.pinv, which
     zeroes the impossible 1/0 directions instead of crashing or
     returning garbage weights.
@@ -232,7 +232,7 @@ def safe_inverse(cov: pd.DataFrame) -> tuple[np.ndarray, bool]:
         return np.linalg.pinv(cov.values), True
 
 
-if __name__ == "__main__":  # smoke test — deterministic synthetic data
+if __name__ == "__main__":  # smoke test - deterministic synthetic data
     rng = np.random.default_rng(7)
     t, tickers = 500, ["AAPL", "MSFT", "GOOG", "NVDA"]
     market = rng.normal(0, 0.012, t)                       # shared wave

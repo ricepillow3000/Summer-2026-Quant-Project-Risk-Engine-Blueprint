@@ -8,13 +8,13 @@ Quant Deep Dive:
   the signal ranked every name perfectly; IC = 0 means it carried no
   information; the sign tells you the direction. Rank (Spearman) correlation
   is used instead of Pearson because a signal only needs to ORDER the
-  cross-section correctly to be tradable — outlier returns shouldn't dominate.
+  cross-section correctly to be tradable - outlier returns shouldn't dominate.
 - The textbook significance bar: mean IC divided by its standard error,
   t = mean / (std / sqrt(n)), and a t-stat above ~2 is "significant" at the
   usual 5% level. Harvey, Liu & Zhu (2016, "...and the Cross-Section of
   Expected Returns") argue that after decades of the industry testing
   thousands of candidate factors, the multiple-testing problem means t = 2
-  is far too easy a bar — enough tries and something clears 2 by luck —
+  is far too easy a bar - enough tries and something clears 2 by luck -
   and propose raising the hurdle toward t = 3. This module reports both bars
   and says plainly which one a signal clears.
 - Grinold's fundamental law of active management: IR = IC * sqrt(breadth),
@@ -24,7 +24,7 @@ Quant Deep Dive:
   assumes every bet is independent, but correlated stocks are largely the
   same bet taken twice. The standard correlation adjustment replaces N names
   with N / (1 + (N - 1) * avg_pairwise_correlation) effective independent
-  bets — with avg correlation ~0.5, a 10-name book is closer to 2 real bets
+  bets - with avg correlation ~0.5, a 10-name book is closer to 2 real bets
   than 10. The honest IR uses this smaller, effective breadth.
 - All of this is measured IN-SAMPLE on the loaded history: no transaction
   costs, no out-of-sample validation, and ICs decay once a signal is known.
@@ -57,7 +57,7 @@ def forward_returns(prices: pd.DataFrame, horizon: int = 5) -> pd.DataFrame:
     """
     Next-`horizon`-day return, aligned so row t holds the return from t to
     t + horizon (i.e. what a signal observed at t is trying to predict).
-    The last `horizon` rows are NaN — those returns haven't happened yet.
+    The last `horizon` rows are NaN - those returns haven't happened yet.
     """
     return prices.shift(-horizon) / prices - 1.0
 
@@ -65,7 +65,7 @@ def forward_returns(prices: pd.DataFrame, horizon: int = 5) -> pd.DataFrame:
 def daily_ic(signal: pd.DataFrame, fwd: pd.DataFrame, min_pairs: int = 3) -> pd.Series:
     """
     Per-date cross-sectional Spearman rank correlation between the signal and
-    forward returns across tickers — the daily information coefficient.
+    forward returns across tickers - the daily information coefficient.
 
     Dates with fewer than `min_pairs` valid (non-NaN in both) ticker pairs are
     dropped, as are dates where the correlation is undefined (e.g. a constant
@@ -99,7 +99,7 @@ def ic_summary(ic: pd.Series) -> dict:
       - mean_ic: average daily IC
       - std_ic: sample standard deviation (ddof=1)
       - n_days: number of IC observations
-      - t_stat: mean / (std / sqrt(n)) — the textbook significance statistic
+      - t_stat: mean / (std / sqrt(n)) - the textbook significance statistic
       - hit_rate: share of days with IC > 0
     """
     ic = ic.dropna()
@@ -114,7 +114,7 @@ def ic_summary(ic: pd.Series) -> dict:
 def fundamental_law_ir(mean_ic: float, breadth: float) -> float:
     """
     Grinold's fundamental law of active management: IR = IC * sqrt(breadth).
-    `breadth` is the number of independent bets per year — see
+    `breadth` is the number of independent bets per year - see
     effective_breadth() for why the raw count overstates it.
     """
     return float(mean_ic * np.sqrt(breadth))

@@ -1,15 +1,15 @@
 """
-Liquidity modeling — how many days to unwind the book, from real volume.
+Liquidity modeling - how many days to unwind the book, from real volume.
 
 Quant Deep Dive:
 Volatility is not the only risk. A position you cannot exit is one that keeps
 hurting you long after the model says "sell." Liquidity risk asks a different
-question: if you HAD to unwind this portfolio, how long would it take — without
+question: if you HAD to unwind this portfolio, how long would it take - without
 becoming the market and moving the price against yourself?
 
 Method (participation-rate model, the industry standard):
 - ADV_i = average daily DOLLAR volume of asset i (price x shares, averaged over
-  a recent lookback window). Comes straight from Yahoo volume data — never
+  a recent lookback window). Comes straight from Yahoo volume data - never
   estimated.
 - You can realistically trade only a fraction of ADV per day before your own
   order flow moves the price. That cap is the PARTICIPATION RATE (typically
@@ -17,7 +17,7 @@ Method (participation-rate model, the industry standard):
 - Position_i          = book_value x weight_i
 - days_to_liquidate_i = Position_i / (participation_rate x ADV_i)
 
-The portfolio's liquidation horizon is the SLOWEST leg — you are not flat until
+The portfolio's liquidation horizon is the SLOWEST leg - you are not flat until
 the last share is sold. The dollar-weighted average describes the typical name,
 and the share exitable in a single day is the number a risk memo leads with.
 """
@@ -33,7 +33,7 @@ def days_to_liquidate(weights, adv: pd.Series, book_value: float = 1_000_000.0,
 
     Args:
         weights: portfolio weights, aligned to `adv`'s index order. May sum to
-            more than 1 under a leverage overlay — that is intentional, since a
+            more than 1 under a leverage overlay - that is intentional, since a
             levered book has more notional to sell.
         adv: average daily DOLLAR volume per asset, indexed by ticker.
         book_value: total dollars invested (position sizes scale from this).
@@ -42,7 +42,7 @@ def days_to_liquidate(weights, adv: pd.Series, book_value: float = 1_000_000.0,
 
     Returns a DataFrame indexed by ticker with weight, position_value, adv,
     daily_capacity, and days. Names with no volume (ADV <= 0, e.g. FX pairs)
-    get days = inf — flagged, never faked.
+    get days = inf - flagged, never faked.
     """
     w = np.asarray(weights, dtype=float)
     adv_v = adv.values.astype(float)
@@ -102,7 +102,7 @@ def liquidity_adjusted_cvar(cvar: float, full_exit_days: float,
     unwinding actually takes `full_exit_days` MORE trading days (the
     participation-rate model above, driven by real volume), the book's true
     exposure window is base_horizon + full_exit_days. Under square-root-of-time
-    scaling — the Basel / Bangia (1999) liquidity-horizon convention — risk
+    scaling - the Basel / Bangia (1999) liquidity-horizon convention - risk
     grows with the sqrt of the window, so:
 
         multiplier = sqrt((base + full_exit) / base) = sqrt(1 + full_exit/base)

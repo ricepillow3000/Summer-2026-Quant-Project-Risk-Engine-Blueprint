@@ -1,4 +1,4 @@
-<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Meleona — heraldic rampant lion, tail encircling a balance scale, triangle crest">
+<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Meleona - heraldic rampant lion, tail encircling a balance scale, triangle crest">
   <defs>
     <linearGradient id="triFill" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#F8F5EF"/>
@@ -16,7 +16,7 @@
   <path d="M60,2 L62.5,6 L60,10 L57.5,6 Z" fill="#9A7B4F"/>
   <path d="M4,111 h8 M7,108 v6" stroke="#9A7B4F" stroke-width="0.9" fill="none"/>
   <path d="M108,111 h8 M113,108 v6" stroke="#9A7B4F" stroke-width="0.9" fill="none"/>
-  <!-- RAMPANT LION: one continuous silhouette — ear, crown, muzzle, open jaw,
+  <!-- RAMPANT LION: one continuous silhouette - ear, crown, muzzle, open jaw,
        beard, chest, two raised clawed forelegs, belly, raised hind leg,
        standing hind leg, rump, flame-jagged mane climbing back to the ear -->
   <path fill="#8A6A3C" d="M74,16 L79,23 C82,21 86,22 88,25 L96,29 L95,32 L88,33 L94,38 L87,41 L84,45 C86,49 87,52 87,55 L93,49 L99,41 C100,38 102,34 103,30 L104,21 L107,26 L110,23 L111,29 L114,28 L112,34 C110,38 107,42 104,45 L98,51 L94,55 L100,52 L106,50 L111,45 L113,50 L116,49 L114,55 L117,57 L112,60 C108,62 103,63 99,63 L94,63 C92,68 90,74 88,79 L96,82 L102,86 L108,83 L110,88 L114,88 L111,93 L114,97 L108,97 C104,97 100,95 97,93 L90,89 L86,96 L82,103 L88,104 L92,107 L86,109 L80,108 L74,109 L70,106 L74,102 L77,95 L79,88 C74,90 68,90 63,88 L58,84 C56,80 55,75 56,70 L58,62 L52,64 L57,57 L60,50 L54,52 L59,45 L62,39 L56,40 L62,33 L65,27 L60,27 L66,21 L70,17 Z"/>

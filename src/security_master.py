@@ -1,5 +1,5 @@
 """
-Security master & corporate actions — free-tier identifier and event data.
+Security master & corporate actions - free-tier identifier and event data.
 
 Quant Deep Dive:
 A security master is the reference-data backbone of a real risk desk: it maps
@@ -16,7 +16,7 @@ the same CONCEPT from what's actually available for free:
 
 Honest limits:
   - `auto_adjust=True` (used everywhere else in this engine) already folds
-    splits/dividends into the adjusted close used for returns — this module
+    splits/dividends into the adjusted close used for returns - this module
     doesn't change any risk number, it makes the underlying events VISIBLE
     and auditable instead of silently absorbed.
   - ISIN comes back as "-" or empty for some tickers (ETFs, some non-US
@@ -72,7 +72,7 @@ def identifier_lookup(ticker: str) -> dict:
     tk = yf.Ticker(ticker)
     try:
         isin = tk.isin
-    except Exception:  # noqa: BLE001 — treat any lookup failure as "unavailable"
+    except Exception:  # noqa: BLE001 - treat any lookup failure as "unavailable"
         isin = None
     isin = isin if isin and isin != "-" else None
     return {"ticker": ticker, "isin": isin}

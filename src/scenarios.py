@@ -5,11 +5,11 @@ Quant Deep Dive:
 - Parametric stress ("apply a -30% drawdown") is an approximation you impose.
 - Regime *replication* is stronger: it replays the ACTUAL daily returns from a
   real crisis window, so the simulation inherits that period's true correlation
-  breakdown, volatility spike, and drawdown path — jointly, not as separate
+  breakdown, volatility spike, and drawdown path - jointly, not as separate
   knobs. This is how risk desks ask "what if 2008 happened to today's book?"
 - We Monte-Carlo from the crisis window's empirical returns. Bootstrapping a
   1-year path from a short, severe window deliberately concentrates that
-  regime — that is the stress.
+  regime - that is the stress.
 
 Honest limits:
 - An asset that didn't trade during the window (later IPO, new ETF, an FX pair
@@ -20,7 +20,7 @@ Honest limits:
 import pandas as pd
 from src.ingestion import fetch_prices
 
-# (start, end) windows for notable risk regimes — major and minor.
+# (start, end) windows for notable risk regimes - major and minor.
 HISTORICAL_REGIMES = {
     "Dot-com crash (2000-02)": ("2000-03-01", "2001-04-30"),
     "Global Financial Crisis (2008)": ("2008-09-01", "2009-03-31"),

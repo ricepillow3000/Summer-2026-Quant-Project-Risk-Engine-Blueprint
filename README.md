@@ -1,6 +1,6 @@
-# Meleona — Institutional-Grade Portfolio Optimization & Risk Engine
+# Meleona - Institutional-Grade Portfolio Optimization & Risk Engine
 
-A quantitative risk dashboard that lets anyone load a portfolio — equities, ETFs, FX, or futures — and stress-test it against thousands of simulated and historical market paths, live. Built by a 2nd-year Data Analytics student to recruiter-facing, quant-interview standards.
+A quantitative risk dashboard that lets anyone load a portfolio - equities, ETFs, FX, or futures - and stress-test it against thousands of simulated and historical market paths, live. Built by a 2nd-year Data Analytics student to recruiter-facing, quant-interview standards.
 
 **Live demo:** _coming August 2026_
 
@@ -8,23 +8,23 @@ A quantitative risk dashboard that lets anyone load a portfolio — equities, ET
 
 ## What This Is
 
-Most student finance projects pull data and plot a chart. This one is built to the standard a quant desk would actually defend: modular Python, statistically rigorous math, honest data provenance, and a Streamlit dashboard that leads with **one number** — a headline CVaR verdict — with all the depth a step behind it.
+Most student finance projects pull data and plot a chart. This one is built to the standard a quant desk would actually defend: modular Python, statistically rigorous math, honest data provenance, and a Streamlit dashboard that leads with **one number** - a headline CVaR verdict - with all the depth a step behind it.
 
-Every market figure is fetched from Yahoo Finance at runtime and computed by the engine's own `numpy`/`scipy` code. **No value is ever hardcoded, estimated, or model-generated** — the provenance panel makes that auditable.
+Every market figure is fetched from Yahoo Finance at runtime and computed by the engine's own `numpy`/`scipy` code. **No value is ever hardcoded, estimated, or model-generated** - the provenance panel makes that auditable.
 
 ---
 
 ## Features (shipped)
 
-- **Configurable universe** — one-click preset baskets (mega-cap tech, 13F-popular names, sector ETFs, FX majors, futures) or type any Yahoo symbol.
-- **Freshness-aware data engine** — per-universe parquet cache with a UTC provenance record on every pull; a data-health check flags staleness, gaps, and insufficient history.
-- **Two allocation methods** — equal weight and risk parity (equal-risk-contribution), with an optional volatility-targeting overlay (leverage up/down to a target annual vol).
-- **Two Monte Carlo engines** — bootstrap resampling *and* a Merton jump-diffusion process (Poisson jumps on Gaussian diffusion) for a fatter, more honest tail. Swappable live.
-- **Tail risk** — historical & parametric VaR, CVaR (expected shortfall), and a Kupiec proportion-of-failures backtest that validates the VaR model rather than just reporting it.
-- **Stress testing** — custom parametric shocks (drawdown + volatility) *or* replay of the actual daily returns of real crisis windows (dot-com, GFC, COVID, 2022, SVB, …), preserving real correlation breakdown.
-- **Risk decomposition** — per-asset risk-contribution vs. dollar-weight, named factor exposures (market/size/value/momentum via ETF proxies), and a correlation matrix.
-- **Liquidity modeling** — days-to-liquidate via a participation-rate model on average daily dollar volume; names with no volume feed are flagged, not faked.
-- **Grit Zone** — ranks each asset's own price history on drawdown-recovery speed, rolling 1-year consistency, and resilience across real historical crisis windows; a relative "perseverance" score, not a mood index.
+- **Configurable universe** - one-click preset baskets (mega-cap tech, 13F-popular names, sector ETFs, FX majors, futures) or type any Yahoo symbol.
+- **Freshness-aware data engine** - per-universe parquet cache with a UTC provenance record on every pull; a data-health check flags staleness, gaps, and insufficient history.
+- **Two allocation methods** - equal weight and risk parity (equal-risk-contribution), with an optional volatility-targeting overlay (leverage up/down to a target annual vol).
+- **Two Monte Carlo engines** - bootstrap resampling *and* a Merton jump-diffusion process (Poisson jumps on Gaussian diffusion) for a fatter, more honest tail. Swappable live.
+- **Tail risk** - historical & parametric VaR, CVaR (expected shortfall), and a Kupiec proportion-of-failures backtest that validates the VaR model rather than just reporting it.
+- **Stress testing** - custom parametric shocks (drawdown + volatility) *or* replay of the actual daily returns of real crisis windows (dot-com, GFC, COVID, 2022, SVB, …), preserving real correlation breakdown.
+- **Risk decomposition** - per-asset risk-contribution vs. dollar-weight, named factor exposures (market/size/value/momentum via ETF proxies), and a correlation matrix.
+- **Liquidity modeling** - days-to-liquidate via a participation-rate model on average daily dollar volume; names with no volume feed are flagged, not faked.
+- **Grit Zone** - ranks each asset's own price history on drawdown-recovery speed, rolling 1-year consistency, and resilience across real historical crisis windows; a relative "perseverance" score, not a mood index.
 
 ---
 
@@ -33,7 +33,7 @@ Every market figure is fetched from Yahoo Finance at runtime and computed by the
 | Layer | Tools |
 |---|---|
 | Data | `yfinance`, `pandas`, freshness-aware parquet cache (`pyarrow`) |
-| Math | `numpy`, `scipy` — covariance/eigen-decomposition, CVaR, Monte Carlo, jump-diffusion |
+| Math | `numpy`, `scipy` - covariance/eigen-decomposition, CVaR, Monte Carlo, jump-diffusion |
 | Allocation | Risk parity (ERC), volatility targeting |
 | Dashboard | `streamlit`, `plotly` |
 | Deployment | Streamlit Community Cloud / Railway / Render (`Procfile` ready) |
@@ -86,7 +86,7 @@ risk-engine/
 - **No LLM-originated data, ever.** Every number traces to Yahoo Finance at runtime; the provenance panel proves it.
 - **Honest labeling.** "Live end-of-day," not "real-time." Scenarios "replay actual returns." Excluded assets are disclosed, not silently dropped.
 - **Lead with one number.** One headline CVaR verdict; all depth collapsed into expanders.
-- **Defensible in an interview.** Every feature carries a "Quant Deep Dive" explaining the math — methodology depth over visual complexity.
+- **Defensible in an interview.** Every feature carries a "Quant Deep Dive" explaining the math - methodology depth over visual complexity.
 
 ---
 

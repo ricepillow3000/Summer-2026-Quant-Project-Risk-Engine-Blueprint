@@ -1,5 +1,5 @@
 """
-Meleona — Streamlit entry point.
+Meleona - Streamlit entry point.
 
 Design philosophy:
 A risk desk doesn't hand a PM eight charts and say "figure it out." It leads
@@ -8,7 +8,7 @@ with one verdict and one number. Everything else is detail you open on demand.
 Phase V:
 The universe is now chosen by the viewer, not hard-coded. Anyone can load a
 preset basket (equities, sector ETFs, FX, futures) or type their own symbols,
-so the engine speaks to any audience — not just one watchlist.
+so the engine speaks to any audience - not just one watchlist.
 """
 
 import base64
@@ -63,14 +63,14 @@ st.set_page_config(page_title="Meleona", layout="wide")
 st.markdown("""
 <style>
 /* ============================================================
-   "THE TEARSHEET" — private-bank editorial design language.
+   "THE TEARSHEET" - private-bank editorial design language.
    Doctrine: sharp edges (no rounded pills), hairline bronze rules,
    extreme type contrast (huge serif numerals vs tiny tracked labels),
    numbered ruled sections. Numbers are king; craft gives it soul.
    ============================================================ */
 html, body, [class*="css"] { font-family: Georgia, 'Times New Roman', serif; }
 h1, h2, h3 { color: #3F3B35; font-weight: 400; letter-spacing: -0.01em; }
-/* Sharpen the whole app — kill Streamlit's default rounded corners */
+/* Sharpen the whole app - kill Streamlit's default rounded corners */
 [data-testid="stExpander"], [data-baseweb="tab"], .stButton>button,
 [data-testid="stMetric"], div[data-baseweb="select"]>div { border-radius: 0 !important; }
 .stCaption, [data-testid="stCaptionContainer"],
@@ -87,7 +87,7 @@ h1, h2, h3 { color: #3F3B35; font-weight: 400; letter-spacing: -0.01em; }
 .brand-tag { font-family: 'Helvetica Neue', sans-serif; font-size: 11px;
              letter-spacing: 0.2em; text-transform: uppercase; color: #8A6E45; }
 
-/* HERO VERDICT — the editorial centerpiece. No card: a stat framed by
+/* HERO VERDICT - the editorial centerpiece. No card: a stat framed by
    bronze hairlines, the one number that owns the page. */
 .verdict-box { background: transparent; border: none;
     border-top: 2px solid #9A7B4F; border-bottom: 1px solid #C4BDAE;
@@ -98,7 +98,7 @@ h1, h2, h3 { color: #3F3B35; font-weight: 400; letter-spacing: -0.01em; }
     line-height: 1; letter-spacing: -0.035em; font-weight: 400; }
 .verdict-sentence { font-size: 18px; color: #54504A; line-height: 1.6; max-width: 580px; }
 
-/* Numbered section eyebrow — editorial ledger markers (01 — UNIVERSE) */
+/* Numbered section eyebrow - editorial ledger markers (01 - UNIVERSE) */
 .sec-mark { font-family: 'Helvetica Neue', sans-serif; font-size: 12px;
     letter-spacing: 0.24em; text-transform: uppercase; color: #9A7B4F;
     border-top: 1px solid #C4BDAE; padding-top: 14px; margin: 26px 0 12px;
@@ -108,7 +108,7 @@ h1, h2, h3 { color: #3F3B35; font-weight: 400; letter-spacing: -0.01em; }
     letter-spacing: 0.16em; text-transform: uppercase; color: #8A7E6A;
     margin-bottom: 4px; }
 
-/* Slider — squared thumb, hairline track */
+/* Slider - squared thumb, hairline track */
 [data-testid="stSlider"] [data-baseweb="slider"] > div > div { background: #C4BDAE !important; }
 [data-testid="stSlider"] [role="slider"] {
     background: #9A7B4F !important; border-radius: 0 !important;
@@ -118,7 +118,7 @@ h1, h2, h3 { color: #3F3B35; font-weight: 400; letter-spacing: -0.01em; }
     color: #3F3B35 !important; font-family: 'Helvetica Neue', sans-serif !important;
     font-size: 12px !important; }
 
-/* Expander — flat cream, sharp, hairline */
+/* Expander - flat cream, sharp, hairline */
 [data-testid="stExpander"] { border: 1px solid #C4BDAE !important;
     background: #ECE7DD !important; }
 
@@ -129,19 +129,19 @@ html { scroll-behavior: smooth; }
 .reveal { animation: meleona-rise linear both;
           animation-timeline: view(); animation-range: entry 0% cover 30%; }
 
-/* WIDE COURT — the whole page works now, capped for taste. Layout is
+/* WIDE COURT - the whole page works now, capped for taste. Layout is
    `wide`; this rules the court width and the gutter rhythm. */
 .block-container { max-width: 1600px !important;
     padding-left: 56px !important; padding-right: 56px !important;
     padding-top: 2.4rem !important; }
 
-/* The page scrolls inside Streamlit's own <section>, NOT <html> — smooth
+/* The page scrolls inside Streamlit's own <section>, NOT <html> - smooth
    behavior must live on the real scroller or anchors hard-teleport. The
    glide script (end of page) drives an eased scroll; this is the fallback. */
 [data-testid="stAppViewContainer"] section, section.main,
 [data-testid="stMain"] { scroll-behavior: smooth; }
 
-/* Presentation arrivals — CTA anchors land like a slide change: the
+/* Presentation arrivals - CTA anchors land like a slide change: the
    target section rises into place under a smooth scroll. */
 .hero-section, .showcase-section, .showcase-row, .engine-heading,
 #engine { scroll-margin-top: 28px; }
@@ -150,7 +150,7 @@ html { scroll-behavior: smooth; }
 #grit-showcase:target, #conviction:target, #engine:target {
     animation: section-arrive .85s cubic-bezier(.16,1,.3,1); }
 
-/* HERO — the great hall, now a two-column court: the pitch on the
+/* HERO - the great hall, now a two-column court: the pitch on the
    left, a 2x2 deck of engine-fact tiles on the right (reference:
    dashboard stat cards), watermark crest behind. 58vh, not 88. */
 .hero-section { min-height: 58vh; display: grid;
@@ -163,7 +163,7 @@ html { scroll-behavior: smooth; }
 @media (max-width: 1100px) {
   .hero-section { grid-template-columns: 1fr; }
   .showcase-row { grid-template-columns: 1fr !important; } }
-/* The stat deck lives in Casper's wash with no plate — but the TILES stay
+/* The stat deck lives in Casper's wash with no plate - but the TILES stay
    fully solid (John: fading them read unprofessional). The background does
    the fading; the instruments never do. */
 .hero-stats { position: relative; }
@@ -172,16 +172,9 @@ html { scroll-behavior: smooth; }
     box-shadow: 0 0 0 1px rgba(154,123,79,.12),
                 0 24px 60px -34px rgba(63,59,53,.55); }
 .hero-crest svg { width: 100%; height: 100%; }
-.hero-badges { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
-.badge { font-family: 'Helvetica Neue', sans-serif; font-size: 10px;
-    letter-spacing: 0.18em; text-transform: uppercase; padding: 6px 13px;
-    border: 1px solid #C4BDAE; color: #6B6459; background: rgba(241,237,229,.72);
-    transition: border-color .25s ease, color .25s ease; }
-.badge:hover { border-color: #9A7B4F; color: #3F3B35; }
-.badge.gold { border-color: #9A7B4F; color: #8A6A3C; }
 .hero-eyebrow { font-family: 'Helvetica Neue', sans-serif; font-size: 12px;
     letter-spacing: 0.32em; text-transform: uppercase; color: #9A7B4F; }
-.hero-title { font-size: 96px !important; color: #3F3B35;
+.hero-title { font-size: clamp(44px, 10.5vw, 96px) !important; color: #3F3B35;
     line-height: 0.98 !important; margin: 2px 0; letter-spacing: -0.035em; }
 .hero-sub { font-size: 21px; color: #54504A; max-width: 640px; line-height: 1.6; }
 .hero-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
@@ -199,12 +192,12 @@ html { scroll-behavior: smooth; }
     letter-spacing: 0.2em; text-transform: uppercase; color: #9A7B4F;
     margin-top: 6px; }
 
-/* Twin showcases share one row — half the scroll, none of the clutter */
+/* Twin showcases share one row - half the scroll, none of the clutter */
 .showcase-row { display: grid; grid-template-columns: 1fr 1fr; gap: 64px;
     padding: 48px 8px 20px; }
 .showcase-row .showcase-section { padding: 0; }
 
-/* CTA — sharp charcoal slab, bronze on hover, alive to the touch */
+/* CTA - sharp charcoal slab, bronze on hover, alive to the touch */
 .cta-btn { display: inline-block; margin-top: 14px; padding: 15px 34px;
     background: #3F3B35; color: #F4F1EA !important; text-decoration: none !important;
     border-radius: 0; font-family: 'Helvetica Neue', sans-serif; font-size: 12px;
@@ -224,7 +217,7 @@ html { scroll-behavior: smooth; }
     letter-spacing: -0.025em; line-height: 1.05; }
 .showcase-body { font-size: 16px; color: #54504A; max-width: 620px; line-height: 1.6; }
 
-/* Pillars — no cards: ledger columns divided by bronze hairlines */
+/* Pillars - no cards: ledger columns divided by bronze hairlines */
 .pillar-row { display: flex; gap: 0; flex-wrap: wrap; margin-top: 16px;
     border-top: 1px solid #C4BDAE; }
 .pillar-card { background: transparent; border: none;
@@ -241,7 +234,7 @@ html { scroll-behavior: smooth; }
     background: linear-gradient(90deg, transparent,
         rgba(154,123,79,.55) 18%, rgba(154,123,79,.55) 82%, transparent); }
 
-/* ENGRAVINGS — crest fragments carved into the stone at low relief.
+/* ENGRAVINGS - crest fragments carved into the stone at low relief.
    Pure ornament: pointer-events none, behind everything. */
 [data-testid="stColumn"] { position: relative; }   /* engrave anchor */
 .engrave { position: absolute; pointer-events: none; z-index: 0;
@@ -256,14 +249,14 @@ html { scroll-behavior: smooth; }
 [data-testid="stDataFrame"] { border: 1px solid #D4CDBF;
     border-top: 2px solid #9A7B4F; }
 
-/* Keyboard focus carries the same bronze — prestige includes a11y */
+/* Keyboard focus carries the same bronze - prestige includes a11y */
 a.cta-btn:focus-visible, .stButton>button:focus-visible,
 [data-baseweb="tab"]:focus-visible {
     outline: 2px solid #9A7B4F; outline-offset: 2px; }
 .engine-heading { text-align: left; padding: 4px 0 22px; }
 
 /* ============================================================
-   TABS — "the gatehouse". Each label is a stone lintel: generous
+   TABS - "the gatehouse". Each label is a stone lintel: generous
    breathing room, wide tracking, a bronze rule that slides in.
    The previous rule tracked the type but gave it NO horizontal
    padding, so uppercase labels collided into one another.
@@ -282,7 +275,7 @@ a.cta-btn:focus-visible, .stButton>button:focus-visible,
 [data-testid="stTabs"] [data-baseweb="tab"] * { letter-spacing: inherit; }
 [data-testid="stTabs"] [data-baseweb="tab"]:hover {
     color: #3F3B35; background: rgba(154,123,79,0.06); }
-/* bronze rule grows from the centre — no jump, no flash */
+/* bronze rule grows from the centre - no jump, no flash */
 [data-testid="stTabs"] [data-baseweb="tab"]::after {
     content: ''; position: absolute; left: 50%; right: 50%; bottom: -1px;
     height: 2px; background: #9A7B4F;
@@ -300,7 +293,7 @@ a.cta-btn:focus-visible, .stButton>button:focus-visible,
     padding-top: 22px; }
 
 /* ============================================================
-   THE KEEP — stone-slab surfaces. Sharp corners, hairline mortar,
+   THE KEEP - stone-slab surfaces. Sharp corners, hairline mortar,
    one soft shadow so a panel reads as a cut block, not a web card.
    Same palette; only the structure is new.
    ============================================================ */
@@ -324,12 +317,12 @@ a.cta-btn:focus-visible, .stButton>button:focus-visible,
     line-height: 1.6; }
 .read-me b { color: #3F3B35; font-weight: 400; }
 
-/* Ruled panel header inside a tab — the lintel over each block */
+/* Ruled panel header inside a tab - the lintel over each block */
 .panel-head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
     border-top: 1px solid #C4BDAE; padding-top: 13px; margin: 34px 0 14px;
     position: relative; }
 /* A bronze accent draws itself across the lintel as the section scrolls
-   into view — one pass, scroll-driven. Where view-timeline is unsupported
+   into view - one pass, scroll-driven. Where view-timeline is unsupported
    or motion is reduced it stays scaleX(0) (invisible) and the 1px border
    above is the base, so there is no regression. */
 .panel-head::before { content: ''; position: absolute; top: -1px; left: 0;
@@ -350,7 +343,7 @@ a.cta-btn:focus-visible, .stButton>button:focus-visible,
     animation: panel-settle .5s cubic-bezier(.16,1,.3,1) both;
     animation-delay: .06s; }
 
-/* Metric slabs pick up the same masonry — and a glossy specular sheen that
+/* Metric slabs pick up the same masonry - and a glossy specular sheen that
    sweeps across on hover (three-finish "trophy" role). Hover-only, one pass;
    the prefers-reduced-motion guard nulls the transition to a static tile. */
 [data-testid="stMetric"] { background: #F1EDE5; border: 1px solid #D4CDBF;
@@ -386,7 +379,7 @@ a.cta-btn:focus-visible, .stButton>button:focus-visible,
     box-shadow: 0 10px 22px -14px rgba(63,59,53,.55); }
 .stButton>button:active { transform: translateY(0) scale(.985); }
 
-/* Inputs breathe too: bronze focus, soft glow — nothing snaps */
+/* Inputs breathe too: bronze focus, soft glow - nothing snaps */
 div[data-baseweb="select"] > div, .stNumberInput input,
 [data-testid="stTextInput"] input, .stMultiSelect [data-baseweb="select"] > div {
     transition: border-color .25s ease, box-shadow .25s ease; }
@@ -395,7 +388,7 @@ div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
     box-shadow: 0 0 0 1px #9A7B4F !important; }
 
 /* ============================================================
-   SKELETON LOADING — the scaffold shows before the stone.
+   SKELETON LOADING - the scaffold shows before the stone.
    1) Boot veil: a full-page skeleton of the hero (crest block,
       title bars, a chart slab) that shimmers, then lifts.
    2) Scroll skeletons: charts entering the viewport wear a
@@ -436,12 +429,12 @@ div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
 
 # ---- GLOSS LAYER (2026-07-09) ----
 # Institutional sheen over the matte editorial base: specular highlights,
-# layered depth, and a few one-pass arrival glints. Same Citadel palette —
+# layered depth, and a few one-pass arrival glints. Same Citadel palette -
 # no new hues, no rounded pills. Every effect degrades to the matte base
 # under prefers-reduced-motion (guard at the end).
 st.markdown("""
 <style>
-/* Verdict numeral — brushed-bronze-to-charcoal specular fill with a single
+/* Verdict numeral - brushed-bronze-to-charcoal specular fill with a single
    sheen sweep on arrival. @supports-guarded so it stays solid charcoal where
    background-clip:text is unsupported (the .verdict-number base keeps color). */
 @supports ((-webkit-background-clip: text) or (background-clip: text)) {
@@ -457,7 +450,7 @@ st.markdown("""
 @keyframes verdict-sheen { 0% { background-position: 160% 0; }
                            62%, 100% { background-position: 0 0; } }
 
-/* Verdict frame — faint top glass + one light-glint pass across it on load. */
+/* Verdict frame - faint top glass + one light-glint pass across it on load. */
 .verdict-box { position: relative; overflow: hidden;
     background: linear-gradient(180deg, rgba(255,253,248,.55), rgba(255,253,248,0) 62%); }
 .verdict-box::after { content: ""; position: absolute; top: 0; left: -45%;
@@ -467,14 +460,14 @@ st.markdown("""
     transform: skewX(-18deg); animation: gloss-glint 2.4s ease-out .2s 1 both; }
 @keyframes gloss-glint { from { left: -45%; } to { left: 150%; } }
 
-/* Hero stat tiles — frosted glass with an inner top highlight; the lift on
+/* Hero stat tiles - frosted glass with an inner top highlight; the lift on
    hover already exists, now it reads as a pane of glass catching light. */
 .hstat { background: linear-gradient(157deg, #F6F2EA 0%, #ECE6DA 100%);
     box-shadow: inset 0 1px 0 rgba(255,255,255,.7),
         0 1px 2px rgba(63,59,53,.05), 0 8px 24px -18px rgba(63,59,53,.35); }
 .hstat:hover { box-shadow: inset 0 1px 0 rgba(255,255,255,.85),
         0 2px 4px rgba(63,59,53,.06), 0 18px 38px -20px rgba(63,59,53,.5); }
-/* Specular sheen sweeps the hero tiles on hover — same trophy finish as
+/* Specular sheen sweeps the hero tiles on hover - same trophy finish as
    the metric slabs, so the brand's front door feels alive. Children sit
    above the sweep (z-index 1) so the gradient numbers stay crisp. */
 .hstat { position: relative; overflow: hidden; }
@@ -492,7 +485,7 @@ st.markdown("""
       -webkit-text-fill-color: transparent; }
 }
 
-/* CTA — was a matte charcoal slab; now polished bronze metal with a running
+/* CTA - was a matte charcoal slab; now polished bronze metal with a running
    sheen band on hover. */
 .cta-btn { background: linear-gradient(180deg, #4A453D 0%, #3A362F 100%);
     position: relative; overflow: hidden;
@@ -507,7 +500,7 @@ st.markdown("""
         rgba(255,255,255,.35), transparent); transition: none; }
 .cta-btn:hover::before { animation: gloss-glint 0.7s ease-out 1; }
 
-/* Streamlit metric readouts — lift the flat numbers onto small glass tiles,
+/* Streamlit metric readouts - lift the flat numbers onto small glass tiles,
    consistent with the hero deck, with a hover lift for tactility. */
 [data-testid="stMetric"] {
     background: linear-gradient(157deg, rgba(246,242,234,.92), rgba(233,227,215,.62));
@@ -526,7 +519,7 @@ st.markdown("""
     transition: box-shadow .4s ease; }
 [data-testid="stPlotlyChart"]:hover { box-shadow: 0 22px 52px -30px rgba(63,59,53,.6); }
 
-/* Expanders + dataframes — a whisper of gradient + inner highlight so panels
+/* Expanders + dataframes - a whisper of gradient + inner highlight so panels
    catch light instead of sitting dead flat. */
 [data-testid="stExpander"] {
     background: linear-gradient(160deg, #EFEAE0, #E6E0D4) !important;
@@ -535,15 +528,11 @@ st.markdown("""
 [data-testid="stDataFrame"] {
     box-shadow: 0 12px 30px -24px rgba(63,59,53,.45); }
 
-/* Section hairline draws itself in — a bronze line unspooling left-to-right. */
+/* Section hairline draws itself in - a bronze line unspooling left-to-right. */
 .section-divider { background-size: 200% 100%;
     animation: divider-draw 1.1s cubic-bezier(.16,1,.3,1) both; }
 @keyframes divider-draw { from { background-size: 0% 100%; opacity: 0; }
                           to   { background-size: 200% 100%; opacity: 1; } }
-
-/* Badges pick up the same frosted glass as the tiles. */
-.badge { background: linear-gradient(160deg, rgba(246,242,234,.85), rgba(233,227,215,.6));
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.55); }
 
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
@@ -556,7 +545,7 @@ st.markdown("""
 # Softened geometry (loosen the border-radius:0 doctrine into a restrained
 # radius scale + organic/circular accents), glossy chart halos + glowing bars,
 # a whisper of scroll-motion-blur on decorative layers, and UFO tile arrivals.
-# Still institutional: radii are gentle (10-26px), one pill (badges), no candy.
+# Still institutional: radii are gentle (10-26px), no candy.
 st.markdown("""
 <style>
 /* --- Radius scale: unblock the corners the base pinned to 0 --- */
@@ -569,7 +558,6 @@ div[data-baseweb="select"]>div, .stNumberInput input,
 .verdict-box { border-radius: 20px; }
 .cta-btn { border-radius: 40px !important; }        /* CTA becomes a soft capsule */
 .hero-crest { border-radius: 26px; }                /* squircle, not a hard square */
-.badge { border-radius: 999px !important; }         /* full pills */
 
 /* Diversify: each hero tile carries a different corner profile so the deck
    reads as a composition, not a grid of identical boxes. */
@@ -579,7 +567,7 @@ div[data-baseweb="select"]>div, .stNumberInput input,
 .hstat:nth-child(3) { border-radius: 6px 22px 22px 22px; }
 .hstat:nth-child(4) { border-radius: 22px 22px 6px 22px; }
 
-/* Organic bronze light — soft radial glows behind the hero. Not flat blobs:
+/* Organic bronze light - soft radial glows behind the hero. Not flat blobs:
    low-opacity, no hard edge, palette-only. */
 .hero-section::before, .hero-section::after { content:""; position:absolute;
     border-radius:50%; pointer-events:none; z-index:0; filter: blur(48px); }
@@ -589,7 +577,7 @@ div[data-baseweb="select"]>div, .stNumberInput input,
     background: radial-gradient(circle, rgba(154,123,79,.12), transparent 70%); }
 .hero-left, .hero-stats { position: relative; z-index: 1; }
 
-/* --- CHARTS: glossy finish — a bronze halo behind, glow on the bars --- */
+/* --- CHARTS: glossy finish - a bronze halo behind, glow on the bars --- */
 [data-testid="stPlotlyChart"] {
     box-shadow: 0 0 42px -6px rgba(154,123,79,.30),
                 0 18px 44px -30px rgba(63,59,53,.5);
@@ -629,13 +617,13 @@ div[data-baseweb="select"]>div, .stNumberInput input,
 
 # ---- ROUND 4 (2026-07-09): THE THREE FINISHES + RUNES ----
 # One material system, three finishes, each with a job:
-#   MATTE  — the reading surface: body text, sections, pillars, expanders,
+#   MATTE  - the reading surface: body text, sections, pillars, expanders,
 #            tables. Paper. (Rebalanced back from round 2's gloss.)
-#   GLOSSY — the trophies: verdict numeral, CTA, hero tiles, chart halos.
-#   GLASS  — the instruments you touch: buttons, selects + their dropdown
+#   GLOSSY - the trophies: verdict numeral, CTA, hero tiles, chart halos.
+#   GLASS  - the instruments you touch: buttons, selects + their dropdown
 #            menus, read-me panels. Real translucency (backdrop-filter),
 #            inner light, react on hover. (Liquid-glass principles in CSS.)
-# Plus: lacquered page background, and Nordic runes engraved in the stone —
+# Plus: lacquered page background, and Nordic runes engraved in the stone -
 # Tiwaz (Tyr's arrow: honesty/justice), Dagaz (daybreak: clarity/problem-
 # solving), Ingwaz (completion: integrity), Ansuz (wisdom).
 st.markdown("""
@@ -690,14 +678,14 @@ st.markdown("""
                   0 12px 30px -24px rgba(63,59,53,.4); }
 }
 
-/* (Nordic rune engravings removed 2026-07-09 at John's call — read as
+/* (Nordic rune engravings removed 2026-07-09 at John's call - read as
    ornament noise against the institutional register. Crest-fragment
    engravings stay; they are the brand.) */
 
 /* --- ROUND 5: precision numerals + one-pass ignite ---
    Tabular figures on every metric so columns of numbers align like a
-   ledger — precision feel, serif untouched. Charts arrive with a single
-   ignite bloom (their one good easing token, cubic-bezier(.25,1,.5,1)) —
+   ledger - precision feel, serif untouched. Charts arrive with a single
+   ignite bloom (their one good easing token, cubic-bezier(.25,1,.5,1)) -
    one pass, never looping, killed under reduced-motion by the global guard. */
 [data-testid="stMetricValue"], .verdict-number, .hstat .n {
     font-variant-numeric: tabular-nums; }
@@ -710,23 +698,23 @@ st.markdown("""
 /* --- ROUND 6: reference-layout lifts (Sculptor / RiverNorth), our palette ---
    Sculptor: the hero display element is a stack of period-terminated serif
    words; the brand recedes to the eyebrow. RiverNorth: section rhythm comes
-   from full-width alternating color bands — here the twin showcases sit on
+   from full-width alternating color bands - here the twin showcases sit on
    one full-bleed charcoal band between beige fields. */
 .hero-title .hline { display: block; }
-.hero-title { font-size: 84px !important; }
+.hero-title { font-size: clamp(40px, 10.5vw, 84px) !important; }
 
 .showcase-row { background: #3F3B35; position: relative;
     margin-left: calc(50% - 50vw); margin-right: calc(50% - 50vw);
     padding: 72px max(7vw, calc(50vw - 744px)) 64px;
     border-top: 2px solid #9A7B4F; border-bottom: 2px solid #9A7B4F; }
-/* Architectural plate behind the band — photo arrives via a small injected
+/* Architectural plate behind the band - photo arrives via a small injected
    style (base64) layered UNDER a charcoal scrim; this rule holds geometry
    and the duotone, tuned WARM (dusk-bronze city, per John's references),
    not cold fog. Text sits above on its own layer. */
 .showcase-row::before { content: ""; position: absolute; inset: 0;
     background-size: cover; background-position: center 30%;
     filter: grayscale(.4) sepia(.42) brightness(.6) contrast(1.03); }
-/* The band's dressed edges — no more naked ribbon: outside, a 2px bronze
+/* The band's dressed edges - no more naked ribbon: outside, a 2px bronze
    rule (border above); inside, a 1px bronze hairline set 14px in (the
    classic double-rule ledger frame), plus soft gradient eases at top and
    bottom so beige melts into the dark instead of snapping. */
@@ -740,9 +728,9 @@ st.markdown("""
       linear-gradient(180deg, rgba(237,233,227,.16), rgba(237,233,227,0) 120px),
       linear-gradient(0deg, rgba(30,27,23,.5), rgba(30,27,23,0) 140px); }
 .showcase-row > * { position: relative; z-index: 1; }
-/* CTA arrival — THE EARTHBENDER: the towers launch from their foundations
+/* CTA arrival - THE EARTHBENDER: the towers launch from their foundations
    (buried 70% below the frame, dim as underground rock), shoot up hard,
-   overshoot the rest position a hair — the slam — flare bright as they
+   overshoot the rest position a hair - the slam - flare bright as they
    crest into the light, then settle into the skyline. "Built from the
    ground up," literally. Delayed ~0.35s so the launch detonates just as
    the glide delivers the reader onto the band. One pass, clipped by the
@@ -761,11 +749,11 @@ st.markdown("""
          filter: grayscale(.4) sepia(.42) brightness(.54) contrast(1.03); }
 }
 
-/* "See the hardest trade" arrival — no earthquake twice. The whole
+/* "See the hardest trade" arrival - no earthquake twice. The whole
    conviction text stack (eyebrow + title + paragraph, wrapped in
    .conv-core) gets the highlight: a DOUBLE FRAME in the band-border
-   bronze — 2px outer rule, 1px inner hairline set 8px in, near-square
-   corners to match the pillar boxes — filled with LATE SUN, a warm gold
+   bronze - 2px outer rule, 1px inner hairline set 8px in, near-square
+   corners to match the pillar boxes - filled with LATE SUN, a warm gold
    wash blooming from the upper corner the way evening light falls
    through a childhood window onto a wall. Draws in, holds so the eye
    lands, then the light leaves the room. */
@@ -803,7 +791,7 @@ st.markdown("""
     color: #EDE9E3 !important; box-shadow: none; }
 .showcase-row .cta-btn:hover { background: #9A7B4F; border-color: #9A7B4F; }
 
-/* Full-bleed bands overflow the court by design — never let that leak into
+/* Full-bleed bands overflow the court by design - never let that leak into
    a horizontal scrollbar (it also seeded phantom mini-scrollers). */
 [data-testid="stAppViewContainer"] section, [data-testid="stMain"] {
     overflow-x: clip; }
@@ -812,7 +800,7 @@ st.markdown("""
 .slab { margin-top: 48px; }
 
 /* --- MCAP FOOTER (private-equity-rebrand reference): the page closes on a
-   full-bleed charcoal band — a "where to next" rail of outlined link boxes,
+   full-bleed charcoal band - a "where to next" rail of outlined link boxes,
    then a thin copyright/disclaimer bar. Our twist: the rail is numbered like
    a ledger and every claim on it stays honest. --- */
 .meleona-footer { background: #3F3B35;
@@ -843,8 +831,8 @@ st.markdown("""
 BRONZE = "#9A7B4F"
 BRONZE_DK = "#8A6A3C"
 CHARCOAL = "#3F3B35"
-BAND_OUTER = "rgba(154,123,79,0.14)"   # light bronze — 5–95 percentile cone
-BAND_INNER = "rgba(154,123,79,0.30)"   # medium bronze — 25–75 percentile cone
+BAND_OUTER = "rgba(154,123,79,0.14)"   # light bronze - 5–95 percentile cone
+BAND_INNER = "rgba(154,123,79,0.30)"   # medium bronze - 25–75 percentile cone
 GRID = "rgba(63,59,53,0.12)"
 AXIS_LINE = "rgba(63,59,53,0.28)"
 
@@ -877,7 +865,7 @@ def fan_chart(bands: dict):
     + 25–75 and 5–95 percentile bands.
 
     Rendering note: the percentile paths are drawn as splines. Every plotted
-    point is a real computed percentile from the simulation — the spline only
+    point is a real computed percentile from the simulation - the spline only
     interpolates *between* those points instead of connecting them with jagged
     straight segments. Hover reports the true underlying value, so nothing is
     smoothed away from the numbers themselves; only the ink between them.
@@ -887,7 +875,7 @@ def fan_chart(bands: dict):
     def p(a):
         return np.asarray(a) * 100.0
 
-    # One curve style for every edge of the cone — laminar, not stair-stepped.
+    # One curve style for every edge of the cone - laminar, not stair-stepped.
     edge = dict(width=0, shape="spline", smoothing=1.0)
 
     fig = go.Figure()
@@ -899,12 +887,12 @@ def fan_chart(bands: dict):
     fig.add_trace(go.Scatter(x=d, y=p(bands["p75"]), line=edge, hoverinfo="skip"))
     fig.add_trace(go.Scatter(x=d, y=p(bands["p25"]), fill="tonexty", fillcolor=BAND_INNER,
                              line=edge, hoverinfo="skip"))
-    # Hairline edges trace the envelope — the silhouette of the airflow
+    # Hairline edges trace the envelope - the silhouette of the airflow
     for key in ("p95", "p5"):
         fig.add_trace(go.Scatter(x=d, y=p(bands[key]), hoverinfo="skip",
                                  line=dict(color="rgba(154,123,79,0.45)", width=1,
                                            shape="spline", smoothing=1.0)))
-    # Median path — the centreline, drawn last so it sits on top
+    # Median path - the centreline, drawn last so it sits on top
     fig.add_trace(go.Scatter(
         x=d, y=p(bands["p50"]), name="median",
         line=dict(color=CHARCOAL, width=2.4, shape="spline", smoothing=1.0),
@@ -925,7 +913,7 @@ def fan_chart(bands: dict):
 def surface_chart(density: dict):
     """
     3D surface of how the simulated outcome distribution evolves over the
-    horizon — the fan chart's cone re-expressed as a probability surface
+    horizon - the fan chart's cone re-expressed as a probability surface
     (day x return-bin x density) instead of percentile lines.
     """
     fig = go.Figure(go.Surface(
@@ -1040,7 +1028,7 @@ def living_surface_html(density: dict, height: int = 520, n_particles: int = 220
       window.addEventListener('touchend', resume);
 
       /* Animation, split by cost: the CAMERA glides every frame via
-         requestAnimationFrame (60fps — the old 150ms interval stepped it
+         requestAnimationFrame (60fps - the old 150ms interval stepped it
          at ~7fps, which is exactly what read as choppy), while the
          particle field re-uploads on a slower ~140ms budget. Delta-time
          based, so speed is identical on any refresh rate. */
@@ -1071,9 +1059,9 @@ def living_surface_html(density: dict, height: int = 520, n_particles: int = 220
 
       /* Only animate while this scene is actually on screen. Streamlit keeps
          inactive tab panels mounted, so an ungated interval would repaint the
-         surface forever on every other tab — burning CPU and never letting the
+         surface forever on every other tab - burning CPU and never letting the
          renderer idle. Gate on both intersection and page visibility. */
-      /* Respect the OS reduced-motion setting — draw once, hold still. This is
+      /* Respect the OS reduced-motion setting - draw once, hold still. This is
          a hard gate, checked inside shouldRun, because the IntersectionObserver
          callback fires asynchronously and would otherwise restart the loop. */
       const reduced = !!(window.matchMedia &&
@@ -1107,7 +1095,7 @@ def living_surface_html(density: dict, height: int = 520, n_particles: int = 220
 
 
 def panel_head(title: str, subtitle: str = "") -> None:
-    """Ruled section lintel inside a tab — replaces bare `###### ` markdown
+    """Ruled section lintel inside a tab - replaces bare `###### ` markdown
     headers so every block reads as a titled stone panel, not a run-on wall."""
     sub = f'<span class="s">{subtitle}</span>' if subtitle else ""
     st.markdown(f'<div class="panel-head"><span class="t">{title}</span>{sub}</div>',
@@ -1124,7 +1112,7 @@ def read_me(html: str) -> None:
 def outcome_hist(total_returns, cvar: float):
     """Histogram of simulated 1-year outcomes. The tail the CVaR measures is
     inked in oxblood so the eye lands on the danger, not the middle; every
-    bar is a real simulation count — color is annotation, not data."""
+    bar is a real simulation count - color is annotation, not data."""
     vals = np.asarray(total_returns) * 100.0
     counts, edges = np.histogram(vals, bins=48)
     mids = (edges[:-1] + edges[1:]) / 2
@@ -1147,8 +1135,8 @@ def outcome_hist(total_returns, cvar: float):
 
 
 def hbar(series: pd.Series, color=BRONZE, pct: bool = False, title_x: str = ""):
-    """Themed horizontal bar chart. Bars deepen with magnitude — the biggest
-    value wears the darkest bronze — so ranking reads at a glance."""
+    """Themed horizontal bar chart. Bars deepen with magnitude - the biggest
+    value wears the darkest bronze - so ranking reads at a glance."""
     x = series.values * (100 if pct else 1)
     span = float(np.max(np.abs(x))) or 1.0
     def _shade(v):  # lerp #CBBB94 (light) -> #8A6A3C (deep) by |value|
@@ -1192,15 +1180,15 @@ with open("assets/logo.svg", "r", encoding="utf-8") as f:
     logo_svg = f.read()
 
 # Architectural plate behind the hero stat deck (replaces the watermark crest).
-# assets/facade.jpg — Unsplash (free commercial license, no attribution
+# assets/facade.jpg - Unsplash (free commercial license, no attribution
 # required). Duotoned toward the palette in CSS, so the photo can never clash.
 try:
     with open("assets/facade.jpg", "rb") as f:
         _facade_b64 = base64.b64encode(f.read()).decode()
     st.markdown(
         # The architecture washes across the WHOLE hero, melting into beige
-        # toward the text side — the building emerges from the page's own
-        # color. Luminosity blend: the photo keeps only its LIGHT — its hue
+        # toward the text side - the building emerges from the page's own
+        # color. Luminosity blend: the photo keeps only its LIGHT - its hue
         # comes entirely from the base color beneath, which is CITY-STONE
         # BEIGE in the crest's own warm family (not gray, not orange).
         f"<style>.hero-section {{ background-color: #C9AF87; "
@@ -1220,7 +1208,7 @@ except OSError:
     pass  # no photo on disk -> tiles render on the plain field, nothing breaks
 
 # Dark-band plate: the charcoal showcase band gets its own architectural
-# photograph (assets/band.jpg — Unsplash, free commercial license): fog-bound
+# photograph (assets/band.jpg - Unsplash, free commercial license): fog-bound
 # towers, duotoned near-charcoal in CSS with a scrim baked in so the beige
 # text stays the loudest thing on the band. Same graceful fallback.
 try:
@@ -1236,7 +1224,7 @@ except OSError:
 
 # Boot veil renders ONLY on the first script run of a session. Streamlit
 # reruns the whole script on every interaction (and the freshness ticker),
-# which would re-create the veil and restart its fade forever — so after
+# which would re-create the veil and restart its fade forever - so after
 # the first run it is simply never rendered again.
 if not st.session_state.get("_booted"):
     st.session_state["_booted"] = True
@@ -1273,18 +1261,13 @@ st.markdown(f"""
 <div class="hero-section reveal" id="hero">
   <div class="hero-left">
     <div class="hero-crest">{logo_svg}</div>
-    <div class="hero-badges">
-      <span class="badge gold">Live data &middot; Yahoo Finance</span>
-      <span class="badge">No fabricated numbers</span>
-      <span class="badge">57 automated tests</span>
-    </div>
     <div class="hero-eyebrow">Meleona &middot; Portfolio Risk Engine</div>
     <h1 class="hero-title"><span class="hline">Grit.</span><span class="hline">Discipline.</span><span class="hline">Evidence.</span></h1>
     <div class="hero-sub">
-      A hedge-fund-grade portfolio risk engine — VaR, CVaR, Monte Carlo stress
+      A hedge-fund-grade portfolio risk engine - VaR, CVaR, Monte Carlo stress
       testing, and named factor exposures, computed live from real market data.
       But every stock has drawdowns. What sets a name apart is what happens
-      after one — that's what we call <strong>grit</strong>.
+      after one - that's what we call <strong>grit</strong>.
     </div>
     <a href="#grit-showcase" class="cta-btn">Explore what we do &darr;</a>
   </div>
@@ -1318,8 +1301,8 @@ st.markdown("""
     <div class="showcase-body">
       Fear &amp; Greed indices measure market mood. We measure something more
       durable: whether an asset, when it gets knocked down, actually gets back
-      up &mdash; consistently, across real crises. There's no such thing as a
-      perfect stock. Grit isn't about avoiding setbacks &mdash; it's about what
+      up - consistently, across real crises. There's no such thing as a
+      perfect stock. Grit isn't about avoiding setbacks - it's about what
       happens after one.
     </div>
     <div class="pillar-row">
@@ -1347,11 +1330,11 @@ st.markdown("""
       <h2 class="showcase-title">The hardest trade is the one history rewards</h2>
       <div class="showcase-body">
         Your brain treats a falling portfolio the way it treats a physical threat
-        &mdash; the panic you feel in a crash is wiring, not weakness. That is the
+        - the panic you feel in a crash is wiring, not weakness. That is the
         emotional problem this engine exists to solve. Not with a slogan: with the
         actual record of every named crisis it stress-tests, computed live from
         market data. Below, what really happened to a buyer on the scariest day of
-        each crisis &mdash; and on the worst-timed day, the pre-crash peak.
+        each crisis - and on the worst-timed day, the pre-crash peak.
       </div>
     </div>
   </div>
@@ -1359,7 +1342,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# ---- Showcase: Crisis Conviction — the emotional problem, answered in numbers ----
+# ---- Showcase: Crisis Conviction - the emotional problem, answered in numbers ----
 @st.cache_data(ttl=6 * 3600, show_spinner="Reading the crisis record…")
 def load_conviction_data():
     """Benchmark crisis record + AI-capex recovery race, live from Yahoo."""
@@ -1383,7 +1366,7 @@ try:
         st.markdown(f"""<div class="slab"><div class="slab-label">Bought the scariest day</div>
         <div class="slab-num">{round(_t1["pct_positive"] * _t1["n"])} of {_t1["n"]}</div>
         <div class="slab-note">crises were positive one year after the trough
-        — median <b>{_t1["median"]:+.0%}</b>.</div></div>""", unsafe_allow_html=True)
+        - median <b>{_t1["median"]:+.0%}</b>.</div></div>""", unsafe_allow_html=True)
     with _sl2:
         st.markdown(f"""<div class="slab"><div class="slab-label">Three years on</div>
         <div class="slab-num">{_t3["median"]:+.0%}</div>
@@ -1405,10 +1388,10 @@ try:
     st.caption(
         "Computed live from Yahoo Finance adjusted closes (S&P 500 via SPY; "
         "AI-capex basket disclosed in the Crisis Conviction tab). Historical "
-        "record, not a forecast — full tables, definitions, and honest limits "
+        "record, not a forecast - full tables, definitions, and honest limits "
         "in the tab below."
     )
-except Exception as _exc:  # noqa: BLE001 — landing page must never crash on data
+except Exception as _exc:  # noqa: BLE001 - landing page must never crash on data
     st.caption(f"Crisis record unavailable right now ({_exc}). "
                "The Crisis Conviction tab retries on load.")
 
@@ -1424,13 +1407,13 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ---- The cockpit: controls fold into three numbered drawers so the verdict
-# leads the section. Widgets still execute when collapsed — zero logic change,
+# leads the section. Widgets still execute when collapsed - zero logic change,
 # the reader just isn't bombarded with every dial at once. ----
-with st.expander("01 · Universe — which assets", expanded=False):
+with st.expander("01 · Universe - which assets", expanded=False):
     preset = st.selectbox("Preset basket", list(PRESETS.keys()), label_visibility="collapsed")
 
     # Keying the multiselect on the preset name makes it re-initialize with the
-    # new default whenever the preset changes — while still letting users add or
+    # new default whenever the preset changes - while still letting users add or
     # remove individual symbols (accept_new_options allows arbitrary tickers).
     suggestions = sorted({t for lst in PRESETS.values() for t in lst})
     chosen = st.multiselect(
@@ -1472,13 +1455,13 @@ def load_risk_free_rate():
 @st.cache_data(ttl=3600, show_spinner="Scoring the Grit Zone…")
 def load_grit(tickers_tuple: tuple[str, ...]):
     """Grit scores need each asset's FULL price history, not just the 2y window
-    used for VaR — grit_scores() pulls it separately (see src.grit)."""
+    used for VaR - grit_scores() pulls it separately (see src.grit)."""
     return grit_scores(list(tickers_tuple))
 
 
 @st.cache_data(ttl=3600, show_spinner="Building the security master…")
 def load_security_master(tickers_tuple: tuple[str, ...]):
-    """Corporate actions change rarely (not intraday) — a longer TTL is fine."""
+    """Corporate actions change rarely (not intraday) - a longer TTL is fine."""
     return security_master(list(tickers_tuple))
 
 
@@ -1501,7 +1484,7 @@ def _audit(step: str, detail: str) -> None:
 
 try:
     prices = load_universe(tuple(tickers))
-except Exception as exc:  # noqa: BLE001 — surface any fetch failure to the user
+except Exception as exc:  # noqa: BLE001 - surface any fetch failure to the user
     st.error(f"Couldn't load market data: {exc}")
     st.stop()
 
@@ -1512,7 +1495,7 @@ if len(loaded) < 2:
     st.error("Fewer than two symbols returned data. Try different tickers.")
     st.stop()
 if missing:
-    st.caption(f"Couldn't load: {', '.join(missing)} — skipped.")
+    st.caption(f"Couldn't load: {', '.join(missing)} - skipped.")
 _audit("Data fetch", f"{len(loaded)} tickers loaded from {preset!r}: {', '.join(loaded)}"
       + (f" (missing: {', '.join(missing)})" if missing else ""))
 
@@ -1532,21 +1515,21 @@ if refresh_col.button("Refresh", help="Clear cache and re-pull the latest prices
 
 # ---- Allocation + stress test: one control deck, side by side ----
 deck_alloc, deck_stress = st.columns(2, gap="medium")
-with deck_alloc, st.expander("02 · Allocation — how capital is weighted",
+with deck_alloc, st.expander("02 · Allocation - how capital is weighted",
                              expanded=False):
     COV_LABELS = {
-        "Ledoit-Wolf": "Ledoit-Wolf — steady (default)",
-        "Sample": "Sample — plain history",
-        "EWMA": "EWMA — reactive / panic lens",
+        "Ledoit-Wolf": "Ledoit-Wolf - steady (default)",
+        "Sample": "Sample - plain history",
+        "EWMA": "EWMA - reactive / panic lens",
     }
     cov_method = st.selectbox(
         "Covariance estimator", ["Ledoit-Wolf", "Sample", "EWMA"],
         format_func=lambda m: COV_LABELS[m],
-        help="How the risk matrix is built — it feeds risk parity, vol-targeting, "
+        help="How the risk matrix is built - it feeds risk parity, vol-targeting, "
              "and the Balance blend. Ledoit-Wolf (default) shrinks noisy history "
              "toward a stable target: steady, always invertible. Sample is plain "
              "history. EWMA (RiskMetrics λ=0.94) weights the last ~2 weeks heavily "
-             "and forgets the calm quarter — it flinches at a single bad day. It is "
+             "and forgets the calm quarter - it flinches at a single bad day. It is "
              "the reactive lens the rest of this product argues against; reach for it "
              "to SEE the panic view, not as your default.")
     cov, cov_info = estimate_covariance(returns, cov_method)  # annualized risk matrix
@@ -1555,14 +1538,14 @@ with deck_alloc, st.expander("02 · Allocation — how capital is weighted",
         st.caption(
             "⚠️ **Reactive lens.** EWMA spikes on one bad day (≈11-day half-life, "
             "~90% of its weight in the last month). It embodies exactly the panic "
-            "[Crisis Conviction] argues against — shown for contrast, so you can see "
+            "[Crisis Conviction] argues against - shown for contrast, so you can see "
             "how twitchy risk looks, not because the engine recommends reacting."
         )
     acol1, acol2 = st.columns(2)
     method = acol1.radio(
         "Weighting", ["Equal weight", "Risk parity"], label_visibility="collapsed",
         help="Risk parity equalizes each asset's RISK contribution, so no single "
-             "name dominates — the Bridgewater All-Weather idea.")
+             "name dominates - the Bridgewater All-Weather idea.")
     use_vt = acol2.checkbox(
         "Target volatility", help="Scale exposure to hold a constant annual vol "
         "(AQR managed-vol style). Leverage < 1 de-risks; > 1 levers up.")
@@ -1588,19 +1571,19 @@ alloc_label = "risk-parity" if method == "Risk parity" else "equal-weight"
 alloc_art = "an" if alloc_label[0] in "aeiou" else "a"  # "an equal-weight" / "a risk-parity"
 lev_txt = f", levered {leverage:.2f}×" if use_vt else ""
 
-with deck_stress, st.expander("03 · Stress test — shock or replay a crisis",
+with deck_stress, st.expander("03 · Stress test - shock or replay a crisis",
                               expanded=False):
     engine = st.radio(
         "Return model", ["Bootstrap (empirical)", "Jump-diffusion (Merton)"],
         horizontal=True,
-        help="Bootstrap resamples real historical days — it can only replay tails "
+        help="Bootstrap resamples real historical days - it can only replay tails "
              "it has already seen. Jump-diffusion (Merton 1976) adds Poisson jumps "
-             "on top of Gaussian diffusion, generating NEW extremes — deeper crashes "
-             "and jump clusters — for a fatter, more honest tail.")
+             "on top of Gaussian diffusion, generating NEW extremes - deeper crashes "
+             "and jump clusters - for a fatter, more honest tail.")
     mode = st.selectbox(
         "Scenario", ["Custom shock (sliders)"] + list(HISTORICAL_REGIMES.keys()),
         help="Custom: set your own drawdown and volatility shock. Or replay the "
-             "ACTUAL daily returns of a real crisis — real correlations, real "
+             "ACTUAL daily returns of a real crisis - real correlations, real "
              "volatility, real path, not an approximation.")
     if mode == "Custom shock (sliders)":
         col1, col2 = st.columns(2)
@@ -1662,7 +1645,7 @@ try:
                              participation_rate=0.20)
     lvar = liquidity_adjusted_cvar(mc["cvar"],
                                    liquidity_profile(_dtl)["full_exit_days"])
-except Exception:  # noqa: BLE001 — headline must still render if volume feed is down
+except Exception:  # noqa: BLE001 - headline must still render if volume feed is down
     lvar = None
 
 # ---- Headline verdict ----
@@ -1673,7 +1656,7 @@ if scenario_label:
         f"loses an average of <b>{mc['cvar']:.1%}</b> in the worst 5% of simulated years."
     )
     if excluded:
-        verdict += f" *(Excludes {', '.join(excluded)} — not trading in that period.)*"
+        verdict += f" *(Excludes {', '.join(excluded)} - not trading in that period.)*"
 else:
     verdict = (
         f"In the worst 5% of simulated years, {alloc_art} {alloc_label} portfolio of these "
@@ -1701,12 +1684,12 @@ with v_col:
   <div class="verdict-sentence">{verdict}</div>
 </div>
 """, unsafe_allow_html=True)
-    # Legend folds away — the verdict number and chart lead; the tutorial
+    # Legend folds away - the verdict number and chart lead; the tutorial
     # is one click for whoever wants it (matches the hide-depth doctrine).
     with st.expander("How to read the cone"):
         st.markdown(
             '<div class="read-me">'
-            '<b>How to read the cone.</b> Time runs left to right — one year of '
+            '<b>How to read the cone.</b> Time runs left to right - one year of '
             'trading days. The dark centreline is the <b>middle outcome</b>: half '
             'the simulations landed above it, half below. The dark inner cone holds '
             'the <b>middle 50%</b> of outcomes; the pale outer cone holds <b>90%</b>. '
@@ -1727,12 +1710,12 @@ with f_col:
 """, unsafe_allow_html=True)
     st.plotly_chart(fan_chart(mc["path_bands"]), width="stretch", config=PLOTLY_CFG)
     _se_txt = (f" CVaR sampling error: ±{mc['cvar_se']:.2%} "
-               f"({mc['n_simulations']:,} paths — a simulated estimate, "
+               f"({mc['n_simulations']:,} paths - a simulated estimate, "
                "not an exact truth)." if np.isfinite(mc.get("cvar_se", float("nan")))
                else "")
     st.caption(
         "Each simulated path compounds a year of daily returns. Hypothetical "
-        "distribution, not a forecast — the curves interpolate between real "
+        "distribution, not a forecast - the curves interpolate between real "
         "computed percentiles." + _se_txt
     )
 
@@ -1748,16 +1731,16 @@ def eigen_factor_panel(cov, weights, returns) -> None:
     kappa = fac["condition_number"]
 
     e1, e2, e3 = st.columns(3)
-    e1.metric("PC1 — variance explained", f"{pc1_pct:.0f}%",
+    e1.metric("PC1 - variance explained", f"{pc1_pct:.0f}%",
               help="Share of total universe variance carried by the single "
                    "dominant statistical factor. High = one wave moves "
                    "everything.")
     e2.metric("Your book riding PC1", f"{port_pc1:.0%}",
               help="Share of THIS portfolio's variance on that dominant "
-                   "factor — the macro vs idiosyncratic split.")
+                   "factor - the macro vs idiosyncratic split.")
     e3.metric("Condition number κ", f"{kappa:,.0f}" if np.isfinite(kappa)
               else "∞ (singular)",
-              help="λmax/λmin — numerical stability of the risk matrix "
+              help="λmax/λmin - numerical stability of the risk matrix "
                    "before any inversion. Fragile above ~1e8.")
 
     # Plain-English translation so a non-quant meets a sentence, not κ.
@@ -1765,19 +1748,19 @@ def eigen_factor_panel(cov, weights, returns) -> None:
         f"**In plain terms:** one market wave drives about **{pc1_pct:.0f}%** of "
         f"this universe's day-to-day swings, and **{port_pc1:.0%}** of *your* "
         "book's risk rides that single wave. The higher that climbs, the less "
-        "your diversification is actually real — in a crash it heads toward 100%.")
+        "your diversification is actually real - in a crash it heads toward 100%.")
 
     read_me(
         "<b>The rubber sheet.</b> Stretch a rubber sheet and most directions "
-        "bend — but a few stretch <i>straight</i>. Those unbending directions "
+        "bend - but a few stretch <i>straight</i>. Those unbending directions "
         "are the <b>eigenvectors</b>: the market's pure risk pathways. How "
-        "hard each is stretched is its <b>eigenvalue</b> — the variance that "
+        "hard each is stretched is its <b>eigenvalue</b> - the variance that "
         "factor carries. The decomposition untangles the correlation web into "
         "independent (orthogonal) factors, ranked by strength. Honest limit: "
-        "these factors are <i>statistical and unlabeled</i> — PC1 with "
+        "these factors are <i>statistical and unlabeled</i> - PC1 with "
         "all-positive loadings reads as the market wave, but naming later "
         "factors is interpretation, not math. In a crisis, PC1's share spikes "
-        "toward 100% — the diversification illusion collapsing into one bet.")
+        "toward 100% - the diversification illusion collapsing into one bet.")
 
     # Scree chart: variance explained per factor + Marcenko-Pastur noise line
     lam = fac["eigenvalues"]
@@ -1802,13 +1785,13 @@ def eigen_factor_panel(cov, weights, returns) -> None:
     st.caption(
         f"Factors above the dotted line carry more variance than pure noise "
         f"would produce at this sample size (N={len(lam)}, T={len(returns)}). "
-        "Heuristic reference at this universe size, not a hard test — the "
+        "Heuristic reference at this universe size, not a hard test - the "
         "Ledoit-Wolf estimator is the production defense against inversion "
         "noise. Flip the covariance estimator to EWMA in Engine controls to "
         "see the CURRENT regime's factor structure instead of the 2-year "
         "average.")
 
-    with st.expander("Factor loadings — how each name anchors onto each factor"):
+    with st.expander("Factor loadings - how each name anchors onto each factor"):
         ld = fac["loadings"]
         lmax = float(np.abs(ld.values).max()) or 1.0
         lfig = go.Figure(go.Heatmap(
@@ -1829,21 +1812,21 @@ def eigen_factor_panel(cov, weights, returns) -> None:
             "deterministic (largest loading forced positive) so a factor "
             "hedge can never silently invert between runs. Neutralizing PC1 "
             "with an index overlay removes the dominant systematic wave "
-            "without selling a single position — that is the eigen-hedge "
+            "without selling a single position - that is the eigen-hedge "
             "lens, shown here as exposure, not an execution engine.")
 
 
 # ---- Supporting depth: one tab at a time, not stacked accordions ----
 # Twelve tabs on one strip overflow invisibly (the tab-list scrollbar is
-# hidden by design) — split into two ruled rows: risk analysis first,
+# hidden by design) - split into two ruled rows: risk analysis first,
 # research & housekeeping second. Nothing removed, everything reachable.
-panel_head("Risk & conviction", "The analysis — where the risk lives")
+panel_head("Risk & conviction", "The analysis - where the risk lives")
 (tab_3d, tab_breakdown, tab_watch, tab_balance, tab_grit,
  tab_conviction) = st.tabs([
     "3D Distribution", "Risk Breakdown", "Correlation Watch", "Balance",
     "Grit Zone", "Crisis Conviction",
 ])
-panel_head("Research & controls", "The workshop — signals, regimes, plumbing")
+panel_head("Research & controls", "The workshop - signals, regimes, plumbing")
 (tab_signals, tab_regimes, tab_liquidity, tab_secmaster, tab_dq,
  tab_lineage) = st.tabs([
     "Signal Lab", "Regime Atlas", "Liquidity", "Security Master",
@@ -1852,12 +1835,12 @@ panel_head("Research & controls", "The workshop — signals, regimes, plumbing")
 
 with tab_watch:
     # Correlation as a moving picture. A static matrix answers "are these
-    # two related on average?" — this tab answers "are they related NOW,
+    # two related on average?" - this tab answers "are they related NOW,
     # and is that relationship eating my diversification?"
     corr_now = correlation_from_cov(covariance_matrix(returns))
     try:
         def_a, def_b, _ = most_correlated_pair(corr_now)
-    except Exception:  # noqa: BLE001 — degenerate universe; fall back to first two
+    except Exception:  # noqa: BLE001 - degenerate universe; fall back to first two
         def_a, def_b = loaded[0], loaded[1]
 
     wc1, wc2, wc3, wc4 = st.columns([2, 2, 2, 2])
@@ -1870,11 +1853,11 @@ with tab_watch:
                           "but is noisier.")
     thresh = wc4.slider("Concentration threshold", 0.50, 0.95, 0.75, step=0.05,
                         key="watch_t",
-                        help="Above this, the pair is close to one bet — "
+                        help="Above this, the pair is close to one bet - "
                              "diversification between them is thinning.")
 
     if pick_a == pick_b:
-        st.warning("Pick two different assets — a name is always +1.00 "
+        st.warning("Pick two different assets - a name is always +1.00 "
                    "correlated with itself.")
     else:
         roll = rolling_correlation(returns, pick_a, pick_b, window=win).dropna()
@@ -1885,12 +1868,12 @@ with tab_watch:
         m1.metric(f"{pick_a} × {pick_b} now ({win}d)", f"{latest:+.2f}")
         m2.metric("Full-period average", f"{static_corr:+.2f}")
         m3.metric("Range over history",
-                  f"{roll.min():+.2f} … {roll.max():+.2f}" if len(roll) else "—")
+                  f"{roll.min():+.2f} … {roll.max():+.2f}" if len(roll) else "-")
 
         if latest > thresh:
             st.warning(f"**Concentration reading:** {pick_a} and {pick_b} are "
                      f"moving at {latest:+.2f} over the last {win} trading "
-                     f"days — above your {thresh:.2f} threshold. Right now "
+                     f"days - above your {thresh:.2f} threshold. Right now "
                      "they are closer to one bet than two.")
         else:
             st.success(f"**Stable:** {pick_a} × {pick_b} at {latest:+.2f} over "
@@ -1914,14 +1897,14 @@ with tab_watch:
         st.plotly_chart(wfig, width="stretch", config=PLOTLY_CFG)
 
         read_me(
-            "<b>Covariance vs correlation — same sign, different units.</b> "
+            "<b>Covariance vs correlation - same sign, different units.</b> "
             "Both tell you the <i>direction</i> two assets move together. "
             "Covariance is in squared-return units, so its size is unreadable "
-            "alone; correlation is covariance divided by both volatilities — "
+            "alone; correlation is covariance divided by both volatilities - "
             "co-movement per unit of risk, locked to −1…+1. The engine "
             "computes it by the matrix identity R = D⁻¹ΣD⁻¹. And it is not a "
             "constant: this line is the relationship <i>moving</i>. Pairs "
-            "that average +0.4 can run above +0.9 inside a stress regime — "
+            "that average +0.4 can run above +0.9 inside a stress regime - "
             "which is exactly when you need them not to.")
 
         # --- Defensive simulation: measured, not promised ---
@@ -1952,7 +1935,7 @@ with tab_watch:
             st.caption(
                 f"Measured through the same engine: the shift **{verdict_shift}** "
                 f"tail risk on this history. {dest} was chosen as the name "
-                f"least correlated to the pair — but its own average "
+                f"least correlated to the pair - but its own average "
                 f"correlation to them is **{dest_corr:+.2f}**, not zero: "
                 "inside one equity universe there is no truly independent "
                 "asset, only less-dependent ones. Simulation on historical "
@@ -1960,14 +1943,14 @@ with tab_watch:
                 "crashes, so measured diversification is a fair-weather "
                 "number.")
         elif latest > thresh:
-            st.caption("No third asset in this universe to shift into — "
+            st.caption("No third asset in this universe to shift into - "
                        "a two-asset book has nowhere defensive to go.")
 
 with tab_3d:
     st.iframe(living_surface_html(mc["path_density"]), height=540)
     st.caption(
         "Simulated (Monte Carlo) distribution of portfolio value over the next "
-        "year — the fan chart's cone shown as a probability surface, with a "
+        "year - the fan chart's cone shown as a probability surface, with a "
         "drifting particle overlay and slow auto-rotate (drag to take over). "
         "Hypothetical, not historical."
     )
@@ -2000,7 +1983,7 @@ with tab_breakdown:
     top = rc["risk_pct"].idxmax()
     st.caption(
         f"Share of total portfolio volatility per asset. {top} contributes the most "
-        f"risk ({rc.loc[top, 'risk_pct']:.0%}). Equal dollar weight ≠ equal risk — "
+        f"risk ({rc.loc[top, 'risk_pct']:.0%}). Equal dollar weight ≠ equal risk - "
         "switch Allocation to Risk parity to flatten these bars."
     )
 
@@ -2014,7 +1997,7 @@ with tab_breakdown:
     s2.metric("Annualized return", f"{ann_ret:+.1%}")
     s3.metric("Annualized volatility", f"{ann_vol:.1%}")
     rf_txt = (f"{rf:.2%} (13-week T-bill, ^IRX)" if rf is not None
-              else "unavailable — Sharpe computed against 0%")
+              else "unavailable - Sharpe computed against 0%")
     st.caption(
         f"Sharpe = (annualized return − risk-free) / annualized volatility, on "
         f"the real (unshocked) portfolio. Risk-free rate: {rf_txt}."
@@ -2025,15 +2008,15 @@ with tab_breakdown:
     read_me(
         "Each cell is how tightly two names move together: <b>bronze = lockstep "
         "(+1)</b>, <b>beige = independent (0)</b>, <b>charcoal = seesaw (−1)</b>. "
-        "A book full of deep bronze has little real diversification — everything "
+        "A book full of deep bronze has little real diversification - everything "
         "falls at once; charcoal cells are the offsets. The empty upper half is "
         "the same data mirrored, masked so the eye reads each pair once.")
     corr = correlation_matrix(shocked_returns)
 
-    # Lower triangle only — the upper half is a mirror image, masked out.
+    # Lower triangle only - the upper half is a mirror image, masked out.
     cmat = corr.to_numpy(dtype=float, copy=True)
     cmat[np.triu(np.ones_like(cmat, dtype=bool))] = np.nan
-    # Hot cells (|corr| >= 0.75, the Watch tab's default threshold) print bold —
+    # Hot cells (|corr| >= 0.75, the Watch tab's default threshold) print bold -
     # the eye lands on concentration first.
     ctext = np.where(np.isnan(cmat), "", np.vectorize(
         lambda v: f"<b>{v:.2f}</b>" if abs(v) >= 0.75 else f"{v:.2f}")(
@@ -2068,16 +2051,16 @@ with tab_breakdown:
             f"in {jp['n_days']} (moves beyond {jp['k']:.0f}σ), implying "
             f"**~{jp['lambda_daily'] * 252:.1f} jumps/year** on a diffusion vol of "
             f"{jp['sigma_d'] * np.sqrt(252):.0%}. Poisson jumps let the tail run "
-            "deeper than any single historical day — a fatter, more honest crash."
+            "deeper than any single historical day - a fatter, more honest crash."
         )
 
     # --- Deep dive: the three statistical-test-heavy panels fold behind one
     #     click so a cold viewer meets the intuitive charts (returns, risk
     #     contribution, correlation) first, and the model-validation depth
-    #     second — "lead with one number", don't wall them with seven charts. ---
-    with st.expander("Deep dive — model validation & factor structure"):
+    #     second - "lead with one number", don't wall them with seven charts. ---
+    with st.expander("Deep dive - model validation & factor structure"):
         # --- VaR methods + backtest (validates the model, not just reports it) ---
-        panel_head("Value at Risk — methods & backtest", "The daily loss line, and whether it holds up")
+        panel_head("Value at Risk - methods & backtest", "The daily loss line, and whether it holds up")
         hist_var = float(-np.percentile(port_returns, 5))
         bt = var_backtest(port_returns)
         v1, v2, v3 = st.columns(3)
@@ -2108,10 +2091,10 @@ with tab_breakdown:
 
         # --- Statistical risk factors (eigendecomposition / PCA) ---
         panel_head("Statistical risk factors",
-                   "Eigendecomposition — how many independent bets is this book?")
+                   "Eigendecomposition - how many independent bets is this book?")
         try:
             eigen_factor_panel(cov, weights, returns)
-        except Exception as exc:  # noqa: BLE001 — degrade like the panel above
+        except Exception as exc:  # noqa: BLE001 - degrade like the panel above
             st.caption(f"Statistical risk factors unavailable: {exc}")
 
 source_txt = f"the {scenario_label} window" if scenario_label else \
@@ -2130,7 +2113,7 @@ with tab_balance:
         "The second solution. Crisis Conviction argues you shouldn't panic-sell; "
         "this argues you shouldn't have to bet the outcome on being right. Pick an "
         "asset you hold, and the engine ranks every other name in your universe by "
-        "how it moves against it — a negatively-correlated partner offsets part of "
+        "how it moves against it - a negatively-correlated partner offsets part of "
         "the anchor's swings. This is diversification, computed from real covariance, "
         "not a story about the future."
     )
@@ -2151,10 +2134,10 @@ with tab_balance:
 
             def _hedge_color(v):
                 if v < HEDGE:
-                    return "#3F6B3F"          # green — genuinely moves against
+                    return "#3F6B3F"          # green - genuinely moves against
                 if v > INDEP:
-                    return "#8A3B2E"          # red — moves with, no protection
-                return "#9A7B4F"              # bronze — independent, not a hedge
+                    return "#8A3B2E"          # red - moves with, no protection
+                return "#9A7B4F"              # bronze - independent, not a hedge
 
             panel_head("Balancers",
                        f"How every other name moves relative to {anchor}")
@@ -2169,11 +2152,11 @@ with tab_balance:
             st.plotly_chart(hedge_fig, width="stretch", config=PLOTLY_CFG)
             st.markdown(
                 '<div class="read-me"><b>Green</b> = moves <b>against</b> the anchor '
-                '(correlation below −0.2) — a true offset. <b>Bronze</b> = roughly '
+                '(correlation below −0.2) - a true offset. <b>Bronze</b> = roughly '
                 '<b>independent</b> (±0.2): it diversifies but does not cancel the '
-                "anchor's moves. <b>Red</b> = moves <b>with</b> it — no protection. "
+                "anchor's moves. <b>Red</b> = moves <b>with</b> it - no protection. "
                 'In a single-sector basket (all tech, say) you often find no green at '
-                'all — everything rises and falls together.</div>',
+                'all - everything rises and falls together.</div>',
                 unsafe_allow_html=True)
 
             best = ranked.index[0]
@@ -2182,17 +2165,17 @@ with tab_balance:
             # Honest verdict: is this actually a hedge, or just the least-bad?
             if best_corr < HEDGE:
                 kind = (f"**{best}** genuinely moves against {anchor} "
-                        f"(correlation {best_corr:+.2f}) — a real hedge.")
+                        f"(correlation {best_corr:+.2f}) - a real hedge.")
             elif best_corr <= INDEP:
                 kind = (f"No true hedge in this universe: **{best}** is the most "
                         f"**independent** name (correlation {best_corr:+.2f}), not a "
-                        f"mirror. Blending it *diversifies* {anchor} — it does not "
+                        f"mirror. Blending it *diversifies* {anchor} - it does not "
                         f"offset it. A genuine hedge would need an asset from outside "
                         f"this basket (bonds, gold, cash).")
             else:
                 kind = (f"Everything here moves **together**: even the least-correlated "
                         f"name (**{best}**, {best_corr:+.2f}) still rises and falls with "
-                        f"{anchor}. This basket cannot hedge itself — a real offset "
+                        f"{anchor}. This basket cannot hedge itself - a real offset "
                         f"needs an asset from a different sector or asset class.")
 
             panel_head("The balanced pair",
@@ -2205,28 +2188,28 @@ with tab_balance:
                 f"{kind} Blending **{pair['w_anchor']:.0%} {anchor}** with "
                 f"**{pair['w_hedge']:.0%} {best}** takes the pair's annual volatility "
                 f"from **{pair['anchor_vol']:.1%}** ({anchor} alone) down to "
-                f"**{pair['blended_vol']:.1%}** — a {pair['vol_reduction']:.0%} "
+                f"**{pair['blended_vol']:.1%}** - a {pair['vol_reduction']:.0%} "
                 "reduction, from diversification. Long-only minimum-variance weights."
             )
             # Caveat kept one click away but signposted in the title, so the
-            # honesty is never buried — just not competing with the number.
-            with st.expander("The honest limit — what this does NOT do"):
+            # honesty is never buried - just not competing with the number.
+            with st.expander("The honest limit - what this does NOT do"):
                 st.markdown(
-                    '<div class="read-me"><b>The honest limit — read this.</b> '
+                    '<div class="read-me"><b>The honest limit - read this.</b> '
                     'Correlations are historical and <b>unstable</b>. In a real crash '
                     'they converge toward +1: almost everything falls together, and a '
                     'hedge that worked in calm markets fades exactly when you need it '
                     'most. This tab lowers <b>ordinary</b> volatility; it does not make a '
                     'portfolio crisis-proof. It is the counterweight to Crisis Conviction '
-                    '— hold your nerve, and structure so being wrong costs less.</div>',
+                    '- hold your nerve, and structure so being wrong costs less.</div>',
                     unsafe_allow_html=True)
-        except Exception as exc:  # noqa: BLE001 — never crash the tab
+        except Exception as exc:  # noqa: BLE001 - never crash the tab
             st.caption(f"Balance unavailable for this universe: {exc}")
 
 with tab_grit:
     st.caption(
         "Fear & Greed measures market MOOD. Grit measures something different: "
-        "when a name gets knocked down, does it get back up — consistently, "
+        "when a name gets knocked down, does it get back up - consistently, "
         "across real crises? There's no such thing as a perfect stock; every "
         "name here has drawdowns. This ranks your chosen universe by how much "
         "perseverance each name's OWN price history has actually shown."
@@ -2247,7 +2230,7 @@ with tab_grit:
             read_me(
                 "<b>Longer bar = grittier.</b> The name at the top has, across its "
                 "own history, bounced back from drawdowns the fastest and most "
-                "reliably. Score is <b>0–100 relative to this basket</b> — it ranks "
+                "reliably. Score is <b>0–100 relative to this basket</b> - it ranks "
                 "these names against each other, not against the whole market.")
             grittiest = gscores.index[0]
             g = gscores.loc[grittiest]
@@ -2269,7 +2252,7 @@ with tab_grit:
                 "drawdown and how fast the recovery across the real historical "
                 "crisis windows this name actually traded through. Each bar is "
                 "RANKED RELATIVE to the other names in this universe, not an "
-                "absolute score — swap in a different basket and the numbers move."
+                "absolute score - swap in a different basket and the numbers move."
             )
 
             if grit["excluded"]:
@@ -2284,7 +2267,7 @@ with tab_grit:
 with tab_conviction:
     st.caption(
         "Buying during a crisis feels impossible because the brain treats "
-        "financial loss like a physical threat — that panic is wiring, not "
+        "financial loss like a physical threat - that panic is wiring, not "
         "weakness. This tab doesn't argue with the feeling. It prices it: "
         "for every named crisis this engine stress-tests, here is what "
         "actually happened next, computed live from market data."
@@ -2317,9 +2300,9 @@ with tab_conviction:
 
         # The 3 metrics above carry the message; the full 10x7 grid folds
         # so a cold viewer isn't hit with 70 raw percentages up front.
-        with st.expander("Show the full table — every crisis, row by row"):
+        with st.expander("Show the full table - every crisis, row by row"):
             st.dataframe(
-                show.style.format({c: "{:+.0%}" for c in pct_cols}, na_rep="—")
+                show.style.format({c: "{:+.0%}" for c in pct_cols}, na_rep="-")
                     .format({"Crash depth": "{:.0%}"})
                     .map(_tone, subset=pct_cols[1:]),
                 width="stretch", hide_index=True)
@@ -2327,18 +2310,18 @@ with tab_conviction:
                 '<div class="read-me">'
                 '<b>How to read this.</b> Each row is a real crisis. '
                 '<b>Trough buy</b>: you bought the S&amp;P 500 (SPY) on the single '
-                'scariest day — the exact bottom. <b>Peak buy</b>: you bought at '
-                'the pre-crash top — the worst-timed entry possible. The columns '
+                'scariest day - the exact bottom. <b>Peak buy</b>: you bought at '
+                'the pre-crash top - the worst-timed entry possible. The columns '
                 'show where that money stood 1 and 3 trading-years later. '
-                '“—” means the crisis is too recent for that horizon: excluded, '
+                '“-” means the crisis is too recent for that horizon: excluded, '
                 'not estimated.'
                 '</div>', unsafe_allow_html=True)
             st.caption(
-                "Nobody can time the exact trough — that row measures the "
+                "Nobody can time the exact trough - that row measures the "
                 "direction of the edge, not an executable strategy. That's why "
                 "the peak row sits beside it: even the worst-timed buyer was "
                 "usually whole within three years. The one honest exception is "
-                "the dot-com peak — three years wasn't enough."
+                "the dot-com peak - three years wasn't enough."
             )
 
         # --- The AI-capex recovery race ---
@@ -2347,7 +2330,7 @@ with tab_conviction:
             f"The thesis: companies pouring capital into compute and AI "
             f"infrastructure ({', '.join(AI_CAPEX_BASKET)}, equal-weight) "
             f"recover from crises faster than the broad market. That is a "
-            f"HYPOTHESIS — here is the actual record, crisis by crisis: "
+            f"HYPOTHESIS - here is the actual record, crisis by crisis: "
             f"trading days from each side's trough back to its own "
             f"pre-crisis level."
         )
@@ -2360,14 +2343,14 @@ with tab_conviction:
             text=[("not within 3y" if pd.isna(v) else f"{v:.0f}d")
                   for v in rr["bench_days"]],
             textposition="outside", textfont=dict(size=11),
-            hovertemplate="%{y} — market: %{text}<extra></extra>"))
+            hovertemplate="%{y} - market: %{text}<extra></extra>"))
         race_fig.add_trace(go.Bar(
             y=rr["crisis"], x=rr["basket_days"].fillna(cap), orientation="h",
             name="AI-capex basket", marker=dict(color=BRONZE_DK),
             text=[("not within 3y" if pd.isna(v) else f"{v:.0f}d")
                   for v in rr["basket_days"]],
             textposition="outside", textfont=dict(size=11),
-            hovertemplate="%{y} — basket: %{text}<extra></extra>"))
+            hovertemplate="%{y} - basket: %{text}<extra></extra>"))
         race_fig = _style_fig(race_fig, height=max(340, 56 * len(rr) + 70))
         race_fig.update_layout(
             barmode="group", xaxis_title="trading days to reclaim pre-crisis level",
@@ -2385,16 +2368,16 @@ with tab_conviction:
             f'faster recovery. The basket got back up faster in '
             f'<b>{bwin} of {len(decided)}</b> crises. Where a bar says '
             f'"not within 3y", that side never reclaimed its pre-crisis '
-            f'level inside ~3 trading years — shown, not hidden.</div>',
+            f'level inside ~3 trading years - shown, not hidden.</div>',
             unsafe_allow_html=True)
         st.caption(
-            "*Honest limits: the basket carries today's \"AI capex\" label — "
+            "*Honest limits: the basket carries today's \"AI capex\" label - "
             "in 2008 these names were simply large-cap tech, and the record "
             "shown is theirs regardless of the label. Members that hadn't "
             "IPO'd by a crisis are excluded from that race, not back-filled "
             "(member count varies by crisis). Survivorship is real: this "
             "basket is named WITH hindsight. One benchmark, one basket, "
-            "hindsight throughout — evidence for a thesis, not proof. "
+            "hindsight throughout - evidence for a thesis, not proof. "
             "Educational analysis, not investment advice.*"
         )
     except Exception as exc:  # noqa: BLE001
@@ -2417,8 +2400,8 @@ with tab_liquidity:
     book = lc1.number_input(
         "Portfolio size ($)", min_value=10_000, max_value=5_000_000_000,
         value=1_000_000, step=100_000,
-        help="Total dollars invested. Position sizes — and so the days to unwind "
-             "them — scale from this.")
+        help="Total dollars invested. Position sizes - and so the days to unwind "
+             "them - scale from this.")
     participation = lc2.slider(
         "Max daily participation (% of ADV)", 5, 50, 20, step=5,
         help="How much of a name's average daily dollar volume you'll be before "
@@ -2435,7 +2418,7 @@ with tab_liquidity:
         m2.metric("Exitable in 1 day", f"{prof['pct_exitable_1day']:.0%}")
         m3.metric("Avg position horizon", _fmt_days(prof["weighted_avg_days"]))
 
-        # Liquidity-adjusted tail — how the headline CVaR fattens once the days
+        # Liquidity-adjusted tail - how the headline CVaR fattens once the days
         # it takes to unwind THIS book at THESE sliders are priced in.
         lv = liquidity_adjusted_cvar(mc["cvar"], prof["full_exit_days"])
         if np.isfinite(lv["lvar"]):
@@ -2447,7 +2430,7 @@ with tab_liquidity:
             read_me(
                 "<b>The tail you can't trade out of.</b> The headline CVaR "
                 "assumes you're flat at the horizon. This widens it by "
-                "√(1 + exit-days/252) — the Basel liquidity-horizon convention — "
+                "√(1 + exit-days/252) - the Basel liquidity-horizon convention - "
                 "to cover the extra days the market can move against you while "
                 "you're still unwinding. Prices market exposure over the unwind, "
                 "not the spread you pay to trade. A one-day-liquid book is barely "
@@ -2477,7 +2460,7 @@ with tab_liquidity:
         if prof["no_volume"]:
             caption += (
                 f"*No volume feed for {', '.join(prof['no_volume'])} "
-                "(e.g. FX/futures on Yahoo) — excluded, not estimated.*"
+                "(e.g. FX/futures on Yahoo) - excluded, not estimated.*"
             )
         st.caption(caption)
     except Exception as exc:  # noqa: BLE001
@@ -2487,7 +2470,7 @@ with tab_secmaster:
     st.caption(
         "A security master maps each ticker to stable identifiers and surfaces "
         "the real corporate-action events (splits, dividends) already folded "
-        "into the adjusted-close prices used everywhere else in this engine — "
+        "into the adjusted-close prices used everywhere else in this engine - "
         "nothing here changes a risk number, it makes the underlying events "
         "auditable instead of silently absorbed."
     )
@@ -2499,7 +2482,7 @@ with tab_secmaster:
             st.caption(
                 f"*ISIN unavailable on the free feed for: {', '.join(missing_isin)}. "
                 "SEDOL/CUSIP and full merger history need a paid reference-data "
-                "vendor (Bloomberg, Refinitiv) — not fabricated here.*"
+                "vendor (Bloomberg, Refinitiv) - not fabricated here.*"
             )
     except Exception as exc:  # noqa: BLE001
         st.caption(f"Security master unavailable: {exc}")
@@ -2507,7 +2490,7 @@ with tab_secmaster:
 with tab_dq:
     st.caption(
         "Every price pull runs through an automated validation gate before "
-        "any risk number is computed from it — schema checks, positivity, "
+        "any risk number is computed from it - schema checks, positivity, "
         "coverage, staleness, and an extreme-move flag. This validates "
         "structure and plausibility, not truth: it catches a malformed or "
         "implausible feed, not a wrong-but-plausible number."
@@ -2515,7 +2498,7 @@ with tab_dq:
     report = validate_prices(prices)
     icon = {"PASS": "✅", "WARN": "⚠️", "FAIL": "❌"}
     for c in report["checks"]:
-        st.caption(f"{icon[c['status']]} **{c['check']}** — {c['message']}")
+        st.caption(f"{icon[c['status']]} **{c['check']}** - {c['message']}")
     verdict_dq = "PASS" if report["passed"] else "FAIL"
     panel_head("Overall data-quality gate", f"This feed: {verdict_dq}")
 
@@ -2533,7 +2516,7 @@ with tab_lineage:
         st.caption(
             "Prices are live end-of-day adjusted closes, pulled on demand from "
             "Yahoo Finance. Every figure above is computed from this source by "
-            "the engine's own code — no value originates from a language model. "
+            "the engine's own code - no value originates from a language model. "
             "Use Refresh to re-pull and update this timestamp."
         )
     else:
@@ -2541,7 +2524,7 @@ with tab_lineage:
 
     panel_head("This run's audit trail", "Every step this session actually took, in order")
     st.caption(
-        "Every step this run took, in order — session-scoped (rebuilt fresh "
+        "Every step this run took, in order - session-scoped (rebuilt fresh "
         "each rerun, not persisted across sessions). A full compliance system "
         "would append this to durable storage; this is the same concept at "
         "the scale this engine actually operates at."
@@ -2558,7 +2541,7 @@ with tab_signals:
             "rank correlation between a signal's ranking of this universe and the "
             "forward returns that actually followed. Demo signal: 60-day momentum "
             "skipping the most recent 5 days (to avoid short-term reversal), scored "
-            "against 5-day forward returns — computed from the same live price "
+            "against 5-day forward returns - computed from the same live price "
             "history as everything above."
         )
     try:
@@ -2570,7 +2553,7 @@ with tab_signals:
         if summ["n_days"] < 30 or not np.isfinite(summ["t_stat"]):
             st.caption(
                 "Not enough overlapping history in this universe to evaluate "
-                f"the signal ({summ['n_days']} usable days — need at least 30)."
+                f"the signal ({summ['n_days']} usable days - need at least 30)."
             )
         else:
             i1, i2, i3 = st.columns(3)
@@ -2586,11 +2569,11 @@ with tab_signals:
                 bar_txt = ("clears the textbook t > 2 bar but NOT the t > 3 bar "
                            "Harvey, Liu & Zhu (2016) argue for once you account "
                            "for the thousands of signals the industry has already "
-                           "tested — by that stricter standard, unproven")
+                           "tested - by that stricter standard, unproven")
             else:
                 bar_txt = ("clears neither the textbook t > 2 bar nor the "
                            "stricter t > 3 multiple-testing bar of Harvey, Liu "
-                           "& Zhu (2016) — statistically indistinguishable from "
+                           "& Zhu (2016) - statistically indistinguishable from "
                            "no skill on this sample")
             st.caption(
                 f"In-sample, this momentum signal's mean IC of "
@@ -2615,7 +2598,7 @@ with tab_signals:
                 legend=dict(orientation="h", y=1.14, x=0, font=dict(size=11)))
             st.plotly_chart(ic_fig, width="stretch", config=PLOTLY_CFG)
             st.caption(
-                "Daily IC is noisy by nature — the 63-day rolling mean is the "
+                "Daily IC is noisy by nature - the 63-day rolling mean is the "
                 "signal's actual pulse. Above zero: the ranking carried "
                 "information that quarter; below: it was actively wrong."
             )
@@ -2634,14 +2617,14 @@ with tab_signals:
                 f"Raw breadth counts {len(loaded)} names × {rebalances:.0f} "
                 f"rebalances a year as independent bets, but average pairwise "
                 f"correlation collapses these {len(loaded)} names to about "
-                f"**{n_eff:.1f} independent bets** — correlated stocks are "
+                f"**{n_eff:.1f} independent bets** - correlated stocks are "
                 f"largely the same bet taken twice, so the honest IR is the "
                 f"smaller one."
             )
 
             st.caption(
                 "*Disclosures: everything here is IN-SAMPLE on the loaded "
-                "history — the signal is scored on the same data used to "
+                "history - the signal is scored on the same data used to "
                 "evaluate it. Momentum is a demo signal, not a recommendation. "
                 "No transaction costs or market impact. Published signals decay "
                 "out of sample. Educational analysis, not investment advice.*"
@@ -2652,13 +2635,13 @@ with tab_signals:
 # ---- Regime Atlas: Wasserstein k-means on full return distributions ----
 with tab_regimes:
     # Method + citation fold to one line so the current-regime verdict leads.
-    with st.expander("Method & source — Wasserstein regime clustering"):
+    with st.expander("Method & source - Wasserstein regime clustering"):
         st.caption(
             "Reproduces Horvath, Issa & Muguruza (2021), *Clustering Market "
             "Regimes using the Wasserstein Distance*: every 20-day window of this "
             "portfolio's daily returns becomes an empirical distribution, and "
             "k-means clusters those whole distributions (via the 1-D optimal-"
-            "transport closed form) rather than summary features — so regimes "
+            "transport closed form) rather than summary features - so regimes "
             "that share volatility but differ in tails or skew still separate."
         )
     try:
@@ -2669,7 +2652,7 @@ with tab_regimes:
         if Q_reg.shape[0] < max(30, k_reg * 5):
             st.caption(
                 f"Not enough portfolio history to cluster regimes "
-                f"({Q_reg.shape[0]} windows — need at least {max(30, k_reg * 5)})."
+                f"({Q_reg.shape[0]} windows - need at least {max(30, k_reg * 5)})."
             )
         else:
             reg_labels = vol_ordered_labels(
@@ -2682,7 +2665,7 @@ with tab_regimes:
             word = REGIME_WORDS[k_reg][cur["label"]]
             r1, r2, r3 = st.columns(3)
             r1.metric("Current regime",
-                      f"{cur['label'] + 1} of {k_reg} — {word}")
+                      f"{cur['label'] + 1} of {k_reg} - {word}")
             r2.metric("Regime ann. vol", f"{cur['ann_vol']:.1%}")
             r3.metric("Regime CVaR (95%)", f"{cur['cvar_95']:.2%}")
 
@@ -2708,7 +2691,7 @@ with tab_regimes:
             # Two dense grids fold together; the plain-English "sticky %"
             # caption below stays visible as the actual takeaway.
             P_reg = transition_matrix(reg_labels, k_reg)
-            with st.expander("Cluster detail — profiles & transition matrix"):
+            with st.expander("Cluster detail - profiles & transition matrix"):
                 panel_head("Regime profiles", "Vol, skew, tail per cluster")
                 reg_table = pd.DataFrame(reg_rows).set_index("label")
                 reg_table.index = [f"regime {i + 1}" for i in reg_table.index]
@@ -2728,7 +2711,7 @@ with tab_regimes:
             stay = float(np.mean(np.diag(P_reg)))
             st.caption(
                 f"Transition matrix, estimated from consecutive windows: "
-                f"regimes are sticky — on average a {stay:.0%} chance the "
+                f"regimes are sticky - on average a {stay:.0%} chance the "
                 f"next window stays in the current regime. Labels are "
                 f"in-sample statistical clusters over {Q_reg.shape[0]} "
                 f"windows ({REG_WINDOW}-day, step {REG_STEP}), ordered "
@@ -2744,11 +2727,11 @@ st.markdown("""
 <div class="meleona-footer">
   <div class="f-rail">
     <a class="f-box" href="#grit-showcase"><span class="f-num">01</span>The Grit Zone
-      <small>Resilience ranked from real drawdowns — recovery, consistency, crisis behavior.</small></a>
+      <small>Resilience ranked from real drawdowns - recovery, consistency, crisis behavior.</small></a>
     <a class="f-box" href="#conviction"><span class="f-num">02</span>Crisis Conviction
       <small>The hardest trade, priced from the actual record of ten crises.</small></a>
     <a class="f-box" href="#engine"><span class="f-num">03</span>The Engine
-      <small>Stress-test any universe live — allocation, scenarios, CVaR verdict.</small></a>
+      <small>Stress-test any universe live - allocation, scenarios, CVaR verdict.</small></a>
   </div>
   <div class="f-bar">
     <div>Meleona &middot; Portfolio Risk Engine &middot; &copy; 2026 John Nguyen</div>
@@ -2759,10 +2742,10 @@ st.markdown("""
 
 # ---- Book-glide: eased anchor scrolling on the REAL scroll container ----
 # Streamlit scrolls its own <section>, so `scroll-behavior` on <html> never
-# fires — anchor clicks teleported. This zero-height component reaches into
+# fires - anchor clicks teleported. This zero-height component reaches into
 # the parent document, intercepts CTA anchor clicks, and drives a 1.1s
 # eased glide (easeInOutCubic) with a mid-scroll arrival animation on the
-# destination — a page turn, not a teleport. Guarded so Streamlit reruns
+# destination - a page turn, not a teleport. Guarded so Streamlit reruns
 # never stack duplicate listeners.
 components.html("""
 <script>
@@ -2771,7 +2754,7 @@ components.html("""
   if (P.__meleonaGlide) return;          // rerun guard: bind once per page
   P.__meleonaGlide = true;
   const ease = t => t < .5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2;
-  /* Streamlit's scroll container has moved between releases — never trust
+  /* Streamlit's scroll container has moved between releases - never trust
      a hardcoded selector. Walk UP from the destination to the first
      ancestor that really scrolls (proved by a nudge test). */
   function findScroller(el) {
@@ -2779,11 +2762,11 @@ components.html("""
     while (n) {
       /* Demand a REAL page scroller (hundreds of px of travel). A tiny
          accidental overflow (e.g. a full-bleed band adding a few px to an
-         inner container) must not hijack the walk — that bug froze every
+         inner container) must not hijack the walk - that bug froze every
          CTA at 1px of movement. */
       if (n.scrollHeight > n.clientHeight + 120) {
         /* The scroller carries `scroll-behavior: smooth` (our CSS fallback),
-           which makes a programmatic scrollTop ASYNC — an immediate read-back
+           which makes a programmatic scrollTop ASYNC - an immediate read-back
            sees no movement and this test wrongly rejected the real scroller.
            Force instant behavior for the probe, restore after. */
         const prevSB = n.style.scrollBehavior;
@@ -2804,7 +2787,7 @@ components.html("""
            scroller.getBoundingClientRect().top + scroller.scrollTop - 26;
   }
   function glide(scroller, el, dur, settled) {
-    /* Our rAF drives every frame — the scroller's own smooth behavior would
+    /* Our rAF drives every frame - the scroller's own smooth behavior would
        fight it (each scrollTo becoming its own animation). Instant while we
        fly, restored when we land. */
     const prevSB = scroller.style.scrollBehavior;
@@ -2817,7 +2800,7 @@ components.html("""
       if (p < 1) { requestAnimationFrame(f); return; }
       scroller.style.scrollBehavior = prevSB;
       /* landing check: if the page shifted mid-flight (a chart mounted,
-         a rerun repainted), re-aim once with a short corrective glide —
+         a rerun repainted), re-aim once with a short corrective glide -
          the reader always ends ON the section the button promised. */
       const drift = targetY(scroller, el) - scroller.scrollTop;
       if (!settled && Math.abs(drift) > 4) glide(scroller, el, 320, true);
@@ -2840,7 +2823,7 @@ components.html("""
     }
     /* Arrival theatrics, one per destination: the EARTHBENDER launch fires
        only for the first CTA (#grit-showcase); #conviction gets the quiet
-       engraver's ring instead — same band, different gesture. */
+       engraver's ring instead - same band, different gesture. */
     const href = a.getAttribute('href');
     const row = el.closest('.showcase-row');
     if (row && href === '#grit-showcase') {
