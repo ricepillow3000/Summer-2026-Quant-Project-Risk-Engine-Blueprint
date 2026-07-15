@@ -1076,22 +1076,32 @@ def living_surface_html(density: dict, height: int = 520, n_particles: int = 220
       const waveZ = data.z.map(row => row.slice());
       const AMP = 0.04, WAVE_K = 0.55, WAVE_W = 2.1;
       const dayN = data.days.length, daySpan = data.days[dayN - 1] - data.days[0];
-      let lastT = null, acc = 0, angle = 0, wt = 0, radius = 1.6;
+      /* PERF: Plotly.relayout is a full JS layout pass - calling it every
+         rAF frame on a high-refresh monitor (120-165Hz) burns a core and
+         stutters page scroll. The orbit advances continuously (delta-time)
+         but COMMITS at most every 33ms (~30fps): for a 63-second lap that
+         is 0.19 degrees per commit - visually identical, a third of the
+         work. The wave commits every 90ms for the same reason. */
+      let lastT = null, acc = 0, camAcc = 0, angle = 0, wt = 0, radius = 1.6;
       const step = function(now) {{
         if (lastT === null) lastT = now;
         const dt = Math.min(now - lastT, 100); lastT = now;
         if (!userInteracting) {{
-          angle += dt * 0.00010;                 // one lap ≈ 63s, silk-smooth
-          Plotly.relayout('living3d', {{
-            'scene.camera.eye.x': radius * Math.cos(angle),
-            'scene.camera.eye.y': radius * Math.sin(angle),
-          }});
+          angle += dt * 0.00010;                 // one lap ≈ 63s
+          camAcc += dt;
+          if (camAcc >= 33) {{
+            camAcc = 0;
+            Plotly.relayout('living3d', {{
+              'scene.camera.eye.x': radius * Math.cos(angle),
+              'scene.camera.eye.y': radius * Math.sin(angle),
+            }});
+          }}
         }}
         acc += dt;
         /* The tide holds its breath while the user drags: a restyle mid-drag
            resets the WebGL gesture and the drag "doesn't take". */
-        if (acc >= 70 && !userInteracting) {{     // the breathing tide
-          acc = 0; wt += 0.07;
+        if (acc >= 90 && !userInteracting) {{     // the breathing tide
+          acc = 0; wt += 0.09;
           for (let i = 0; i < waveZ.length; i++) {{
             const rowB = baseZ[i], rowW = waveZ[i];
             for (let j = 0; j < rowW.length; j++) {{
