@@ -125,6 +125,24 @@ def anchor_rank(returns: pd.DataFrame, high_flyer: str,
     return df.sort_values("anchor_score", ascending=False)
 
 
+def pair_weights(returns_a: pd.Series, returns_b: pd.Series) -> dict:
+    """
+    Risk-parity split for the two circles: each leg contributes EQUAL RISK,
+    not equal dollars. For two assets this is exact inverse-volatility:
+        w_a * sigma_a = w_b * sigma_b  =>  w_a = sigma_b / (sigma_a + sigma_b)
+    A high-flyer at ~3x the anchor's vol naturally lands near 25/75 - the
+    anchor holds most of the CAPITAL precisely because the flyer holds most
+    of the RISK. Long-only by construction.
+    """
+    sa = float(pd.Series(returns_a).dropna().std())
+    sb = float(pd.Series(returns_b).dropna().std())
+    if sa <= 0 or sb <= 0:
+        raise ValueError("both legs need positive volatility")
+    w_a = sb / (sa + sb)
+    return {"w_a": w_a, "w_b": 1.0 - w_a, "vol_a": sa * np.sqrt(252),
+            "vol_b": sb * np.sqrt(252)}
+
+
 def tail_gap(returns: pd.DataFrame, a: str, b: str,
              confidence: float = TAIL_CONFIDENCE) -> dict:
     """The safety line: distance between the circles in tail-loss units."""

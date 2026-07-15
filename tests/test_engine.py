@@ -1005,6 +1005,23 @@ def test_es_bootstrap_ci_contains_point_and_narrows():
     assert (hi_b - lo_b) < (hi_s - lo_s), "CI must narrow with more data"
 
 
+def test_pair_weights_equal_risk_contribution():
+    from src.pairing import pair_weights
+    rng = np.random.default_rng(31)
+    a = pd.Series(rng.normal(0, 0.03, 700))     # 3x the anchor's vol
+    b = pd.Series(rng.normal(0, 0.01, 700))
+    w = pair_weights(a, b)
+    # Exact two-asset risk parity: each leg contributes equal risk.
+    assert abs(w["w_a"] * a.std() - w["w_b"] * b.std()) < 1e-12
+    assert w["w_a"] < 0.5 < w["w_b"], "higher-vol leg must hold less capital"
+    assert abs(w["w_a"] + w["w_b"] - 1.0) < 1e-12
+    try:
+        pair_weights(a, pd.Series([0.0] * 700))
+        raise AssertionError("zero-vol leg must raise")
+    except ValueError:
+        pass
+
+
 def test_tail_gap_identity():
     rng = np.random.default_rng(21)
     rets = pd.DataFrame({"A": rng.normal(0, 0.03, 600),

@@ -37,8 +37,8 @@ from src.factors import factor_exposures
 from src.strategies import risk_contributions, risk_parity_weights, vol_target
 from src.hedge import min_variance_pair, rank_hedges
 from src.pairing import (anchor_rank, backtest_pair, crisis_cushion,
-                         es_confidence_interval, regime_labels, tail_gap,
-                         DEFENSIVE_ANCHOR_TICKERS, DEFAULT_W_A)
+                         es_confidence_interval, pair_weights, regime_labels,
+                         tail_gap, DEFENSIVE_ANCHOR_TICKERS)
 from src.covariance import estimate_covariance
 from src.eigenrisk import eigen_factors, marcenko_pastur_bounds, pc1_exposure
 from src.scenarios import HISTORICAL_REGIMES, replay_returns
@@ -2225,6 +2225,12 @@ with tab_balance:
             def _bv_crisis(a: str, b: str, w: float):
                 return crisis_cushion(a, b, w)
 
+            @st.cache_data(ttl=6 * 3600, show_spinner=False)
+            def _bv_grit(tickers: tuple):
+                """Grit scores for anchor candidates - the engine's founding
+                question ("who gets back up?") IS the Circle 2 screen."""
+                return grit_scores(list(tickers))["scores"]["grit_score"]
+
             panel_head("Bon Voyage - the defensive pair",
                        "What goes up must come down: tether a high-flyer "
                        "to an anchor and measure the cushion")
@@ -2237,38 +2243,54 @@ with tab_balance:
                 "High-flyer (Circle A - the volatile conviction position)",
                 loaded, index=loaded.index(vols.idxmax()),
                 help="Defaults to the most volatile name in your universe.")
-            bv_ranked = anchor_rank(bv_rets, flyer)
+            try:                                   # grit feeds the anchor rank
+                bv_grit = _bv_grit(tuple(sorted(bv_rets.columns)))
+            except Exception:  # noqa: BLE001 - grit needs full-history fetch
+                bv_grit = None
+            bv_ranked = anchor_rank(bv_rets, flyer, grit=bv_grit)
             bv_anchor = bv_ranked.index[0]
             tg = tail_gap(bv_rets, flyer, bv_anchor)
             ci_lo, ci_hi = es_confidence_interval(bv_rets[flyer])
-            bt = backtest_pair(bv_rets[flyer], bv_rets[bv_anchor], DEFAULT_W_A)
+            pw = pair_weights(bv_rets[flyer], bv_rets[bv_anchor])
+            bt = backtest_pair(bv_rets[flyer], bv_rets[bv_anchor], pw["w_a"])
             phase_now = regime_labels(
                 (1 + bv_rets[flyer]).cumprod(), tg["gap"]).iloc[-1]
             _ph_col = {"Tether": "#3F6B3F", "Descent": "#8A3B2E",
                        "Rotation": "#9A7B4F"}[phase_now]
-            # Circle-and-line: the two-in-one motif, drawn as a diagram (no
-            # new chart). Kept contiguous - st.markdown truncates at blank lines.
+            # Circle-and-line drawn to John's sketch: the high-flyer rides
+            # top-RIGHT, the steady anchor sits bottom-LEFT, joined by the
+            # diagonal safety line. Two-in-one motif, no new chart. Kept
+            # contiguous - st.markdown truncates at blank lines.
             st.markdown(
                 f'<div style="display:flex;align-items:center;gap:26px;padding:18px 6px 6px;">'
-                f'<svg viewBox="0 0 120 190" width="96" height="152" xmlns="http://www.w3.org/2000/svg">'
-                f'<line x1="60" y1="38" x2="60" y2="152" stroke="#9A7B4F" stroke-width="1.5" stroke-dasharray="5 4"/>'
-                f'<circle cx="60" cy="28" r="21" fill="rgba(154,123,79,.14)" stroke="#8A6A3C" stroke-width="1.6"/>'
-                f'<circle cx="60" cy="162" r="15" fill="rgba(63,59,53,.10)" stroke="#3F3B35" stroke-width="1.6"/>'
-                f'<text x="60" y="32" text-anchor="middle" font-family="Georgia" font-size="11" fill="#3F3B35">{flyer}</text>'
-                f'<text x="60" y="166" text-anchor="middle" font-family="Georgia" font-size="9" fill="#3F3B35">{bv_anchor}</text>'
-                f'<text x="70" y="99" font-family="Helvetica Neue" font-size="8.5" letter-spacing="1" fill="#8A6A3C">GAP {tg["gap"]:.1%}</text>'
+                f'<svg viewBox="0 0 240 170" width="188" height="133" xmlns="http://www.w3.org/2000/svg">'
+                f'<line x1="62" y1="126" x2="176" y2="44" stroke="#9A7B4F" stroke-width="1.5" stroke-dasharray="5 4"/>'
+                f'<circle cx="188" cy="35" r="24" fill="rgba(154,123,79,.14)" stroke="#8A6A3C" stroke-width="1.6"/>'
+                f'<circle cx="48" cy="136" r="17" fill="rgba(63,59,53,.10)" stroke="#3F3B35" stroke-width="1.6"/>'
+                f'<text x="188" y="39" text-anchor="middle" font-family="Georgia" font-size="11" fill="#3F3B35">{flyer}</text>'
+                f'<text x="48" y="140" text-anchor="middle" font-family="Georgia" font-size="9" fill="#3F3B35">{bv_anchor}</text>'
+                f'<text x="188" y="72" text-anchor="middle" font-family="Helvetica Neue" font-size="8" letter-spacing="1" fill="#6B6459">{pw["w_a"]:.0%} OF CAPITAL</text>'
+                f'<text x="48" y="164" text-anchor="middle" font-family="Helvetica Neue" font-size="8" letter-spacing="1" fill="#6B6459">{pw["w_b"]:.0%} OF CAPITAL</text>'
+                f'<text x="96" y="76" font-family="Helvetica Neue" font-size="8.5" letter-spacing="1" fill="#8A6A3C" transform="rotate(-35 96 76)">GAP {tg["gap"]:.1%}</text>'
                 f'</svg>'
                 f'<div style="min-width:0;">'
                 f'<div style="font-family:Georgia;font-size:15px;color:#3F3B35;line-height:1.55;">'
                 f'In the loaded 2-year history, holding <b>{flyer}</b> alone fell '
-                f'<b>{bt["max_dd_solo"]:.0%}</b> at its worst; tethered '
-                f'{DEFAULT_W_A:.0%}/{1 - DEFAULT_W_A:.0%} to <b>{bv_anchor}</b> '
-                f'(rebalanced monthly) the fall was <b>{bt["max_dd_pair"]:.0%}</b> - '
+                f'<b>{bt["max_dd_solo"]:.0%}</b> at its worst; tethered to '
+                f'<b>{bv_anchor}</b> at risk-parity weights '
+                f'(<b>{pw["w_b"]:.0%}</b> anchor / <b>{pw["w_a"]:.0%}</b> flyer, '
+                f'rebalanced monthly) the fall was <b>{bt["max_dd_pair"]:.0%}</b> - '
                 f'a <b>{bt["cushion"]:+.0%}</b> cushion. A cushion, not a cap.</div>'
                 f'<div style="font-family:\'Helvetica Neue\',sans-serif;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#6B6459;margin-top:8px;">'
                 f'Safety line (tail gap): ES 97.5% {tg["es_a"]:.1%} vs {tg["es_b"]:.1%} &middot; '
                 f'{flyer} ES 90% CI {ci_lo:.1%}-{ci_hi:.1%} &middot; current phase '
                 f'<span style="color:{_ph_col};font-weight:600;">{phase_now}</span></div>'
+                f'<div style="font-family:Georgia;font-size:12.5px;color:#6B6459;margin-top:6px;">'
+                f'Why the anchor holds most of the capital: equal-risk split - '
+                f'{flyer} runs {pw["vol_a"]:.0%} annual vol to {bv_anchor}\'s '
+                f'{pw["vol_b"]:.0%}, so each dollar of {flyer} carries '
+                f'{pw["vol_a"] / pw["vol_b"]:.1f}x the risk. The flyer holds most '
+                f'of the RISK; the anchor holds most of the MONEY.</div>'
                 f'</div></div>',
                 unsafe_allow_html=True)
             with st.expander("The real backtest - pair vs solo, and the crisis record"):
@@ -2292,7 +2314,7 @@ with tab_balance:
                     f"{bt['total_return_pair']:+.0%} vs {bt['total_return_solo']:+.0%}. "
                     "In-sample description of one history, not a forecast.")
                 try:
-                    cc = _bv_crisis(flyer, bv_anchor, DEFAULT_W_A)
+                    cc = _bv_crisis(flyer, bv_anchor, round(pw["w_a"], 3))
                     if len(cc):
                         panel_head("Crisis cushion record",
                                    "The same pair replayed through real crises "
@@ -2320,8 +2342,12 @@ with tab_balance:
                     '"pairs trading" - there is no short leg and no cointegration '
                     'bet. The anchor is chosen by rank (lowest correlation to the '
                     "universe's dominant risk factor, low volatility, shallow "
-                    'tail, from your universe plus Treasury/gold/staples/'
-                    'utilities/min-vol ETFs) - ranked, never promised. Losses '
+                    'tail, highest Grit score - the engine\'s founding question, '
+                    '"who gets back up?", IS the Circle 2 screen - from your '
+                    'universe plus Treasury/gold/staples/utilities/min-vol ETFs) '
+                    '- ranked, never promised. Weights are risk parity: each leg '
+                    'contributes equal risk, which is why the steady anchor '
+                    'holds most of the capital. Losses '
                     'are <b>cushioned, not capped</b>: a long-only pair has no '
                     'floor above zero, and crisis correlations converge toward '
                     '+1 exactly when protection matters most. The Tether / '
