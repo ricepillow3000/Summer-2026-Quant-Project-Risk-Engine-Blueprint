@@ -75,7 +75,11 @@ def pc1_factor_correlations(returns: pd.DataFrame) -> pd.Series:
     vals, vecs = np.linalg.eigh(corr.values)
     vecs = align_eigenvector_signs(vecs)
     v1 = vecs[:, -1]                                   # eigh: ascending order
-    factor = pd.Series(returns.values @ v1, index=returns.index)
+    # A correlation-matrix eigenvector is defined on STANDARDIZED returns -
+    # projecting raw returns would let high-vol names hijack the factor
+    # (audit pass 8, trace: Jolliffe, Principal Component Analysis).
+    standardized = (returns - returns.mean()) / returns.std()
+    factor = pd.Series(standardized.values @ v1, index=returns.index)
     return returns.corrwith(factor).rename("pc1_corr")
 
 

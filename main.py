@@ -544,6 +544,23 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# ---- BREATHING ROOM (2026-07-15, Breez-inspired spacing pass) ----
+# The engine section reads as a wall when panels touch. Generous, consistent
+# vertical rhythm: every ruled section gets air above it, tab strips get a
+# quiet margin, and expanders stop crowding the panel above them. Space,
+# not emptiness - nothing removed.
+st.markdown("""
+<style>
+.section-divider { margin: 54px 0 34px !important; }
+[data-testid="stTabs"] { margin-top: 10px; }
+[data-baseweb="tab-list"] { margin-bottom: 14px !important; }
+[data-testid="stExpander"] { margin-top: 10px; }
+.panel-head, .lintel { margin-top: 26px; }
+.verdict-box { margin-top: 8px; }
+[data-testid="stMainBlockContainer"] { padding-bottom: 96px; }
+</style>
+""", unsafe_allow_html=True)
+
 # ---- ROUND 3 (2026-07-09) ----
 # Softened geometry (loosen the border-radius:0 doctrine into a restrained
 # radius scale + organic/circular accents), glossy chart halos + glowing bars,
@@ -1202,10 +1219,18 @@ try:
         f"background-size: auto, cover; "
         f"background-position: left, right 78%; "
         f"background-blend-mode: normal, luminosity; "
-        # Full-bleed: Casper fills the page edge-to-edge and reaches the top;
-        # the bottom keeps its hairline + beige gap, the seam before Gotham.
-        f"margin: -2.4rem calc(50% - 50vw) 0; "
-        f"padding: 64px max(7vw, calc(50vw - 744px)) 48px; }}</style>",
+        # Full-bleed: Casper fills the page edge-to-edge and reaches the top.
+        # The extra -96px swallows the flex-gap of the six zero-height style
+        # blocks Streamlit stacks above the hero (6 x 1rem) - without it a
+        # pale strip of bare page shows between the header and the photo.
+        f"margin: calc(-2.4rem - 96px) calc(50% - 50vw) 0; "
+        f"padding: 96px max(7vw, calc(50vw - 744px)) 48px; "
+        # Ledger frame, same grammar as Gotham: 2px bronze rule top and
+        # bottom with a 1px inner hairline 14px inside each edge.
+        f"box-shadow: inset 0 2px 0 rgba(176,138,85,.55), "
+        f"inset 0 -2px 0 rgba(176,138,85,.55), "
+        f"inset 0 16px 0 -15px rgba(176,138,85,.45), "
+        f"inset 0 -16px 0 -15px rgba(176,138,85,.45); }}</style>",
         unsafe_allow_html=True)
 except OSError:
     pass  # no photo on disk -> tiles render on the plain field, nothing breaks
@@ -1882,11 +1907,17 @@ panel_head("Risk & conviction", "The analysis - where the risk lives")
     "Grit Zone", "Crisis Conviction",
 ])
 panel_head("Research & controls", "The workshop - signals, regimes, plumbing")
-(tab_signals, tab_regimes, tab_liquidity, tab_secmaster, tab_dq,
- tab_lineage) = st.tabs([
-    "Signal Lab", "Regime Atlas", "Liquidity", "Security Master",
-    "Data Quality", "Lineage & Audit",
-])
+# Declutter (Breez-inspired spacing pass): the workshop is for the reader who
+# wants the plumbing - fold the entire second tab strip behind one door so
+# the default scroll ends at the analysis, not a second wall of charts.
+_workshop = st.expander("Open the workshop - signal research, regimes, "
+                        "liquidity, reference data, audit trail")
+with _workshop:
+    (tab_signals, tab_regimes, tab_liquidity, tab_secmaster, tab_dq,
+     tab_lineage) = st.tabs([
+        "Signal Lab", "Regime Atlas", "Liquidity", "Security Master",
+        "Data Quality", "Lineage & Audit",
+    ])
 
 with tab_watch:
     # Correlation as a moving picture. A static matrix answers "are these
@@ -2055,7 +2086,9 @@ with tab_breakdown:
               else "unavailable - Sharpe computed against 0%")
     st.caption(
         f"Sharpe = (annualized return − risk-free) / annualized volatility, on "
-        f"the real (unshocked) portfolio. Risk-free rate: {rf_txt}."
+        f"the real (unshocked) "
+        f"{'synthetic short book (daily-rebalanced; borrow costs not modeled)' if bearish else 'portfolio'}. "
+        f"Risk-free rate: {rf_txt}."
     )
 
 
@@ -2123,10 +2156,18 @@ with tab_breakdown:
         v2.metric("Parametric VaR (95%)", f"{parametric_var(port_returns):.2%}")
         v3.metric("VaR breaches", f"{bt['breaches']} / {bt['expected_breaches']:.0f} exp.")
         verdict_word = "passes" if bt["passed"] else "fails"
+        _kupiec_clause = (
+            f"the model's breach rate of {bt['observed_rate']:.1%} is "
+            "statistically consistent with the 5% it claims" if bt["passed"]
+            else f"the model's breach rate of {bt['observed_rate']:.1%} is "
+                 "statistically INCONSISTENT with the 5% it claims - the VaR "
+                 "model misstates its own tail on this sample")
         st.caption(
-            f"Daily VaR backtest {verdict_word} the Kupiec test "
-            f"(LR = {bt['kupiec_lr']}, 95% critical = 3.84): the model's breach rate "
-            f"of {bt['observed_rate']:.1%} is statistically consistent with the 5% it claims."
+            f"Daily VaR check {verdict_word} the Kupiec proportion-of-failures "
+            f"test (Kupiec 1995; LR = {bt['kupiec_lr']}, 95% critical = 3.84): "
+            f"{_kupiec_clause}. Honest limit: VaR here is estimated on the same "
+            "sample it is tested against (an in-sample consistency check, not a "
+            "true out-of-sample backtest), which biases the test toward passing."
         )
 
         # --- Named factor exposures ---
@@ -2320,17 +2361,36 @@ with tab_balance:
             # top-RIGHT, the steady anchor sits bottom-LEFT, joined by the
             # diagonal safety line. Two-in-one motif, no new chart. Kept
             # contiguous - st.markdown truncates at blank lines.
+            _bv_role_a = ("THE SHORT" if bearish else "THE HIGH-FLYER")
+            _bv_role_b = ("SQUEEZE CUSHION" if bearish else "THE STEADY ANCHOR")
             st.markdown(
-                f'<div style="display:flex;align-items:center;gap:26px;padding:18px 6px 6px;">'
-                f'<svg viewBox="0 0 240 170" width="188" height="133" xmlns="http://www.w3.org/2000/svg">'
-                f'<line x1="62" y1="126" x2="176" y2="44" stroke="#9A7B4F" stroke-width="1.5" stroke-dasharray="5 4"/>'
-                f'<circle cx="188" cy="35" r="24" fill="rgba(154,123,79,.14)" stroke="#8A6A3C" stroke-width="1.6"/>'
-                f'<circle cx="48" cy="136" r="17" fill="rgba(63,59,53,.10)" stroke="#3F3B35" stroke-width="1.6"/>'
-                f'<text x="188" y="39" text-anchor="middle" font-family="Georgia" font-size="{"9" if bearish else "11"}" fill="#3F3B35">{"-" + flyer if bearish else flyer}</text>'
-                f'<text x="48" y="140" text-anchor="middle" font-family="Georgia" font-size="9" fill="#3F3B35">{bv_anchor}</text>'
-                f'<text x="188" y="72" text-anchor="middle" font-family="Helvetica Neue" font-size="8" letter-spacing="1" fill="#6B6459">{pw["w_a"]:.0%} OF CAPITAL</text>'
-                f'<text x="48" y="164" text-anchor="middle" font-family="Helvetica Neue" font-size="8" letter-spacing="1" fill="#6B6459">{pw["w_b"]:.0%} OF CAPITAL</text>'
-                f'<text x="96" y="76" font-family="Helvetica Neue" font-size="8.5" letter-spacing="1" fill="#8A6A3C" transform="rotate(-35 96 76)">GAP {tg["gap"]:.1%}</text>'
+                f'<div style="display:flex;align-items:center;gap:40px;padding:26px 10px 12px;flex-wrap:wrap;">'
+                f'<svg viewBox="0 0 420 300" width="400" height="286" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;">'
+                # Ledger corner ticks - the same double-rule frame grammar as
+                # the section bands.
+                f'<path d="M8 30 V8 H30 M390 8 H412 V30 M412 270 V292 H390 M30 292 H8 V270" fill="none" stroke="rgba(154,123,79,.5)" stroke-width="1.5"/>'
+                # The safety line: bronze, dashed, with a small plaque.
+                f'<line x1="118" y1="216" x2="288" y2="92" stroke="#9A7B4F" stroke-width="2" stroke-dasharray="7 5"/>'
+                f'<g transform="rotate(-36 203 154)">'
+                f'<rect x="157" y="140" width="92" height="26" rx="2" fill="#F1EDE5" stroke="rgba(154,123,79,.55)" stroke-width="1"/>'
+                f'<text x="203" y="157" text-anchor="middle" font-family="Helvetica Neue" font-size="12" letter-spacing="1.5" fill="#8A6A3C">GAP {tg["gap"]:.1%}</text>'
+                f'</g>'
+                # Circle 1 - double ring, warm glossy fill (crest treatment).
+                f'<circle cx="316" cy="66" r="52" fill="#F6F2EA" stroke="#8A6A3C" stroke-width="2"/>'
+                f'<circle cx="316" cy="66" r="45" fill="rgba(154,123,79,.10)" stroke="rgba(154,123,79,.4)" stroke-width="1"/>'
+                f'<text x="316" y="62" text-anchor="middle" font-family="Georgia" font-size="{"17" if len(flyer) < 5 else "14"}" fill="#3F3B35">{"-" + flyer if bearish else flyer}</text>'
+                f'<text x="316" y="80" text-anchor="middle" font-family="Helvetica Neue" font-size="10" letter-spacing="1.4" fill="#8A6A3C">{pw["w_a"]:.0%} CAPITAL</text>'
+                f'<text x="316" y="136" text-anchor="middle" font-family="Helvetica Neue" font-size="10.5" letter-spacing="1.8" fill="#6B6459">{_bv_role_a}</text>'
+                # Circle 2 - the one we are: charcoal-inked, steady.
+                f'<circle cx="92" cy="236" r="40" fill="#EFEAE0" stroke="#3F3B35" stroke-width="2"/>'
+                f'<circle cx="92" cy="236" r="34" fill="rgba(63,59,53,.07)" stroke="rgba(63,59,53,.3)" stroke-width="1"/>'
+                f'<text x="92" y="233" text-anchor="middle" font-family="Georgia" font-size="{"15" if len(bv_anchor) < 5 else "12"}" fill="#3F3B35">{bv_anchor}</text>'
+                f'<text x="92" y="250" text-anchor="middle" font-family="Helvetica Neue" font-size="10" letter-spacing="1.4" fill="#6B6459">{pw["w_b"]:.0%} CAPITAL</text>'
+                f'<text x="92" y="290" text-anchor="middle" font-family="Helvetica Neue" font-size="10.5" letter-spacing="1.8" fill="#6B6459">{_bv_role_b}</text>'
+                # Phase chip under the line.
+                f'<rect x="150" y="228" width="118" height="24" rx="12" fill="none" stroke="{_ph_col}" stroke-width="1.3"/>'
+                f'<circle cx="166" cy="240" r="4" fill="{_ph_col}"/>'
+                f'<text x="216" y="244" text-anchor="middle" font-family="Helvetica Neue" font-size="10.5" letter-spacing="1.8" fill="{_ph_col}">{phase_now.upper()}</text>'
                 f'</svg>'
                 f'<div style="min-width:0;">'
                 f'<div style="font-family:Georgia;font-size:15px;color:#3F3B35;line-height:1.55;">'
@@ -2344,7 +2404,7 @@ with tab_balance:
                 f'a <b>{bt["cushion"]:+.0%}</b> cushion. A cushion, not a cap.</div>'
                 f'<div style="font-family:\'Helvetica Neue\',sans-serif;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#6B6459;margin-top:8px;">'
                 f'Safety line (tail gap): ES 97.5% {tg["es_a"]:.1%} vs {tg["es_b"]:.1%} &middot; '
-                f'{flyer} ES 90% CI {ci_lo:.1%}-{ci_hi:.1%} &middot; current phase '
+                f'{"short " if bearish else ""}{flyer} ES 90% CI {ci_lo:.1%}-{ci_hi:.1%} &middot; current phase '
                 f'<span style="color:{_ph_col};font-weight:600;">{phase_now}</span></div>'
                 f'<div style="font-family:Georgia;font-size:12.5px;color:#6B6459;margin-top:6px;">'
                 f'Why the anchor holds most of the capital: equal-risk split - '
@@ -2383,10 +2443,10 @@ with tab_balance:
                                    "(both assets must have traded)")
                         st.dataframe(
                             cc.rename(columns={
-                                "solo_dd": f"{flyer} alone",
+                                "solo_dd": f"{'short ' if bearish else ''}{flyer} alone",
                                 "pair_dd": "pair", "cushion": "cushion",
                                 "days": "days"})
-                              .style.format({f"{flyer} alone": "{:.1%}",
+                              .style.format({f"{'short ' if bearish else ''}{flyer} alone": "{:.1%}",
                                              "pair": "{:.1%}",
                                              "cushion": "{:+.1%}",
                                              "days": "{:.0f}"}),
