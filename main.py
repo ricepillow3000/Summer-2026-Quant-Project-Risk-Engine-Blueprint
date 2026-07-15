@@ -1028,12 +1028,18 @@ def living_surface_html(density: dict, height: int = 520, n_particles: int = 220
     font: {{ family: "Georgia, 'Times New Roman', serif", color: '#D9D2C4', size: 12 }},
     scene: {{
       bgcolor: 'rgba(0,0,0,0)',
+      /* Axis ranges are FROZEN. If they autoscale, every wave tick rescales
+         the z-axis and the whole grid pulses - the user sees "the lines
+         moving". Locked ranges mean only the sheet and particles swim. */
       xaxis: {{ title: 'Trading day', gridcolor: 'rgba(237,233,227,0.14)',
-               backgroundcolor: 'rgba(24,21,18,0.45)', showbackground: true }},
+               backgroundcolor: 'rgba(24,21,18,0.45)', showbackground: true,
+               range: [data.days[0], data.days[data.days.length - 1]] }},
       yaxis: {{ title: '1-year outcome', tickformat: '.0%', gridcolor: 'rgba(237,233,227,0.14)',
-               backgroundcolor: 'rgba(24,21,18,0.45)', showbackground: true }},
+               backgroundcolor: 'rgba(24,21,18,0.45)', showbackground: true,
+               range: [data.rets[0], data.rets[data.rets.length - 1]] }},
       zaxis: {{ title: 'Density', gridcolor: 'rgba(237,233,227,0.14)',
-               backgroundcolor: 'rgba(24,21,18,0.45)', showbackground: true }},
+               backgroundcolor: 'rgba(24,21,18,0.45)', showbackground: true,
+               range: [0, Math.max.apply(null, data.z.map(r => Math.max.apply(null, r))) * 1.12] }},
       camera: {{ eye: {{x: 1.6, y: 1.6, z: 0.9}} }},
     }},
   }};
@@ -1042,7 +1048,16 @@ def living_surface_html(density: dict, height: int = 520, n_particles: int = 220
     .then(function(gd) {{
       let t = 0, userInteracting = false, resumeTimer = null;
       const pause = () => {{ userInteracting = true; clearTimeout(resumeTimer); }};
-      const resume = () => {{ resumeTimer = setTimeout(() => {{ userInteracting = false; }}, 4000); }};
+      const resume = () => {{ resumeTimer = setTimeout(() => {{
+        /* Hand the wheel back where the user left it: re-derive the orbit
+           angle from the camera they dragged to, so auto-rotate continues
+           from THEIR view instead of snapping back to the old position. */
+        const eye = (gd.layout.scene && gd.layout.scene.camera &&
+                     gd.layout.scene.camera.eye) || {{x: 1.6, y: 1.6}};
+        angle = Math.atan2(eye.y, eye.x);
+        radius = Math.hypot(eye.x, eye.y) || 1.6;   // keep the user's zoom
+        userInteracting = false;
+      }}, 4000); }};
       gd.addEventListener('mousedown', pause);
       gd.addEventListener('touchstart', pause);
       window.addEventListener('mouseup', resume);
@@ -1061,19 +1076,21 @@ def living_surface_html(density: dict, height: int = 520, n_particles: int = 220
       const waveZ = data.z.map(row => row.slice());
       const AMP = 0.04, WAVE_K = 0.55, WAVE_W = 2.1;
       const dayN = data.days.length, daySpan = data.days[dayN - 1] - data.days[0];
-      let lastT = null, acc = 0, angle = 0, wt = 0;
+      let lastT = null, acc = 0, angle = 0, wt = 0, radius = 1.6;
       const step = function(now) {{
         if (lastT === null) lastT = now;
         const dt = Math.min(now - lastT, 100); lastT = now;
         if (!userInteracting) {{
           angle += dt * 0.00010;                 // one lap ≈ 63s, silk-smooth
           Plotly.relayout('living3d', {{
-            'scene.camera.eye.x': 1.6 * Math.cos(angle),
-            'scene.camera.eye.y': 1.6 * Math.sin(angle),
+            'scene.camera.eye.x': radius * Math.cos(angle),
+            'scene.camera.eye.y': radius * Math.sin(angle),
           }});
         }}
         acc += dt;
-        if (acc >= 70) {{                         // the breathing tide
+        /* The tide holds its breath while the user drags: a restyle mid-drag
+           resets the WebGL gesture and the drag "doesn't take". */
+        if (acc >= 70 && !userInteracting) {{     // the breathing tide
           acc = 0; wt += 0.07;
           for (let i = 0; i < waveZ.length; i++) {{
             const rowB = baseZ[i], rowW = waveZ[i];
@@ -1464,7 +1481,7 @@ _bv_sk_a, _bv_sk_b = ("SHORT", "the squeeze cushion") if bearish \
     else ("high-flyer", "the steady cushion")
 st.markdown(
     f'<div class="showcase-section reveal" style="padding-top:2px;text-align:center;">'
-    f'<svg viewBox="0 0 240 130" width="150" height="81" xmlns="http://www.w3.org/2000/svg" style="opacity:.85;">'
+    f'<svg viewBox="0 0 240 130" width="420" height="228" xmlns="http://www.w3.org/2000/svg" style="opacity:.9;max-width:92vw;height:auto;">'
     f'<line x1="62" y1="96" x2="176" y2="34" stroke="#9A7B4F" stroke-width="1.5" stroke-dasharray="5 4"/>'
     f'<circle cx="188" cy="27" r="20" fill="rgba(154,123,79,.14)" stroke="#8A6A3C" stroke-width="1.6"/>'
     f'<circle cx="48" cy="104" r="15" fill="rgba(63,59,53,.10)" stroke="#3F3B35" stroke-width="1.6"/>'
@@ -2387,7 +2404,7 @@ with tab_balance:
             _bv_role_b = ("SQUEEZE CUSHION" if bearish else "THE STEADY ANCHOR")
             st.markdown(
                 f'<div style="display:flex;align-items:center;gap:44px;padding:26px 10px 12px;flex-wrap:wrap;">'
-                f'<div style="flex:1 1 560px;max-width:720px;background:#F1EDE5;'
+                f'<div style="flex:1 1 100%;max-width:980px;margin:0 auto;background:#F1EDE5;'
                 f'border:1px solid #C4BDAE;border-top:2px solid #9A7B4F;border-radius:14px;'
                 f'padding:26px 18px 14px;box-shadow:0 1px 2px rgba(63,59,53,.05),'
                 f'0 12px 30px -22px rgba(63,59,53,.4);">'
@@ -2423,7 +2440,7 @@ with tab_balance:
                 f'text-align:center;margin-top:10px;">Bon Voyage &middot; '
                 f'{"the short and its squeeze cushion" if bearish else "what goes up must come down"}</div>'
                 f'</div>'
-                f'<div style="flex:1 1 380px;min-width:0;">'
+                f'<div style="flex:1 1 100%;min-width:0;max-width:980px;margin:0 auto;">'
                 f'<div style="font-family:Georgia;font-size:15px;color:#3F3B35;line-height:1.55;">'
                 f'In the loaded 2-year history, {"shorting" if bearish else "holding"} '
                 f'<b>{flyer}</b> alone fell <b>{bt["max_dd_solo"]:.0%}</b> at its worst'
