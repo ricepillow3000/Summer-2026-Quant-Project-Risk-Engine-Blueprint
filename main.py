@@ -203,11 +203,13 @@ html { scroll-behavior: smooth; }
 /* CTA - sharp charcoal slab, bronze on hover, alive to the touch */
 .cta-btn { display: inline-block; margin-top: 14px; padding: 15px 34px;
     background: #3F3B35; color: #F4F1EA !important; text-decoration: none !important;
-    border-radius: 0; font-family: 'Helvetica Neue', sans-serif; font-size: 12px;
-    letter-spacing: 0.16em; text-transform: uppercase;
+    /* Same voice as the Grit./Discipline./Evidence. headline: Georgia serif,
+       engraved plaque - not a sans-serif game pill. */
+    border-radius: 0; font-family: Georgia, 'Times New Roman', serif; font-size: 14.5px;
+    letter-spacing: 0.11em; text-transform: uppercase;
     transition: background .25s ease, letter-spacing .25s ease,
                 transform .25s cubic-bezier(.16,1,.3,1), box-shadow .25s ease; }
-.cta-btn:hover { background: #9A7B4F; letter-spacing: 0.2em;
+.cta-btn:hover { background: #9A7B4F; letter-spacing: 0.14em;
     transform: translateY(-2px);
     box-shadow: 0 16px 30px -18px rgba(63,59,53,.6); }
 .cta-btn:active { transform: translateY(0) scale(.985); }
@@ -576,7 +578,7 @@ div[data-baseweb="select"]>div, .stNumberInput input,
 .stButton>button { border-radius: 12px !important; }
 [data-testid="stPlotlyChart"] { border-radius: 16px !important; }
 .verdict-box { border-radius: 20px; }
-.cta-btn { border-radius: 40px !important; }        /* CTA becomes a soft capsule */
+.cta-btn { border-radius: 10px !important; }        /* soft plaque, not a game pill */
 .hero-crest { border-radius: 26px; }                /* squircle, not a hard square */
 
 /* Diversify: each hero tile carries a different corner profile so the deck
