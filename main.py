@@ -1477,18 +1477,24 @@ with _dir_col:
              "of the same assets. Borrow fees, margin interest and buy-ins "
              "are NOT modeled - real short results are worse than shown.")
 bearish = direction.startswith("Bearish")
-_bv_sk_a, _bv_sk_b = ("SHORT", "the squeeze cushion") if bearish \
-    else ("high-flyer", "the steady cushion")
+_bv_sk_a, _bv_sk_b = ("the short position", "the squeeze cushion") if bearish \
+    else ("the high-flyer", "the steady cushion")
+# Geometry note: the tether line runs CIRCUMFERENCE to CIRCUMFERENCE - its
+# endpoints sit on each circle's edge plus a 4px breath, never inside. All
+# labels are sized against the chord width where they sit, so nothing
+# overflows a circle or collides with a role caption.
 st.markdown(
     f'<div class="showcase-section reveal" style="padding-top:2px;text-align:center;">'
-    f'<svg viewBox="0 0 240 130" width="420" height="228" xmlns="http://www.w3.org/2000/svg" style="opacity:.9;max-width:92vw;height:auto;">'
-    f'<line x1="62" y1="96" x2="176" y2="34" stroke="#9A7B4F" stroke-width="1.5" stroke-dasharray="5 4"/>'
-    f'<circle cx="188" cy="27" r="20" fill="rgba(154,123,79,.14)" stroke="#8A6A3C" stroke-width="1.6"/>'
-    f'<circle cx="48" cy="104" r="15" fill="rgba(63,59,53,.10)" stroke="#3F3B35" stroke-width="1.6"/>'
-    f'<text x="188" y="31" text-anchor="middle" font-family="Helvetica Neue" font-size="8" letter-spacing="1" fill="#3F3B35">{"SHORT" if bearish else "CIRCLE 1"}</text>'
-    f'<text x="48" y="108" text-anchor="middle" font-family="Helvetica Neue" font-size="7" letter-spacing="1" fill="#3F3B35">CIRCLE 2</text>'
-    f'<text x="188" y="58" text-anchor="middle" font-family="Georgia" font-size="9" fill="#6B6459">{_bv_sk_a}</text>'
-    f'<text x="48" y="124" text-anchor="middle" font-family="Georgia" font-size="9" fill="#6B6459">{_bv_sk_b}</text>'
+    f'<svg viewBox="0 0 320 214" width="460" height="308" xmlns="http://www.w3.org/2000/svg" style="opacity:.92;max-width:92vw;height:auto;">'
+    f'<line x1="105" y1="133" x2="204" y2="74" stroke="#9A7B4F" stroke-width="1.5" stroke-dasharray="5 4"/>'
+    f'<circle cx="240" cy="52" r="38" fill="rgba(154,123,79,.14)" stroke="#8A6A3C" stroke-width="1.6"/>'
+    f'<circle cx="240" cy="52" r="32" fill="none" stroke="rgba(154,123,79,.35)" stroke-width="1"/>'
+    f'<circle cx="76" cy="150" r="30" fill="rgba(63,59,53,.10)" stroke="#3F3B35" stroke-width="1.6"/>'
+    f'<circle cx="76" cy="150" r="24" fill="none" stroke="rgba(63,59,53,.3)" stroke-width="1"/>'
+    f'<text x="240" y="56" text-anchor="middle" font-family="Helvetica Neue" font-size="10.5" letter-spacing="1.4" fill="#3F3B35">CIRCLE 1</text>'
+    f'<text x="76" y="154" text-anchor="middle" font-family="Helvetica Neue" font-size="8.5" letter-spacing="1.2" fill="#3F3B35">CIRCLE 2</text>'
+    f'<text x="240" y="108" text-anchor="middle" font-family="Georgia" font-size="11" fill="#6B6459">{_bv_sk_a}</text>'
+    f'<text x="76" y="200" text-anchor="middle" font-family="Georgia" font-size="11" fill="#6B6459">{_bv_sk_b}</text>'
     f'</svg>'
     f'<div style="font-family:Georgia;font-size:12.5px;color:#6B6459;max-width:560px;margin:2px auto 0;">'
     f'{"Shorting flips the sketch: Circle 1 is the position you are against, and Circle 2 - a correlated long - cushions the squeeze. Short losses can exceed 100%; borrow costs are not modeled." if bearish else "Circle 1 rides high and volatile; Circle 2 - reliability, stability, grit - is what this engine was built to find. We are Circle 2."}'
@@ -2412,11 +2418,13 @@ with tab_balance:
                 # Ledger corner ticks - the same double-rule frame grammar as
                 # the section bands.
                 f'<path d="M8 30 V8 H30 M390 8 H412 V30 M412 270 V292 H390 M30 292 H8 V270" fill="none" stroke="rgba(154,123,79,.5)" stroke-width="1.5"/>'
-                # The safety line: bronze, dashed, with a small plaque.
-                f'<line x1="118" y1="216" x2="288" y2="92" stroke="#9A7B4F" stroke-width="2" stroke-dasharray="7 5"/>'
-                f'<g transform="rotate(-36 203 154)">'
-                f'<rect x="157" y="140" width="92" height="26" rx="2" fill="#F1EDE5" stroke="rgba(154,123,79,.55)" stroke-width="1"/>'
-                f'<text x="203" y="157" text-anchor="middle" font-family="Helvetica Neue" font-size="12" letter-spacing="1.5" fill="#8A6A3C">GAP {tg["gap"]:.1%}</text>'
+                # The safety line: bronze, dashed, circumference to
+                # circumference (endpoints sit r+6 from each center - the
+                # old line ran 38px INSIDE Circle 1).
+                f'<line x1="129" y1="208" x2="270" y2="101" stroke="#9A7B4F" stroke-width="2" stroke-dasharray="7 5"/>'
+                f'<g transform="rotate(-37 200 155)">'
+                f'<rect x="154" y="142" width="92" height="26" rx="2" fill="#F1EDE5" stroke="rgba(154,123,79,.55)" stroke-width="1"/>'
+                f'<text x="200" y="159" text-anchor="middle" font-family="Helvetica Neue" font-size="12" letter-spacing="1.5" fill="#8A6A3C">GAP {tg["gap"]:.1%}</text>'
                 f'</g>'
                 # Circle 1 - double ring, warm glossy fill (crest treatment).
                 f'<circle cx="316" cy="66" r="52" fill="#F6F2EA" stroke="#8A6A3C" stroke-width="2"/>'
@@ -2428,8 +2436,8 @@ with tab_balance:
                 f'<circle cx="92" cy="236" r="40" fill="#EFEAE0" stroke="#3F3B35" stroke-width="2"/>'
                 f'<circle cx="92" cy="236" r="34" fill="rgba(63,59,53,.07)" stroke="rgba(63,59,53,.3)" stroke-width="1"/>'
                 f'<text x="92" y="233" text-anchor="middle" font-family="Georgia" font-size="{"15" if len(bv_anchor) < 5 else "12"}" fill="#3F3B35">{bv_anchor}</text>'
-                f'<text x="92" y="250" text-anchor="middle" font-family="Helvetica Neue" font-size="10" letter-spacing="1.4" fill="#6B6459">{pw["w_b"]:.0%} CAPITAL</text>'
-                f'<text x="92" y="290" text-anchor="middle" font-family="Helvetica Neue" font-size="10.5" letter-spacing="1.8" fill="#6B6459">{_bv_role_b}</text>'
+                f'<text x="92" y="249" text-anchor="middle" font-family="Helvetica Neue" font-size="8" letter-spacing="1" fill="#6B6459">{pw["w_b"]:.0%} CAPITAL</text>'
+                f'<text x="104" y="287" text-anchor="middle" font-family="Helvetica Neue" font-size="10.5" letter-spacing="1.8" fill="#6B6459">{_bv_role_b}</text>'
                 # Phase chip under the line.
                 f'<rect x="150" y="228" width="118" height="24" rx="12" fill="none" stroke="{_ph_col}" stroke-width="1.3"/>'
                 f'<circle cx="166" cy="240" r="4" fill="{_ph_col}"/>'
