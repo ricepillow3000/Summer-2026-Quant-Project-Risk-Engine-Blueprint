@@ -36,6 +36,9 @@ from src.comovement import (
 from src.factors import factor_exposures
 from src.strategies import risk_contributions, risk_parity_weights, vol_target
 from src.hedge import min_variance_pair, rank_hedges
+from src.pairing import (anchor_rank, backtest_pair, crisis_cushion,
+                         es_confidence_interval, regime_labels, tail_gap,
+                         DEFENSIVE_ANCHOR_TICKERS, DEFAULT_W_A)
 from src.covariance import estimate_covariance
 from src.eigenrisk import eigen_factors, marcenko_pastur_bounds, pc1_exposure
 from src.scenarios import HISTORICAL_REGIMES, replay_returns
@@ -2202,6 +2205,129 @@ with tab_balance:
                     'most. This tab lowers <b>ordinary</b> volatility; it does not make a '
                     'portfolio crisis-proof. It is the counterweight to Crisis Conviction '
                     '- hold your nerve, and structure so being wrong costs less.</div>',
+                    unsafe_allow_html=True)
+
+            # ---- BON VOYAGE: long-only defensive pairing ----------------
+            # "What goes up must come down. We can't cap the fall; we
+            # measure the cushion." Council pass 6: cushion never cap,
+            # ES@97.5 never CVaR@99, ranks never promises.
+            @st.cache_data(ttl=6 * 3600, show_spinner=False)
+            def _bv_anchor_returns(universe_key: str):
+                """Universe returns joined with defensive ETF candidates
+                (Treasuries/gold/staples/utilities/min-vol) - an equity
+                basket usually cannot anchor itself."""
+                etf = fetch_prices(DEFENSIVE_ANCHOR_TICKERS, period="2y")
+                etf_rets = etf.pct_change().dropna()
+                joined_bv = returns.join(etf_rets, how="inner")
+                return joined_bv.dropna(axis=1)
+
+            @st.cache_data(ttl=6 * 3600, show_spinner=False)
+            def _bv_crisis(a: str, b: str, w: float):
+                return crisis_cushion(a, b, w)
+
+            panel_head("Bon Voyage - the defensive pair",
+                       "What goes up must come down: tether a high-flyer "
+                       "to an anchor and measure the cushion")
+            try:
+                bv_rets = _bv_anchor_returns(",".join(sorted(loaded)))
+            except Exception:  # noqa: BLE001 - offline: universe only
+                bv_rets = returns
+            vols = returns.std() * np.sqrt(252)
+            flyer = st.selectbox(
+                "High-flyer (Circle A - the volatile conviction position)",
+                loaded, index=loaded.index(vols.idxmax()),
+                help="Defaults to the most volatile name in your universe.")
+            bv_ranked = anchor_rank(bv_rets, flyer)
+            bv_anchor = bv_ranked.index[0]
+            tg = tail_gap(bv_rets, flyer, bv_anchor)
+            ci_lo, ci_hi = es_confidence_interval(bv_rets[flyer])
+            bt = backtest_pair(bv_rets[flyer], bv_rets[bv_anchor], DEFAULT_W_A)
+            phase_now = regime_labels(
+                (1 + bv_rets[flyer]).cumprod(), tg["gap"]).iloc[-1]
+            _ph_col = {"Tether": "#3F6B3F", "Descent": "#8A3B2E",
+                       "Rotation": "#9A7B4F"}[phase_now]
+            # Circle-and-line: the two-in-one motif, drawn as a diagram (no
+            # new chart). Kept contiguous - st.markdown truncates at blank lines.
+            st.markdown(
+                f'<div style="display:flex;align-items:center;gap:26px;padding:18px 6px 6px;">'
+                f'<svg viewBox="0 0 120 190" width="96" height="152" xmlns="http://www.w3.org/2000/svg">'
+                f'<line x1="60" y1="38" x2="60" y2="152" stroke="#9A7B4F" stroke-width="1.5" stroke-dasharray="5 4"/>'
+                f'<circle cx="60" cy="28" r="21" fill="rgba(154,123,79,.14)" stroke="#8A6A3C" stroke-width="1.6"/>'
+                f'<circle cx="60" cy="162" r="15" fill="rgba(63,59,53,.10)" stroke="#3F3B35" stroke-width="1.6"/>'
+                f'<text x="60" y="32" text-anchor="middle" font-family="Georgia" font-size="11" fill="#3F3B35">{flyer}</text>'
+                f'<text x="60" y="166" text-anchor="middle" font-family="Georgia" font-size="9" fill="#3F3B35">{bv_anchor}</text>'
+                f'<text x="70" y="99" font-family="Helvetica Neue" font-size="8.5" letter-spacing="1" fill="#8A6A3C">GAP {tg["gap"]:.1%}</text>'
+                f'</svg>'
+                f'<div style="min-width:0;">'
+                f'<div style="font-family:Georgia;font-size:15px;color:#3F3B35;line-height:1.55;">'
+                f'In the loaded 2-year history, holding <b>{flyer}</b> alone fell '
+                f'<b>{bt["max_dd_solo"]:.0%}</b> at its worst; tethered '
+                f'{DEFAULT_W_A:.0%}/{1 - DEFAULT_W_A:.0%} to <b>{bv_anchor}</b> '
+                f'(rebalanced monthly) the fall was <b>{bt["max_dd_pair"]:.0%}</b> - '
+                f'a <b>{bt["cushion"]:+.0%}</b> cushion. A cushion, not a cap.</div>'
+                f'<div style="font-family:\'Helvetica Neue\',sans-serif;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#6B6459;margin-top:8px;">'
+                f'Safety line (tail gap): ES 97.5% {tg["es_a"]:.1%} vs {tg["es_b"]:.1%} &middot; '
+                f'{flyer} ES 90% CI {ci_lo:.1%}-{ci_hi:.1%} &middot; current phase '
+                f'<span style="color:{_ph_col};font-weight:600;">{phase_now}</span></div>'
+                f'</div></div>',
+                unsafe_allow_html=True)
+            with st.expander("The real backtest - pair vs solo, and the crisis record"):
+                bv_fig = go.Figure()
+                bv_fig.add_scatter(x=bt["solo_path"].index,
+                                   y=(bt["solo_path"] - 1) * 100,
+                                   name=f"{flyer} alone",
+                                   line=dict(color="#8A3B2E", width=1.4))
+                bv_fig.add_scatter(x=bt["pair_path"].index,
+                                   y=(bt["pair_path"] - 1) * 100,
+                                   name="Bon Voyage pair",
+                                   line=dict(color=BRONZE, width=2))
+                bv_fig = _style_fig(bv_fig, height=280)
+                bv_fig.update_layout(yaxis_title="cumulative return (%)",
+                                     legend=dict(orientation="h", y=1.08))
+                st.plotly_chart(bv_fig, width="stretch", config=PLOTLY_CFG)
+                st.caption(
+                    f"Real daily returns, {bt['n_days']} trading days, monthly "
+                    f"rebalancing, no lookahead. Pair vol {bt['ann_vol_pair']:.1%} "
+                    f"vs {bt['ann_vol_solo']:.1%} solo; total return "
+                    f"{bt['total_return_pair']:+.0%} vs {bt['total_return_solo']:+.0%}. "
+                    "In-sample description of one history, not a forecast.")
+                try:
+                    cc = _bv_crisis(flyer, bv_anchor, DEFAULT_W_A)
+                    if len(cc):
+                        panel_head("Crisis cushion record",
+                                   "The same pair replayed through real crises "
+                                   "(both assets must have traded)")
+                        st.dataframe(
+                            cc.rename(columns={
+                                "solo_dd": f"{flyer} alone",
+                                "pair_dd": "pair", "cushion": "cushion",
+                                "days": "days"})
+                              .style.format({f"{flyer} alone": "{:.1%}",
+                                             "pair": "{:.1%}",
+                                             "cushion": "{:+.1%}",
+                                             "days": "{:.0f}"}),
+                            width="stretch")
+                        st.caption(
+                            "Crises where either asset had not yet listed are "
+                            "omitted, not guessed. A small or negative cushion "
+                            "is the honest signature of correlations converging "
+                            "in that crisis.")
+                except Exception:  # noqa: BLE001 - crisis replay needs network
+                    st.caption("Crisis replay unavailable offline.")
+                st.markdown(
+                    '<div class="read-me"><b>What this is - and is not.</b> '
+                    'Long-only defensive pairing (a core-satellite blend), not '
+                    '"pairs trading" - there is no short leg and no cointegration '
+                    'bet. The anchor is chosen by rank (lowest correlation to the '
+                    "universe's dominant risk factor, low volatility, shallow "
+                    'tail, from your universe plus Treasury/gold/staples/'
+                    'utilities/min-vol ETFs) - ranked, never promised. Losses '
+                    'are <b>cushioned, not capped</b>: a long-only pair has no '
+                    'floor above zero, and crisis correlations converge toward '
+                    '+1 exactly when protection matters most. The Tether / '
+                    'Descent / Rotation phases are a descriptive regime study '
+                    'on past prices - not a trading signal. Educational '
+                    'analysis, not investment advice.</div>',
                     unsafe_allow_html=True)
         except Exception as exc:  # noqa: BLE001 - never crash the tab
             st.caption(f"Balance unavailable for this universe: {exc}")

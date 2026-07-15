@@ -896,6 +896,124 @@ def test_eigen_edge_cases_no_crash():
     assert n == 0
 
 
+# ---------------------------------------------------------------------------
+# Bon Voyage - long-only defensive pairing (src/pairing.py)
+# Synthetic data is allowed HERE (deterministic, seeded) - never in the UI.
+# ---------------------------------------------------------------------------
+from src.pairing import (
+    expected_shortfall, es_confidence_interval, pc1_factor_correlations,
+    anchor_rank, tail_gap, backtest_pair, regime_labels)
+
+
+def _seeded_returns(n=1000, seed=11):
+    rng = np.random.default_rng(seed)
+    idx = pd.bdate_range("2020-01-01", periods=n)
+    return pd.Series(rng.normal(0.0005, 0.02, n), index=idx)
+
+
+def test_es_coherent_and_monotone():
+    r = _seeded_returns()
+    v = float(-np.percentile(r, 2.5))
+    es = expected_shortfall(r, 0.975)
+    assert es >= v, "ES must be at least as severe as VaR at the same level"
+    assert expected_shortfall(r, 0.99) >= es >= expected_shortfall(r, 0.95), \
+        "ES must be nondecreasing in confidence"
+
+
+def test_pair_variance_analytic_matches_empirical():
+    rng = np.random.default_rng(3)
+    a = pd.Series(rng.normal(0, 0.02, 800))
+    b = pd.Series(0.4 * a + rng.normal(0, 0.01, 800))
+    w = np.array([0.6, 0.4])
+    cov = np.cov(np.vstack([a, b]))
+    analytic = (w[0]**2 * cov[0, 0] + w[1]**2 * cov[1, 1]
+                + 2 * w[0] * w[1] * cov[0, 1])
+    empirical = float(np.var(w[0] * a + w[1] * b, ddof=1))
+    assert abs(analytic - empirical) / empirical < 1e-9
+
+
+def test_pair_degenerate_correlations():
+    a = _seeded_returns(500, seed=5)
+    # rho = +1: no diversification - pair vol equals weighted sum of vols
+    bt_same = backtest_pair(a, a.copy(), w_a=0.6, rebalance_days=0)
+    assert abs(bt_same["ann_vol_pair"] - bt_same["ann_vol_solo"]) < 1e-9
+    # rho = -1 at 50/50 with daily rebalancing: near-total cancellation
+    bt_opp = backtest_pair(a, -a, w_a=0.5, rebalance_days=1)
+    assert bt_opp["ann_vol_pair"] < 0.05 * bt_opp["ann_vol_solo"]
+
+
+def test_pc1_planted_loading_ranks_correctly():
+    rng = np.random.default_rng(7)
+    n = 750
+    market = rng.normal(0, 0.015, n)
+    idx = pd.bdate_range("2020-01-01", periods=n)
+    rets = pd.DataFrame({
+        "HIBETA": 1.2 * market + rng.normal(0, 0.005, n),
+        "MIDBETA": 0.8 * market + rng.normal(0, 0.005, n),
+        "LOWBETA": 0.05 * market + rng.normal(0, 0.01, n),
+    }, index=idx)
+    pc1 = pc1_factor_correlations(rets)
+    assert abs(pc1["LOWBETA"]) < abs(pc1["MIDBETA"]) < abs(pc1["HIBETA"])
+    ranked = anchor_rank(rets, "HIBETA")
+    assert ranked.index[0] == "LOWBETA", "planted independent asset must rank first"
+
+
+def test_backtest_cushion_on_synthetic_crash():
+    idx = pd.bdate_range("2021-01-01", periods=60)
+    a = pd.Series([0.01] * 20 + [-0.05] * 20 + [0.0] * 20, index=idx)
+    b = pd.Series([0.001] * 60, index=idx)          # flat anchor
+    bt = backtest_pair(a, b, w_a=0.6)
+    assert bt["max_dd_pair"] > bt["max_dd_solo"], "pair drawdown must be shallower"
+    assert bt["cushion"] > 0
+    assert abs(bt["max_dd_solo"] + (1 - 0.95**20)) < 0.05  # dd is negative; ~ -64%
+
+
+def test_backtest_long_only_no_lookahead_weights():
+    a, b = _seeded_returns(300, 1), _seeded_returns(300, 2)
+    bt = backtest_pair(a, b, w_a=0.7, rebalance_days=21)
+    w = bt["weights_a"]
+    assert abs(float(w.iloc[0]) - 0.7) < 1e-12, "day-1 weight is the target, set before any return"
+    assert ((w >= 0) & (w <= 1)).all(), "long-only: weights stay in [0,1]"
+    assert abs(float(w.iloc[21]) - 0.7) < 1e-12, "weight resets to target after rebalance day"
+    try:
+        backtest_pair(a, b, w_a=1.4)
+        raise AssertionError("w_a > 1 must raise (no leverage)")
+    except ValueError:
+        pass
+
+
+def test_regime_labels_deterministic_and_causal():
+    idx = pd.bdate_range("2021-01-01", periods=8)
+    prices = pd.Series([100, 105, 110, 95, 90, 100, 108, 110], index=idx, dtype=float)
+    labels = regime_labels(prices, gap=0.10)
+    # 95, 90 breach the 10% gap; 100 (-9.1%) is still beyond gap/2 so the
+    # Descent holds; 108 (-1.8%) re-enters within gap/2 -> Rotation; 110 -> Tether.
+    assert list(labels) == ["Tether", "Tether", "Tether", "Descent", "Descent",
+                            "Descent", "Rotation", "Tether"]
+    # Causality: appending future data must not rewrite past labels.
+    longer = pd.concat([prices, pd.Series([60.0], index=[idx[-1] + pd.Timedelta(days=1)])])
+    assert list(regime_labels(longer, gap=0.10).iloc[:8]) == list(labels)
+
+
+def test_es_bootstrap_ci_contains_point_and_narrows():
+    small, big = _seeded_returns(250, 9), _seeded_returns(2500, 9)
+    for r in (small, big):
+        lo, hi = es_confidence_interval(r, n_boot=200)
+        assert lo <= expected_shortfall(r) <= hi
+    lo_s, hi_s = es_confidence_interval(small, n_boot=200)
+    lo_b, hi_b = es_confidence_interval(big, n_boot=200)
+    assert (hi_b - lo_b) < (hi_s - lo_s), "CI must narrow with more data"
+
+
+def test_tail_gap_identity():
+    rng = np.random.default_rng(21)
+    rets = pd.DataFrame({"A": rng.normal(0, 0.03, 600),
+                         "B": rng.normal(0, 0.01, 600)})
+    tg = tail_gap(rets, "A", "B")
+    assert abs(tg["gap"] - (tg["es_a"] - tg["es_b"])) < 1e-12
+    assert tg["es_a"] > tg["es_b"], "3x-vol asset must carry the deeper tail"
+
+
 if __name__ == "__main__":
     import sys
 
