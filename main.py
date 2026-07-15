@@ -1398,16 +1398,49 @@ except Exception as _exc:  # noqa: BLE001 - landing page must never crash on dat
     st.caption(f"Crisis record unavailable right now ({_exc}). "
                "The Crisis Conviction tab retries on load.")
 
-st.markdown("""
-<div class="showcase-section reveal" style="padding-top:8px;">
-  <a href="#engine" class="cta-btn">Work with an exceptional risk engine &darr;</a>
-</div>
-<hr class="section-divider">
-<div class="engine-heading reveal" id="engine">
-  <div class="showcase-eyebrow">The Engine</div>
-  <h2 class="showcase-title" style="font-size:26px;">Stress-test any portfolio, live</h2>
-</div>
-""", unsafe_allow_html=True)
+# ---- Direction: the same honest math from either side of the trade ----
+# Council pass 7: bearish mode models a SYNTHETIC DAILY-REBALANCED SHORT
+# (negated daily returns). Symmetric statistics (covariance, correlation,
+# eigenvectors, volatility) are mathematically identical either way and are
+# never relabeled; only asymmetric ones (tails, drawdowns, Monte Carlo,
+# factor betas, Bon Voyage) genuinely recompute.
+_dir_col = st.columns([1.2, 2.6, 1.2])[1]
+with _dir_col:
+    direction = st.radio(
+        "Which side of the trade are you on?",
+        ["Bullish - long the book", "Bearish - short the book"],
+        horizontal=True, key="bv_direction",
+        help="Bearish mode re-runs every tail metric, Monte Carlo path and "
+             "the Bon Voyage pairing on a synthetic daily-rebalanced short "
+             "of the same assets. Borrow fees, margin interest and buy-ins "
+             "are NOT modeled - real short results are worse than shown.")
+bearish = direction.startswith("Bearish")
+_bv_sk_a, _bv_sk_b = ("SHORT", "the squeeze cushion") if bearish \
+    else ("high-flyer", "the steady cushion")
+st.markdown(
+    f'<div class="showcase-section reveal" style="padding-top:2px;text-align:center;">'
+    f'<svg viewBox="0 0 240 130" width="150" height="81" xmlns="http://www.w3.org/2000/svg" style="opacity:.85;">'
+    f'<line x1="62" y1="96" x2="176" y2="34" stroke="#9A7B4F" stroke-width="1.5" stroke-dasharray="5 4"/>'
+    f'<circle cx="188" cy="27" r="20" fill="rgba(154,123,79,.14)" stroke="#8A6A3C" stroke-width="1.6"/>'
+    f'<circle cx="48" cy="104" r="15" fill="rgba(63,59,53,.10)" stroke="#3F3B35" stroke-width="1.6"/>'
+    f'<text x="188" y="31" text-anchor="middle" font-family="Helvetica Neue" font-size="8" letter-spacing="1" fill="#3F3B35">{"SHORT" if bearish else "CIRCLE 1"}</text>'
+    f'<text x="48" y="108" text-anchor="middle" font-family="Helvetica Neue" font-size="7" letter-spacing="1" fill="#3F3B35">CIRCLE 2</text>'
+    f'<text x="188" y="58" text-anchor="middle" font-family="Georgia" font-size="9" fill="#6B6459">{_bv_sk_a}</text>'
+    f'<text x="48" y="124" text-anchor="middle" font-family="Georgia" font-size="9" fill="#6B6459">{_bv_sk_b}</text>'
+    f'</svg>'
+    f'<div style="font-family:Georgia;font-size:12.5px;color:#6B6459;max-width:560px;margin:2px auto 0;">'
+    f'{"Shorting flips the sketch: Circle 1 is the position you are against, and Circle 2 - a correlated long - cushions the squeeze. Short losses can exceed 100%; borrow costs are not modeled." if bearish else "Circle 1 rides high and volatile; Circle 2 - reliability, stability, grit - is what this engine was built to find. We are Circle 2."}'
+    f'</div>'
+    f'<a href="#engine" class="cta-btn" style="margin-top:14px;">Work with an exceptional '
+    f'{"bearish" if bearish else "bullish"} risk engine &darr;</a>'
+    f'</div>'
+    f'<hr class="section-divider">'
+    f'<div class="engine-heading reveal" id="engine">'
+    f'<div class="showcase-eyebrow">The Engine</div>'
+    f'<h2 class="showcase-title" style="font-size:26px;">Stress-test any '
+    f'{"short book" if bearish else "portfolio"}, live</h2>'
+    f'</div>',
+    unsafe_allow_html=True)
 
 # ---- The cockpit: controls fold into three numbered drawers so the verdict
 # leads the section. Widgets still execute when collapsed - zero logic change,
@@ -1566,12 +1599,20 @@ else:
     weights = base_weights
 
 port_returns = returns @ weights  # real (unshocked) portfolio series for VaR/factors
+if bearish:
+    # Synthetic daily-rebalanced short of the whole book: negate the
+    # PORTFOLIO return stream. Covariance/correlation/eigen panels keep the
+    # raw asset returns - those statistics are sign-invariant (council: a
+    # "bearish correlation matrix" would be a fabricated distinction).
+    port_returns = -port_returns
 _audit("Allocation", f"{method}" + (f", vol-targeted to {target_vol:.0%} "
       f"(leverage {leverage:.2f}x)" if use_vt else ""))
 
 # ---- Stress test: custom parametric shock OR historical regime replay ----
 alloc_label = "risk-parity" if method == "Risk parity" else "equal-weight"
-alloc_art = "an" if alloc_label[0] in "aeiou" else "a"  # "an equal-weight" / "a risk-parity"
+if bearish:
+    alloc_label = f"short {alloc_label}"
+alloc_art = "an" if alloc_label[0] in "aeiou" else "a"  # "an equal-weight" / "a short ..."
 lev_txt = f", levered {leverage:.2f}×" if use_vt else ""
 
 with deck_stress, st.expander("03 · Stress test - shock or replay a crisis",
@@ -1632,6 +1673,10 @@ else:
 
 use_jd = engine.startswith("Jump-diffusion")
 mc_fn = jump_diffusion_mc if use_jd else monte_carlo
+if bearish:
+    # Negate BEFORE calibration/resampling so jump-diffusion calibrates its
+    # jumps on the short's own tail (an asset's melt-UP is the short's crash).
+    shocked_returns = -shocked_returns
 mc = mc_fn(shocked_returns, sim_weights, n_simulations=10_000, horizon_days=252)
 _audit("Stress scenario", scenario_label or
       (f"Custom shock (drawdown {drawdown_shock:+d}%, vol {vol_shock:+d}%)"
@@ -1667,6 +1712,13 @@ else:
     )
     if is_shocked:
         verdict += " *(under the stress scenario applied above)*"
+if bearish:
+    verdict += (
+        " <span style='font-size:12px;color:#8A6A3C;'>Synthetic daily-"
+        "rebalanced short: borrow fees, margin interest and buy-ins are not "
+        "modeled - real short results are worse. Short losses can exceed "
+        "100% of capital.</span>"
+    )
 
 # Only surface the liquidity add-on when it materially fattens the tail
 # (multiplier > 1.005 ≈ more than ~2.5 trading days to fully exit).
@@ -2222,8 +2274,8 @@ with tab_balance:
                 return joined_bv.dropna(axis=1)
 
             @st.cache_data(ttl=6 * 3600, show_spinner=False)
-            def _bv_crisis(a: str, b: str, w: float):
-                return crisis_cushion(a, b, w)
+            def _bv_crisis(a: str, b: str, w: float, short_a: bool = False):
+                return crisis_cushion(a, b, w, short_a=short_a)
 
             @st.cache_data(ttl=6 * 3600, show_spinner=False)
             def _bv_grit(tickers: tuple):
@@ -2247,14 +2299,21 @@ with tab_balance:
                 bv_grit = _bv_grit(tuple(sorted(bv_rets.columns)))
             except Exception:  # noqa: BLE001 - grit needs full-history fetch
                 bv_grit = None
-            bv_ranked = anchor_rank(bv_rets, flyer, grit=bv_grit)
+            # Bearish: Circle 1 becomes a synthetic daily-rebalanced SHORT of
+            # the flyer (negated column); every downstream formula is reused
+            # unchanged. The anchor screen flips to squeeze-cushion logic.
+            bv_frame = bv_rets.copy()
+            if bearish:
+                bv_frame[flyer] = -bv_frame[flyer]
+            bv_ranked = anchor_rank(bv_frame, flyer, grit=bv_grit,
+                                    direction="short" if bearish else "long")
             bv_anchor = bv_ranked.index[0]
-            tg = tail_gap(bv_rets, flyer, bv_anchor)
-            ci_lo, ci_hi = es_confidence_interval(bv_rets[flyer])
-            pw = pair_weights(bv_rets[flyer], bv_rets[bv_anchor])
-            bt = backtest_pair(bv_rets[flyer], bv_rets[bv_anchor], pw["w_a"])
+            tg = tail_gap(bv_frame, flyer, bv_anchor)
+            ci_lo, ci_hi = es_confidence_interval(bv_frame[flyer])
+            pw = pair_weights(bv_frame[flyer], bv_frame[bv_anchor])
+            bt = backtest_pair(bv_frame[flyer], bv_frame[bv_anchor], pw["w_a"])
             phase_now = regime_labels(
-                (1 + bv_rets[flyer]).cumprod(), tg["gap"]).iloc[-1]
+                (1 + bv_frame[flyer]).cumprod(), tg["gap"]).iloc[-1]
             _ph_col = {"Tether": "#3F6B3F", "Descent": "#8A3B2E",
                        "Rotation": "#9A7B4F"}[phase_now]
             # Circle-and-line drawn to John's sketch: the high-flyer rides
@@ -2267,7 +2326,7 @@ with tab_balance:
                 f'<line x1="62" y1="126" x2="176" y2="44" stroke="#9A7B4F" stroke-width="1.5" stroke-dasharray="5 4"/>'
                 f'<circle cx="188" cy="35" r="24" fill="rgba(154,123,79,.14)" stroke="#8A6A3C" stroke-width="1.6"/>'
                 f'<circle cx="48" cy="136" r="17" fill="rgba(63,59,53,.10)" stroke="#3F3B35" stroke-width="1.6"/>'
-                f'<text x="188" y="39" text-anchor="middle" font-family="Georgia" font-size="11" fill="#3F3B35">{flyer}</text>'
+                f'<text x="188" y="39" text-anchor="middle" font-family="Georgia" font-size="{"9" if bearish else "11"}" fill="#3F3B35">{"-" + flyer if bearish else flyer}</text>'
                 f'<text x="48" y="140" text-anchor="middle" font-family="Georgia" font-size="9" fill="#3F3B35">{bv_anchor}</text>'
                 f'<text x="188" y="72" text-anchor="middle" font-family="Helvetica Neue" font-size="8" letter-spacing="1" fill="#6B6459">{pw["w_a"]:.0%} OF CAPITAL</text>'
                 f'<text x="48" y="164" text-anchor="middle" font-family="Helvetica Neue" font-size="8" letter-spacing="1" fill="#6B6459">{pw["w_b"]:.0%} OF CAPITAL</text>'
@@ -2275,8 +2334,10 @@ with tab_balance:
                 f'</svg>'
                 f'<div style="min-width:0;">'
                 f'<div style="font-family:Georgia;font-size:15px;color:#3F3B35;line-height:1.55;">'
-                f'In the loaded 2-year history, holding <b>{flyer}</b> alone fell '
-                f'<b>{bt["max_dd_solo"]:.0%}</b> at its worst; tethered to '
+                f'In the loaded 2-year history, {"shorting" if bearish else "holding"} '
+                f'<b>{flyer}</b> alone fell <b>{bt["max_dd_solo"]:.0%}</b> at its worst'
+                f'{" (a short bleeds when the name rallies - the squeeze)" if bearish else ""}; '
+                f'tethered to {"a correlated long in " if bearish else ""}'
                 f'<b>{bv_anchor}</b> at risk-parity weights '
                 f'(<b>{pw["w_b"]:.0%}</b> anchor / <b>{pw["w_a"]:.0%}</b> flyer, '
                 f'rebalanced monthly) the fall was <b>{bt["max_dd_pair"]:.0%}</b> - '
@@ -2297,7 +2358,7 @@ with tab_balance:
                 bv_fig = go.Figure()
                 bv_fig.add_scatter(x=bt["solo_path"].index,
                                    y=(bt["solo_path"] - 1) * 100,
-                                   name=f"{flyer} alone",
+                                   name=f"{'short ' if bearish else ''}{flyer} alone",
                                    line=dict(color="#8A3B2E", width=1.4))
                 bv_fig.add_scatter(x=bt["pair_path"].index,
                                    y=(bt["pair_path"] - 1) * 100,
@@ -2314,7 +2375,8 @@ with tab_balance:
                     f"{bt['total_return_pair']:+.0%} vs {bt['total_return_solo']:+.0%}. "
                     "In-sample description of one history, not a forecast.")
                 try:
-                    cc = _bv_crisis(flyer, bv_anchor, round(pw["w_a"], 3))
+                    cc = _bv_crisis(flyer, bv_anchor, round(pw["w_a"], 3),
+                                    bearish)
                     if len(cc):
                         panel_head("Crisis cushion record",
                                    "The same pair replayed through real crises "
@@ -2355,6 +2417,16 @@ with tab_balance:
                     'on past prices - not a trading signal. Educational '
                     'analysis, not investment advice.</div>',
                     unsafe_allow_html=True)
+                if bearish:
+                    st.caption(
+                        "Bearish read of grit: LOW grit describes past "
+                        "fragility - it is not a short signal. Past losers "
+                        "are often crowded shorts with high borrow cost and "
+                        "the sharpest squeezes; the asset that keeps getting "
+                        "back up (HIGH grit) is the short-seller's nightmare. "
+                        "Synthetic daily-rebalanced short; borrow fees, "
+                        "margin and buy-ins not modeled - real short results "
+                        "are worse. Short losses can exceed 100%.")
         except Exception as exc:  # noqa: BLE001 - never crash the tab
             st.caption(f"Balance unavailable for this universe: {exc}")
 

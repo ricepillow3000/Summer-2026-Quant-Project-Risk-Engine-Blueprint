@@ -86,7 +86,8 @@ def _rank01(raw: pd.Series, higher_is_better: bool) -> pd.Series:
 
 
 def anchor_rank(returns: pd.DataFrame, high_flyer: str,
-                grit: pd.Series | None = None) -> pd.DataFrame:
+                grit: pd.Series | None = None,
+                direction: str = "long") -> pd.DataFrame:
     """
     Rank every OTHER column of `returns` as an anchor candidate for
     `high_flyer`. Components (equal-weight composite of percentile ranks):
@@ -94,8 +95,17 @@ def anchor_rank(returns: pd.DataFrame, high_flyer: str,
       - low annualized vol     (steadiness)
       - shallow ES@97.5        (thin own-tail)
       - high grit score        (only if provided - resilience record)
+    direction="short": the caller is SHORT the flyer (pass the flyer column
+    already negated). A short's worst day is a squeeze - a sharp rally - and
+    squeezes ride sector rallies, when defensives don't help. So the first
+    component flips: the cushion for a short is a LONG that moves WITH the
+    shorted name (high correlation to the raw asset = low correlation to the
+    negated flyer column), rallying alongside the squeeze. Classic
+    sector-hedged short. Other components unchanged.
     Returns a DataFrame sorted best anchor first. Ranks, never promises.
     """
+    if direction not in ("long", "short"):
+        raise ValueError("direction must be 'long' or 'short'")
     if high_flyer not in returns.columns:
         raise ValueError(f"{high_flyer} not in returns")
     cands = returns.drop(columns=[high_flyer])
@@ -111,11 +121,22 @@ def anchor_rank(returns: pd.DataFrame, high_flyer: str,
         "pc1_corr": pc1, "ann_vol": vol, "es_975": es,
         "corr_to_flyer": corr_a,
     })
-    parts = [
-        _rank01(df["pc1_corr"].abs(), higher_is_better=False),
-        _rank01(df["ann_vol"], higher_is_better=False),
-        _rank01(df["es_975"], higher_is_better=False),
-    ]
+    if direction == "short":
+        # flyer column arrives negated: corr_to_flyer < 0 means the candidate
+        # moves WITH the underlying asset - exactly the squeeze cushion. The
+        # cushion DOMINATES this screen (weight 3x): a steady but uncorrelated
+        # defensive fails precisely when the squeeze hits, so steadiness and
+        # tail-depth are tie-breakers here, not co-equal votes.
+        first = _rank01(df["corr_to_flyer"], higher_is_better=False)
+        parts = [first, first, first,
+                 _rank01(df["ann_vol"], higher_is_better=False),
+                 _rank01(df["es_975"], higher_is_better=False)]
+    else:
+        parts = [
+            _rank01(df["pc1_corr"].abs(), higher_is_better=False),
+            _rank01(df["ann_vol"], higher_is_better=False),
+            _rank01(df["es_975"], higher_is_better=False),
+        ]
     if grit is not None:
         g = grit.reindex(df.index).dropna()
         if len(g) >= 2:
@@ -229,7 +250,8 @@ def regime_labels(prices_a: pd.Series, gap: float) -> pd.Series:
     return pd.Series(labels, index=prices_a.index, name="phase")
 
 
-def crisis_cushion(a: str, b: str, w_a: float = DEFAULT_W_A) -> pd.DataFrame:
+def crisis_cushion(a: str, b: str, w_a: float = DEFAULT_W_A,
+                   short_a: bool = False) -> pd.DataFrame:
     """
     Per-crisis cushion record on REPLAYED real returns: for each historical
     regime where both assets traded, max drawdown of A alone vs the
@@ -242,7 +264,7 @@ def crisis_cushion(a: str, b: str, w_a: float = DEFAULT_W_A) -> pd.DataFrame:
         r = replay_returns([a, b], start, end)
         if a not in r.columns or b not in r.columns or len(r) < 5:
             continue                       # asset absent in window - UI discloses omissions
-        bt = backtest_pair(r[a], r[b], w_a)
+        bt = backtest_pair(-r[a] if short_a else r[a], r[b], w_a)
         rows[name] = {"solo_dd": bt["max_dd_solo"], "pair_dd": bt["max_dd_pair"],
                       "cushion": bt["cushion"], "days": bt["n_days"]}
     return pd.DataFrame(rows).T

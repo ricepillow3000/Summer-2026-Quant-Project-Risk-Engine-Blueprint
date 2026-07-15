@@ -1022,6 +1022,46 @@ def test_pair_weights_equal_risk_contribution():
         pass
 
 
+def test_short_es_is_right_tail_of_long():
+    r = _seeded_returns(2000, seed=13)
+    es_short = expected_shortfall(-r, 0.975)
+    thresh = np.percentile(r, 97.5)                 # right tail of the asset
+    right_tail_mean = float(r[r >= thresh].mean())
+    assert abs(es_short - right_tail_mean) < 1e-9, \
+        "a short's expected shortfall must equal the asset's right-tail mean"
+
+
+def test_anchor_rank_short_prefers_correlated_long():
+    rng = np.random.default_rng(17)
+    n = 800
+    base = rng.normal(0, 0.02, n)
+    idx = pd.bdate_range("2020-01-01", periods=n)
+    rets = pd.DataFrame({
+        "FLYER": base + rng.normal(0, 0.01, n),
+        "SAMESECTOR": 0.9 * base + rng.normal(0, 0.004, n),   # squeeze cushion
+        "DEFENSIVE": rng.normal(0.0002, 0.006, n),            # uncorrelated
+    }, index=idx)
+    short_frame = rets.copy()
+    short_frame["FLYER"] = -short_frame["FLYER"]              # synthetic short
+    ranked = anchor_rank(short_frame, "FLYER", direction="short")
+    assert ranked.index[0] == "SAMESECTOR", \
+        "short mode must anchor in the correlated long, not the defensive"
+    long_ranked = anchor_rank(rets, "FLYER", direction="long")
+    assert long_ranked.index[0] == "DEFENSIVE", \
+        "long mode must still prefer the independent defensive"
+
+
+def test_short_backtest_directions():
+    idx = pd.bdate_range("2021-01-01", periods=40)
+    rising = pd.Series([0.02] * 40, index=idx)      # melts up every day
+    flat = pd.Series([0.0] * 40, index=idx)
+    bt_short_riser = backtest_pair(-rising, flat, w_a=1.0, rebalance_days=0)
+    assert bt_short_riser["total_return_pair"] < 0, "shorting a riser loses"
+    falling = pd.Series([-0.02] * 40, index=idx)
+    bt_short_faller = backtest_pair(-falling, flat, w_a=1.0, rebalance_days=0)
+    assert bt_short_faller["total_return_pair"] > 0, "shorting a faller gains"
+
+
 def test_tail_gap_identity():
     rng = np.random.default_rng(21)
     rets = pd.DataFrame({"A": rng.normal(0, 0.03, 600),
