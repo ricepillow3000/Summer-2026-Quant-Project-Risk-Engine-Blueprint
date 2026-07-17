@@ -152,16 +152,18 @@ html { scroll-behavior: smooth; }
 #engine { scroll-margin-top: 28px; }
 #analysis { scroll-margin-top: 28px; }
 #gungnir { scroll-margin-top: 28px; }
-/* Gungnir - the slice band: beige topography engraved with the bound rune,
-   strongest at the left edge, dissolving toward the reading column - the
-   mirror of Casper's right-anchored facade. */
-.gungnir-band { position: relative; margin: 38px calc(50% - 50vw) 4px;
-  padding: 78px max(calc(50vw - 50%), 48px) 70px;
+/* Gungnir - the slice: the WHOLE zone (headline, direction radio, circle
+   sketch, CTA) sits on one beige topography engraved with the bound rune,
+   strongest at the left edge, dissolving rightward - Casper's mirror. */
+.st-key-gungnir_zone { position: relative; padding: 64px 0 84px; margin-top: 30px; }
+.st-key-gungnir_zone::before { content: ""; position: absolute;
+  top: 0; bottom: 0; left: calc(50% - 50vw); right: calc(50% - 50vw);
   background-color: #F4F1EA; background-size: cover;
-  background-position: left center; background-repeat: no-repeat;
+  background-position: left top; background-repeat: no-repeat;
   border-top: 1px solid #C4BDAE; border-bottom: 1px solid #C4BDAE; }
-.gungnir-band .showcase-eyebrow { color: #9A7B4F; }
-.gungnir-band .showcase-title { color: #3F3B35; margin: 6px 0 10px; }
+.st-key-gungnir_zone > * { position: relative; z-index: 1; }
+.gungnir-head .showcase-eyebrow { color: #9A7B4F; }
+.gungnir-head .showcase-title { color: #3F3B35; margin: 6px 0 10px; }
 .gungnir-sub { font-family: Georgia, serif; font-size: 14px; color: #6B6459;
   max-width: 600px; line-height: 1.6; }
 @keyframes section-arrive { from { opacity: .25; transform: translateY(26px); }
@@ -1294,13 +1296,18 @@ except Exception:  # noqa: BLE001 - asset missing: plain band, honest fallback
     _gungnir_bg = ""
 st.markdown(
     f'<div id="gungnir"></div>'
-    f'<div class="gungnir-band" style="{_gungnir_bg}">'
-    f'<div class="showcase-eyebrow">Gungnir · The Slice</div>'
-    f'<h2 class="showcase-title" style="font-size:30px;">Reading ends. Wielding begins.</h2>'
-    f'<div class="gungnir-sub">Everything above was the case. Everything below is the tool: '
-    f'choose a side, pick a universe, and every number recomputes live from market data.</div>'
-    f'</div>',
+    f'<style>.st-key-gungnir_zone::before {{ {_gungnir_bg} }}</style>',
     unsafe_allow_html=True)
+_gungnir_zone = st.container(key="gungnir_zone")
+with _gungnir_zone:
+    st.markdown(
+        '<div class="gungnir-head">'
+        '<div class="showcase-eyebrow">Gungnir · The Slice</div>'
+        '<h2 class="showcase-title" style="font-size:30px;">From evidence to allocation.</h2>'
+        '<div class="gungnir-sub">Everything above was the case. Everything below is the tool: '
+        'choose a side, pick a universe, and every number recomputes live from market data.</div>'
+        '</div>',
+        unsafe_allow_html=True)
 
 # ---- Direction: the same honest math from either side of the trade ----
 # Council pass 7: bearish mode models a SYNTHETIC DAILY-REBALANCED SHORT
@@ -1308,16 +1315,17 @@ st.markdown(
 # eigenvectors, volatility) are mathematically identical either way and are
 # never relabeled; only asymmetric ones (tails, drawdowns, Monte Carlo,
 # factor betas, Bon Voyage) genuinely recompute.
-_dir_col = st.columns([1.2, 2.6, 1.2])[1]
-with _dir_col:
-    direction = st.radio(
-        "Which side of the trade are you on?",
-        ["Bullish - long the book", "Bearish - short the book"],
-        horizontal=True, key="bv_direction",
-        help="Bearish mode re-runs every tail metric, Monte Carlo path and "
-             "the Bon Voyage pairing on a synthetic daily-rebalanced short "
-             "of the same assets. Borrow fees, margin interest and buy-ins "
-             "are NOT modeled - real short results are worse than shown.")
+with _gungnir_zone:
+    _dir_col = st.columns([1.2, 2.6, 1.2])[1]
+    with _dir_col:
+        direction = st.radio(
+            "Which side of the trade are you on?",
+            ["Bullish - long the book", "Bearish - short the book"],
+            horizontal=True, key="bv_direction",
+            help="Bearish mode re-runs every tail metric, Monte Carlo path and "
+                 "the Bon Voyage pairing on a synthetic daily-rebalanced short "
+                 "of the same assets. Borrow fees, margin interest and buy-ins "
+                 "are NOT modeled - real short results are worse than shown.")
 bearish = direction.startswith("Bearish")
 _bv_sk_a, _bv_sk_b = ("the short position", "the squeeze cushion") if bearish \
     else ("the high-flyer", "the steady cushion")
@@ -1325,7 +1333,8 @@ _bv_sk_a, _bv_sk_b = ("the short position", "the squeeze cushion") if bearish \
 # endpoints sit on each circle's edge plus a 4px breath, never inside. All
 # labels are sized against the chord width where they sit, so nothing
 # overflows a circle or collides with a role caption.
-st.markdown(
+with _gungnir_zone:
+    st.markdown(
     f'<div class="showcase-section reveal" style="padding-top:2px;text-align:center;">'
     f'<svg viewBox="0 0 320 214" width="460" height="308" xmlns="http://www.w3.org/2000/svg" style="opacity:.92;max-width:92vw;height:auto;">'
     f'<line x1="105" y1="133" x2="204" y2="74" stroke="#9A7B4F" stroke-width="1.5" stroke-dasharray="5 4"/>'
@@ -1343,7 +1352,10 @@ st.markdown(
     f'</div>'
     f'<a href="#engine" class="cta-btn" style="margin-top:14px;">'
     f'Stress-test it live &darr;</a>'
-    f'</div>'
+    f'</div>',
+    unsafe_allow_html=True)
+
+st.markdown(
     f'<hr class="section-divider">'
     f'<div class="engine-heading reveal" id="engine">'
     f'<div class="showcase-eyebrow">The Engine</div>'
