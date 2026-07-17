@@ -151,6 +151,19 @@ html { scroll-behavior: smooth; }
 .hero-section, .showcase-section, .showcase-row, .engine-heading,
 #engine { scroll-margin-top: 28px; }
 #analysis { scroll-margin-top: 28px; }
+#gungnir { scroll-margin-top: 28px; }
+/* Gungnir - the slice band: beige topography engraved with the bound rune,
+   strongest at the left edge, dissolving toward the reading column - the
+   mirror of Casper's right-anchored facade. */
+.gungnir-band { position: relative; margin: 38px calc(50% - 50vw) 4px;
+  padding: 78px max(calc(50vw - 50%), 48px) 70px;
+  background-color: #F4F1EA; background-size: cover;
+  background-position: left center; background-repeat: no-repeat;
+  border-top: 1px solid #C4BDAE; border-bottom: 1px solid #C4BDAE; }
+.gungnir-band .showcase-eyebrow { color: #9A7B4F; }
+.gungnir-band .showcase-title { color: #3F3B35; margin: 6px 0 10px; }
+.gungnir-sub { font-family: Georgia, serif; font-size: 14px; color: #6B6459;
+  max-width: 600px; line-height: 1.6; }
 @keyframes section-arrive { from { opacity: .25; transform: translateY(26px); }
                             to   { opacity: 1; transform: none; } }
 #grit-showcase:target, #conviction:target, #engine:target {
@@ -1191,7 +1204,6 @@ st.markdown("""
           recovery across real historical crises.</div>
       </div>
     </div>
-    <a href="#conviction" class="cta-btn">See the hardest trade &rarr;</a>
   </div>
   <div class="showcase-section" id="conviction">
     <div class="conv-core">
@@ -1206,7 +1218,7 @@ st.markdown("""
         each crisis - and on the worst-timed day, the pre-crash peak.
       </div>
     </div>
-    <a href="#engine" class="cta-btn"
+    <a href="#gungnir" class="cta-btn"
        style="margin-top:26px;background:transparent;border:1px solid #B08A55;">
       Work with an exceptional risk engine &darr;</a>
   </div>
@@ -1267,6 +1279,29 @@ except Exception as _exc:  # noqa: BLE001 - landing page must never crash on dat
     st.caption(f"Crisis record unavailable right now ({_exc}). "
                "The Crisis Conviction tab retries on load.")
 
+# ---- Gungnir - the slice: reading ends, allocation begins ----
+# assets/gungnir.png is generated in-repo (procedural topographic contours
+# from a single scalar field + the bound-rune engraving) - born at 3200px,
+# no upscaling involved, so it can never look like a stretched photo.
+try:
+    with open("assets/gungnir.png", "rb") as _gf:
+        _gungnir_b64 = base64.b64encode(_gf.read()).decode()
+    _gungnir_bg = (
+        "background-image:linear-gradient(90deg, rgba(244,241,234,0) 0%, "
+        "rgba(244,241,234,.22) 36%, rgba(244,241,234,.9) 64%, #F4F1EA 82%), "
+        f"url(data:image/png;base64,{_gungnir_b64});")
+except Exception:  # noqa: BLE001 - asset missing: plain band, honest fallback
+    _gungnir_bg = ""
+st.markdown(
+    f'<div id="gungnir"></div>'
+    f'<div class="gungnir-band" style="{_gungnir_bg}">'
+    f'<div class="showcase-eyebrow">Gungnir · The Slice</div>'
+    f'<h2 class="showcase-title" style="font-size:30px;">Reading ends. Wielding begins.</h2>'
+    f'<div class="gungnir-sub">Everything above was the case. Everything below is the tool: '
+    f'choose a side, pick a universe, and every number recomputes live from market data.</div>'
+    f'</div>',
+    unsafe_allow_html=True)
+
 # ---- Direction: the same honest math from either side of the trade ----
 # Council pass 7: bearish mode models a SYNTHETIC DAILY-REBALANCED SHORT
 # (negated daily returns). Symmetric statistics (covariance, correlation,
@@ -1306,8 +1341,8 @@ st.markdown(
     f'<div style="font-family:Georgia;font-size:12.5px;color:#6B6459;max-width:560px;margin:2px auto 0;">'
     f'{"Shorting flips the sketch: Circle 1 is the position you are against, and Circle 2 - a correlated long - cushions the squeeze. Short losses can exceed 100%; borrow costs are not modeled." if bearish else "Circle 1 rides high and volatile; Circle 2 - reliability, stability, grit - is what this engine was built to find. We are Circle 2."}'
     f'</div>'
-    f'<a href="#engine" class="cta-btn" style="margin-top:14px;">Work with an exceptional '
-    f'{"bearish" if bearish else "bullish"} risk engine &darr;</a>'
+    f'<a href="#engine" class="cta-btn" style="margin-top:14px;">'
+    f'Stress-test it live &darr;</a>'
     f'</div>'
     f'<hr class="section-divider">'
     f'<div class="engine-heading reveal" id="engine">'
