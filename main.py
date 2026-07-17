@@ -1966,6 +1966,7 @@ with tab_3d:
             "pairs": _wr_pairs,
             "muFlyer": 0.0, "muAnchor": 0.0, "muBook": 0.0,
             "cal": _wr_cal["cal"], "muV": round(float(_wr_cal["muV"]), 4),
+            "muB": round(float(_wr_cal["muB"]), 3),
             "days": 30,
             "domain": _wr_dom,
             "live": True,

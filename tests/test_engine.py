@@ -1111,6 +1111,9 @@ def test_state_calibration_sane_and_stress_ordering():
         assert np.isfinite(base[k]), f"{k} not finite"
     assert CLAMPS["theta"][0] <= base["thB"] <= CLAMPS["theta"][1]
     assert CLAMPS["mu_v"][0] <= out["muV"] <= CLAMPS["mu_v"][1]
+    assert CLAMPS["mu_b"][0] <= out["muB"] <= CLAMPS["mu_b"][1]
+    # the planted book is 1.2x the market: the long-run beta must find it
+    assert abs(out["muB"] - 1.2) < 0.25, f"muB {out['muB']:.2f} vs planted 1.2"
     assert abs(base["rho"]) <= 0.95 and abs(base["lev"]) <= 0.95
     assert abs(stress["etaV"] - base["etaV"] * STRESS_SHOCK_MULT) < 1e-12
     assert abs(stress["sigB"] - base["sigB"] * STRESS_SHOCK_MULT) < 1e-12

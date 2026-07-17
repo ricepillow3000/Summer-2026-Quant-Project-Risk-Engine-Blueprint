@@ -45,6 +45,7 @@ CLAMPS = {
     "eta_v": (0.2, 4.0),         # vol-of-vol, per sqrt(year)
     "rho": (-0.95, 0.95),
     "mu_v": (0.05, 0.80),        # long-run vol between 5% and 80%
+    "mu_b": (-0.5, 2.0),         # long-run beta the state reverts to
 }
 
 # Policy multipliers for the alternative calibrations (disclosed, not data).
@@ -131,6 +132,7 @@ def calibrate_state_dynamics(port_returns: pd.Series,
     sig_b = _clamp(fb["sigma"], "sig_b", flags)
     eta_v = _clamp(fv["sigma"], "eta_v", flags)
     mu_v = _clamp(float(np.exp(fv["mu"])), "mu_v", flags)
+    mu_b = _clamp(fb["mu"], "mu_b", flags)
 
     # shock correlations, measured on the AR(1) residuals
     resid = pd.concat([fb["resid"].rename("b"), fv["resid"].rename("v")],
@@ -150,6 +152,7 @@ def calibrate_state_dynamics(port_returns: pd.Series,
     return {
         "cal": {"calm": calm, "base": base, "stress": stress},
         "muV": mu_v,
+        "muB": mu_b,
         "n_obs": int(len(state)),
         "beta_now": float(state["beta"].iloc[-1]),
         "vol_now": float(state["vol"].iloc[-1]),
