@@ -88,6 +88,19 @@ body {
 .runbtn:hover { background: var(--bronze); letter-spacing: 0.14em; }
 .runbtn:focus-visible { outline: 2px solid var(--bronze); outline-offset: 2px; }
 .runbtn[disabled] { opacity: .55; cursor: default; }
+.explbtn {
+  font-family: Georgia, serif; font-size: 11.5px; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--mute);
+  background: transparent; border: 1px solid var(--line2);
+  border-radius: 10px; padding: 8px 10px; width: 100%; margin-top: 8px;
+  cursor: pointer; transition: color .2s, border-color .2s, background .2s;
+}
+.explbtn:hover { color: var(--beige); border-color: var(--bronze); }
+.explbtn[aria-pressed="true"] {
+  color: var(--beige); border-color: var(--bronze);
+  background: rgba(154,123,79,0.18);
+}
+.explbtn:focus-visible { outline: 2px solid var(--bronze); outline-offset: 2px; }
 .ctl { margin-top: 15px; }
 .ctl-h {
   font-size: 9.5px; letter-spacing: 0.24em; text-transform: uppercase;
@@ -235,6 +248,11 @@ select {
   border-top: 1px solid var(--line); padding-top: 9px; }
 .honest b { color: var(--mute); font-weight: 400; }
 
+@media (max-width: 1680px) {
+  .tiles { grid-template-columns: repeat(2, minmax(104px, 1fr)); }
+  .verdict { min-width: 280px; }
+  .verdict .n { font-size: 42px; }
+}
 @media (max-width: 1180px) {
   .side { width: 200px; }
   .hud { left: 226px; right: 330px; }
@@ -261,6 +279,7 @@ select {
     <h1>Risk Topology</h1>
     <div class="sub">Where the book can drift over the next 30 trading days, and what it costs to be wrong.</div>
     <button class="runbtn" id="btnRun">Run Simulation</button>
+    <button class="explbtn" id="btnExplain" aria-pressed="false">Explain the map</button>
     <div class="ctl">
       <div class="ctl-h">Engine</div>
       <div class="row"><label for="selCal">Calibration</label>
@@ -301,10 +320,10 @@ select {
       <div class="s">Average loss across the worst 2.5% of simulated paths. One number, then the map.</div>
     </div>
     <div class="tiles">
-      <div class="tile"><div class="l">VaR 95 · T+30</div><div class="v" id="hudVaR">--</div><div class="d">simulated quantile</div></div>
-      <div class="tile"><div class="l" id="hudT2L">Sharpe · simulated</div><div class="v" id="hudSharpe">--</div><div class="d" id="hudT2D">annualized, demo drift</div></div>
-      <div class="tile"><div class="l">Breach probability</div><div class="v" id="hudTail">--</div><div class="d">paths touching perimeter</div></div>
-      <div class="tile"><div class="l">Beyond 95% ring</div><div class="v" id="hudSigma">--</div><div class="d">end-states past 2nd ring</div></div>
+      <div class="tile" title="If the next 30 days land in the worst 5% of simulated paths, the loss is at least this much."><div class="l">VaR 95 · T+30</div><div class="v" id="hudVaR">--</div><div class="d">simulated quantile</div></div>
+      <div class="tile" title="The volatility level the book keeps returning to, estimated from its own history."><div class="l" id="hudT2L">Sharpe · simulated</div><div class="v" id="hudSharpe">--</div><div class="d" id="hudT2D">annualized, demo drift</div></div>
+      <div class="tile" title="Share of the 10,000 simulated paths that touched the danger perimeter at any point in 30 days."><div class="l">Breach probability</div><div class="v" id="hudTail">--</div><div class="d">paths touching perimeter</div></div>
+      <div class="tile" title="Share of simulated end-states landing outside the 95% probability ring - measured, and by construction close to 4.6%."><div class="l">Beyond 95% ring</div><div class="v" id="hudSigma">--</div><div class="d">end-states past 2nd ring</div></div>
     </div>
     <div class="chips">
       <div class="chip" id="chipEngine">Engine · OU-state Monte Carlo</div>
@@ -318,7 +337,7 @@ select {
   <div class="inspector glass" id="inspPanel">
     <div class="insp-h">
       <div class="k">Bon Voyage Linkages</div>
-      <div class="t">Tournament standings</div>
+      <div class="t">League table · ranked by cushion</div>
     </div>
     <div class="standings" id="standings"></div>
     <div class="detail" id="detail"></div>
@@ -554,7 +573,7 @@ function sizeCanvases() {
 const S = {
   cal: 'base', runSeed: 42,
   cloud: null, stats: null,
-  atmo: true, marks: true, links: true,
+  atmo: true, marks: true, links: true, explain: false,
   selPair: 0, pairStats: [],
   hoverAsset: null, mouse: null,
   trailPaths: null,
@@ -608,10 +627,13 @@ function drawTerrain() {
     g.fillText(Math.round(v * 100) + '%', PAD.l - 8, y + 3);
   }
   /* axis titles */
+  /* x-title rides the right end of its axis - the bottom-left corner
+     belongs to the identity chips and must never collide with them */
   g.fillStyle = 'rgba(154,123,79,0.85)';
   g.font = '10px Georgia';
+  g.textAlign = 'right';
+  spacedText(g, 'Portfolio beta', W - PAD.r - 4, H - 10);
   g.textAlign = 'center';
-  spacedText(g, 'Portfolio beta', PAD.l + (W - PAD.l - PAD.r) / 2, H - 10);
   g.save();
   g.translate(PAD.l - 46, PAD.t + (H - PAD.t - PAD.b) / 2); g.rotate(-Math.PI / 2);
   spacedText(g, 'Annualized volatility (realized)', 0, 0);
@@ -867,6 +889,9 @@ function pathBreachIdx(pts) {
   return -1;
 }
 function drawTrails(progress) {
+  /* Smooth, continuous growth: each path advances by FRACTIONAL segments
+     (the tip lerps inside its current day) and paths launch staggered, so
+     the run reads as flowing ink instead of a slide deck of 30 steps. */
   const g = xTrail;
   g.clearRect(0, 0, W, H);
   if (!S.trailPaths) return;
@@ -874,13 +899,20 @@ function drawTrails(progress) {
   g.beginPath();
   g.rect(PAD.l, PAD.t, W - PAD.l - PAD.r, H - PAD.t - PAD.b);
   g.clip();
+  g.lineCap = 'round'; g.lineJoin = 'round';
   const n = S.trailPaths.length;
   for (let i = 0; i < n; i++) {
     const pts = S.trailPaths[i];
     const bIdx = pathBreachIdx(pts);
-    const last = Math.max(1, Math.floor(progress * (pts.length - 1)));
+    /* staggered launch: up to 25% of the run spent fanning the starts out */
+    const delay = (i % 20) / 20 * 0.25;
+    const pi = Math.max(0, Math.min(1, (progress - delay) / (1 - delay)));
+    if (pi <= 0) continue;
+    const fIdx = pi * (pts.length - 1);
+    const last = Math.floor(fIdx);
+    const frac = fIdx - last;
     for (let j = 1; j <= last; j++) {
-      const age = (last - j) / pts.length;
+      const age = (fIdx - j) / pts.length;
       const alpha = Math.max(0.03, 0.5 - age * 0.55);
       const breachedSeg = bIdx >= 0 && j >= bIdx;
       g.strokeStyle = breachedSeg
@@ -892,7 +924,22 @@ function drawTrails(progress) {
       g.lineTo(toX(pts[j].b), toY(pts[j].v));
       g.stroke();
     }
-    if (progress >= 1) {
+    if (frac > 0 && last + 1 < pts.length) {   /* the growing tip */
+      const a = pts[last], b2 = pts[last + 1];
+      const tipB = a.b + (b2.b - a.b) * frac, tipV = a.v + (b2.v - a.v) * frac;
+      const breachedSeg = bIdx >= 0 && last + 1 >= bIdx;
+      g.strokeStyle = breachedSeg ? 'rgba(194,91,58,0.62)' : 'rgba(154,123,79,0.5)';
+      g.lineWidth = breachedSeg ? 1.3 : 1;
+      g.beginPath();
+      g.moveTo(toX(a.b), toY(a.v));
+      g.lineTo(toX(tipB), toY(tipV));
+      g.stroke();
+      /* a faint spark rides each tip while its path is still being drawn */
+      g.beginPath(); g.arc(toX(tipB), toY(tipV), 1.3, 0, Math.PI * 2);
+      g.fillStyle = breachedSeg ? 'rgba(194,91,58,0.7)' : 'rgba(217,192,137,0.6)';
+      g.fill();
+    }
+    if (pi >= 1) {
       const e = pts[pts.length - 1];
       g.beginPath(); g.arc(toX(e.b), toY(e.v), 1.8, 0, Math.PI * 2);
       g.fillStyle = bIdx >= 0 ? 'rgba(194,91,58,0.85)' : 'rgba(217,192,137,0.75)';
@@ -958,6 +1005,67 @@ function startCouriers(linkIdx, dur) {
   if (S.reduced) return;
   S.courier = { link: linkIdx, t0: performance.now(), dur: dur };
   if (!courierRAF) courierRAF = requestAnimationFrame(courierLoop);
+}
+
+/* ---------- explain mode: plain-language reading of every map element ---------- */
+const EXPLAIN = {
+  asset: t => [t + ' · one holding',
+    'Sits at its measured risk address: how hard it moves with the market (left-right) and how violently it moves day to day (up-down). Both measured from its actual price history.'],
+  portfolio: () => ['Portfolio · you are here',
+    'The whole book today, measured from rolling windows of its real returns. Every simulated future starts from this exact spot.'],
+  link: pr => [pr.fl + ' - ' + pr.an + ' · Bon Voyage pair',
+    'The flyer (' + pr.fl + ') holds most of the risk, the anchor (' + pr.an + ') holds most of the money. Tether them and a crash in the flyer digs a shallower hole. Click the link to see the replayed history.'],
+  ring: pct => [pct + ' probability ring',
+    'After 10,000 simulated 30-day futures, ' + pct + ' of them END inside this ring. Counted from the simulation, not assumed. The farther out, the darker: the fog is where the book almost never lands.'],
+  perimeter: () => ['Maximum VaR breach perimeter',
+    'The danger line, set by a disclosed policy (3x today\'s volatility, or beta up 0.8). Any simulated path that crosses it burns ember and counts toward the breach probability in the top bar.'],
+  iso: pct => ['Iso-VaR guide · ' + pct + ' daily',
+    'A reference altitude: at this volatility, a normal bad day (worst 5%) costs about ' + pct + '. Higher on the map = bigger daily losses at the same odds.'],
+  xaxis: () => ['Portfolio beta · the x-axis',
+    'Market sensitivity. 1.0 moves with the market, 0 ignores it, negative moves against it. Drifting right means the book behaves more like the index.'],
+  yaxis: () => ['Realized volatility · the y-axis',
+    'How big the daily swings actually are, annualized, measured from real returns. Climbing this axis is what a risk manager gets paid to notice.'],
+  tail: () => ['Tail territory',
+    'Beyond the 99.7% ring. The simulation almost never reaches here in 30 days - but "almost never" is where blowups live. That is why the map keeps it visible instead of cropping it away.'],
+  terrain: () => ['The terrain · one Monte Carlo run',
+    'Every thread is one simulated 30-day future of the book, stepping day by day through dynamics calibrated on its real history. The bright web is where futures crowd; ember threads crossed the danger line.'],
+};
+
+function explainTarget(x, y) {
+  /* priority: units > portfolio > links > perimeter > rings > iso > axes > tail > terrain */
+  for (const a of DEMO.assets) {
+    if (Math.hypot(toX(a.b) - x, toY(a.v) - y) < 10) return EXPLAIN.asset(a.t);
+  }
+  if (Math.hypot(toX(DEMO.base.beta) - x, toY(DEMO.base.vol) - y) < 20) return EXPLAIN.portfolio();
+  if (S.links) {
+    for (let i = 0; i < DEMO.pairs.length; i++) {
+      const pr = DEMO.pairs[i];
+      const A = DEMO.assets.find(a => a.t === pr.fl), B = DEMO.assets.find(a => a.t === pr.an);
+      if (!A || !B) continue;
+      const ax = toX(A.b), ay = toY(A.v), bx = toX(B.b), by = toY(B.v);
+      const L2 = (bx - ax) * (bx - ax) + (by - ay) * (by - ay);
+      let t = ((x - ax) * (bx - ax) + (y - ay) * (by - ay)) / L2;
+      t = Math.max(0, Math.min(1, t));
+      if (Math.hypot(x - (ax + t * (bx - ax)), y - (ay + t * (by - ay))) < 7) return EXPLAIN.link(pr);
+    }
+  }
+  if (S.marks) {
+    const hx = toX(DEMO.hazard.betaMax), hy = toY(DEMO.hazard.volMax);
+    if ((Math.abs(y - hy) < 6 && x <= hx) || (Math.abs(x - hx) < 6 && y >= hy)) return EXPLAIN.perimeter();
+    for (const varPct of [0.02, 0.03, 0.05]) {
+      const vIso = varPct * Math.sqrt(252) / 1.645;
+      if (vIso <= DOMN.v1 && Math.abs(y - toY(vIso)) < 5) return EXPLAIN.iso(Math.round(varPct * 100) + '%');
+    }
+  }
+  if (S.atmo && S.cloud) {
+    const d = S.cloud.maha(fromX(x), fromY(y));
+    const named = [[S.cloud.r68, '68%'], [S.cloud.r95, '95%'], [S.cloud.r997, '99.7%']];
+    for (const ring of named) {
+      if (Math.abs(d - ring[0]) < S.cloud.r997 * 0.05) return EXPLAIN.ring(ring[1]);
+    }
+    if (d > S.cloud.r997 * 1.15) return EXPLAIN.tail();
+  }
+  return EXPLAIN.terrain();
 }
 
 /* ---------- scenario reading ---------- */
@@ -1191,10 +1299,12 @@ function runSimulation() {
 
   if (S.reduced) { drawTrails(1); btn.disabled = false; return; }
   if (trailAnimRAF) cancelAnimationFrame(trailAnimRAF);
-  const t0 = performance.now(), DUR = 2600;
+  const t0 = performance.now(), DUR = 3400;
   const tick = now => {
     const p = Math.min(1, (now - t0) / DUR);
-    drawTrails(1 - Math.pow(1 - p, 2.2));
+    /* easeInOut: paths pour out, cruise, then settle - no slideshow steps */
+    const e = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+    drawTrails(e);
     if (p < 1) trailAnimRAF = requestAnimationFrame(tick);
     else { drawTrails(1); btn.disabled = false; }
   };
@@ -1203,6 +1313,11 @@ function runSimulation() {
 
 /* ---------- events ---------- */
 document.getElementById('btnRun').addEventListener('click', runSimulation);
+document.getElementById('btnExplain').addEventListener('click', e => {
+  S.explain = !S.explain;
+  e.currentTarget.setAttribute('aria-pressed', String(S.explain));
+  tip.style.display = 'none';
+});
 document.getElementById('selCal').addEventListener('change', e => { S.cal = e.target.value; runSimulation(); });
 const togMap = { tgAtmo: 'atmo', tgMarks: 'marks', tgLinks: 'links' };
 for (const id in togMap) {
@@ -1229,7 +1344,29 @@ shell.addEventListener('mousemove', e => {
   }
   if (hov !== S.hoverAsset) { S.hoverAsset = hov; drawIntel(); }
   drawOverlay();
-  if (x > PAD.l && x < W - PAD.r && y > PAD.t && y < H - PAD.b && S.cloud) {
+  const inPlot = x > PAD.l && x < W - PAD.r && y > PAD.t && y < H - PAD.b;
+  const tipSc = document.getElementById('tipSc');
+  const hintEl = tip.querySelector('.hint');
+  if (S.explain && S.cloud) {
+    /* explain mode: name the thing under the cursor in plain language.
+       The axis gutters count as things too. */
+    let ex = null;
+    if (inPlot) ex = explainTarget(x, y);
+    else if (y >= H - PAD.b && x > PAD.l && x < W - PAD.r) ex = EXPLAIN.xaxis();
+    else if (x <= PAD.l && y > PAD.t && y < H - PAD.b) ex = EXPLAIN.yaxis();
+    if (ex) {
+      document.getElementById('tipCo').textContent = ex[0];
+      document.getElementById('tipM').textContent = ex[1];
+      tipSc.style.display = 'none';
+      hintEl.textContent = 'Explain mode · hover anything, click the button to exit';
+      tip.style.display = 'block';
+      const tw = 250, th = 140;
+      tip.style.left = Math.min(x + 18, W - tw - 10) + 'px';
+      tip.style.top = Math.min(Math.max(y - 20, 8), H - th - 8) + 'px';
+    } else {
+      tip.style.display = 'none';
+    }
+  } else if (inPlot && S.cloud) {
     const b = fromX(x), v = fromY(y);
     const d = S.cloud.maha(b, v);
     document.getElementById('tipCo').innerHTML =
@@ -1237,7 +1374,9 @@ shell.addEventListener('mousemove', e => {
     document.getElementById('tipM').textContent =
       '1d VaR95 at this vol = ' + (1.645 * v / Math.sqrt(252) * 100).toFixed(1) + '%. ' +
       (S.cloud.fracBeyond(d) * 100).toFixed(1) + '% of simulated end-states drift farther.';
+    tipSc.style.display = 'block';
     document.getElementById('tipSc').textContent = scenarioText(b, v);
+    hintEl.textContent = 'Stylized scenario reading, not a forecast';
     tip.style.display = 'block';
     const tw = 250, th = 160;
     tip.style.left = Math.min(x + 18, W - tw - 10) + 'px';

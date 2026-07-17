@@ -150,6 +150,7 @@ html { scroll-behavior: smooth; }
    target section rises into place under a smooth scroll. */
 .hero-section, .showcase-section, .showcase-row, .engine-heading,
 #engine { scroll-margin-top: 28px; }
+#analysis { scroll-margin-top: 28px; }
 @keyframes section-arrive { from { opacity: .25; transform: translateY(26px); }
                             to   { opacity: 1; transform: none; } }
 #grit-showcase:target, #conviction:target, #engine:target {
@@ -1205,6 +1206,9 @@ st.markdown("""
         each crisis - and on the worst-timed day, the pre-crash peak.
       </div>
     </div>
+    <a href="#engine" class="cta-btn"
+       style="margin-top:26px;background:transparent;border:1px solid #B08A55;">
+      Work with an exceptional risk engine &darr;</a>
   </div>
 </div>
 """, unsafe_allow_html=True)
@@ -1310,6 +1314,9 @@ st.markdown(
     f'<div class="showcase-eyebrow">The Engine</div>'
     f'<h2 class="showcase-title" style="font-size:26px;">Stress-test any '
     f'{"short book" if bearish else "portfolio"}, live</h2>'
+    f'<a href="#analysis" class="cta-btn" '
+    f'style="margin-top:10px;padding:10px 24px;font-size:12.5px;">'
+    f'Skip to the risk map &darr;</a>'
     f'</div>',
     unsafe_allow_html=True)
 
@@ -1746,6 +1753,7 @@ def eigen_factor_panel(cov, weights, returns) -> None:
 # Twelve tabs on one strip overflow invisibly (the tab-list scrollbar is
 # hidden by design) - split into two ruled rows: risk analysis first,
 # research & housekeeping second. Nothing removed, everything reachable.
+st.markdown('<div id="analysis"></div>', unsafe_allow_html=True)
 panel_head("Risk & conviction", "The analysis - where the risk lives")
 (tab_3d, tab_breakdown, tab_watch, tab_balance, tab_grit,
  tab_conviction) = st.tabs([
