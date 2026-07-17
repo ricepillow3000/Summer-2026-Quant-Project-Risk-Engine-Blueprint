@@ -1,0 +1,1228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meleona - War Room - Risk Topology</title>
+<style>
+/* ============================================================
+   MELEONA WAR ROOM - tactical risk topology
+   Palette: the house palette in its Gotham (dark band) register.
+   Warm charcoal blacks, bronze vectors, beige instruments.
+   Ember is FUNCTIONAL hazard color only, never decoration.
+   ============================================================ */
+:root {
+  --void:   #15120D;   /* page night */
+  --panel:  #1D1912;   /* raised plate */
+  --plate:  #241F16;   /* brighter plate */
+  --line:   rgba(237,233,227,0.10);
+  --line2:  rgba(237,233,227,0.20);
+  --beige:  #EDE9E3;
+  --mute:   #B0A794;
+  --dim:    #7E766A;
+  --bronze: #9A7B4F;
+  --bronzehi: #C9A227;
+  --bronzesoft: #D9C089;
+  --ember:  #A64B33;
+  --emberhi:#C25B3A;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  background: radial-gradient(130% 100% at 50% 0%, #1B1710 0%, var(--void) 62%);
+  color: var(--beige);
+  font-family: Georgia, 'Times New Roman', serif;
+  overflow: hidden;
+  font-variant-numeric: tabular-nums;
+}
+.shell { display: flex; height: 100vh; min-height: 620px; }
+
+/* ---------------- sidebar : settings and tools ---------------- */
+.side {
+  width: 250px; flex: 0 0 250px;
+  background: linear-gradient(180deg, #1A1610 0%, #16130D 100%);
+  border-right: 1px solid var(--line);
+  padding: 22px 18px 14px;
+  display: flex; flex-direction: column; gap: 0;
+}
+.eyebrow {
+  font-size: 10px; letter-spacing: 0.32em; text-transform: uppercase;
+  color: var(--bronze);
+}
+.side h1 {
+  font-size: 25px; font-weight: 400; letter-spacing: -0.01em;
+  color: var(--beige); margin: 6px 0 2px; line-height: 1.1;
+}
+.side .sub { font-size: 11.5px; color: var(--dim); line-height: 1.5; margin-bottom: 18px; }
+.runbtn {
+  font-family: Georgia, serif; font-size: 14.5px; letter-spacing: 0.11em;
+  text-transform: uppercase; color: var(--beige);
+  background: linear-gradient(180deg, #4A453D 0%, #3A362F 100%);
+  border: 1px solid rgba(217,192,137,0.35);
+  border-radius: 10px; padding: 13px 10px; width: 100%;
+  cursor: pointer; transition: background .25s, letter-spacing .25s;
+}
+.runbtn:hover { background: var(--bronze); letter-spacing: 0.14em; }
+.runbtn:focus-visible { outline: 2px solid var(--bronze); outline-offset: 2px; }
+.runbtn[disabled] { opacity: .55; cursor: default; }
+.ctl { margin-top: 16px; }
+.ctl-h {
+  font-size: 9.5px; letter-spacing: 0.24em; text-transform: uppercase;
+  color: var(--bronze); border-bottom: 1px solid var(--line);
+  padding-bottom: 5px; margin-bottom: 9px;
+}
+.row { display: flex; align-items: center; justify-content: space-between; margin: 7px 0; }
+.row label { font-size: 12px; color: var(--mute); }
+select {
+  background: var(--panel); color: var(--beige); border: 1px solid var(--line2);
+  font-family: Georgia, serif; font-size: 12px; padding: 3px 6px; border-radius: 2px;
+}
+.tog { display: inline-flex; align-items: center; cursor: pointer; position: relative; }
+.tog input { position: absolute; opacity: 0; }
+.tog .pip {
+  width: 30px; height: 15px; border: 1px solid var(--line2); border-radius: 2px;
+  background: var(--panel); position: relative; transition: border-color .2s; display: inline-block;
+}
+.tog .pip::after {
+  content: ''; position: absolute; top: 2px; left: 2px; width: 10px; height: 9px;
+  background: var(--dim); transition: left .18s, background .18s;
+}
+.tog input:checked + .pip { border-color: var(--bronze); }
+.tog input:checked + .pip::after { left: 16px; background: var(--bronze); }
+.tog input:focus-visible + .pip { outline: 2px solid var(--bronze); outline-offset: 2px; }
+.side .foot {
+  margin-top: auto; padding-top: 12px; border-top: 1px solid var(--line);
+  font-size: 10px; color: var(--dim); line-height: 1.55;
+}
+.side .foot b { color: var(--mute); font-weight: 400; }
+
+/* ---------------- main column ---------------- */
+.main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+/* ---- HUD statistics band (top third) ---- */
+.hud {
+  flex: 0 0 auto; min-height: 178px;
+  border-bottom: 1px solid var(--line);
+  padding: 18px 26px 16px;
+  display: flex; gap: 30px; align-items: stretch;
+  background: linear-gradient(180deg, rgba(36,31,22,0.55) 0%, rgba(21,18,13,0) 100%);
+}
+.verdict { min-width: 300px; }
+.verdict .k {
+  font-size: 10px; letter-spacing: 0.26em; text-transform: uppercase; color: var(--bronze);
+}
+.verdict .n {
+  font-size: 66px; line-height: 1.02; margin: 4px 0 2px; color: var(--beige);
+  text-shadow: 0 0 34px rgba(201,162,39,0.14);
+}
+.verdict .n em { font-style: normal; font-size: 26px; color: var(--mute); }
+.verdict .s { font-size: 12px; color: var(--dim); line-height: 1.5; max-width: 330px; }
+.tiles { display: grid; grid-template-columns: repeat(4, minmax(118px, 1fr)); gap: 12px; flex: 1; align-content: center; }
+.tile {
+  background: var(--panel); border: 1px solid var(--line);
+  border-top: 2px solid var(--bronze); padding: 11px 13px 9px;
+}
+.tile .l { font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--bronze); }
+.tile .v { font-size: 26px; color: var(--beige); line-height: 1.15; margin-top: 3px; }
+.tile .v small { font-size: 13px; color: var(--mute); }
+.tile .d { font-size: 10px; color: var(--dim); margin-top: 1px; }
+.chips { display: flex; flex-direction: column; gap: 7px; justify-content: center; }
+.chip {
+  font-size: 9.5px; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--mute); border: 1px solid var(--line); border-left: 2px solid var(--bronze);
+  padding: 5px 9px; white-space: nowrap; background: rgba(29,25,18,0.6);
+}
+.chip.warn { border-left-color: var(--ember); color: #C99A85; }
+
+/* ---- stage : map + inspector ---- */
+.stage { flex: 1; display: flex; min-height: 0; }
+.mapwrap {
+  flex: 1.6; position: relative; min-width: 0; margin: 14px 0 14px 16px;
+  border: 1px solid var(--line); background: #16130E;
+  box-shadow: inset 0 0 90px rgba(0,0,0,0.5);
+}
+.mapwrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+#cvBase { z-index: 1; } #cvFog { z-index: 2; } #cvIntel { z-index: 3; } #cvTrail { z-index: 4; } #cvAnim { z-index: 5; }
+.maptag {
+  position: absolute; top: 10px; left: 28px; z-index: 6; pointer-events: none;
+  font-size: 9.5px; letter-spacing: 0.26em; text-transform: uppercase; color: var(--bronze);
+}
+.demotag {
+  position: absolute; top: 10px; right: 28px; z-index: 6; pointer-events: none;
+  font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: #C99A85;
+  border: 1px solid rgba(166,75,51,0.5); padding: 3px 8px; background: rgba(21,18,13,0.72);
+}
+.tip {
+  position: absolute; z-index: 7; pointer-events: none; display: none;
+  width: 250px; background: rgba(24,20,14,0.94); border: 1px solid var(--line2);
+  border-top: 2px solid var(--bronze); padding: 10px 12px 9px;
+  backdrop-filter: blur(3px);
+}
+.tip .coords { font-size: 15px; color: var(--beige); }
+.tip .coords span { color: var(--bronzesoft); }
+.tip .m { font-size: 10.5px; color: var(--mute); margin-top: 3px; line-height: 1.5; }
+.tip .sc { font-size: 11px; color: var(--beige); margin-top: 7px; line-height: 1.5;
+  border-top: 1px solid var(--line); padding-top: 6px; }
+.tip .hint { font-size: 9px; color: var(--dim); margin-top: 6px; letter-spacing: 0.08em; text-transform: uppercase; }
+
+/* ---- inspector : bon voyage linkages ---- */
+.inspector {
+  flex: 1; min-width: 300px; max-width: 400px; margin: 14px 16px;
+  border: 1px solid var(--line); background: var(--panel);
+  display: flex; flex-direction: column; min-height: 0;
+}
+.insp-h {
+  padding: 12px 16px 10px; border-bottom: 1px solid var(--line);
+}
+.insp-h .k { font-size: 9.5px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--bronze); }
+.insp-h .t { font-size: 17px; color: var(--beige); margin-top: 3px; }
+.standings { border-bottom: 1px solid var(--line); }
+.standings .srow {
+  display: flex; align-items: baseline; gap: 10px; padding: 8px 16px 13px;
+  cursor: pointer; border-left: 2px solid transparent; transition: background .15s, border-color .15s;
+  position: relative;
+}
+.srow .bar { position: absolute; left: 42px; right: 16px; bottom: 6px; height: 2px;
+  background: rgba(237,233,227,0.07); }
+.srow .bar i { display: block; height: 100%;
+  background: linear-gradient(90deg, var(--bronze), var(--bronzehi)); }
+.standings .srow:hover { background: rgba(154,123,79,0.07); }
+.standings .srow.sel { background: rgba(154,123,79,0.11); border-left-color: var(--bronze); }
+.srow .rk { font-size: 11px; color: var(--dim); width: 16px; }
+.srow .pair { font-size: 14px; color: var(--beige); flex: 1; }
+.srow .pair span { color: var(--dim); font-size: 11px; }
+.srow .cu { font-size: 13px; color: var(--bronzesoft); }
+.detail { flex: 1; overflow-y: auto; padding: 14px 16px; scrollbar-width: thin; scrollbar-color: rgba(154,123,79,0.4) rgba(0,0,0,0.2); }
+.detail::-webkit-scrollbar { width: 8px; }
+.detail::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
+.detail::-webkit-scrollbar-thumb { background: rgba(154,123,79,0.4); }
+.linkdiag { display: block; margin: 2px auto 10px; }
+.dgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 8px; }
+.dcell { border: 1px solid var(--line); border-top: 2px solid var(--bronze); padding: 8px 10px 7px; background: rgba(21,18,13,0.5); }
+.dcell .l { font-size: 8.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--bronze); }
+.dcell .v { font-size: 19px; color: var(--beige); margin-top: 2px; }
+.dcell .v small { font-size: 11px; color: var(--mute); }
+.runctr { margin-top: 12px; border: 1px solid var(--line); padding: 10px 12px 9px; background: rgba(21,18,13,0.5); }
+.runctr .l { font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--bronze); }
+.runctr .n { font-size: 30px; color: var(--beige); }
+.runctr .n small { font-size: 12px; color: var(--dim); }
+.runbar { height: 3px; background: rgba(237,233,227,0.08); margin-top: 7px; position: relative; overflow: hidden; }
+.runbar i { position: absolute; inset: 0 100% 0 0; background: linear-gradient(90deg, var(--bronze), var(--bronzehi)); }
+.agents-note { font-size: 10px; color: var(--dim); margin-top: 6px; line-height: 1.5; }
+.honest {
+  margin-top: 12px; font-size: 10px; color: var(--dim); line-height: 1.55;
+  border-top: 1px solid var(--line); padding-top: 9px;
+}
+.honest b { color: var(--mute); font-weight: 400; }
+@media (max-width: 1080px) {
+  .side { width: 210px; flex-basis: 210px; }
+  .tiles { grid-template-columns: repeat(2, 1fr); }
+  .verdict .n { font-size: 52px; }
+}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- ============ SIDEBAR : settings and tools ============ -->
+  <aside class="side">
+    <div class="eyebrow">Meleona · Risk Engine</div>
+    <h1>Risk Topology</h1>
+    <div class="sub">Where the book can drift over the next 30 trading days, and what it costs to be wrong.</div>
+
+    <button class="runbtn" id="btnRun">Run Simulation</button>
+
+    <div class="ctl">
+      <div class="ctl-h">Engine</div>
+      <div class="row"><label for="selCal">Calibration</label>
+        <select id="selCal">
+          <option value="calm">Calm</option>
+          <option value="base" selected>Baseline</option>
+          <option value="stress">Stressed</option>
+        </select></div>
+      <div class="row"><label for="selTracers">Visible tracers</label>
+        <select id="selTracers">
+          <option>60</option><option selected>100</option><option>180</option>
+        </select></div>
+    </div>
+
+    <div class="ctl">
+      <div class="ctl-h">Overlays</div>
+      <div class="row"><label>Fog of war</label>
+        <label class="tog"><input type="checkbox" id="tgFog" checked><span class="pip"></span></label></div>
+      <div class="row"><label>Probability rings</label>
+        <label class="tog"><input type="checkbox" id="tgRings" checked><span class="pip"></span></label></div>
+      <div class="row"><label>VaR breach perimeter</label>
+        <label class="tog"><input type="checkbox" id="tgHaz" checked><span class="pip"></span></label></div>
+      <div class="row"><label>Iso-VaR guides</label>
+        <label class="tog"><input type="checkbox" id="tgIso" checked><span class="pip"></span></label></div>
+      <div class="row"><label>Bon Voyage links</label>
+        <label class="tog"><input type="checkbox" id="tgLinks" checked><span class="pip"></span></label></div>
+    </div>
+
+    <div class="foot" id="paramsFoot">
+      <b>State model:</b> OU beta, log-OU volatility, shock corr +0.45,
+      return leverage effect -0.50. 10,000 paths per run, T+30 trading days.
+      All statistics are computed from the simulated paths on this page.
+      Demo calibration; production wiring reads the live engine payload.
+    </div>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <div class="main">
+
+    <!-- HUD statistics band -->
+    <header class="hud">
+      <div class="verdict">
+        <div class="k">Expected Shortfall · 97.5% · T+30</div>
+        <div class="n" id="hudES">--<em>%</em></div>
+        <div class="s">If the next 30 days land in the worst 2.5% of simulated paths,
+          this is the average loss. One number, then the map.</div>
+      </div>
+      <div class="tiles">
+        <div class="tile"><div class="l">VaR 95 · T+30</div><div class="v" id="hudVaR">--</div><div class="d">simulated quantile</div></div>
+        <div class="tile"><div class="l" id="hudT2L">Sharpe · simulated</div><div class="v" id="hudSharpe">--</div><div class="d" id="hudT2D">annualized, demo drift</div></div>
+        <div class="tile"><div class="l">Breach probability</div><div class="v" id="hudTail">--</div><div class="d">paths touching perimeter</div></div>
+        <div class="tile"><div class="l">Beyond 95% ring</div><div class="v" id="hudSigma">--</div><div class="d">end-states past 2nd ring</div></div>
+      </div>
+      <div class="chips">
+        <div class="chip" id="chipEngine">Engine · OU-state Monte Carlo</div>
+        <div class="chip" id="chipPaths">Paths · 10,000 · T+30d</div>
+        <div class="chip" id="chipBase">Base · β 1.00 · σ 20%</div>
+        <div class="chip warn" id="chipProv">Demo calibration · not live data</div>
+      </div>
+    </header>
+
+    <!-- map + inspector -->
+    <section class="stage">
+      <div class="mapwrap" id="mapwrap">
+        <canvas id="cvBase"></canvas>
+        <canvas id="cvFog"></canvas>
+        <canvas id="cvIntel"></canvas>
+        <canvas id="cvTrail"></canvas>
+        <canvas id="cvAnim"></canvas>
+        <div class="maptag">Risk terrain · beta × realized volatility</div>
+        <div class="demotag" id="provTag">Demo calibration</div>
+        <div class="tip" id="tip">
+          <div class="coords" id="tipCo"></div>
+          <div class="m" id="tipM"></div>
+          <div class="sc" id="tipSc"></div>
+          <div class="hint">Stylized scenario reading, not a forecast</div>
+        </div>
+      </div>
+
+      <div class="inspector">
+        <div class="insp-h">
+          <div class="k">Bon Voyage Linkages</div>
+          <div class="t">Tournament standings</div>
+        </div>
+        <div class="standings" id="standings"></div>
+        <div class="detail" id="detail"></div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* ==========================================================================
+   MELEONA WAR ROOM - all numbers on this page are computed from the
+   client-side Monte Carlo below. Nothing displayed is typed in by hand.
+   The DEMO block is the single payload boundary: in production, Streamlit
+   injects the live engine's numbers here and nothing else changes.
+   ========================================================================== */
+
+/* ---------- deterministic RNG ---------- */
+function mulberry32(a) {
+  return function() {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function gaussPair(rng) {           /* Box-Muller */
+  let u = 0, v = 0;
+  while (u === 0) u = rng();
+  while (v === 0) v = rng();
+  const r = Math.sqrt(-2 * Math.log(u)), a = 2 * Math.PI * v;
+  return [r * Math.cos(a), r * Math.sin(a)];
+}
+
+/* ---------- payload boundary: Streamlit splices live engine JSON between
+   the markers below. Everything the map shows comes from this one object. ---------- */
+/* __PAYLOAD_BEGIN__ */
+const DEMO = {
+  base: { beta: 1.0, vol: 0.20 },
+  hazard: { volMax: 0.70, betaMax: 1.8 },
+  assets: [
+    { t: 'NVDA', b: 1.65, v: 0.52, f: 'Tech' },
+    { t: 'AVGO', b: 1.45, v: 0.44, f: 'Tech' },
+    { t: 'META', b: 1.25, v: 0.38, f: 'Tech' },
+    { t: 'MSFT', b: 1.12, v: 0.27, f: 'Tech' },
+    { t: 'GOOGL', b: 1.05, v: 0.30, f: 'Tech' },
+    { t: 'XLE',  b: 1.02, v: 0.33, f: 'Commodity' },
+    { t: 'USO',  b: 0.85, v: 0.39, f: 'Commodity' },
+    { t: 'SLV',  b: 0.38, v: 0.30, f: 'Commodity' },
+    { t: 'USMV', b: 0.74, v: 0.14, f: 'Defensive' },
+    { t: 'XLP',  b: 0.55, v: 0.13, f: 'Defensive' },
+    { t: 'XLU',  b: 0.46, v: 0.17, f: 'Defensive' },
+    { t: 'GLD',  b: 0.06, v: 0.15, f: 'Defensive' },
+    { t: 'TLT',  b: -0.24, v: 0.16, f: 'Defensive' },
+  ],
+  pairs: [   /* flyer holds the risk, anchor holds the money */
+    { fl: 'AVGO', an: 'TLT', rho: -0.05 },
+    { fl: 'NVDA', an: 'GLD', rho: 0.02 },
+    { fl: 'META', an: 'XLU', rho: 0.18 },
+    { fl: 'XLE',  an: 'USMV', rho: 0.42 },
+  ],
+  muFlyer: 0.10, muAnchor: 0.04, muBook: 0.06,
+};
+/* __PAYLOAD_END__ */
+
+/* ---------- state dynamics (payload may carry its own calibration) ---------- */
+const CAL = DEMO.cal || {
+  calm:   { thB: 4.0, sigB: 0.62, thV: 6.0, etaV: 1.0, rho: 0.35, lev: -0.4 },
+  base:   { thB: 4.0, sigB: 1.00, thV: 6.0, etaV: 1.5, rho: 0.45, lev: -0.5 },
+  stress: { thB: 3.2, sigB: 1.35, thV: 4.5, etaV: 2.1, rho: 0.55, lev: -0.6 },
+};
+const DAYS = DEMO.days || 30, DT = 1 / 252;
+const MU_V = DEMO.muV || 0.22;   /* long-run vol level the state reverts to */
+
+function simulate(nPaths, seed, cal, keepPts) {
+  /* One engine for everything on the page: fog, tracers, HUD.
+     Each path carries (beta_t, vol_t) state AND a book P&L increment
+     r_t = mu dt + vol_t/sqrt(252) * z, with z negatively correlated to
+     the vol shock (leverage effect). */
+  const p = CAL[cal], rng = mulberry32(seed);
+  const ends = new Float64Array(nPaths * 2);
+  const pnls = new Float64Array(nPaths);
+  const breached = new Uint8Array(nPaths);
+  const lnMuV = Math.log(MU_V);
+  const paths = keepPts ? [] : null;
+  for (let i = 0; i < nPaths; i++) {
+    let b = DEMO.base.beta, lv = Math.log(DEMO.base.vol), pnl = 0, hit = 0;
+    const pts = keepPts ? [{ b: b, v: DEMO.base.vol }] : null;
+    for (let d = 0; d < DAYS; d++) {
+      const g1 = gaussPair(rng), g2 = gaussPair(rng);
+      const z1 = g1[0];
+      const z2 = p.rho * z1 + Math.sqrt(1 - p.rho * p.rho) * g1[1];
+      const zr = p.lev * z2 + Math.sqrt(1 - p.lev * p.lev) * g2[0];
+      /* Euler discipline: the day's return uses START-of-day vol (known at t,
+         independent of the day's shocks) or the leverage correlation injects
+         a spurious negative drift of about -2% per horizon. State updates after. */
+      const vStart = Math.exp(lv);
+      pnl += DEMO.muBook * DT + (vStart / Math.sqrt(252)) * zr;
+      b  += p.thB * (1.0 - b) * DT + p.sigB * Math.sqrt(DT) * z1;
+      lv += p.thV * (lnMuV - lv) * DT + p.etaV * Math.sqrt(DT) * z2;
+      const v = Math.exp(lv);
+      if (v > DEMO.hazard.volMax || b > DEMO.hazard.betaMax) hit = 1;
+      if (pts) pts.push({ b: b, v: v });
+    }
+    ends[i * 2] = b; ends[i * 2 + 1] = Math.exp(lv);
+    pnls[i] = pnl; breached[i] = hit;
+    if (paths) paths.push(pts);
+  }
+  return { ends: ends, pnls: pnls, breached: breached, paths: paths, n: nPaths };
+}
+
+/* ---------- geometry of uncertainty: empirical Mahalanobis rings ---------- */
+function norm2(v) { const m = Math.hypot(v[0], v[1]) || 1; return [v[0] / m, v[1] / m]; }
+
+function fitCloud(ends, n) {
+  let mb = 0, mv = 0;
+  for (let i = 0; i < n; i++) { mb += ends[i * 2]; mv += ends[i * 2 + 1]; }
+  mb /= n; mv /= n;
+  let c00 = 0, c01 = 0, c11 = 0;
+  for (let i = 0; i < n; i++) {
+    const db = ends[i * 2] - mb, dv = ends[i * 2 + 1] - mv;
+    c00 += db * db; c01 += db * dv; c11 += dv * dv;
+  }
+  c00 /= n - 1; c01 /= n - 1; c11 /= n - 1;
+  const det = c00 * c11 - c01 * c01;
+  const inv = { a: c11 / det, b: -c01 / det, d: c00 / det };
+  /* eigen for ellipse axes */
+  const tr = c00 + c11, disc = Math.sqrt(Math.max(0, tr * tr / 4 - det));
+  const l1 = tr / 2 + disc, l2 = tr / 2 - disc;
+  let e1;
+  if (Math.abs(c01) > 1e-12) e1 = norm2([l1 - c11, c01]);
+  else e1 = c00 >= c11 ? [1, 0] : [0, 1];
+  const e2 = [-e1[1], e1[0]];
+  /* empirical Mahalanobis distances -> ring radii holding TRUE mass
+     (in 2D a "1 sigma" ellipse holds 39.3%, not 68% - so rings are
+     placed at measured 68/95/99.7% quantiles instead) */
+  const d = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    const db = ends[i * 2] - mb, dv = ends[i * 2 + 1] - mv;
+    d[i] = Math.sqrt(Math.max(0, inv.a * db * db + 2 * inv.b * db * dv + inv.d * dv * dv));
+  }
+  const ds = Array.from(d).sort((x, y) => x - y);
+  const q = p => ds[Math.min(n - 1, Math.floor(p * n))];
+  return {
+    mean: [mb, mv], inv: inv,
+    ax1: e1, ax2: e2, s1: Math.sqrt(Math.max(l1, 1e-12)), s2: Math.sqrt(Math.max(l2, 1e-12)),
+    r68: q(0.683), r95: q(0.954), r997: q(0.997),
+    maha: function(b, v) {
+      const db = b - mb, dv = v - mv;
+      return Math.sqrt(Math.max(0, inv.a * db * db + 2 * inv.b * db * dv + inv.d * dv * dv));
+    },
+    fracBeyond: function(x) {   /* share of simulated end-states farther out */
+      let lo = 0, hi = n;
+      while (lo < hi) { const m = (lo + hi) >> 1; if (ds[m] <= x) lo = m + 1; else hi = m; }
+      return (n - lo) / n;
+    },
+  };
+}
+
+function computeStats(sim) {
+  const n = sim.n;
+  const s = Array.from(sim.pnls).sort((a, b) => a - b);
+  const var95 = -s[Math.floor(0.05 * n)];
+  const k = Math.max(1, Math.floor(0.025 * n));
+  let es = 0; for (let i = 0; i < k; i++) es += s[i];
+  es = -es / k;
+  let mean = 0; for (let i = 0; i < n; i++) mean += sim.pnls[i];
+  mean /= n;
+  let sd = 0; for (let i = 0; i < n; i++) sd += (sim.pnls[i] - mean) * (sim.pnls[i] - mean);
+  sd = Math.sqrt(sd / (n - 1));
+  const ann = 252 / DAYS;
+  let hits = 0; for (let i = 0; i < n; i++) hits += sim.breached[i];
+  return { es: es, var95: var95, sharpe: (mean * ann) / (sd * Math.sqrt(ann)), pBreach: hits / n };
+}
+
+/* ---------- canvas plumbing ---------- */
+const wrap = document.getElementById('mapwrap');
+const cvs = ['cvBase', 'cvFog', 'cvIntel', 'cvTrail', 'cvAnim'].map(id => document.getElementById(id));
+const ctxs = cvs.map(c => c.getContext('2d'));
+const xBase = ctxs[0], xFog = ctxs[1], xIntel = ctxs[2], xTrail = ctxs[3], xAnim = ctxs[4];
+let W = 0, H = 0, DPR = 1;
+const PAD = { l: 62, r: 20, t: 34, b: 44 };
+const DOMN = DEMO.domain || { b0: -1.0, b1: 2.0, v0: 0.0, v1: 1.0 };
+const toX = b => PAD.l + (b - DOMN.b0) / (DOMN.b1 - DOMN.b0) * (W - PAD.l - PAD.r);
+const toY = v => PAD.t + (1 - (v - DOMN.v0) / (DOMN.v1 - DOMN.v0)) * (H - PAD.t - PAD.b);
+const fromX = x => DOMN.b0 + (x - PAD.l) / (W - PAD.l - PAD.r) * (DOMN.b1 - DOMN.b0);
+const fromY = y => DOMN.v0 + (1 - (y - PAD.t) / (H - PAD.t - PAD.b)) * (DOMN.v1 - DOMN.v0);
+
+function sizeCanvases() {
+  const r = wrap.getBoundingClientRect();
+  W = Math.max(320, r.width); H = Math.max(260, r.height);
+  DPR = Math.min(window.devicePixelRatio || 1, 2.5);
+  for (let i = 0; i < cvs.length; i++) {
+    cvs[i].width = Math.round(W * DPR); cvs[i].height = Math.round(H * DPR);
+    ctxs[i].setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+}
+
+/* ---------- app state ---------- */
+const S = {
+  cal: 'base', tracers: 100, runSeed: 42,
+  cloud: null, stats: null,
+  fog: true, rings: true, haz: true, iso: true, links: true,
+  selPair: 0, pairStats: [],
+  hoverAsset: null, mouse: null,
+  trailPaths: null,
+  reduced: !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches),
+};
+
+/* ---------- base layer ---------- */
+function hull(points) {           /* Andrew monotone chain */
+  const p = points.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  if (p.length < 3) return p;
+  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lo = [], up = [];
+  for (const pt of p) {
+    while (lo.length > 1 && cross(lo[lo.length - 2], lo[lo.length - 1], pt) <= 0) lo.pop();
+    lo.push(pt);
+  }
+  for (const pt of p.reverse()) {
+    while (up.length > 1 && cross(up[up.length - 2], up[up.length - 1], pt) <= 0) up.pop();
+    up.push(pt);
+  }
+  return lo.slice(0, -1).concat(up.slice(0, -1));
+}
+function spacedText(g, txt, x, y) {
+  /* letterspaced micro-caps without relying on canvas letterSpacing support */
+  g.fillText(txt.toUpperCase().split('').join(' '), x, y);
+}
+
+function drawTerrain() {
+  /* TERRAIN: sits BELOW the fog. Grid, hazard ground, faction biomes.
+     The fog is allowed to swallow this - that is the point of fog. */
+  const g = xBase;
+  g.clearRect(0, 0, W, H);
+
+  /* grid */
+  g.strokeStyle = 'rgba(237,233,227,0.09)'; g.lineWidth = 1;
+  g.font = '10px Georgia'; g.fillStyle = 'rgba(237,233,227,0.45)';
+  for (let b = Math.ceil(DOMN.b0 * 2) / 2; b <= DOMN.b1 + 0.001; b += 0.5) {
+    const x = toX(b);
+    g.beginPath(); g.moveTo(x, PAD.t); g.lineTo(x, H - PAD.b); g.stroke();
+    g.textAlign = 'center';
+    g.fillText(b.toFixed(1), x, H - PAD.b + 16);
+  }
+  for (let v = Math.ceil(DOMN.v0 * 10) / 10; v <= DOMN.v1 + 0.001; v += 0.1) {
+    const y = toY(v);
+    g.beginPath(); g.moveTo(PAD.l, y); g.lineTo(W - PAD.r, y); g.stroke();
+    g.textAlign = 'right';
+    g.fillText(Math.round(v * 100) + '%', PAD.l - 8, y + 3);
+  }
+  /* axis titles */
+  g.fillStyle = 'rgba(154,123,79,0.85)';
+  g.font = '10px Georgia';
+  g.textAlign = 'center';
+  spacedText(g, 'Portfolio beta', PAD.l + (W - PAD.l - PAD.r) / 2, H - 10);
+  g.save();
+  g.translate(16, PAD.t + (H - PAD.t - PAD.b) / 2); g.rotate(-Math.PI / 2);
+  spacedText(g, 'Annualized volatility (realized)', 0, 0);
+  g.restore();
+
+  /* hazard ground: v > volMax OR b > betaMax (hatch only; boundary is intel) */
+  if (S.haz) {
+    const hx = toX(DEMO.hazard.betaMax), hy = toY(DEMO.hazard.volMax);
+    g.save();
+    g.beginPath();
+    g.moveTo(PAD.l, PAD.t); g.lineTo(W - PAD.r, PAD.t);
+    g.lineTo(W - PAD.r, H - PAD.b); g.lineTo(hx, H - PAD.b);
+    g.lineTo(hx, hy); g.lineTo(PAD.l, hy); g.closePath();
+    g.clip();
+    g.fillStyle = 'rgba(166,75,51,0.06)';
+    g.fillRect(PAD.l, PAD.t, W - PAD.l - PAD.r, H - PAD.t - PAD.b);
+    g.strokeStyle = 'rgba(166,75,51,0.12)'; g.lineWidth = 1;
+    for (let d = -H; d < W + H; d += 14) {
+      g.beginPath(); g.moveTo(d, PAD.t); g.lineTo(d + H, H); g.stroke();
+    }
+    g.restore();
+  }
+
+  /* faction biomes */
+  const factions = {};
+  for (const a of DEMO.assets) (factions[a.f] = factions[a.f] || []).push([toX(a.b), toY(a.v)]);
+  g.font = '9px Georgia';
+  for (const f in factions) {
+    const pts = factions[f];
+    let cx = 0, cy = 0;
+    for (const p of pts) { cx += p[0]; cy += p[1]; }
+    cx /= pts.length; cy /= pts.length;
+    const hp = hull(pts).map(p => [cx + (p[0] - cx) * 1.35, cy + (p[1] - cy) * 1.35]);
+    if (hp.length >= 3) {
+      g.beginPath(); g.moveTo(hp[0][0], hp[0][1]);
+      for (let i = 1; i < hp.length; i++) g.lineTo(hp[i][0], hp[i][1]);
+      g.closePath();
+      g.fillStyle = 'rgba(154,123,79,0.05)'; g.fill();
+      g.setLineDash([3, 4]); g.strokeStyle = 'rgba(154,123,79,0.4)'; g.lineWidth = 1; g.stroke();
+      g.setLineDash([]);
+    }
+  }
+}
+
+function drawIntel() {
+  /* INTEL: tactical symbology ABOVE the fog. A command map dims the ground,
+     never its own markings: perimeter, contours, linkages, units, home. */
+  const g = xIntel;
+  g.clearRect(0, 0, W, H);
+
+  /* iso-VaR contours: v = VaR * sqrt(252) / 1.645 */
+  if (S.iso) {
+    g.setLineDash([5, 5]);
+    for (const varPct of [0.02, 0.03, 0.05]) {
+      const v = varPct * Math.sqrt(252) / 1.645;
+      if (v > DOMN.v1) continue;
+      const y = toY(v);
+      g.strokeStyle = 'rgba(217,192,137,0.20)'; g.lineWidth = 1;
+      g.beginPath(); g.moveTo(PAD.l, y); g.lineTo(W - PAD.r, y); g.stroke();
+      g.fillStyle = 'rgba(217,192,137,0.55)'; g.textAlign = 'right'; g.font = '9px Georgia';
+      g.fillText('1d VaR95 = ' + Math.round(varPct * 100) + '% at sigma ' + Math.round(v * 100) + '%', W - PAD.r - 6, y - 5);
+    }
+    g.setLineDash([]);
+  }
+
+  /* hazard boundary */
+  if (S.haz) {
+    const hx = toX(DEMO.hazard.betaMax), hy = toY(DEMO.hazard.volMax);
+    g.strokeStyle = 'rgba(194,91,58,0.75)'; g.lineWidth = 1.5;
+    g.beginPath();
+    g.moveTo(PAD.l, hy); g.lineTo(hx, hy); g.lineTo(hx, H - PAD.b);
+    g.stroke();
+    g.fillStyle = 'rgba(194,91,58,0.9)'; g.font = '9px Georgia'; g.textAlign = 'left';
+    spacedText(g, 'Maximum VaR breach perimeter', PAD.l + 10, hy - 7);
+  }
+
+  /* faction names ride above the fog: cluster identity is intel */
+  const factions = {};
+  for (const a of DEMO.assets) (factions[a.f] = factions[a.f] || []).push([toX(a.b), toY(a.v)]);
+  g.font = '9px Georgia';
+  for (const f in factions) {
+    const pts = factions[f];
+    let cx = 0;
+    for (const p of pts) cx += p[0];
+    cx /= pts.length;
+    g.fillStyle = 'rgba(154,123,79,0.65)'; g.textAlign = 'center';
+    const ly = Math.min.apply(null, pts.map(p => p[1])) - 14;
+    spacedText(g, f, cx, ly);
+  }
+
+  /* bon voyage links (lesson 9: endpoints = center + (r+gap) * unit vector) */
+  if (S.links) {
+    DEMO.pairs.forEach((pr, i) => {
+      const A = DEMO.assets.find(a => a.t === pr.fl), B = DEMO.assets.find(a => a.t === pr.an);
+      const ax = toX(A.b), ay = toY(A.v), bx = toX(B.b), by = toY(B.v);
+      const u = norm2([bx - ax, by - ay]);
+      const rA = 6, rB = 6, gap = 4;
+      const x1 = ax + u[0] * (rA + gap), y1 = ay + u[1] * (rA + gap);
+      const x2 = bx - u[0] * (rB + gap), y2 = by - u[1] * (rB + gap);
+      const sel = i === S.selPair;
+      g.strokeStyle = sel ? 'rgba(201,162,39,0.85)' : 'rgba(154,123,79,0.45)';
+      g.lineWidth = sel ? 1.6 : 1;
+      g.setLineDash(sel ? [] : [6, 5]);
+      g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke();
+      g.setLineDash([]);
+    });
+  }
+
+  /* asset units - labels dodge each other in dense clusters */
+  g.font = '10px Georgia';
+  const placedLabels = [];
+  for (const a of DEMO.assets) {
+    const x = toX(a.b), y = toY(a.v);
+    const hov = S.hoverAsset === a.t;
+    const selP = DEMO.pairs[S.selPair];
+    const inPair = selP && (selP.fl === a.t || selP.an === a.t);
+    g.beginPath(); g.arc(x, y, hov ? 5.5 : 4, 0, Math.PI * 2);
+    g.fillStyle = inPair ? '#C9A227' : '#9A7B4F';
+    g.fill();
+    if (inPair) {
+      g.beginPath(); g.arc(x, y, 9, 0, Math.PI * 2);
+      g.strokeStyle = 'rgba(201,162,39,0.55)'; g.lineWidth = 1; g.stroke();
+    }
+    let ly = y - (inPair ? 14 : 9);
+    for (const p of placedLabels) {
+      if (Math.abs(p[0] - x) < 36 && Math.abs(p[1] - ly) < 11) {
+        ly = y + 17;                       /* collision: drop below the node */
+        break;
+      }
+    }
+    placedLabels.push([x, ly]);
+    g.fillStyle = hov ? '#EDE9E3' : 'rgba(237,233,227,0.7)';
+    g.textAlign = 'center';
+    g.fillText(a.t, x, ly);
+  }
+
+  /* tail territory marker, only where the 99.7% ring truly does not reach */
+  if (S.cloud) {
+    const tb = -0.35, tv = 0.86;
+    if (S.cloud.maha(tb, tv) > S.cloud.r997 * 1.15) {
+      g.font = '9px Georgia'; g.fillStyle = 'rgba(237,233,227,0.22)'; g.textAlign = 'center';
+      spacedText(g, 'Tail territory · beyond 99.7%', toX(tb), toY(tv));
+    }
+  }
+
+  /* home base reticle (double ring, bon voyage grammar) */
+  const hx0 = toX(DEMO.base.beta), hy0 = toY(DEMO.base.vol);
+  g.strokeStyle = '#D9C089'; g.lineWidth = 1.5;
+  g.beginPath(); g.arc(hx0, hy0, 10, 0, Math.PI * 2); g.stroke();
+  g.strokeStyle = 'rgba(217,192,137,0.5)'; g.lineWidth = 1;
+  g.beginPath(); g.arc(hx0, hy0, 15, 0, Math.PI * 2); g.stroke();
+  g.fillStyle = '#EDE9E3';
+  g.beginPath(); g.arc(hx0, hy0, 2.5, 0, Math.PI * 2); g.fill();
+  g.font = '9px Georgia'; g.textAlign = 'center';
+  g.fillStyle = 'rgba(237,233,227,0.9)';
+  spacedText(g, 'Portfolio', hx0, hy0 + 30);
+}
+
+function drawMap() { drawTerrain(); drawIntel(); }
+
+/* ---------- fog of war ---------- */
+function ringPoint(cloud, r, t) {
+  const c = Math.cos(t), s = Math.sin(t);
+  const b = cloud.mean[0] + r * (cloud.s1 * c * cloud.ax1[0] + cloud.s2 * s * cloud.ax2[0]);
+  const v = cloud.mean[1] + r * (cloud.s1 * c * cloud.ax1[1] + cloud.s2 * s * cloud.ax2[1]);
+  return [toX(b), toY(v)];
+}
+function tracePath(g, cloud, r) {
+  const SEG = 72;
+  for (let i = 0; i <= SEG; i++) {
+    const p = ringPoint(cloud, r, i / SEG * Math.PI * 2);
+    if (i === 0) g.moveTo(p[0], p[1]); else g.lineTo(p[0], p[1]);
+  }
+  g.closePath();
+}
+function fogAlpha(r, cloud) {
+  /* illumination profile keyed to the TRUE mass rings:
+     lit inside 68%, dusk to 95%, night to 99.7%, void beyond */
+  const r1 = cloud.r68, r2 = cloud.r95, r3 = cloud.r997;
+  if (r <= r1) return 0.02 * (r / r1);
+  if (r <= r2) return 0.02 + 0.42 * (r - r1) / (r2 - r1);
+  if (r <= r3) return 0.44 + 0.40 * (r - r2) / (r3 - r2);
+  return 0.84;
+}
+function drawFog() {
+  const g = xFog;
+  g.clearRect(0, 0, W, H);
+  if (!S.fog || !S.cloud) return;
+  const cloud = S.cloud;
+  /* radius big enough to cover the plot corners */
+  let rMax = cloud.r997;
+  const corners = [[PAD.l, PAD.t], [W - PAD.r, PAD.t], [PAD.l, H - PAD.b], [W - PAD.r, H - PAD.b]];
+  for (const c of corners) {
+    rMax = Math.max(rMax, cloud.maha(fromX(c[0]), fromY(c[1])));
+  }
+  rMax *= 1.05;
+  const BANDS = 64;
+  for (let i = 0; i < BANDS; i++) {
+    const rA = rMax * i / BANDS, rB = rMax * (i + 1) / BANDS;
+    const a = fogAlpha((rA + rB) / 2, cloud);
+    if (a <= 0.003) continue;
+    g.beginPath();
+    tracePath(g, cloud, rB);
+    tracePath(g, cloud, Math.max(rA, 0.001));
+    g.fillStyle = 'rgba(12,9,5,' + a.toFixed(3) + ')';
+    g.fill('evenodd');
+  }
+  /* keep gutters (axis labels) clean */
+  g.clearRect(0, 0, W, PAD.t); g.clearRect(0, H - PAD.b, W, PAD.b);
+  g.clearRect(0, 0, PAD.l, H); g.clearRect(W - PAD.r, 0, PAD.r, H);
+
+  /* warm illumination inside the 68% ring, scaled to the ring itself */
+  const hx0 = toX(cloud.mean[0]), hy0 = toY(cloud.mean[1]);
+  const pA = ringPoint(cloud, cloud.r68, 0), pB = ringPoint(cloud, cloud.r68, Math.PI / 2);
+  const rPix = Math.max(Math.hypot(pA[0] - hx0, pA[1] - hy0),
+                        Math.hypot(pB[0] - hx0, pB[1] - hy0));
+  const lum = g.createRadialGradient(hx0, hy0, 0, hx0, hy0, rPix);
+  lum.addColorStop(0, 'rgba(201,162,39,0.09)');
+  lum.addColorStop(1, 'rgba(201,162,39,0)');
+  g.fillStyle = lum;
+  g.beginPath(); tracePath(g, cloud, cloud.r68); g.fill();
+
+  /* mass rings */
+  if (S.rings) {
+    const rings = [
+      [cloud.r68, '68% of simulated end-states'],
+      [cloud.r95, '95%'],
+      [cloud.r997, '99.7%'],
+    ];
+    g.font = '9px Georgia'; g.textAlign = 'left';
+    for (const ring of rings) {
+      g.beginPath(); tracePath(g, cloud, ring[0]);
+      g.strokeStyle = 'rgba(237,233,227,0.3)'; g.lineWidth = 1;
+      g.setLineDash([2, 4]); g.stroke(); g.setLineDash([]);
+      /* label the ring at the first probe angle that stays on the grid */
+      let p = null;
+      for (const ang of [-Math.PI / 2.4, Math.PI / 2.4, -Math.PI / 6, Math.PI * 0.8]) {
+        const c = ringPoint(cloud, ring[0], ang);
+        if (c[0] > PAD.l + 8 && c[0] < W - PAD.r - 150 &&
+            c[1] > PAD.t + 12 && c[1] < H - PAD.b - 8) { p = c; break; }
+      }
+      if (p) {
+        g.fillStyle = 'rgba(237,233,227,0.62)';
+        g.fillText(ring[1], p[0] + 5, p[1] - 3);
+      }
+    }
+  }
+}
+
+/* ---------- tracers ---------- */
+function pathBreachIdx(pts) {
+  for (let i = 0; i < pts.length; i++) {
+    if (pts[i].v > DEMO.hazard.volMax || pts[i].b > DEMO.hazard.betaMax) return i;
+  }
+  return -1;
+}
+function drawTrails(progress) {
+  const g = xTrail;
+  g.clearRect(0, 0, W, H);
+  if (!S.trailPaths) return;
+  /* tracers never leave the grid: clip to the plot rectangle */
+  g.save();
+  g.beginPath();
+  g.rect(PAD.l, PAD.t, W - PAD.l - PAD.r, H - PAD.t - PAD.b);
+  g.clip();
+  const n = S.trailPaths.length;
+  for (let i = 0; i < n; i++) {
+    const pts = S.trailPaths[i];
+    const bIdx = pathBreachIdx(pts);
+    const last = Math.max(1, Math.floor(progress * (pts.length - 1)));
+    for (let j = 1; j <= last; j++) {
+      const age = (last - j) / pts.length;               /* older segments fade */
+      const alpha = Math.max(0.03, 0.5 - age * 0.55);
+      const breachedSeg = bIdx >= 0 && j >= bIdx;
+      g.strokeStyle = breachedSeg
+        ? 'rgba(194,91,58,' + (alpha + 0.12).toFixed(3) + ')'
+        : 'rgba(154,123,79,' + alpha.toFixed(3) + ')';
+      g.lineWidth = breachedSeg ? 1.3 : 1;
+      g.beginPath();
+      g.moveTo(toX(pts[j - 1].b), toY(pts[j - 1].v));
+      g.lineTo(toX(pts[j].b), toY(pts[j].v));
+      g.stroke();
+    }
+    if (progress >= 1) {
+      const e = pts[pts.length - 1];
+      g.beginPath(); g.arc(toX(e.b), toY(e.v), 1.8, 0, Math.PI * 2);
+      g.fillStyle = bIdx >= 0 ? 'rgba(194,91,58,0.85)' : 'rgba(217,192,137,0.75)';
+      g.fill();
+    }
+  }
+  g.restore();
+}
+
+/* ---------- anim layer : crosshair, reticle sweep, link agents ---------- */
+let animRAF = null, animLast = null, sweepA = 0, agentT = 0;
+function drawAnim(dt) {
+  const g = xAnim;
+  g.clearRect(0, 0, W, H);
+
+  /* reticle sweep on home base */
+  if (!S.reduced) {
+    sweepA += dt * 0.0006;
+    const hx0 = toX(DEMO.base.beta), hy0 = toY(DEMO.base.vol);
+    g.strokeStyle = 'rgba(217,192,137,0.7)'; g.lineWidth = 1.5;
+    g.beginPath(); g.arc(hx0, hy0, 15, sweepA, sweepA + Math.PI / 3); g.stroke();
+  }
+
+  /* agents traversing the selected link */
+  const pr = DEMO.pairs[S.selPair];
+  if (pr && S.links && !S.reduced) {
+    agentT += dt * 0.00022;
+    const A = DEMO.assets.find(a => a.t === pr.fl), B = DEMO.assets.find(a => a.t === pr.an);
+    const ax = toX(A.b), ay = toY(A.v), bx = toX(B.b), by = toY(B.v);
+    for (let k = 0; k < 6; k++) {
+      let t = (agentT + k / 6) % 1;
+      const back = k % 2 === 1;                     /* half return with data */
+      if (back) t = 1 - t;
+      const x = ax + (bx - ax) * t, y = ay + (by - ay) * t;
+      g.beginPath(); g.arc(x, y, 1.7, 0, Math.PI * 2);
+      g.fillStyle = back ? 'rgba(237,233,227,0.8)' : 'rgba(201,162,39,0.9)';
+      g.fill();
+    }
+  }
+
+  /* crosshair */
+  if (S.mouse) {
+    const x = S.mouse.x, y = S.mouse.y;
+    if (x > PAD.l && x < W - PAD.r && y > PAD.t && y < H - PAD.b) {
+      g.strokeStyle = 'rgba(237,233,227,0.18)'; g.lineWidth = 1;
+      g.setLineDash([3, 5]);
+      g.beginPath(); g.moveTo(PAD.l, y); g.lineTo(W - PAD.r, y); g.stroke();
+      g.beginPath(); g.moveTo(x, PAD.t); g.lineTo(x, H - PAD.b); g.stroke();
+      g.setLineDash([]);
+      g.strokeStyle = 'rgba(217,192,137,0.9)';
+      g.beginPath(); g.moveTo(x - 7, y); g.lineTo(x + 7, y); g.stroke();
+      g.beginPath(); g.moveTo(x, y - 7); g.lineTo(x, y + 7); g.stroke();
+    }
+  }
+}
+function animLoop(now) {
+  if (animLast === null) animLast = now;
+  const dt = Math.min(now - animLast, 100); animLast = now;
+  drawAnim(dt);
+  animRAF = requestAnimationFrame(animLoop);
+}
+function animGate() {
+  const on = document.visibilityState === 'visible';
+  if (on && animRAF === null) { animLast = null; animRAF = requestAnimationFrame(animLoop); }
+  if (!on && animRAF !== null) { cancelAnimationFrame(animRAF); animRAF = null; }
+}
+document.addEventListener('visibilitychange', animGate);
+
+/* ---------- scenario reading ---------- */
+function scenarioText(b, v) {
+  const db = b - DEMO.base.beta, dv = v - DEMO.base.vol;
+  const d = S.cloud.maha(b, v);
+  let sev;
+  if (d < S.cloud.r68) sev = 'Within normal drift.';
+  else if (d < S.cloud.r95) sev = 'Stressed but survivable.';
+  else if (d < S.cloud.r997) sev = 'Crisis regime.';
+  else sev = 'Tail event, beyond the simulated frontier.';
+  let dir;
+  if (dv > 0.06 && db > 0.15) dir = 'Vol expands while beta drifts up: crowded momentum unwinds, margin pressure builds, correlations converge toward one.';
+  else if (dv > 0.06 && db < -0.15) dir = 'Vol spikes while beta compresses: hedges are biting during systemic stress, the book behaves defensively at a cost.';
+  else if (dv > 0.06) dir = 'Vol expands at steady beta: single-name shocks or an event window, index exposure unchanged.';
+  else if (dv < -0.04 && db > 0.15) dir = 'Calm tape with rising beta: carry-friendly regime, complacency risk if leverage keeps building.';
+  else if (dv < -0.04) dir = 'Vol compresses: quiet regime, premium selling crowds in, the next shock gets sharper.';
+  else if (db > 0.2) dir = 'Beta builds at steady vol: the book is drifting toward index risk without volatility payback.';
+  else if (db < -0.2) dir = 'Beta sheds at steady vol: de-risking into cash-like or short-correlated sleeves.';
+  else dir = 'Coordinates near base camp: no material regime change required.';
+  return sev + ' ' + dir;
+}
+
+/* ---------- HUD ---------- */
+function fmtPct(x, dp) { return (x * 100).toFixed(dp === undefined ? 1 : dp) + '%'; }
+function updateHUD() {
+  const st = S.stats;
+  document.getElementById('hudES').innerHTML = '-' + (st.es * 100).toFixed(1) + '<em>%</em>';
+  document.getElementById('hudVaR').innerHTML = '-' + (st.var95 * 100).toFixed(1) + '<small>%</small>';
+  if (DEMO.live) {
+    /* zero-drift risk view: a simulated Sharpe is noise by construction,
+       show the calibrated long-run vol level instead */
+    document.getElementById('hudT2L').textContent = 'Long-run vol · calibrated';
+    document.getElementById('hudT2D').textContent = 'OU mean-reversion level';
+    document.getElementById('hudSharpe').textContent = Math.round(MU_V * 100) + '%';
+  } else {
+    document.getElementById('hudSharpe').textContent = st.sharpe.toFixed(2);
+  }
+  document.getElementById('hudTail').textContent = fmtPct(st.pBreach, 1);
+  document.getElementById('hudSigma').textContent = fmtPct(S.cloud.fracBeyond(S.cloud.r95), 1);
+  document.getElementById('chipEngine').textContent =
+    'Engine · OU-state Monte Carlo · ' + S.cal.toUpperCase();
+  document.getElementById('chipBase').textContent =
+    'Base · β ' + DEMO.base.beta.toFixed(2) + ' · σ ' + Math.round(DEMO.base.vol * 100) + '%';
+}
+
+/* ---------- bon voyage inspector ---------- */
+function pairMC(pr, seed) {
+  /* 10,000 draws of 30d P&L: solo flyer vs inverse-vol pair blend.
+     Same daily-loop discipline as the main engine. */
+  const A = DEMO.assets.find(a => a.t === pr.fl), B = DEMO.assets.find(a => a.t === pr.an);
+  /* flyer weight: engine-computed when supplied, else w_f sig_f = w_a sig_a */
+  const w = pr.wFlyer !== undefined ? pr.wFlyer : B.v / (A.v + B.v);
+  const rng = mulberry32(seed);
+  const N = 10000;
+  const solo = new Float64Array(N), blend = new Float64Array(N);
+  for (let i = 0; i < N; i++) {
+    let ps = 0, pb = 0;
+    for (let d = 0; d < DAYS; d++) {
+      const gp = gaussPair(rng);
+      const z1 = gp[0], z2 = pr.rho * z1 + Math.sqrt(1 - pr.rho * pr.rho) * gp[1];
+      const rf = DEMO.muFlyer * DT + (A.v / Math.sqrt(252)) * z1;
+      const ra = DEMO.muAnchor * DT + (B.v / Math.sqrt(252)) * z2;
+      ps += rf;
+      pb += w * rf + (1 - w) * ra;
+    }
+    solo[i] = ps; blend[i] = pb;
+  }
+  const es = arr => {
+    const s = Array.from(arr).sort((a, b) => a - b);
+    const k = Math.max(1, Math.floor(0.025 * N));
+    let e = 0; for (let i = 0; i < k; i++) e += s[i];
+    return -e / k;
+  };
+  const esS = es(solo), esB = es(blend);
+  return { w: w, esSolo: esS, esPair: esB, cushion: esS - esB,
+           volPair: Math.sqrt(w * w * A.v * A.v + (1 - w) * (1 - w) * B.v * B.v + 2 * w * (1 - w) * pr.rho * A.v * B.v) };
+}
+
+function linkDiagramSVG(pr, st) {
+  /* circle-and-line, endpoints = center + (r+gap) * unit vector */
+  const W2 = 300, H2 = 128;
+  const fx = 62, fy = 42, fr = 22;                  /* flyer top-left */
+  const ax2 = 232, ay = 76, ar = 30;                /* anchor bottom-right */
+  const u = norm2([ax2 - fx, ay - fy]);
+  const gap = 5;
+  const x1 = fx + u[0] * (fr + gap), y1 = fy + u[1] * (fr + gap);
+  const x2 = ax2 - u[0] * (ar + gap), y2 = ay - u[1] * (ar + gap);
+  return '<svg class="linkdiag" width="' + W2 + '" height="' + H2 + '" viewBox="0 0 ' + W2 + ' ' + H2 + '">' +
+    '<line x1="' + x1.toFixed(1) + '" y1="' + y1.toFixed(1) + '" x2="' + x2.toFixed(1) + '" y2="' + y2.toFixed(1) + '" stroke="#9A7B4F" stroke-width="1.2" stroke-dasharray="5 4"/>' +
+    '<circle cx="' + fx + '" cy="' + fy + '" r="' + fr + '" fill="none" stroke="#C9A227" stroke-width="1.4"/>' +
+    '<circle cx="' + fx + '" cy="' + fy + '" r="' + (fr - 4) + '" fill="none" stroke="rgba(201,162,39,0.4)" stroke-width="1"/>' +
+    '<circle cx="' + ax2 + '" cy="' + ay + '" r="' + ar + '" fill="none" stroke="#D9C089" stroke-width="1.4"/>' +
+    '<circle cx="' + ax2 + '" cy="' + ay + '" r="' + (ar - 4) + '" fill="none" stroke="rgba(217,192,137,0.4)" stroke-width="1"/>' +
+    '<text x="' + fx + '" y="' + (fy + 4) + '" fill="#EDE9E3" font-size="11" font-family="Georgia" text-anchor="middle">' + pr.fl + '</text>' +
+    '<text x="' + fx + '" y="' + (fy - fr - 7) + '" fill="#9A7B4F" font-size="8" letter-spacing="2" font-family="Georgia" text-anchor="middle">FLYER ' + Math.round(st.w * 100) + '%</text>' +
+    '<text x="' + ax2 + '" y="' + (ay + 4) + '" fill="#EDE9E3" font-size="11" font-family="Georgia" text-anchor="middle">' + pr.an + '</text>' +
+    '<text x="' + ax2 + '" y="' + (ay + ar + 14) + '" fill="#9A7B4F" font-size="8" letter-spacing="2" font-family="Georgia" text-anchor="middle">ANCHOR ' + Math.round((1 - st.w) * 100) + '%</text>' +
+    '</svg>';
+}
+
+let ctrRAF = null;
+function cushOf(i) {
+  const pr = DEMO.pairs[i];
+  return pr.real ? pr.real.cushion : S.pairStats[i].cushion;
+}
+function renderDetail() {
+  const el = document.getElementById('detail');
+  if (!DEMO.pairs.length) {
+    el.innerHTML = '<div class="honest">No pair linkages available for this universe.</div>';
+    return;
+  }
+  const pr = DEMO.pairs[S.selPair];
+  const st = S.pairStats[S.selPair];
+  const real = pr.real || null;
+  /* real-history mode: numbers come from the engine's backtest replay,
+     not the client model. Demo mode: Gaussian daily-loop MC, labeled. */
+  const esSolo = real ? real.esSolo : st.esSolo;
+  const esPair = real ? real.esPair : st.esPair;
+  const cush = real ? real.cushion : st.cushion;
+  const volP = real ? real.volPair : st.volPair;
+  const suffix = real ? ' · real history' : '';
+  const ctrTarget = real ? real.nDays : 10000;
+  const ctrLabel = real ? 'Trading days replayed · this linkage' : 'Simulator runs · this linkage';
+  const cushLabel = real ? 'Drawdown cushion' : 'Crisis cushion';
+  const esUnit = real ? 'daily' : 'T+30';
+  el.innerHTML =
+    linkDiagramSVG(pr, st) +
+    '<div class="dgrid">' +
+    '<div class="dcell"><div class="l">ES 97.5 · solo · ' + esUnit + '</div><div class="v">-' + (esSolo * 100).toFixed(1) + '<small>%</small></div></div>' +
+    '<div class="dcell"><div class="l">ES 97.5 · pair · ' + esUnit + '</div><div class="v">-' + (esPair * 100).toFixed(1) + '<small>%</small></div></div>' +
+    '<div class="dcell"><div class="l">' + cushLabel + '</div><div class="v">+' + (cush * 100).toFixed(1) + '<small>pp</small></div></div>' +
+    '<div class="dcell"><div class="l">Blend vol</div><div class="v">' + (volP * 100).toFixed(1) + '<small>%</small></div></div>' +
+    '</div>' +
+    '<div class="runctr"><div class="l">' + ctrLabel + '</div>' +
+    '<div class="n"><span id="ctrN">0</span><small> / ' + ctrTarget.toLocaleString('en-US') + '</small></div>' +
+    '<div class="runbar"><i id="ctrBar"></i></div>' +
+    '<div class="agents-note">Agents on the map are traversing this link: bronze outbound gathering draws, beige returning with data. A decorative representation of the ' + (real ? 'replayed history' : '10,000 runs') + ' above.</div>' +
+    '</div>' +
+    (real
+      ? '<div class="honest"><b>Paper trail.</b> ES and cushion come from the engine\'s real-history pair backtest: ' +
+        'actual daily returns, monthly rebalance, no lookahead, over ' + real.nDays.toLocaleString('en-US') + ' trading days ' +
+        'of Yahoo Finance adjusted closes. Weights are exact two-asset risk parity. Pair correlation ' + pr.rho.toFixed(2) + ' measured on the same window.</div>'
+      : '<div class="honest"><b>Honest limits.</b> Pair statistics come from a Gaussian daily-loop Monte Carlo ' +
+        'on demo calibration (flyer drift 10%, anchor 4%, pair correlation ' + pr.rho.toFixed(2) + '). ' +
+        'Weights are exact two-asset risk parity: the flyer holds most of the risk, the anchor holds most of the money. ' +
+        'Correlations converge toward one in real crashes; the live engine replays actual crisis windows instead.</div>');
+
+  /* counter eases up to the REAL count behind the numbers above */
+  const nEl = document.getElementById('ctrN'), bEl = document.getElementById('ctrBar');
+  if (ctrRAF) cancelAnimationFrame(ctrRAF);
+  if (S.reduced) { nEl.textContent = ctrTarget.toLocaleString('en-US'); bEl.style.inset = '0 0 0 0'; return; }
+  const t0 = performance.now(), DUR = 1400;
+  const tick = now => {
+    const p = Math.min(1, (now - t0) / DUR);
+    const eased = 1 - Math.pow(1 - p, 3);
+    nEl.textContent = Math.round(eased * ctrTarget).toLocaleString('en-US');
+    bEl.style.inset = '0 ' + ((1 - eased) * 100).toFixed(1) + '% 0 0';
+    if (p < 1) ctrRAF = requestAnimationFrame(tick);
+  };
+  ctrRAF = requestAnimationFrame(tick);
+}
+
+function renderStandings() {
+  const el = document.getElementById('standings');
+  if (!DEMO.pairs.length) { el.innerHTML = ''; return; }
+  const rows = DEMO.pairs.map((pr, i) => ({ i: i, pr: pr, cu: cushOf(i) }))
+    .sort((a, b) => b.cu - a.cu);
+  const maxCu = Math.max.apply(null, rows.map(r => Math.abs(r.cu))) || 1;
+  el.innerHTML = rows.map((r, rank) =>
+    '<div class="srow' + (r.i === S.selPair ? ' sel' : '') + '" data-i="' + r.i + '">' +
+    '<span class="rk">0' + (rank + 1) + '</span>' +
+    '<span class="pair">' + r.pr.fl + ' - ' + r.pr.an + ' <span>flyer / anchor</span></span>' +
+    '<span class="cu">' + (r.cu >= 0 ? '+' : '') + (r.cu * 100).toFixed(1) + 'pp</span>' +
+    '<span class="bar"><i style="width:' + Math.max(4, Math.abs(r.cu) / maxCu * 100).toFixed(0) + '%"></i></span>' +
+    '</div>').join('');
+  el.querySelectorAll('.srow').forEach(row => {
+    row.addEventListener('click', () => {
+      S.selPair = +row.dataset.i;
+      renderStandings(); renderDetail(); drawIntel();
+    });
+  });
+}
+
+/* ---------- run ---------- */
+let trailAnimRAF = null;
+function runSimulation() {
+  const btn = document.getElementById('btnRun');
+  btn.disabled = true;
+  /* 10k stats batch + visible tracer batch, same engine, same calibration */
+  const big = simulate(10000, S.runSeed, S.cal, false);
+  S.cloud = fitCloud(big.ends, big.n);
+  S.stats = computeStats(big);
+  const vis = simulate(S.tracers, S.runSeed + 1, S.cal, true);
+  S.trailPaths = vis.paths;
+  S.runSeed += 2;
+
+  drawMap(); drawFog(); updateHUD();
+
+  if (S.reduced) { drawTrails(1); btn.disabled = false; return; }
+  if (trailAnimRAF) cancelAnimationFrame(trailAnimRAF);
+  const t0 = performance.now(), DUR = 2600;
+  const tick = now => {
+    const p = Math.min(1, (now - t0) / DUR);
+    drawTrails(1 - Math.pow(1 - p, 2.2));
+    if (p < 1) trailAnimRAF = requestAnimationFrame(tick);
+    else { drawTrails(1); btn.disabled = false; }
+  };
+  trailAnimRAF = requestAnimationFrame(tick);
+}
+
+/* ---------- events ---------- */
+document.getElementById('btnRun').addEventListener('click', runSimulation);
+document.getElementById('selCal').addEventListener('change', e => { S.cal = e.target.value; runSimulation(); });
+document.getElementById('selTracers').addEventListener('change', e => { S.tracers = +e.target.value; });
+const togMap = { tgFog: 'fog', tgRings: 'rings', tgHaz: 'haz', tgIso: 'iso', tgLinks: 'links' };
+for (const id in togMap) {
+  document.getElementById(id).addEventListener('change', e => {
+    S[togMap[id]] = e.target.checked;
+    drawMap(); drawFog();
+  });
+}
+
+const tip = document.getElementById('tip');
+wrap.addEventListener('mousemove', e => {
+  const r = wrap.getBoundingClientRect();
+  const x = e.clientX - r.left, y = e.clientY - r.top;
+  S.mouse = { x: x, y: y };
+  let hov = null;
+  for (const a of DEMO.assets) {
+    if (Math.hypot(toX(a.b) - x, toY(a.v) - y) < 9) { hov = a.t; break; }
+  }
+  if (hov !== S.hoverAsset) { S.hoverAsset = hov; drawIntel(); }
+  if (x > PAD.l && x < W - PAD.r && y > PAD.t && y < H - PAD.b && S.cloud) {
+    const b = fromX(x), v = fromY(y);
+    const d = S.cloud.maha(b, v);
+    document.getElementById('tipCo').innerHTML =
+      'β <span>' + b.toFixed(2) + '</span> · σ <span>' + Math.round(v * 100) + '%</span>';
+    document.getElementById('tipM').textContent =
+      '1d VaR95 at this vol = ' + (1.645 * v / Math.sqrt(252) * 100).toFixed(1) + '%. ' +
+      (S.cloud.fracBeyond(d) * 100).toFixed(1) + '% of simulated end-states drift farther.';
+    document.getElementById('tipSc').textContent = scenarioText(b, v);
+    tip.style.display = 'block';
+    const tw = 250, th = 160;
+    tip.style.left = Math.min(x + 18, W - tw - 10) + 'px';
+    tip.style.top = Math.min(Math.max(y - 20, 8), H - th - 8) + 'px';
+  } else {
+    tip.style.display = 'none';
+  }
+});
+wrap.addEventListener('mouseleave', () => { S.mouse = null; tip.style.display = 'none'; });
+wrap.addEventListener('click', e => {
+  const r = wrap.getBoundingClientRect();
+  const x = e.clientX - r.left, y = e.clientY - r.top;
+  let best = -1, bestD = 9;
+  DEMO.pairs.forEach((pr, i) => {
+    const A = DEMO.assets.find(a => a.t === pr.fl), B = DEMO.assets.find(a => a.t === pr.an);
+    const ax = toX(A.b), ay = toY(A.v), bx = toX(B.b), by = toY(B.v);
+    const L2 = (bx - ax) * (bx - ax) + (by - ay) * (by - ay);
+    let t = ((x - ax) * (bx - ax) + (y - ay) * (by - ay)) / L2;
+    t = Math.max(0, Math.min(1, t));
+    const d = Math.hypot(x - (ax + t * (bx - ax)), y - (ay + t * (by - ay)));
+    if (d < bestD) { bestD = d; best = i; }
+  });
+  if (best >= 0) {
+    S.selPair = best;
+    renderStandings(); renderDetail(); drawIntel();
+  }
+});
+
+/* ---------- boot ---------- */
+function boot() {
+  /* provenance and methodology text ride in on the payload */
+  if (DEMO.provenance) {
+    document.getElementById('provTag').textContent = DEMO.provenance;
+    document.getElementById('chipProv').textContent = DEMO.provenance;
+    if (DEMO.live) document.getElementById('chipProv').classList.remove('warn');
+  }
+  if (DEMO.footnote) document.getElementById('paramsFoot').innerHTML = DEMO.footnote;
+  sizeCanvases();
+  S.pairStats = DEMO.pairs.map((pr, i) => pairMC(pr, 1000 + i));
+  /* the tournament winner is the default selection: strongest link first */
+  if (DEMO.pairs.length) {
+    let bestI = 0;
+    DEMO.pairs.forEach((pr, i) => { if (cushOf(i) > cushOf(bestI)) bestI = i; });
+    S.selPair = bestI;
+  } else {
+    S.selPair = -1;
+  }
+  runSimulation();
+  renderStandings();
+  renderDetail();
+  animGate();
+}
+let rszT = null;
+new ResizeObserver(() => {
+  clearTimeout(rszT);
+  rszT = setTimeout(() => {
+    sizeCanvases(); drawMap(); drawFog(); drawTrails(1);
+  }, 120);
+}).observe(wrap);
+window.addEventListener('load', boot);
+</script>
+</body>
+</html>

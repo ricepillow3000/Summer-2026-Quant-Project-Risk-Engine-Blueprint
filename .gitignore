@@ -10,4 +10,7 @@ data/*.json
 # Local logs
 streamlit.log
 
+# Local agent-tool state
+.claude/
+
 graphify-out/

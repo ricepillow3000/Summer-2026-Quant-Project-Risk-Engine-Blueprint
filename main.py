@@ -13,6 +13,7 @@ so the engine speaks to any audience - not just one watchlist.
 
 import base64
 import json
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -40,6 +41,7 @@ from src.pairing import (anchor_rank, backtest_pair, crisis_cushion,
                          es_confidence_interval, pair_weights, regime_labels,
                          tail_gap, DEFENSIVE_ANCHOR_TICKERS)
 from src.covariance import estimate_covariance
+from src.state_calibration import calibrate_state_dynamics
 from src.eigenrisk import eigen_factors, marcenko_pastur_bounds, pc1_exposure
 from src.scenarios import HISTORICAL_REGIMES, replay_returns
 from src.liquidity import (days_to_liquidate, liquidity_profile,
@@ -932,235 +934,24 @@ def fan_chart(bands: dict):
     return fig
 
 
-def surface_chart(density: dict):
+WAR_ROOM_FILE = Path(__file__).parent / "prototypes" / "war_room.html"
+
+
+def war_room_html(payload: dict) -> str:
     """
-    3D surface of how the simulated outcome distribution evolves over the
-    horizon - the fan chart's cone re-expressed as a probability surface
-    (day x return-bin x density) instead of percentile lines.
+    The Risk Topology map (prototypes/war_room.html) with the LIVE engine
+    payload spliced between its __PAYLOAD__ markers. The page renders only
+    what this payload carries: every number traces back to the yfinance
+    returns and the calibration/backtest code in src/. The file's built-in
+    demo block is replaced wholesale here, so no demo number can leak into
+    the product.
     """
-    fig = go.Figure(go.Surface(
-        x=density["days"], y=density["returns"], z=density["density"].T,
-        colorscale=[[0, "#EDE9E3"], [0.5, BRONZE], [1, CHARCOAL]],
-        showscale=False,
-        hovertemplate="Day %{x} · Return %{y:.0%} · density %{z:.3f}<extra></extra>",
-    ))
-    scene_axis = dict(gridcolor=GRID, zerolinecolor=AXIS_LINE, linecolor=AXIS_LINE,
-                      showbackground=True, backgroundcolor="rgba(237,233,227,0.35)")
-    fig.update_layout(
-        height=480,
-        margin=dict(l=0, r=0, t=10, b=0),
-        paper_bgcolor="rgba(0,0,0,0)",
-        font=dict(family="Georgia, 'Times New Roman', serif", color=CHARCOAL, size=12),
-        scene=dict(
-            bgcolor="rgba(0,0,0,0)",
-            xaxis=dict(title="Trading day", **scene_axis),
-            yaxis=dict(title="1-year outcome", tickformat=".0%", **scene_axis),
-            zaxis=dict(title="Density", **scene_axis),
-        ),
-        hoverlabel=dict(bgcolor="#F4F1EA", font=dict(family="Georgia, serif", color=CHARCOAL)),
-    )
-    return fig
-
-
-def _seed_particles(density: dict, n_particles: int = 220, seed: int = 42):
-    """
-    Sample particle anchor points weighted by the density surface itself, so
-    the 'drifting particle' overlay clusters where the probability mass
-    actually is instead of floating randomly in empty space.
-    """
-    z = np.asarray(density["density"])            # shape (n_days, n_returns)
-    days = np.asarray(density["days"], dtype=float)
-    rets = np.asarray(density["returns"], dtype=float)
-
-    w = np.clip(z.flatten(), 0, None)
-    w = w / w.sum() if w.sum() > 0 else np.ones_like(w) / w.size
-    rng = np.random.default_rng(seed)
-    idx = rng.choice(w.size, size=n_particles, p=w, replace=True)
-    day_idx, ret_idx = np.unravel_index(idx, z.shape)
-
-    px = days[day_idx].tolist()
-    py = rets[ret_idx].tolist()
-    pz = (z[day_idx, ret_idx] * 1.05).tolist()      # sit just above the surface
-    return px, py, pz
-
-
-def living_surface_html(density: dict, height: int = 520, n_particles: int = 220) -> str:
-    """
-    A 'living' version of the 3D outcome-distribution surface: raw plotly.js
-    (bypassing st.plotly_chart's static embed) with a drifting-particle
-    overlay and a slow continuous camera auto-rotate, paused while the viewer
-    is manually dragging. Same surface/colorscale/hover as surface_chart().
-    """
-    z = np.asarray(density["density"])
-    payload = json.dumps({
-        "days": [float(x) for x in density["days"]],
-        "rets": [float(x) for x in density["returns"]],
-        "z": z.T.tolist(),                          # shape (n_returns, n_days)
-        "px": (p := _seed_particles(density, n_particles))[0],
-        "py": p[1],
-        "pz": p[2],
-    })
-
-    return f"""
-<div style="background:
-      radial-gradient(120% 90% at 50% 0%, #423C33 0%, #2E2A24 58%, #262320 100%);
-    border: 1px solid #9A7B4F; border-radius: 14px; padding: 10px 8px 4px;
-    box-shadow: inset 0 1px 0 rgba(237,233,227,.08);">
-  <div id="living3d" style="width:100%;height:{height - 16}px;"></div>
-</div>
-<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
-<script>
-(function() {{
-  const data = {payload};
-  const surface = {{
-    type: 'surface', x: data.days, y: data.rets, z: data.z,
-    customdata: data.z,   /* pristine values: hover reads TRUTH, not the shimmer */
-    colorscale: [[0, '#EDE9E3'], [0.5, '#9A7B4F'], [1, '#3F3B35']],
-    showscale: false, opacity: 0.96,
-    hovertemplate: 'Day %{{x}} · Return %{{y:.0%}} · density %{{customdata:.3f}}<extra></extra>',
-  }};
-  const particles = {{
-    type: 'scatter3d', mode: 'markers', x: data.px, y: data.py, z: data.pz,
-    marker: {{ size: 2.6, color: '#C9A227', opacity: 0.55 }},
-    hoverinfo: 'skip',
-  }};
-  const layout = {{
-    height: {height - 16}, margin: {{l:0,r:0,t:10,b:0}},
-    paper_bgcolor: 'rgba(0,0,0,0)',
-    font: {{ family: "Georgia, 'Times New Roman', serif", color: '#D9D2C4', size: 12 }},
-    scene: {{
-      bgcolor: 'rgba(0,0,0,0)',
-      /* Axis ranges are FROZEN. If they autoscale, every wave tick rescales
-         the z-axis and the whole grid pulses - the user sees "the lines
-         moving". Locked ranges mean only the sheet and particles swim. */
-      xaxis: {{ title: 'Trading day', gridcolor: 'rgba(237,233,227,0.14)',
-               backgroundcolor: 'rgba(24,21,18,0.45)', showbackground: true,
-               range: [data.days[0], data.days[data.days.length - 1]] }},
-      yaxis: {{ title: '1-year outcome', tickformat: '.0%', gridcolor: 'rgba(237,233,227,0.14)',
-               backgroundcolor: 'rgba(24,21,18,0.45)', showbackground: true,
-               range: [data.rets[0], data.rets[data.rets.length - 1]] }},
-      zaxis: {{ title: 'Density', gridcolor: 'rgba(237,233,227,0.14)',
-               backgroundcolor: 'rgba(24,21,18,0.45)', showbackground: true,
-               range: [0, Math.max.apply(null, data.z.map(r => Math.max.apply(null, r))) * 1.12] }},
-      camera: {{ eye: {{x: 1.6, y: 1.6, z: 0.9}} }},
-    }},
-  }};
-
-  Plotly.newPlot('living3d', [surface, particles], layout, {{displayModeBar: false}})
-    .then(function(gd) {{
-      let t = 0, userInteracting = false, resumeTimer = null;
-      const pause = () => {{ userInteracting = true; clearTimeout(resumeTimer); }};
-      const resume = () => {{ resumeTimer = setTimeout(() => {{
-        /* Hand the wheel back where the user left it: re-derive the orbit
-           angle from the camera they dragged to, so auto-rotate continues
-           from THEIR view instead of snapping back to the old position. */
-        const eye = (gd.layout.scene && gd.layout.scene.camera &&
-                     gd.layout.scene.camera.eye) || {{x: 1.6, y: 1.6}};
-        angle = Math.atan2(eye.y, eye.x);
-        radius = Math.hypot(eye.x, eye.y) || 1.6;   // keep the user's zoom
-        userInteracting = false;
-      }}, 4000); }};
-      gd.addEventListener('mousedown', pause);
-      gd.addEventListener('touchstart', pause);
-      window.addEventListener('mouseup', resume);
-      window.addEventListener('touchend', resume);
-
-      /* ONE organism, two budgets. The CAMERA glides every frame via
-         requestAnimationFrame (60fps, delta-time based - identical speed on
-         any refresh rate). The SURFACE and the particles breathe together on
-         a ~70ms budget as a single traveling wave rolling down the day axis
-         - a weather front, not a static sheet with loose dots. The wave is a
-         DECORATIVE ±4% shimmer around the true density (about the scale of
-         the Monte Carlo sampling error): geometry sways, but hover always
-         reads the pristine values via customdata. Particles ride the same
-         phase as the surface beneath them, so the whole scene moves as one. */
-      const baseZ = data.z.map(row => row.slice());   // pristine copy
-      const waveZ = data.z.map(row => row.slice());
-      const AMP = 0.04, WAVE_K = 0.55, WAVE_W = 2.1;
-      const dayN = data.days.length, daySpan = data.days[dayN - 1] - data.days[0];
-      /* PERF: Plotly.relayout is a full JS layout pass - calling it every
-         rAF frame on a high-refresh monitor (120-165Hz) burns a core and
-         stutters page scroll. The orbit advances continuously (delta-time)
-         but COMMITS at most every 33ms (~30fps): for a 63-second lap that
-         is 0.19 degrees per commit - visually identical, a third of the
-         work. The wave commits every 90ms for the same reason. */
-      let lastT = null, acc = 0, camAcc = 0, angle = 0, wt = 0, radius = 1.6;
-      const step = function(now) {{
-        if (lastT === null) lastT = now;
-        const dt = Math.min(now - lastT, 100); lastT = now;
-        if (!userInteracting) {{
-          angle += dt * 0.00010;                 // one lap ≈ 63s
-          camAcc += dt;
-          if (camAcc >= 33) {{
-            camAcc = 0;
-            Plotly.relayout('living3d', {{
-              'scene.camera.eye.x': radius * Math.cos(angle),
-              'scene.camera.eye.y': radius * Math.sin(angle),
-            }});
-          }}
-        }}
-        acc += dt;
-        /* The tide holds its breath while the user drags: a restyle mid-drag
-           resets the WebGL gesture and the drag "doesn't take". */
-        if (acc >= 90 && !userInteracting) {{     // the breathing tide
-          acc = 0; wt += 0.09;
-          for (let i = 0; i < waveZ.length; i++) {{
-            const rowB = baseZ[i], rowW = waveZ[i];
-            for (let j = 0; j < rowW.length; j++) {{
-              rowW[j] = rowB[j] * (1 + AMP *
-                Math.sin(wt * WAVE_W - j * WAVE_K + i * 0.16));
-            }}
-          }}
-          const n = data.px.length;
-          const nx = new Array(n), ny = new Array(n), nz = new Array(n);
-          for (let k = 0; k < n; k++) {{
-            nx[k] = data.px[k] + Math.sin(wt * 1.3 + k * 1.7) * 3;
-            ny[k] = data.py[k] + Math.cos(wt * 1.5 + k * 2.3) * 0.01;
-            const jNear = daySpan > 0
-              ? (data.px[k] - data.days[0]) / daySpan * (dayN - 1) : 0;
-            nz[k] = Math.max(0, data.pz[k] * (1 + AMP *
-              Math.sin(wt * WAVE_W - jNear * WAVE_K)));
-          }}
-          Plotly.restyle('living3d', {{z: [waveZ]}}, [0]);
-          Plotly.restyle('living3d', {{x: [nx], y: [ny], z: [nz]}}, [1]);
-        }}
-      }};
-
-      /* Only animate while this scene is actually on screen. Streamlit keeps
-         inactive tab panels mounted, so an ungated interval would repaint the
-         surface forever on every other tab - burning CPU and never letting the
-         renderer idle. Gate on both intersection and page visibility. */
-      /* Respect the OS reduced-motion setting - draw once, hold still. This is
-         a hard gate, checked inside shouldRun, because the IntersectionObserver
-         callback fires asynchronously and would otherwise restart the loop. */
-      const reduced = !!(window.matchMedia &&
-        window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-
-      let rafId = null;
-      const loop = function(now) {{ step(now); rafId = requestAnimationFrame(loop); }};
-      const running = () => rafId !== null;
-      const start = function() {{
-        if (!running()) {{ lastT = null; rafId = requestAnimationFrame(loop); }} }};
-      const stop = function() {{
-        if (running()) {{ cancelAnimationFrame(rafId); rafId = null; }} }};
-      const shouldRun = function(visible) {{
-        (!reduced && visible && document.visibilityState === 'visible') ? start() : stop();
-      }};
-
-      if ('IntersectionObserver' in window) {{
-        new IntersectionObserver(function(entries) {{
-          shouldRun(entries[0].isIntersecting);
-        }}, {{ threshold: 0 }}).observe(gd);
-      }} else {{
-        shouldRun(true);   /* no observer support: run whenever page is visible */
-      }}
-      document.addEventListener('visibilitychange', function() {{
-        shouldRun(gd.getBoundingClientRect().height > 0);
-      }});
-    }});
-}})();
-</script>
-"""
+    html = WAR_ROOM_FILE.read_text(encoding="utf-8")
+    begin, end = "/* __PAYLOAD_BEGIN__ */", "/* __PAYLOAD_END__ */"
+    i = html.index(begin) + len(begin)
+    j = html.index(end)
+    blob = json.dumps(payload, allow_nan=False)
+    return html[:i] + "\nconst DEMO = " + blob + ";\n" + html[j:]
 
 
 def panel_head(title: str, subtitle: str = "") -> None:
@@ -1958,7 +1749,7 @@ def eigen_factor_panel(cov, weights, returns) -> None:
 panel_head("Risk & conviction", "The analysis - where the risk lives")
 (tab_3d, tab_breakdown, tab_watch, tab_balance, tab_grit,
  tab_conviction) = st.tabs([
-    "3D Distribution", "Risk Breakdown", "Correlation Watch", "Balance",
+    "Risk Topology", "Risk Breakdown", "Correlation Watch", "Balance",
     "Grit Zone", "Crisis Conviction",
 ])
 panel_head("Research & controls", "The workshop - signals, regimes, plumbing")
@@ -2088,15 +1879,124 @@ with tab_watch:
                        "a two-asset book has nowhere defensive to go.")
 
 with tab_3d:
-    st.iframe(living_surface_html(mc["path_density"]), height=540)
-    st.caption(
-        "Simulated (Monte Carlo) distribution of portfolio value over the next "
-        "year - the fan chart's cone shown as a probability surface that "
-        "breathes as one slow wave (drag to take over the rotation). The "
-        "swell is a decorative shimmer of about ±4%, roughly the scale of the "
-        "Monte Carlo sampling error - hover any point and the readout shows "
-        "the true, unmoving density. Hypothetical, not historical."
-    )
+    # Risk Topology - the Monte Carlo re-drawn as a strategy map. Every
+    # number in the payload traces to yfinance history through src/ code:
+    # positions from rolling windows, dynamics from the OU calibration,
+    # pair statistics from the real-history backtest. Nothing typed in.
+    try:
+        try:
+            _wr_mkt = fetch_prices(["SPY"], period="2y").pct_change().dropna()["SPY"]
+            _wr_proxy = "S&P 500 via SPY"
+        except Exception:  # noqa: BLE001 - offline: basket proxies the market
+            _wr_mkt = returns.mean(axis=1)
+            _wr_proxy = "equal-weight basket (SPY unavailable)"
+        _wr_port = portfolio_daily_returns(returns, weights)
+        if bearish:
+            _wr_port = -_wr_port
+        _wr_cal = calibrate_state_dynamics(_wr_port, _wr_mkt)
+
+        # every unit on the map: universe + defensive anchor pool
+        try:
+            _wr_etf = fetch_prices(DEFENSIVE_ANCHOR_TICKERS, period="2y")
+            _wr_frame = returns.join(_wr_etf.pct_change().dropna(),
+                                     how="inner").dropna(axis=1)
+        except Exception:  # noqa: BLE001 - offline: universe only
+            _wr_frame = returns
+        _wr_common = _wr_frame.index.intersection(_wr_mkt.index)
+        _wr_mvar = float(_wr_mkt.loc[_wr_common].var())
+        _wr_assets = []
+        for _t in _wr_frame.columns:
+            _b = float(_wr_frame[_t].loc[_wr_common].cov(
+                _wr_mkt.loc[_wr_common]) / _wr_mvar)
+            _v = float(_wr_frame[_t].std() * np.sqrt(252))
+            if np.isfinite(_b) and np.isfinite(_v):
+                _wr_assets.append({"t": _t, "b": round(_b, 3), "v": round(_v, 4),
+                                   "f": "Universe" if _t in loaded else "Anchor pool"})
+
+        # Bon Voyage tournament: the flyer against the top anchor candidates,
+        # each linkage backtested on actual overlapping history
+        _wr_pairs = []
+        try:
+            _wr_vols = returns.std() * np.sqrt(252)
+            _wr_fly = str(_wr_vols.idxmax())
+            _wr_bt_frame = _wr_frame.copy()
+            if bearish:
+                _wr_bt_frame[_wr_fly] = -_wr_bt_frame[_wr_fly]
+            _wr_rank = anchor_rank(_wr_bt_frame, _wr_fly,
+                                   direction="short" if bearish else "long")
+            _wr_corr = _wr_bt_frame.corr()
+            for _an in list(_wr_rank.index[:4]):
+                _pw = pair_weights(_wr_bt_frame[_wr_fly], _wr_bt_frame[_an])
+                _bt = backtest_pair(_wr_bt_frame[_wr_fly], _wr_bt_frame[_an],
+                                    _pw["w_a"])
+                _wr_pairs.append({
+                    "fl": _wr_fly, "an": str(_an),
+                    "rho": round(float(_wr_corr.loc[_wr_fly, _an]), 3),
+                    "wFlyer": round(float(_pw["w_a"]), 4),
+                    "real": {
+                        "esSolo": round(float(_bt["es_solo"]), 5),
+                        "esPair": round(float(_bt["es_pair"]), 5),
+                        "cushion": round(float(_bt["cushion"]), 5),
+                        "volPair": round(float(_bt["ann_vol_pair"]), 4),
+                        "nDays": int(_bt["n_days"]),
+                    },
+                })
+        except Exception:  # noqa: BLE001 - map still works without linkages
+            _wr_pairs = []
+
+        _wr_beta0 = round(float(_wr_cal["beta_now"]), 3)
+        _wr_vol0 = round(float(_wr_cal["vol_now"]), 4)
+        # hazard policy, disclosed: 3x today's vol (floored/capped), +0.8 beta
+        _wr_hvol = round(float(min(0.90, max(0.35, 3.0 * _wr_vol0))), 2)
+        _wr_hbeta = round(float(min(1.9, _wr_beta0 + 0.8)), 2)
+        _wr_bmax = max([a["b"] for a in _wr_assets] + [_wr_hbeta, _wr_beta0])
+        _wr_bmin = min([a["b"] for a in _wr_assets] + [_wr_beta0])
+        _wr_vmax = max([a["v"] for a in _wr_assets] + [_wr_hvol, _wr_vol0])
+        _wr_dom = {
+            "b0": float(min(-1.0, np.floor((_wr_bmin - 0.25) * 2) / 2)),
+            "b1": float(max(2.0, np.ceil((_wr_bmax + 0.25) * 2) / 2)),
+            "v0": 0.0,
+            "v1": float(max(1.0, np.ceil((_wr_vmax + 0.1) * 10) / 10)),
+        }
+        _wr_base_cal = _wr_cal["cal"]["base"]
+        _wr_payload = {
+            "base": {"beta": _wr_beta0, "vol": _wr_vol0},
+            "hazard": {"volMax": _wr_hvol, "betaMax": _wr_hbeta},
+            "assets": _wr_assets,
+            "pairs": _wr_pairs,
+            "muFlyer": 0.0, "muAnchor": 0.0, "muBook": 0.0,
+            "cal": _wr_cal["cal"], "muV": round(float(_wr_cal["muV"]), 4),
+            "days": 30,
+            "domain": _wr_dom,
+            "live": True,
+            "provenance": f"Live · yfinance EOD · {_wr_cal['n_obs']} state obs",
+            "footnote": (
+                "<b>State model:</b> OU beta and log-OU volatility, calibrated "
+                f"by AR(1) on rolling windows of the book's own daily returns "
+                f"(market: {_wr_proxy}; {_wr_cal['n_obs']} state observations; "
+                "overlapping windows smooth the mean-reversion estimate). "
+                f"Shock corr {_wr_base_cal['rho']:+.2f}, leverage "
+                f"{_wr_base_cal['lev']:+.2f}. Stressed = calibrated shocks x 1.4, "
+                "calm = x 0.7 (disclosed policy, not data). Zero-drift risk "
+                "view. Hazard: 3x today's vol and +0.8 beta. Pair numbers "
+                "replay real history: monthly rebalance, no lookahead."
+            ),
+        }
+        st.iframe(war_room_html(_wr_payload), height=820)
+        st.caption(
+            "The Monte Carlo as a strategy map: the grid is (beta, realized "
+            "vol), the lit terrain holds 68% of simulated 30-day end-states, "
+            "night falls at 99.7%, and the perimeter marks the disclosed "
+            "hazard policy. Tracers are simulated state paths from dynamics "
+            "calibrated on this book's actual history; linkage statistics "
+            "replay real history. Simulated estimates, not forecasts."
+        )
+    except Exception as _wr_exc:  # noqa: BLE001 - never fake the map
+        st.info(
+            "Risk Topology needs live market history to calibrate "
+            f"({type(_wr_exc).__name__}: {_wr_exc}). No demo numbers are "
+            "shown in the product - reload when data is available."
+        )
 
 with tab_breakdown:
     st.caption(f"Universe ({len(loaded)}): {', '.join(loaded)}")

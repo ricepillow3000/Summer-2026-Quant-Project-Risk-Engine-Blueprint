@@ -1071,6 +1071,66 @@ def test_tail_gap_identity():
     assert tg["es_a"] > tg["es_b"], "3x-vol asset must carry the deeper tail"
 
 
+def test_ou_fit_recovers_known_parameters():
+    """
+    The AR(1)->OU mapping must recover the parameters of a synthetic OU path
+    generated with the EXACT discretization it inverts (validation against
+    the closed-form transition, not a smoke test).
+    """
+    from src.state_calibration import fit_ou, DT
+    rng = np.random.default_rng(7)
+    theta, mu, sigma, n = 8.0, 1.0, 0.9, 2000
+    phi = np.exp(-theta * DT)
+    s = sigma * np.sqrt((1 - phi * phi) / (2 * theta))
+    x = np.empty(n)
+    x[0] = mu
+    for i in range(1, n):
+        x[i] = mu + phi * (x[i - 1] - mu) + s * rng.standard_normal()
+    fit = fit_ou(pd.Series(x, index=pd.bdate_range("2018-01-01", periods=n)))
+    assert abs(fit["mu"] - mu) < 0.12, f"mu {fit['mu']:.3f} vs {mu}"
+    assert abs(fit["sigma"] - sigma) / sigma < 0.25, f"sigma {fit['sigma']:.3f}"
+    assert abs(fit["theta"] - theta) / theta < 0.5, f"theta {fit['theta']:.2f}"
+
+
+def test_state_calibration_sane_and_stress_ordering():
+    """
+    Full calibration on synthetic correlated port/market returns: outputs
+    must respect the disclosed clamps, and the stressed set must widen the
+    shocks relative to base exactly by the disclosed multiplier.
+    """
+    from src.state_calibration import (calibrate_state_dynamics, CLAMPS,
+                                       STRESS_SHOCK_MULT)
+    rng = np.random.default_rng(11)
+    n = 750
+    idx = pd.bdate_range("2022-01-03", periods=n)
+    mkt = pd.Series(rng.normal(0.0003, 0.011, n), index=idx)
+    port = 1.2 * mkt + pd.Series(rng.normal(0, 0.006, n), index=idx)
+    out = calibrate_state_dynamics(port, mkt)
+    base, stress = out["cal"]["base"], out["cal"]["stress"]
+    for k in ("thB", "sigB", "thV", "etaV", "rho", "lev"):
+        assert np.isfinite(base[k]), f"{k} not finite"
+    assert CLAMPS["theta"][0] <= base["thB"] <= CLAMPS["theta"][1]
+    assert CLAMPS["mu_v"][0] <= out["muV"] <= CLAMPS["mu_v"][1]
+    assert abs(base["rho"]) <= 0.95 and abs(base["lev"]) <= 0.95
+    assert abs(stress["etaV"] - base["etaV"] * STRESS_SHOCK_MULT) < 1e-12
+    assert abs(stress["sigB"] - base["sigB"] * STRESS_SHOCK_MULT) < 1e-12
+    assert out["n_obs"] >= 120
+
+
+def test_rolling_state_series_tracks_planted_beta():
+    """A book built as 1.5x the market must show rolling beta near 1.5."""
+    from src.state_calibration import rolling_state_series
+    rng = np.random.default_rng(3)
+    n = 500
+    idx = pd.bdate_range("2023-01-02", periods=n)
+    mkt = pd.Series(rng.normal(0.0004, 0.010, n), index=idx)
+    port = 1.5 * mkt + pd.Series(rng.normal(0, 0.002, n), index=idx)
+    state = rolling_state_series(port, mkt)
+    assert not state.isna().any().any()
+    assert abs(state["beta"].median() - 1.5) < 0.1
+    assert (state["vol"] > 0).all()
+
+
 if __name__ == "__main__":
     import sys
 
