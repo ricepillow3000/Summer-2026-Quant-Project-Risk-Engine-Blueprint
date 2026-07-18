@@ -166,6 +166,29 @@ html { scroll-behavior: smooth; }
 .gungnir-head .showcase-title { color: #3F3B35; margin: 6px 0 10px; }
 .gungnir-sub { font-family: Georgia, serif; font-size: 14px; color: #6B6459;
   max-width: 600px; line-height: 1.6; }
+/* The plaque: the two-asset risk-parity identity engraved beside the
+   sketch it explains. Solid plate over the contour wash (instruments
+   never fade), hairline bronze, quieter than the radio and the CTA. */
+.gungnir-plaque { max-width: 560px; margin-top: 34px; padding: 30px 34px 26px;
+  background: #F1EDE5; border: 1px solid #C4BDAE; border-top: 2px solid #9A7B4F;
+  box-shadow: 0 1px 2px rgba(63,59,53,.05), 0 8px 24px -18px rgba(63,59,53,.35); }
+.gplaque-eyebrow { font-family: 'Helvetica Neue', sans-serif; font-size: 11px;
+  letter-spacing: .22em; text-transform: uppercase; color: #9A7B4F; }
+.gplaque-eq { display: flex; align-items: flex-start; gap: 20px; margin: 18px 0 12px; }
+.gplaque-term { display: flex; flex-direction: column; align-items: center; gap: 7px; }
+.gplaque-term .t { font-family: Georgia, serif; font-size: 46px; line-height: 1;
+  color: #3F3B35; letter-spacing: .01em; }
+.gplaque-term .t sub { font-size: .48em; }
+.gplaque-eqs { font-family: Georgia, serif; font-size: 46px; line-height: 1;
+  color: #9A7B4F; }
+.gplaque-term .c { font-family: 'Helvetica Neue', sans-serif; font-size: 9.5px;
+  letter-spacing: .2em; text-transform: uppercase; color: #8A7E6A; }
+.gplaque-read { font-family: Georgia, serif; font-size: 15.5px; color: #54504A;
+  line-height: 1.6; max-width: 460px; }
+.gplaque-rule { border: none; height: 1px; margin: 16px 0 13px;
+  background: linear-gradient(90deg, rgba(154,123,79,.5), rgba(154,123,79,.06)); }
+.gplaque-note { font-family: Georgia, serif; font-size: 12.5px; color: #6B6459;
+  line-height: 1.65; }
 @keyframes section-arrive { from { opacity: .25; transform: translateY(26px); }
                             to   { opacity: 1; transform: none; } }
 #grit-showcase:target, #conviction:target, #engine:target {
@@ -1329,27 +1352,55 @@ _bv_sk_a, _bv_sk_b = ("the short position", "the squeeze cushion") if bearish \
 # endpoints sit on each circle's edge plus a 4px breath, never inside. All
 # labels are sized against the chord width where they sit, so nothing
 # overflows a circle or collides with a role caption.
+# The sketch keeps the left half; the right half carries the plaque: the
+# two-asset risk-parity identity the sketch is drawing. Volatility is
+# symmetric under negation (Council pass 7), so the plaque holds verbatim
+# on either side of the trade and never relabels.
 with _gungnir_zone:
-    st.markdown(
-    f'<div class="showcase-section reveal" style="padding-top:2px;text-align:center;">'
-    f'<svg viewBox="0 0 320 214" width="460" height="308" xmlns="http://www.w3.org/2000/svg" style="opacity:.92;max-width:92vw;height:auto;">'
-    f'<line x1="105" y1="133" x2="204" y2="74" stroke="#9A7B4F" stroke-width="1.5" stroke-dasharray="5 4"/>'
-    f'<circle cx="240" cy="52" r="38" fill="rgba(154,123,79,.14)" stroke="#8A6A3C" stroke-width="1.6"/>'
-    f'<circle cx="240" cy="52" r="32" fill="none" stroke="rgba(154,123,79,.35)" stroke-width="1"/>'
-    f'<circle cx="76" cy="150" r="30" fill="rgba(63,59,53,.10)" stroke="#3F3B35" stroke-width="1.6"/>'
-    f'<circle cx="76" cy="150" r="24" fill="none" stroke="rgba(63,59,53,.3)" stroke-width="1"/>'
-    f'<text x="240" y="56" text-anchor="middle" font-family="Helvetica Neue" font-size="10.5" letter-spacing="1.4" fill="#3F3B35">CIRCLE 1</text>'
-    f'<text x="76" y="154" text-anchor="middle" font-family="Helvetica Neue" font-size="8.5" letter-spacing="1.2" fill="#3F3B35">CIRCLE 2</text>'
-    f'<text x="240" y="108" text-anchor="middle" font-family="Georgia" font-size="11" fill="#6B6459">{_bv_sk_a}</text>'
-    f'<text x="76" y="200" text-anchor="middle" font-family="Georgia" font-size="11" fill="#6B6459">{_bv_sk_b}</text>'
-    f'</svg>'
-    f'<div style="font-family:Georgia;font-size:12.5px;color:#6B6459;max-width:560px;margin:2px auto 0;">'
-    f'{"Shorting flips the sketch: Circle 1 is the position you are against, and Circle 2 - a correlated long - cushions the squeeze. Short losses can exceed 100%; borrow costs are not modeled." if bearish else "Circle 1 rides high and volatile; Circle 2 is the steadier partner this engine is built to find."}'
-    f'</div>'
-    f'<a href="#engine" class="cta-btn" style="margin-top:14px;">'
-    f'To the engine &darr;</a>'
-    f'</div>',
-    unsafe_allow_html=True)
+    _gg_sketch, _gg_plaque = st.columns([1.05, 1], gap="large")
+    with _gg_sketch:
+        st.markdown(
+        f'<div class="showcase-section reveal" style="padding-top:2px;text-align:center;">'
+        f'<svg viewBox="0 0 320 214" width="460" height="308" xmlns="http://www.w3.org/2000/svg" style="opacity:.92;max-width:92vw;height:auto;">'
+        f'<line x1="105" y1="133" x2="204" y2="74" stroke="#9A7B4F" stroke-width="1.5" stroke-dasharray="5 4"/>'
+        f'<circle cx="240" cy="52" r="38" fill="rgba(154,123,79,.14)" stroke="#8A6A3C" stroke-width="1.6"/>'
+        f'<circle cx="240" cy="52" r="32" fill="none" stroke="rgba(154,123,79,.35)" stroke-width="1"/>'
+        f'<circle cx="76" cy="150" r="30" fill="rgba(63,59,53,.10)" stroke="#3F3B35" stroke-width="1.6"/>'
+        f'<circle cx="76" cy="150" r="24" fill="none" stroke="rgba(63,59,53,.3)" stroke-width="1"/>'
+        f'<text x="240" y="56" text-anchor="middle" font-family="Helvetica Neue" font-size="10.5" letter-spacing="1.4" fill="#3F3B35">CIRCLE 1</text>'
+        f'<text x="76" y="154" text-anchor="middle" font-family="Helvetica Neue" font-size="8.5" letter-spacing="1.2" fill="#3F3B35">CIRCLE 2</text>'
+        f'<text x="240" y="108" text-anchor="middle" font-family="Georgia" font-size="11" fill="#6B6459">{_bv_sk_a}</text>'
+        f'<text x="76" y="200" text-anchor="middle" font-family="Georgia" font-size="11" fill="#6B6459">{_bv_sk_b}</text>'
+        f'</svg>'
+        f'<div style="font-family:Georgia;font-size:12.5px;color:#6B6459;max-width:560px;margin:2px auto 0;">'
+        f'{"Shorting flips the sketch: Circle 1 is the position you are against, and Circle 2 - a correlated long - cushions the squeeze. Short losses can exceed 100%; borrow costs are not modeled." if bearish else "Circle 1 rides high and volatile; Circle 2 is the steadier partner this engine is built to find."}'
+        f'</div>'
+        f'<a href="#engine" class="cta-btn" style="margin-top:14px;">'
+        f'To the engine &darr;</a>'
+        f'</div>',
+        unsafe_allow_html=True)
+    with _gg_plaque:
+        st.markdown(
+        f'<div class="gungnir-plaque reveal">'
+        f'<div class="gplaque-eyebrow">The math behind the sketch</div>'
+        f'<div class="gplaque-eq">'
+        f'<span class="gplaque-term"><span class="t">w<sub>1</sub>&sigma;<sub>1</sub></span>'
+        f'<span class="c">circle 1</span></span>'
+        f'<span class="gplaque-eqs">=</span>'
+        f'<span class="gplaque-term"><span class="t">w<sub>2</sub>&sigma;<sub>2</sub></span>'
+        f'<span class="c">circle 2</span></span>'
+        f'</div>'
+        f'<div class="gplaque-read">The steadier name carries more of the money, '
+        f'so both names carry the same share of the risk.</div>'
+        f'<hr class="gplaque-rule">'
+        f'<div class="gplaque-note">Equal risk contribution, two assets: weight times '
+        f'volatility, matched. A name three times as volatile gets one third as much '
+        f'capital as its steadier partner. Correlation cancels out of the two-asset '
+        f'condition, so the split rests on measured volatility alone, not on a forecast. '
+        f'The engine below solves the same condition across a full basket, where '
+        f'correlation no longer cancels and the covariance matrix takes over.</div>'
+        f'</div>',
+        unsafe_allow_html=True)
 
 st.markdown(
     f'<hr class="section-divider">'
