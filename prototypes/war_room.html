@@ -380,13 +380,15 @@ function gaussPair(rng) {           /* Box-Muller */
   return [r * Math.cos(a), r * Math.sin(a)];
 }
 
+/* iso-VaR guide levels - ONE source of truth shared by drawIntel (what is
+   drawn) and explainTarget (what hover explains), so explain mode can never
+   name a line that is not on the map. Lives OUTSIDE the payload markers:
+   everything between them is replaced wholesale by the live splice. */
+const ISO_LEVELS = [0.03];
+
 /* ---------- payload boundary: Streamlit splices live engine JSON between
    the markers below. Everything the map shows comes from this one object. ---------- */
 /* __PAYLOAD_BEGIN__ */
-/* iso-VaR guide levels - ONE source of truth shared by drawIntel (what is
-   drawn) and explainTarget (what hover explains), so explain mode can never
-   name a line that is not on the map. */
-const ISO_LEVELS = [0.03];
 const DEMO = {
   base: { beta: 1.0, vol: 0.20 },
   hazard: { volMax: 0.60, betaMax: 1.8 },   /* 3x demo base vol 0.20 - obeys the disclosed policy */
