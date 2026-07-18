@@ -93,6 +93,45 @@ def test_risk_parity_equalizes_risk_contributions():
     assert abs(w.sum() - 1.0) < 1e-8                    # long-only, fully invested
 
 
+def test_risk_parity_diagonal_two_asset_closed_form():
+    """
+    Regression for the 2026-07-18 audit bug: the old fixed-point iteration
+    w <- b/(Sigma w) is a period-2 oscillator on a DIAGONAL matrix and
+    silently returned 50/50. For two uncorrelated assets with vols 3% and 1%
+    the exact ERC answer is w1*s1 = w2*s2 -> [0.25, 0.75].
+    """
+    cov = pd.DataFrame(np.diag([0.03 ** 2, 0.01 ** 2]),
+                       index=["HI", "LO"], columns=["HI", "LO"])
+    w = risk_parity_weights(cov)
+    assert np.allclose(w, [0.25, 0.75], atol=1e-6)
+
+
+def test_risk_parity_zero_correlation_is_inverse_vol():
+    """With zero correlations ERC reduces exactly to inverse volatility."""
+    vols = np.array([0.10, 0.20, 0.05, 0.40])
+    cov = pd.DataFrame(np.diag(vols ** 2))
+    w = risk_parity_weights(cov)
+    iv = (1.0 / vols) / (1.0 / vols).sum()
+    assert np.allclose(w, iv, atol=1e-6)
+
+
+def test_risk_parity_negative_correlation_equal_rc():
+    """
+    A bond/gold-style basket with negative covariances must still return
+    strictly positive weights whose risk contributions are equal (the old
+    solver's marginal<=0 clamp threw legs to the boundary here).
+    """
+    s = np.array([0.15, 0.07, 0.12])
+    corr = np.array([[1.0, -0.4, -0.2],
+                     [-0.4, 1.0, 0.1],
+                     [-0.2, 0.1, 1.0]])
+    cov = pd.DataFrame(corr * np.outer(s, s))
+    w = risk_parity_weights(cov)
+    assert (w > 0).all()
+    rc = risk_contributions(w, cov)["risk_pct"].values
+    assert np.allclose(rc, 1.0 / len(rc), atol=1e-6)
+
+
 def test_vol_target_hits_target():
     cov = covariance_matrix(_synthetic_returns())
     w = np.ones(cov.shape[0]) / cov.shape[0]

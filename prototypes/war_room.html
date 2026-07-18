@@ -383,9 +383,13 @@ function gaussPair(rng) {           /* Box-Muller */
 /* ---------- payload boundary: Streamlit splices live engine JSON between
    the markers below. Everything the map shows comes from this one object. ---------- */
 /* __PAYLOAD_BEGIN__ */
+/* iso-VaR guide levels - ONE source of truth shared by drawIntel (what is
+   drawn) and explainTarget (what hover explains), so explain mode can never
+   name a line that is not on the map. */
+const ISO_LEVELS = [0.03];
 const DEMO = {
   base: { beta: 1.0, vol: 0.20 },
-  hazard: { volMax: 0.70, betaMax: 1.8 },
+  hazard: { volMax: 0.60, betaMax: 1.8 },   /* 3x demo base vol 0.20 - obeys the disclosed policy */
   assets: [
     { t: 'NVDA', b: 1.65, v: 0.52, f: 'Tech' },
     { t: 'AVGO', b: 1.45, v: 0.44, f: 'Tech' },
@@ -581,21 +585,6 @@ const S = {
 };
 
 /* ---------- terrain (below fog) ---------- */
-function hull(points) {           /* Andrew monotone chain */
-  const p = points.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-  if (p.length < 3) return p;
-  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
-  const lo = [], up = [];
-  for (const pt of p) {
-    while (lo.length > 1 && cross(lo[lo.length - 2], lo[lo.length - 1], pt) <= 0) lo.pop();
-    lo.push(pt);
-  }
-  for (const pt of p.reverse()) {
-    while (up.length > 1 && cross(up[up.length - 2], up[up.length - 1], pt) <= 0) up.pop();
-    up.push(pt);
-  }
-  return lo.slice(0, -1).concat(up.slice(0, -1));
-}
 function spacedText(g, txt, x, y) {
   g.fillText(txt.toUpperCase().split('').join(' '), x, y);
 }
@@ -749,7 +738,7 @@ function drawIntel() {
   /* iso-VaR contours: v = VaR * sqrt(252) / 1.645 (parametric Gaussian) */
   if (S.marks) {
     g.setLineDash([5, 5]);
-    for (const varPct of [0.03]) {
+    for (const varPct of ISO_LEVELS) {
       const v = varPct * Math.sqrt(252) / 1.645;
       if (v > DOMN.v1) continue;
       const y = toY(v);
@@ -1018,7 +1007,7 @@ function explainTarget(x, y) {
   if (S.marks) {
     const hx = toX(DEMO.hazard.betaMax), hy = toY(DEMO.hazard.volMax);
     if ((Math.abs(y - hy) < 6 && x <= hx) || (Math.abs(x - hx) < 6 && y >= hy)) return EXPLAIN.perimeter();
-    for (const varPct of [0.02, 0.03, 0.05]) {
+    for (const varPct of ISO_LEVELS) {
       const vIso = varPct * Math.sqrt(252) / 1.645;
       if (vIso <= DOMN.v1 && Math.abs(y - toY(vIso)) < 5) return EXPLAIN.iso(Math.round(varPct * 100) + '%');
     }
@@ -1194,7 +1183,7 @@ function renderDetail() {
     '<div class="dgrid">' +
     '<div class="dcell"><div class="l">ES 97.5 · solo · ' + esUnit + '</div><div class="v">-' + (esSolo * 100).toFixed(1) + '<small>%</small></div></div>' +
     '<div class="dcell"><div class="l">ES 97.5 · pair · ' + esUnit + '</div><div class="v">-' + (esPair * 100).toFixed(1) + '<small>%</small></div></div>' +
-    '<div class="dcell"><div class="l">' + cushLabel + '</div><div class="v">+' + (cush * 100).toFixed(1) + '<small>pp</small></div></div>' +
+    '<div class="dcell"><div class="l">' + cushLabel + '</div><div class="v">' + (cush >= 0 ? '+' : '') + (cush * 100).toFixed(1) + '<small>pp</small></div></div>' +
     '<div class="dcell"><div class="l">Blend vol</div><div class="v">' + (volP * 100).toFixed(1) + '<small>%</small></div></div>' +
     '</div>' +
     '<div class="runctr"><div class="l">' + ctrLabel + '</div>' +

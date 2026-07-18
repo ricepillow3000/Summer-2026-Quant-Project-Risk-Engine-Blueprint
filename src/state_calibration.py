@@ -100,6 +100,7 @@ def fit_ou(series: pd.Series, dt: float = DT) -> dict:
     mu = c / (1.0 - phi)
     sigma = s * np.sqrt(2.0 * theta / (1.0 - phi * phi))
     return {"theta": float(theta), "mu": float(mu), "sigma": float(sigma),
+            "s": s, "dt": dt,
             "phi": phi, "resid": pd.Series(resid, index=series.dropna().index[1:])}
 
 
@@ -129,8 +130,19 @@ def calibrate_state_dynamics(port_returns: pd.Series,
 
     th_b = _clamp(fb["theta"], "theta", flags)
     th_v = _clamp(fv["theta"], "theta", flags)
-    sig_b = _clamp(fb["sigma"], "sig_b", flags)
-    eta_v = _clamp(fv["sigma"], "eta_v", flags)
+    # If theta landed on a clamp, the (theta, sigma) pair from fit_ou no
+    # longer reproduces the fitted one-step residual variance - the exact
+    # transition the simulator uses would then imply a different daily shock
+    # than the one measured. Recompute sigma from the fitted residual s under
+    # the CLAMPED theta so the innovation variance survives:
+    # s'^2 = sigma^2 (1 - e^{-2 theta dt}) / (2 theta)  ==  s^2.
+    def _sigma_for(theta_c: float, fit: dict) -> float:
+        return float(fit["s"] * np.sqrt(
+            2.0 * theta_c / (1.0 - np.exp(-2.0 * theta_c * fit["dt"]))))
+    sig_b = _clamp(_sigma_for(th_b, fb) if th_b != fb["theta"] else fb["sigma"],
+                   "sig_b", flags)
+    eta_v = _clamp(_sigma_for(th_v, fv) if th_v != fv["theta"] else fv["sigma"],
+                   "eta_v", flags)
     mu_v = _clamp(float(np.exp(fv["mu"])), "mu_v", flags)
     mu_b = _clamp(fb["mu"], "mu_b", flags)
 

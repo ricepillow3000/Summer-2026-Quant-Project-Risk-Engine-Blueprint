@@ -44,26 +44,34 @@ def risk_contributions(weights: np.ndarray, cov: pd.DataFrame) -> pd.DataFrame:
     }, index=cov.index)
 
 
-def risk_parity_weights(cov: pd.DataFrame, iters: int = 5000, tol: float = 1e-10) -> np.ndarray:
+def risk_parity_weights(cov: pd.DataFrame, iters: int = 10000,
+                        tol: float = 1e-12) -> np.ndarray:
     """
-    Equal-risk-contribution (ERC) long-only weights via the standard fixed-point
-    iteration: w_i <- (1/n) / (Sigma w)_i, renormalized. Converges for a
-    positive-definite covariance matrix.
+    Equal-risk-contribution (ERC) long-only weights via cyclical coordinate
+    descent on the strictly convex problem
+        min 0.5 w'Sigma w - lam * sum_i b_i ln(w_i),
+    whose first-order condition w_i (Sigma w)_i = lam b_i IS the ERC
+    condition after normalization (Spinu 2012; Griveau-Billion, Richard &
+    Roncalli 2013). Converges for any positive-definite covariance matrix,
+    including baskets with bond, gold, FX or futures legs where the naive
+    fixed point w <- b/(Sigma w) is a period-2 oscillator and silently
+    returns equal weight (audit 2026-07-18: that failure hit any zero- or
+    negative-correlation universe, e.g. the FX and futures presets).
     """
     sigma = cov.values
     n = sigma.shape[0]
-    budget = np.ones(n) / n
+    b = np.ones(n) / n
+    lam = 1.0
     w = np.ones(n) / n
     for _ in range(iters):
-        marginal = sigma @ w
-        marginal = np.where(marginal <= 0, 1e-12, marginal)
-        w_new = budget / marginal
-        w_new = w_new / w_new.sum()
-        if np.max(np.abs(w_new - w)) < tol:
-            w = w_new
+        w_prev = w.copy()
+        for i in range(n):
+            c_i = sigma[i] @ w - sigma[i, i] * w[i]
+            w[i] = (-c_i + np.sqrt(c_i * c_i + 4.0 * sigma[i, i] * lam * b[i])) \
+                / (2.0 * sigma[i, i])
+        if np.max(np.abs(w - w_prev)) < tol * max(1.0, np.max(np.abs(w))):
             break
-        w = w_new
-    return w
+    return w / w.sum()
 
 
 def portfolio_vol(weights: np.ndarray, cov: pd.DataFrame) -> float:
@@ -93,15 +101,10 @@ def vol_target(weights: np.ndarray, cov: pd.DataFrame,
     }
 
 
-# Historical stress scenarios as (drawdown %, volatility shock %) magnitudes.
-# Drawdown is the peak-to-trough equity move; vol shock scales daily dispersion.
-# Calibrated to the rough character of each episode - illustrative, not exact.
-SCENARIOS = {
-    "2008 Global Financial Crisis": {"drawdown": -50, "vol": 150},
-    "COVID-19 crash (Mar 2020)": {"drawdown": -34, "vol": 200},
-    "2022 rate-shock selloff": {"drawdown": -25, "vol": 80},
-    "1987 Black Monday": {"drawdown": -22, "vol": 250},
-}
+# (A hand-tuned SCENARIOS dict of illustrative crisis magnitudes used to live
+# here. Deleted: never imported by the app, and it contradicted the house
+# doctrine that stress magnitudes are whatever actually happened - real
+# replays live in src/scenarios.py HISTORICAL_REGIMES.)
 
 
 if __name__ == "__main__":

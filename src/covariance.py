@@ -12,12 +12,16 @@ Quant Deep Dive
 1. **Sample** - the plain historical covariance (analytics.covariance_matrix).
    Baseline; unbiased but high-variance, unstable as #assets approaches #days.
 
-2. **Ledoit-Wolf shrinkage** (Ledoit & Wolf, 2004):
+2. **Ledoit-Wolf shrinkage** (Ledoit & Wolf 2004, "A well-conditioned
+   estimator for large-dimensional covariance matrices", J. Multivariate
+   Analysis - the scaled-identity variant, as implemented by scikit-learn):
         Σ̂ = δ·F + (1−δ)·S
-   S is the messy sample matrix, F a structured target (constant-correlation),
-   and δ ∈ [0,1] an optimally-chosen intensity. Pulls the noisy estimate toward
-   a stable target, guaranteeing a well-conditioned, invertible matrix. Uses
-   scikit-learn's closed-form δ (Ledoit-Wolf lemma), not a guess.
+   S is the messy sample matrix, F = (avg variance)·I the scaled-identity
+   target, and δ ∈ [0,1] the closed-form optimal intensity. Pulls the noisy
+   estimate toward a stable target, guaranteeing a well-conditioned,
+   invertible matrix. (The constant-correlation target is the other LW 2004
+   paper, "Honey, I Shrunk the Sample Covariance Matrix"; sklearn ships the
+   identity-target estimator, and that is what runs here.)
 
 3. **EWMA** (RiskMetrics, λ=0.94 daily):
         Σ_t = λ·Σ_{t−1} + (1−λ)·rₜrₜᵀ
@@ -88,7 +92,8 @@ def estimate_covariance(returns: pd.DataFrame, method: str = "sample",
     human string describing what was used (for the UI caption)."""
     if method == "Ledoit-Wolf":
         cov, delta = ledoit_wolf_covariance(returns)
-        return cov, f"Ledoit-Wolf shrinkage (δ = {delta:.2f} toward constant-correlation)"
+        return cov, (f"Ledoit-Wolf shrinkage (δ = {delta:.2f} toward scaled "
+                     "identity, avg-variance x I)")
     if method == "EWMA":
         return ewma_covariance(returns, lam), (
             f"EWMA reactive lens, RiskMetrics λ = {lam:.2f} "

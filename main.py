@@ -1009,9 +1009,11 @@ def read_me(html: str) -> None:
 
 
 def outcome_hist(total_returns, cvar: float):
-    """Histogram of simulated 1-year outcomes. The tail the CVaR measures is
-    inked in oxblood so the eye lands on the danger, not the middle; every
-    bar is a real simulation count - color is annotation, not data."""
+    """Histogram of simulated 1-year outcomes. Bars at or beyond the CVaR
+    average (not the whole VaR tail - the measured tail starts at the 5th
+    percentile; CVaR is that tail's mean, which sits deeper) are inked in
+    oxblood so the eye lands on the danger; every bar is a real simulation
+    count - color is annotation, not data."""
     vals = np.asarray(total_returns) * 100.0
     counts, edges = np.histogram(vals, bins=48)
     mids = (edges[:-1] + edges[1:]) / 2
@@ -1397,8 +1399,9 @@ with _gungnir_zone:
         f'volatility, matched. A name three times as volatile gets one third as much '
         f'capital as its steadier partner. Correlation cancels out of the two-asset '
         f'condition, so the split rests on measured volatility alone, not on a forecast. '
-        f'The engine below solves the same condition across a full basket, where '
-        f'correlation no longer cancels and the covariance matrix takes over.</div>'
+        f'The engine below solves the same condition across a full basket (switch '
+        f'Weighting to Risk parity), where correlation no longer cancels and the '
+        f'covariance matrix takes over.</div>'
         f'</div>',
         unsafe_allow_html=True)
 
@@ -1723,8 +1726,9 @@ with v_col:
             'the simulations landed above it, half below. The dark inner cone holds '
             'the <b>middle 50%</b> of outcomes; the pale outer cone holds <b>90%</b>. '
             'It widens because uncertainty compounds. Its <b>bottom edge is the '
-            'tail</b> the CVaR headline measures. Change any setting and watch the '
-            'cone breathe.'
+            'frontier of the worst 5%</b>; the CVaR headline is the average loss '
+            'beyond that edge, so the CVaR number sits deeper than the cone shows. '
+            'Change any setting and watch the cone breathe.'
             '</div>', unsafe_allow_html=True)
 with f_col:
     st.markdown("""
@@ -2081,10 +2085,14 @@ with tab_3d:
                 f"(market: {_wr_proxy}; {_wr_cal['n_obs']} state observations; "
                 "overlapping windows smooth the mean-reversion estimate). "
                 f"Shock corr {_wr_base_cal['rho']:+.2f}, leverage "
-                f"{_wr_base_cal['lev']:+.2f}. Stressed = calibrated shocks x 1.4, "
-                "calm = x 0.7 (disclosed policy, not data). Zero-drift risk "
-                "view. Hazard: 3x today's vol and +0.8 beta. Pair numbers "
-                "replay real history: monthly rebalance, no lookahead."
+                f"{_wr_base_cal['lev']:+.2f}. Stressed = calibrated shocks x 1.4 "
+                "plus +0.10 shock corr, calm = x 0.7 (disclosed policy, not "
+                "data). Zero-drift risk view. Hazard: 3x today's vol (floored "
+                "at 35%, capped at 90%) and beta +0.8 (capped at 1.9). Pair "
+                "numbers replay real history: monthly rebalance, no lookahead."
+                + (" <b>Calibration clamps hit:</b> "
+                   + "; ".join(_wr_cal["clamp_flags"]) + "."
+                   if _wr_cal.get("clamp_flags") else "")
             ),
         }
         st.iframe(war_room_html(_wr_payload), height=820)
@@ -2160,7 +2168,10 @@ with tab_breakdown:
         "(+1)</b>, <b>beige = independent (0)</b>, <b>charcoal = seesaw (−1)</b>. "
         "A book full of deep bronze has little real diversification - everything "
         "falls at once; charcoal cells are the offsets. The empty upper half is "
-        "the same data mirrored, masked so the eye reads each pair once.")
+        "the same data mirrored, masked so the eye reads each pair once. "
+        "Sample: the returns AFTER the stress-test choice above - under a "
+        "crisis replay this matrix is that crisis window, not the full "
+        "two-year history the Correlation Watch tab averages.")
     corr = correlation_matrix(shocked_returns)
 
     # Lower triangle only - the upper half is a mirror image, masked out.
@@ -2461,7 +2472,8 @@ with tab_balance:
                 f'<div style="font-family:\'Helvetica Neue\',sans-serif;font-size:10px;'
                 f'letter-spacing:.22em;text-transform:uppercase;color:#9A7B4F;'
                 f'text-align:center;margin-top:10px;">Bon Voyage &middot; '
-                f'{"the short and its squeeze cushion" if bearish else "what goes up must come down"}</div>'
+                f'{"the short and its squeeze cushion" if bearish else "what goes up must come down"}'
+                f' &middot; circle size reflects volatility, not capital</div>'
                 f'</div>'
                 f'<div style="flex:1 1 100%;min-width:0;max-width:980px;margin:0 auto;">'
                 f'<div style="font-family:Georgia;font-size:15px;color:#3F3B35;line-height:1.55;">'
@@ -2931,7 +2943,11 @@ with tab_signals:
             st.caption(
                 f"In-sample, this momentum signal's mean IC of "
                 f"{summ['mean_ic']:+.3f} (t = {t:.2f}, scored over "
-                f"{summ['n_days']} days) **{bar_txt}**."
+                f"{summ['n_days']} days) **{bar_txt}**. One honest caveat on "
+                f"t itself: daily ICs against a 5-day forward window overlap, "
+                f"so consecutive ICs are autocorrelated and this iid-style t "
+                f"is inflated (by up to roughly sqrt(5) in the worst case) - "
+                f"treat the bars as optimistic, not exact."
             )
 
             roll = ic.rolling(63).mean()
@@ -3020,7 +3036,7 @@ with tab_regimes:
             r1.metric("Current regime",
                       f"{cur['label'] + 1} of {k_reg} - {word}")
             r2.metric("Regime ann. vol", f"{cur['ann_vol']:.1%}")
-            r3.metric("Regime CVaR (95%)", f"{cur['cvar_95']:.2%}")
+            r3.metric("Regime daily CVaR (95%)", f"{cur['cvar_95']:.2%}")
 
             # regime timeline: one dot per window end-date, shaded by regime
             REG_COLORS = ["#CBBB94", "#B8946A", "#8A6A3C", "#5A4526"][:k_reg]
@@ -3065,7 +3081,10 @@ with tab_regimes:
             st.caption(
                 f"Transition matrix, estimated from consecutive windows: "
                 f"regimes are sticky - on average a {stay:.0%} chance the "
-                f"next window stays in the current regime. Labels are "
+                f"next window stays in the current regime (partly mechanical: "
+                f"consecutive {REG_WINDOW}-day windows share "
+                f"{REG_WINDOW - REG_STEP} days, which inflates the diagonal). "
+                f"Labels are "
                 f"in-sample statistical clusters over {Q_reg.shape[0]} "
                 f"windows ({REG_WINDOW}-day, step {REG_STEP}), ordered "
                 f"calm→turbulent by volatility; k is a user choice, not "

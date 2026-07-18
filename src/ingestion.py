@@ -50,6 +50,10 @@ PRESETS = {
     "Mega-cap tech (Mag 7 + QQQ)": DEFAULT_UNIVERSE,
     "Multi-sector blue chips (institutional-style)": [
         "JPM", "XOM", "UNH", "WMT", "PG", "JNJ", "V", "HD", "CAT", "LMT",
+        "KO", "MCD",
+    ],
+    "Index core (S&P 500 & broad market ETFs)": [
+        "SPY", "VOO", "IVV", "RSP", "DIA", "IWM", "VTI", "QQQ",
     ],
     "S&P sector ETFs": [
         "XLK", "XLF", "XLE", "XLV", "XLY", "XLP", "XLI", "XLU", "XLB",
