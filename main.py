@@ -1181,13 +1181,11 @@ st.markdown("""
       </g>
     </svg></div>
     <div class="showcase-eyebrow">The Innovation</div>
-    <h2 class="showcase-title">Introducing the Grit Zone</h2>
+    <h2 class="showcase-title">The Grit Zone</h2>
     <div class="showcase-body">
       Fear &amp; Greed indices measure market mood. We measure something more
-      durable: whether an asset, when it gets knocked down, actually gets back
-      up - consistently, across real crises. There's no such thing as a
-      perfect stock. Grit isn't about avoiding setbacks - it's about what
-      happens after one.
+      durable: whether an asset, once knocked down, actually gets back up,
+      consistently, across real crises.
     </div>
     <div class="pillar-row">
       <div class="pillar-card">
@@ -1210,19 +1208,17 @@ st.markdown("""
   <div class="showcase-section" id="conviction">
     <div class="conv-core">
       <div class="showcase-eyebrow">The Conviction</div>
-      <h2 class="showcase-title">The hardest trade is the one history rewards</h2>
+      <h2 class="showcase-title" style="font-size:34px;">The hardest trade is the one history rewards</h2>
       <div class="showcase-body">
-        Your brain treats a falling portfolio the way it treats a physical threat
-        - the panic you feel in a crash is wiring, not weakness. That is the
-        emotional problem this engine exists to solve. Not with a slogan: with the
-        actual record of every named crisis it stress-tests, computed live from
-        market data. Below, what really happened to a buyer on the scariest day of
-        each crisis - and on the worst-timed day, the pre-crash peak.
+        Panic in a crash is wiring, not weakness. This engine answers it with
+        evidence, not a slogan: the actual record of every named crisis it
+        stress-tests, computed live. Below is what a buyer earned on the scariest
+        day of each crisis, and at the worst-timed entry, the pre-crash peak.
       </div>
     </div>
     <a href="#gungnir" class="cta-btn"
        style="margin-top:26px;background:transparent;border:1px solid #B08A55;">
-      Work with an exceptional risk engine &darr;</a>
+      From the record to the allocation &darr;</a>
   </div>
 </div>
 """, unsafe_allow_html=True)
@@ -1305,7 +1301,7 @@ with _gungnir_zone:
         '<div class="showcase-eyebrow">Gungnir · The Slice</div>'
         '<h2 class="showcase-title" style="font-size:30px;">From evidence to allocation.</h2>'
         '<div class="gungnir-sub">Everything above was the case. Everything below is the tool: '
-        'choose a side, pick a universe, and every number recomputes live from market data.</div>'
+        'choose a side, pick a universe.</div>'
         '</div>',
         unsafe_allow_html=True)
 
@@ -1348,10 +1344,10 @@ with _gungnir_zone:
     f'<text x="76" y="200" text-anchor="middle" font-family="Georgia" font-size="11" fill="#6B6459">{_bv_sk_b}</text>'
     f'</svg>'
     f'<div style="font-family:Georgia;font-size:12.5px;color:#6B6459;max-width:560px;margin:2px auto 0;">'
-    f'{"Shorting flips the sketch: Circle 1 is the position you are against, and Circle 2 - a correlated long - cushions the squeeze. Short losses can exceed 100%; borrow costs are not modeled." if bearish else "Circle 1 rides high and volatile; Circle 2 - reliability, stability, grit - is what this engine was built to find. We are Circle 2."}'
+    f'{"Shorting flips the sketch: Circle 1 is the position you are against, and Circle 2 - a correlated long - cushions the squeeze. Short losses can exceed 100%; borrow costs are not modeled." if bearish else "Circle 1 rides high and volatile; Circle 2 is the steadier partner this engine is built to find."}'
     f'</div>'
     f'<a href="#engine" class="cta-btn" style="margin-top:14px;">'
-    f'Stress-test it live &darr;</a>'
+    f'To the engine &darr;</a>'
     f'</div>',
     unsafe_allow_html=True)
 
@@ -1361,8 +1357,10 @@ st.markdown(
     f'<div class="showcase-eyebrow">The Engine</div>'
     f'<h2 class="showcase-title" style="font-size:26px;">Stress-test any '
     f'{"short book" if bearish else "portfolio"}, live</h2>'
-    f'<a href="#analysis" class="cta-btn" '
-    f'style="margin-top:10px;padding:10px 24px;font-size:12.5px;">'
+    f'<a href="#analysis" style="display:inline-block;margin-top:10px;'
+    f'font-family:\'Helvetica Neue\',sans-serif;font-size:11px;letter-spacing:.14em;'
+    f'text-transform:uppercase;color:#9A7B4F;text-decoration:none;'
+    f'border-bottom:1px solid rgba(154,123,79,.4);padding-bottom:2px;">'
     f'Skip to the risk map &darr;</a>'
     f'</div>',
     unsafe_allow_html=True)
@@ -2219,11 +2217,9 @@ st.caption(
 
 with tab_balance:
     st.caption(
-        "The second solution. Crisis Conviction argues you shouldn't panic-sell; "
-        "this argues you shouldn't have to bet the outcome on being right. Pick an "
-        "asset you hold, and the engine ranks every other name in your universe by "
-        "how it moves against it - a negatively-correlated partner offsets part of "
-        "the anchor's swings. This is diversification, computed from real covariance, "
+        "Pick a name you hold; the engine ranks every other name in your universe "
+        "by how it moves against it. A negatively-correlated partner offsets part "
+        "of the anchor's swings - diversification computed from real covariance, "
         "not a story about the future."
     )
     if len(loaded) < 2:
@@ -2516,11 +2512,9 @@ with tab_balance:
 
 with tab_grit:
     st.caption(
-        "Fear & Greed measures market MOOD. Grit measures something different: "
-        "when a name gets knocked down, does it get back up - consistently, "
-        "across real crises? There's no such thing as a perfect stock; every "
-        "name here has drawdowns. This ranks your chosen universe by how much "
-        "perseverance each name's OWN price history has actually shown."
+        "Grit ranks your universe by how each name recovered from its own "
+        "drawdowns: how fast, how completely, and how consistently across real "
+        "crises. Every name here has drawdowns; this measures what happened next."
     )
     try:
         grit = load_grit(tuple(loaded))
