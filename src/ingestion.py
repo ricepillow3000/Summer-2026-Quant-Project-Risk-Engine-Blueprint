@@ -75,6 +75,15 @@ PRESETS = {
     "Global macro (multi-asset ETFs)": [
         "SPY", "EFA", "EEM", "TLT", "GLD", "UUP",
     ],
+    # Small/micro-cap names, deliberately chosen for THIN volume rather than any
+    # view on the companies. Every basket above is mega-cap or ETF, so days-to-
+    # liquidate rounds to zero and the Liquidity tab shows a 0% adjustment no
+    # matter where the sliders go - the model looks broken when it is merely
+    # unstressed. On this basket the participation-rate cap actually binds.
+    "Small-cap liquidity stress (thin volume)": [
+        "CRWS", "WEYS", "BSET", "VRA", "HBB",
+        "FLWS", "LAKE", "JOUT", "UNTY", "SMP",
+    ],
 }
 
 

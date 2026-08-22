@@ -2822,6 +2822,15 @@ with tab_liquidity:
                 f"**{prof['least_liquid']}** is the bottleneck at "
                 f"{_fmt_days(prof['full_exit_days'])} to fully exit. "
             )
+        if np.isfinite(lv["multiplier"]) and lv["multiplier"] - 1 < 0.005:
+            # Every mega-cap/ETF preset exits in well under a day, so the tail
+            # adjustment rounds to +0%. Say why, or a reader assumes the model
+            # is dead rather than the book being genuinely liquid.
+            caption += (
+                "At this size the participation cap never binds, so the tail is "
+                "unchanged - a liquid book, not a dormant model. The *Small-cap "
+                "liquidity stress* preset, or a larger book above, makes it bite. "
+            )
         if prof["no_volume"]:
             caption += (
                 f"*No volume feed for {', '.join(prof['no_volume'])} "
