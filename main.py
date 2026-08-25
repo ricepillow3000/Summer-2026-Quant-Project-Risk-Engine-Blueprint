@@ -35,7 +35,7 @@ from src.ingestion import (
 from src.analytics import correlation_matrix, covariance_matrix
 from src.risk import (
     monte_carlo, jump_diffusion_mc, parametric_var, var_backtest, sharpe_ratio,
-    var, cvar, portfolio_daily_returns, gpd_tail_fit,
+    var, cvar, portfolio_daily_returns, gpd_tail_fit, mcneil_frey_tail,
 )
 from src.comovement import (
     correlation_from_cov, rolling_correlation, most_correlated_pair,
@@ -1488,7 +1488,11 @@ def load_tail_fit(tickers_tuple: tuple[str, ...], weights_tuple: tuple[float, ..
     if bearish_flag:
         pr = -pr
     dropped = [t for t in tickers_tuple if t not in keep]
-    return gpd_tail_fit(pr), int(len(pr)), dropped
+    # Conditional EVT: the GPD is fitted to EWMA-standardised residuals, not
+    # raw returns, because peaks-over-threshold assumes i.i.d. exceedances and
+    # the Christoffersen test above exists to show they are not. Returns the
+    # unconditional xi alongside, so the clustering bias is visible.
+    return mcneil_frey_tail(pr), int(len(pr)), dropped
 
 
 @st.cache_data(ttl=3600, show_spinner="Loading volume data…")
@@ -2344,22 +2348,28 @@ with tab_breakdown:
         if _tf is not None and _tf["fitted"]:
             _xi, _ci = _tf["xi"], _tf["xi_ci"]
             t1, t2, t3 = st.columns(3)
-            t1.metric("Tail index ξ", f"{_xi:+.2f}",
+            t1.metric("Tail index ξ (filtered)", f"{_xi:+.2f}",
                       help="Shape of the loss tail from a Generalized Pareto "
-                           "fit. ξ>0 = heavy tail with NO finite worst case. "
-                           "ξ<0 would mean a bounded tail. Bigger ξ = fatter.")
+                           "fit on VOLATILITY-STANDARDISED residuals, so it "
+                           "measures how heavy the shocks really are rather "
+                           "than how bunched they arrived. ξ>0 = heavy tail "
+                           "with NO finite worst case; ξ<0 would mean a "
+                           "bounded tail. Bigger ξ = fatter.")
             t2.metric("Worst case",
                       "None exists" if _xi >= 0 else f"{_tf['finite_endpoint']:.1%}",
                       help="A finite maximum loss exists only if ξ<0. For "
                            "equities ξ is essentially always >0, so the honest "
                            "answer is that no finite worst case exists - the "
                            "only hard floor is -100% from limited liability.")
-            _es999 = _tf["tail"][0.999]["es"]
-            t3.metric("ES 99.9%", "undefined" if _es999 is None else f"{_es999:.1%}",
-                      help="Average loss on the worst 1-in-1000 days, "
-                           "extrapolated from the fitted tail - beyond anything "
-                           "in the sample. 'undefined' means ξ≥1: the mean "
-                           "itself does not exist, so no ES can.")
+            _es999 = _tf["conditional"].get(0.999, {}).get("es")
+            t3.metric("ES 99.9% tomorrow",
+                      "undefined" if _es999 is None else f"{_es999:.1%}",
+                      help="Average loss on a 1-in-1000 day, for TOMORROW: the "
+                           "fitted residual tail rescaled by the current "
+                           "volatility forecast. It moves with the market's "
+                           "state, unlike a static full-sample number. "
+                           "'undefined' means ξ≥1 - the mean itself does not "
+                           "exist, so no ES can.")
 
             _ci_txt = ("" if _ci is None else
                        f" (95% bootstrap interval {_ci[0]:+.2f} to {_ci[1]:+.2f})")
@@ -2388,15 +2398,37 @@ with tab_breakdown:
                    " the full history and were excluded from this fit.*"
                    if _tf_dropped else "")
             )
+            _uxi, _snext = _tf.get("unconditional_xi"), _tf.get("sigma_next")
+            if _uxi is not None:
+                _gap = _uxi - _xi
+                st.caption(
+                    f"**Conditional EVT (McNeil-Frey 2000).** Peaks-over-threshold "
+                    f"assumes exceedances are independent, and the Christoffersen "
+                    f"test above is there to check exactly that - so the GPD here "
+                    f"is fitted to **volatility-standardised residuals**, not raw "
+                    f"returns. Fitting the raw series instead gives ξ = {_uxi:+.2f} "
+                    f"against {_xi:+.2f} filtered, a gap of {_gap:+.2f}: that "
+                    f"difference is volatility clustering masquerading as a fatter "
+                    f"tail, and it is what an unconditional fit would have "
+                    f"reported as danger. Volatility is filtered with EWMA "
+                    f"(λ={_tf.get('lam', 0.94)}, the RiskMetrics daily decay), "
+                    f"which is IGARCH(1,1) with λ fixed - so **no volatility "
+                    f"parameter is fitted to this sample** and the filter cannot "
+                    f"overfit it. The paper specifies AR(1)-GARCH(1,1); this is "
+                    f"the deliberate simplification. Tomorrow's numbers rescale "
+                    f"the residual tail by the current volatility forecast "
+                    f"σ = {_snext:.2%} per day."
+                )
             st.caption(
-                "Honest limits: peaks-over-threshold assumes exceedances are "
-                "independent. The Christoffersen test above exists precisely to "
-                "check that - where it rejects independence, ξ here is biased "
-                "upward and its interval is too narrow; the fix is conditional "
-                "EVT (McNeil-Frey), fitting the GPD to volatility-standardised "
-                "residuals rather than raw returns. The interval is a "
-                "percentile bootstrap over exceedances: it captures estimation "
-                "noise, not the risk of having picked the wrong threshold."
+                "Honest limits: ξ is estimated by maximum likelihood on "
+                "exceedances over a 95% threshold, which is known to sit a "
+                "little BELOW the asymptotic value - so read the gap between "
+                "the two fits, which is robust, rather than either level as "
+                "exact. The interval is a percentile bootstrap over "
+                "exceedances: it captures estimation noise, not the risk of "
+                "having picked the wrong threshold. The conditional mean is "
+                "taken as zero, since at a one-day horizon equity drift is "
+                "~2 orders of magnitude below daily volatility."
             )
         elif _tf is not None:
             st.caption(

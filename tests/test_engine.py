@@ -19,6 +19,7 @@ from src.analytics import covariance_matrix, correlation_matrix
 from src.risk import (
     var, cvar, monte_carlo, jump_diffusion_mc, calibrate_jump_diffusion, sharpe_ratio,
     var_backtest, christoffersen_test, gpd_tail_fit,
+    mcneil_frey_tail, ewma_volatility,
 )
 from src.strategies import (
     risk_parity_weights, risk_contributions, vol_target, portfolio_vol,
@@ -1220,6 +1221,83 @@ def test_var_backtest_has_no_lookahead():
     # ...and the mutated day itself must register as a breach.
     assert not bool(b1["breach_flags"].iloc[-1])
     assert bool(b2["breach_flags"].iloc[-1])
+
+
+def _garch11(n, omega=1e-6, alpha=0.09, beta=0.90, seed=0, innov="normal", df=5):
+    """GARCH(1,1). With NORMAL innovations the residual tail is thin, so any
+    fat unconditional tail is produced purely by volatility clustering."""
+    rng = np.random.default_rng(seed)
+    z = (rng.standard_normal(n) if innov == "normal"
+         else rng.standard_t(df, n) / np.sqrt(df / (df - 2)))
+    r = np.empty(n)
+    s2 = omega / (1 - alpha - beta)
+    for t in range(n):
+        r[t] = np.sqrt(s2) * z[t]
+        s2 = omega + alpha * r[t] ** 2 + beta * s2
+    return pd.Series(r)
+
+
+def test_mcneil_frey_strips_clustering_from_the_tail_index():
+    """
+    The reason conditional EVT exists. Simulate GARCH with NORMAL innovations:
+    the true residual tail is thin, so ANY apparent tail fatness in the raw
+    returns is volatility clustering, not fat shocks. Filtering must therefore
+    give a materially LOWER xi than the unconditional fit.
+
+    The assertion is on the GAP, not on the levels: MLE-POT at a 95% threshold
+    is known to sit below the asymptotic value, so absolute xi skews low for
+    both fits. The difference between them is the clustering contribution and
+    is the robust quantity.
+    """
+    mf = mcneil_frey_tail(_garch11(4000, seed=1, innov="normal"), n_boot=0)
+    assert mf["fitted"] is True
+    assert mf["unconditional_xi"] - mf["xi"] > 0.10, (
+        f"clustering bias not detected: uncond={mf['unconditional_xi']} "
+        f"cond={mf['xi']}")
+
+    # Control: i.i.d. data has no clustering, so the filter has nothing to
+    # remove and the two fits must stay close.
+    iid = pd.Series(np.random.default_rng(3).standard_t(5, 4000) * 0.01)
+    mf_iid = mcneil_frey_tail(iid, n_boot=0)
+    assert abs(mf_iid["unconditional_xi"] - mf_iid["xi"]) < 0.10
+
+
+def test_ewma_filter_has_no_lookahead_and_forecasts_forward():
+    """
+    sigma_t is built from returns up to t-1, so standardising r_t by it is
+    legitimate. Mutating the FINAL return must leave the whole sigma path
+    untouched while still moving the one-step-ahead forecast.
+    """
+    base = _garch11(1200, seed=4)
+    mutated = base.copy()
+    mutated.iloc[-1] = -0.5
+
+    s_base, next_base = ewma_volatility(base.values)
+    s_mut, next_mut = ewma_volatility(mutated.values)
+    assert np.allclose(s_base, s_mut), "past sigma must not see the last return"
+    assert next_mut > next_base * 2, "the forecast must react to a huge new loss"
+
+
+def test_mcneil_frey_rescales_by_the_volatility_forecast():
+    """Conditional risk = residual quantile blown back up by tomorrow's vol.
+    Exact arithmetic, not approximate."""
+    mf = mcneil_frey_tail(_garch11(4000, seed=2, innov="t", df=5), n_boot=0)
+    s = mf["sigma_next"]
+    assert s > 0
+    for q in (0.99, 0.999):
+        assert abs(mf["conditional"][q]["var"] - s * mf["tail"][q]["var"]) < 1e-12
+        assert abs(mf["conditional"][q]["es"] - s * mf["tail"][q]["es"]) < 1e-12
+    # Deeper quantile must cost more, and ES must sit at or above VaR.
+    assert mf["conditional"][0.999]["var"] > mf["conditional"][0.99]["var"]
+    assert mf["conditional"][0.99]["es"] >= mf["conditional"][0.99]["var"]
+
+
+def test_mcneil_frey_refuses_a_series_too_short_to_filter():
+    """Burn-in plus a tail fit needs history. Say so rather than fit noise."""
+    short = pd.Series(np.random.default_rng(9).normal(0, 0.01, 120))
+    mf = mcneil_frey_tail(short, n_boot=0)
+    assert mf["fitted"] is False
+    assert "EWMA filter" in mf["reason"]
 
 
 def test_gpd_recovers_known_tail_index_from_theory():

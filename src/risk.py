@@ -13,6 +13,7 @@ Quant Deep Dive:
 import numpy as np
 import pandas as pd
 from scipy import stats, special
+from src.covariance import RISKMETRICS_LAMBDA
 from src.ingestion import fetch_prices, get_returns
 
 
@@ -194,6 +195,108 @@ def gpd_tail_fit(port_returns: pd.Series, threshold_quantile: float = 0.95,
         out["tail"][q] = {"var": float(var_q),
                           "es": None if es_q is None else float(es_q)}
     return out
+
+
+def ewma_volatility(returns, lam: float = RISKMETRICS_LAMBDA,
+                    seed_window: int = 60) -> tuple:
+    """
+    RiskMetrics EWMA conditional volatility, plus the one-step-ahead forecast.
+
+        sigma^2_t = lam * sigma^2_{t-1} + (1 - lam) * r^2_{t-1}
+
+    Note the t-1 on the return: sigma_t is a FORECAST made before day t is
+    observed, so standardising r_t by it involves no look-ahead. The variance
+    is seeded from the first `seed_window` returns; those early points are
+    burnt in by the caller rather than trusted.
+
+    Returns (sigma array aligned to `returns`, one-step-ahead sigma for T+1).
+    """
+    r = np.asarray(returns, dtype=float)
+    n = len(r)
+    if n <= seed_window:
+        raise ValueError(f"need more than {seed_window} returns to seed EWMA")
+    var = np.empty(n, dtype=float)
+    var[0] = float(np.var(r[:seed_window], ddof=1))
+    for t in range(1, n):
+        var[t] = lam * var[t - 1] + (1.0 - lam) * r[t - 1] ** 2
+    sigma_next = float(np.sqrt(lam * var[-1] + (1.0 - lam) * r[-1] ** 2))
+    return np.sqrt(var), sigma_next
+
+
+def mcneil_frey_tail(port_returns: pd.Series, lam: float = RISKMETRICS_LAMBDA,
+                     burn_in: int = 60, **gpd_kwargs) -> dict:
+    """
+    Conditional EVT - McNeil & Frey (2000), two-stage.
+
+    Quant Deep Dive:
+    Plain peaks-over-threshold assumes exceedances are i.i.d. Financial returns
+    are not: volatility clusters, so big losses arrive in bunches. That is not
+    a hypothetical objection here - the Christoffersen test in this module
+    exists to measure exactly that, and when it rejects independence the
+    unconditional xi is biased UPWARD, because clustering masquerades as a
+    fatter tail. The engine would then be citing its own violated assumption
+    as evidence of danger.
+
+    McNeil-Frey removes the volatility first, then does EVT on what is left:
+
+      1. Filter: estimate conditional volatility sigma_t, standardise
+         z_t = r_t / sigma_t. Clustering lives in sigma, so z is far closer
+         to i.i.d. than r.
+      2. Fit: peaks-over-threshold GPD on the standardised residuals z.
+         The xi from this stage is the asset's TRUE tail heaviness, with the
+         volatility dynamics stripped out.
+      3. Rescale: a risk number for tomorrow is the residual quantile blown
+         back up by tomorrow's volatility forecast:
+
+             VaR_{T+1} = sigma_{T+1} * z_q
+             ES_{T+1}  = sigma_{T+1} * z_ES
+
+    This is why conditional EVT is the honest version: xi answers "how heavy
+    is this tail really", while sigma_{T+1} answers "how dangerous is right
+    now". The unconditional fit confounds the two.
+
+    Deviation from the paper, stated rather than glossed: McNeil-Frey specify
+    AR(1)-GARCH(1,1). This filters with EWMA, which is IGARCH(1,1) with lam
+    fixed at the RiskMetrics 0.94 already used elsewhere in this engine. The
+    trade is deliberate - NO volatility parameters are fitted to the sample,
+    so the filter cannot overfit it, and no extra dependency is required. The
+    conditional mean is taken as zero: at a one-day horizon the equity drift
+    is ~2 orders of magnitude below the daily volatility, so the paper's AR(1)
+    mean term would add estimation noise rather than accuracy.
+
+    Returns the GPD fit on standardised residuals, plus `sigma_next` and a
+    `conditional` block holding the rescaled VaR/ES per quantile, and
+    `unconditional_xi` so the two fits can be compared directly - the gap
+    between them IS the clustering bias.
+    """
+    r = pd.Series(port_returns).dropna().astype(float)
+    if len(r) <= burn_in + 100:
+        return {"fitted": False,
+                "reason": (f"need more than {burn_in + 100} returns for the "
+                           "EWMA filter plus a tail fit"),
+                "sigma_next": None, "conditional": {}, "unconditional_xi": None}
+
+    sigma, sigma_next = ewma_volatility(r.values, lam=lam, seed_window=burn_in)
+    # Drop the burn-in: those sigmas still carry the seed rather than the
+    # recursion, so their residuals are not comparable to the rest.
+    z = pd.Series(r.values[burn_in:] / sigma[burn_in:], index=r.index[burn_in:])
+
+    fit = gpd_tail_fit(z, **gpd_kwargs)
+    fit["sigma_next"] = sigma_next
+    fit["lam"] = lam
+    fit["n_standardised"] = int(len(z))
+    fit["conditional"] = {}
+    if fit["fitted"]:
+        for q, vals in fit["tail"].items():
+            fit["conditional"][q] = {
+                "var": sigma_next * vals["var"],
+                "es": None if vals["es"] is None else sigma_next * vals["es"],
+            }
+    # For the side-by-side that makes the clustering bias visible.
+    raw = gpd_tail_fit(r, **gpd_kwargs)
+    fit["unconditional_xi"] = raw["xi"]
+    fit["unconditional_xi_ci"] = raw["xi_ci"]
+    return fit
 
 
 def christoffersen_test(breach_flags, kupiec_lr: float | None = None) -> dict:
