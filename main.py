@@ -906,13 +906,27 @@ BAND_INNER = "rgba(154,123,79,0.30)"   # medium bronze - 25–75 percentile cone
 GRID = "rgba(63,59,53,0.12)"
 AXIS_LINE = "rgba(63,59,53,0.28)"
 
-PLOTLY_CFG = {"displayModeBar": False, "staticPlot": False}
+# responsive=True is not cosmetic. Plotly defaults it to FALSE, which means a
+# figure keeps whatever pixel width it first laid out at and never re-fits when
+# its container settles, an expander opens, a column re-flows or the window
+# resizes. That is how charts end up hanging outside their box - measured here
+# at 643px of SVG inside a 429px column. With it on, Plotly re-lays out on
+# every container resize, so charts stay inside their designated spot.
+PLOTLY_CFG = {"displayModeBar": False, "staticPlot": False, "responsive": True}
 
 
 def _style_fig(fig, height: int = 300):
     """Apply the calm serif/beige institutional theme to any Plotly figure."""
     fig.update_layout(
         height=height,
+        # Charts inside st.tabs are rendered while their tab is HIDDEN, so the
+        # container measures 0px wide and Plotly falls back to its 700px
+        # default - which then sits 90px short inside a 790px box, leaving a
+        # gap on the right. autosize makes the figure take its width from the
+        # container instead of that default, so it fills the box on whichever
+        # tab it lands in. Pairs with responsive=True in PLOTLY_CFG: autosize
+        # decides the initial width, responsive keeps it correct on resize.
+        autosize=True,
         margin=dict(l=8, r=8, t=8, b=8),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
@@ -3343,6 +3357,27 @@ _html("""
   const P = window.parent.document;
   if (P.__meleonaGlide) return;          // rerun guard: bind once per page
   P.__meleonaGlide = true;
+
+  /* Charts inside a tab or expander are rendered while their container is
+     HIDDEN, so it measures 0px wide and Plotly falls back to its 700px
+     default - which then sits ~90px short inside a 790px box and leaves a
+     gap. Plotly's responsive mode only re-lays out on a WINDOW resize, and
+     revealing a tab fires no such event, so the stale width sticks.
+     Dispatching one resize after the reveal makes every chart re-fit its
+     real container. Verified: 700px -> 790px exact fit. */
+  P.addEventListener('click', function(e) {
+    if (e.target.closest && e.target.closest('[role="tab"], summary')) {
+      /* Twice on purpose: the first nudge catches the common case, the second
+         covers containers still settling their width when the first fires
+         (measured a chart mid-settle at 700px in a 755px box). Two resize
+         events are cheap - Plotly only re-lays out figures whose box moved. */
+      [140, 620].forEach(function(d) {
+        setTimeout(function() {
+          window.parent.dispatchEvent(new Event('resize'));
+        }, d);
+      });
+    }
+  }, true);
   const ease = t => t < .5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2;
   /* Streamlit's scroll container has moved between releases - never trust
      a hardcoded selector. Walk UP from the destination to the first
