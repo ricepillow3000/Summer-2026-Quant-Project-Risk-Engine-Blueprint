@@ -18,7 +18,7 @@ import pandas as pd
 from src.analytics import covariance_matrix, correlation_matrix
 from src.risk import (
     var, cvar, monte_carlo, jump_diffusion_mc, calibrate_jump_diffusion, sharpe_ratio,
-    var_backtest,
+    var_backtest, christoffersen_test,
 )
 from src.strategies import (
     risk_parity_weights, risk_contributions, vol_target, portfolio_vol,
@@ -1220,6 +1220,75 @@ def test_var_backtest_has_no_lookahead():
     # ...and the mutated day itself must register as a breach.
     assert not bool(b1["breach_flags"].iloc[-1])
     assert bool(b2["breach_flags"].iloc[-1])
+
+
+def test_christoffersen_matches_hand_computed_likelihood_ratio():
+    """
+    Verify LR_ind against the formula worked out by hand with math.log - a
+    different code path from the implementation's special.xlogy, so agreement
+    is real corroboration rather than the same arithmetic twice.
+
+    I = [0,0,1,1,0,1,0,0,1,1] -> 9 transitions: n00=2, n01=3, n10=2, n11=2
+    """
+    import math
+    I = pd.Series([0, 0, 1, 1, 0, 1, 0, 0, 1, 1], dtype=bool)
+    c = christoffersen_test(I)
+    assert (c["n00"], c["n01"], c["n10"], c["n11"]) == (2, 3, 2, 2)
+    assert c["transitions"] == 9
+
+    pi01, pi11, pi = 3 / 5, 2 / 4, 5 / 9
+    ll_markov = (2 * math.log(1 - pi01) + 3 * math.log(pi01)
+                 + 2 * math.log(1 - pi11) + 2 * math.log(pi11))
+    ll_indep = 4 * math.log(1 - pi) + 5 * math.log(pi)
+    expected = -2 * (ll_indep - ll_markov)
+
+    assert abs(c["lr_ind"] - round(expected, 2)) < 0.01
+    assert abs(c["pi01"] - pi01) < 1e-12
+    assert abs(c["pi11"] - pi11) < 1e-12
+
+
+def test_christoffersen_flags_clustering_that_kupiec_cannot_see():
+    """
+    The whole reason this test exists: identical breach COUNTS, opposite
+    verdicts. Kupiec sees one number for both; independence separates them.
+    """
+    n, k = 400, 40
+    spread = np.zeros(n, dtype=bool)
+    spread[::10] = True                      # 40 breaches, evenly spaced
+    clustered = np.zeros(n, dtype=bool)
+    clustered[100:140] = True                # same 40, all consecutive
+
+    assert spread.sum() == clustered.sum() == k     # Kupiec cannot tell these apart
+
+    c_spread = christoffersen_test(pd.Series(spread))
+    c_clust = christoffersen_test(pd.Series(clustered))
+
+    assert c_clust["lr_ind"] > c_spread["lr_ind"]
+    assert c_clust["passed_ind"] is False, "40 consecutive breaches must fail independence"
+
+
+def test_christoffersen_returns_none_when_undefined_not_zero():
+    """
+    No breach is ever followed by another observation -> pi11 is not
+    estimable and LR_ind does not exist. It must report None. Returning 0
+    would render as "passed independence", a fabricated verdict.
+    """
+    c = christoffersen_test(pd.Series(np.zeros(300, dtype=bool)))
+    assert c["lr_ind"] is None
+    assert c["passed_ind"] is None
+    assert c["p_ind"] is None
+
+
+def test_conditional_coverage_is_additive_and_wired_into_backtest():
+    """LR_cc = LR_uc + LR_ind by construction, on chi2(2)."""
+    rng = np.random.default_rng(21)
+    bt = var_backtest(pd.Series(np.r_[rng.normal(0, 0.01, 1200),
+                                      rng.normal(-0.01, 0.05, 300)]))
+    c = bt["christoffersen"]
+    assert c["lr_ind"] is not None
+    assert abs(c["lr_cc"] - round(bt["kupiec_lr"] + c["lr_ind"], 2)) < 0.02
+    assert c["passed_cc"] == (c["lr_cc"] <= 5.991)
+    assert 0.0 <= c["p_cc"] <= 1.0
 
 
 def test_var_backtest_reports_untestable_on_short_sample():

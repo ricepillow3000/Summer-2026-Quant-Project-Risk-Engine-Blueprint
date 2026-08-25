@@ -12,7 +12,7 @@ Quant Deep Dive:
 
 import numpy as np
 import pandas as pd
-from scipy import stats
+from scipy import stats, special
 from src.ingestion import fetch_prices, get_returns
 
 
@@ -72,6 +72,99 @@ def parametric_var(port_returns: pd.Series, confidence: float = 0.95) -> float:
     mu, sigma = port_returns.mean(), port_returns.std()
     z = stats.norm.ppf(1 - confidence)
     return float(-(mu + z * sigma))
+
+
+def christoffersen_test(breach_flags, kupiec_lr: float | None = None) -> dict:
+    """
+    Christoffersen (1998) independence + conditional coverage tests.
+
+    Quant Deep Dive:
+    Kupiec asks only "were there about the right NUMBER of breaches?" It is
+    blind to WHEN they happened. Twelve breaches spread evenly across a year
+    and twelve breaches all inside one week score identically - yet the second
+    is a model that works in calm markets and collapses in stress, which is
+    the only time a risk number matters.
+
+    Christoffersen tests the missing dimension. Treat the breach indicator as
+    a Markov chain and count transitions:
+
+        n_ij = # of days where I(t-1) = i and I(t) = j
+
+        pi01 = n01 / (n00 + n01)      P(breach | no breach yesterday)
+        pi11 = n11 / (n10 + n11)      P(breach | breach yesterday)
+        pi   = (n01 + n11) / N        unconditional breach rate
+
+    Under independence pi01 = pi11 = pi: yesterday tells you nothing. The
+    likelihood ratio
+
+        LR_ind = -2 [ log L(independent) - log L(Markov) ]   ~ chi2(1)
+
+    rejects when breaches predict breaches - i.e. they cluster.
+
+    Conditional coverage combines both dimensions, and the statistics are
+    additive by construction:
+
+        LR_cc = LR_uc + LR_ind                               ~ chi2(2)
+
+    Implementation notes that matter for correctness:
+    - `xlogy(x, y)` is x*log(y) with xlogy(0, 0) = 0, which is the correct
+      limit of the 0*log(0) terms and avoids a spurious -inf when a transition
+      count is zero. Every case where the log argument is 0 has a matching
+      zero count, so no term is ever genuinely infinite.
+    - If no breach is ever followed by another observation (n10 + n11 = 0,
+      which happens with zero breaches or a single breach on the last day),
+      pi11 is not estimable. Then LR_ind does not exist and this returns None
+      for it rather than substituting 0 - a 0 would read as "passed
+      independence", which would be a fabricated verdict.
+    """
+    I = np.asarray(pd.Series(breach_flags).values, dtype=int)
+    prev, cur = I[:-1], I[1:]
+    n00 = int(((prev == 0) & (cur == 0)).sum())
+    n01 = int(((prev == 0) & (cur == 1)).sum())
+    n10 = int(((prev == 1) & (cur == 0)).sum())
+    n11 = int(((prev == 1) & (cur == 1)).sum())
+    total = n00 + n01 + n10 + n11
+
+    out = {
+        "n00": n00, "n01": n01, "n10": n10, "n11": n11,
+        "transitions": total,
+        "lr_ind": None, "p_ind": None, "passed_ind": None,
+        "lr_cc": None, "p_cc": None, "passed_cc": None,
+        "pi01": None, "pi11": None,
+    }
+    # Both conditional probabilities must be estimable, or the Markov
+    # alternative is not identified and no honest statistic exists.
+    if total == 0 or (n00 + n01) == 0 or (n10 + n11) == 0:
+        return out
+
+    pi01 = n01 / (n00 + n01)
+    pi11 = n11 / (n10 + n11)
+    pi = (n01 + n11) / total
+
+    log_l_markov = (
+        special.xlogy(n00, 1 - pi01) + special.xlogy(n01, pi01)
+        + special.xlogy(n10, 1 - pi11) + special.xlogy(n11, pi11)
+    )
+    log_l_indep = (
+        special.xlogy(n00 + n10, 1 - pi) + special.xlogy(n01 + n11, pi)
+    )
+    lr_ind = float(-2.0 * (log_l_indep - log_l_markov))
+    # Clamp microscopic negatives from floating-point error; a genuine
+    # negative LR is impossible since the Markov model nests independence.
+    if -1e-9 < lr_ind < 0:
+        lr_ind = 0.0
+
+    out["pi01"], out["pi11"] = pi01, pi11
+    out["lr_ind"] = round(lr_ind, 2)
+    out["p_ind"] = float(stats.chi2.sf(lr_ind, df=1))
+    out["passed_ind"] = bool(lr_ind <= 3.841)          # chi2(1) at 95%
+
+    if kupiec_lr is not None and np.isfinite(kupiec_lr):
+        lr_cc = float(kupiec_lr) + lr_ind
+        out["lr_cc"] = round(lr_cc, 2)
+        out["p_cc"] = float(stats.chi2.sf(lr_cc, df=2))
+        out["passed_cc"] = bool(lr_cc <= 5.991)        # chi2(2) at 95%
+    return out
 
 
 def var_backtest(port_returns: pd.Series, confidence: float = 0.95,
@@ -138,7 +231,7 @@ def var_backtest(port_returns: pd.Series, confidence: float = 0.95,
     crit = 3.841  # chi-square(1) at 95%
     passed = bool(np.isnan(lr) or lr <= crit)
 
-    return {
+    result = {
         "breaches": breaches,
         "n": n,
         "expected_breaches": round(expected_rate * n, 1),
@@ -152,6 +245,13 @@ def var_backtest(port_returns: pd.Series, confidence: float = 0.95,
         # these breaches CLUSTER rather than just how many there are.
         "breach_flags": breach_flags,
     }
+    # Second dimension: Kupiec counts breaches, Christoffersen asks whether
+    # they arrive independently. A model can pass one and fail the other, and
+    # failing independence is the more dangerous failure - it means the model
+    # holds in calm markets and breaks exactly when it is needed.
+    result["christoffersen"] = christoffersen_test(
+        breach_flags, None if np.isnan(lr) else float(lr))
+    return result
 
 
 def monte_carlo(

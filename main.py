@@ -2231,10 +2231,22 @@ with tab_breakdown:
         panel_head("Value at Risk - methods & backtest", "The daily loss line, and whether it holds up")
         hist_var = float(-np.percentile(port_returns, 5))
         bt = var_backtest(port_returns)
-        v1, v2, v3 = st.columns(3)
+        _chr = bt.get("christoffersen", {})
+        # Two dimensions, two words. Kupiec answers "how many?", Christoffersen
+        # answers "did they arrive together?" - a model can pass one and fail
+        # the other, and clustering is the more dangerous failure.
+        _clump = ("n/a" if _chr.get("passed_ind") is None
+                  else "Independent" if _chr["passed_ind"] else "CLUSTERED")
+        v1, v2, v3, v4 = st.columns(4)
         v1.metric("Historical VaR (95%)", f"{hist_var:.2%}")
         v2.metric("Parametric VaR (95%)", f"{parametric_var(port_returns):.2%}")
         v3.metric("VaR breaches", f"{bt['breaches']} / {bt['expected_breaches']:.0f} exp.")
+        v4.metric("Breach timing", _clump,
+                  help="Kupiec counts breaches; this asks whether they arrived "
+                       "independently or bunched together. Breaches that cluster "
+                       "mean the model holds in calm markets and fails in stress - "
+                       "exactly when the number matters. 'n/a' means too few "
+                       "breaches to estimate it, not a pass.")
         verdict_word = "passes" if bt["passed"] else "fails"
         _kupiec_clause = (
             f"the model's breach rate of {bt['observed_rate']:.1%} is "
@@ -2242,6 +2254,31 @@ with tab_breakdown:
             else f"the model's breach rate of {bt['observed_rate']:.1%} is "
                  "statistically INCONSISTENT with the 5% it claims - the VaR "
                  "model misstates its own tail on this sample")
+        # Christoffersen. Reported separately because it answers a different
+        # question, and because "n/a" must never read as a pass.
+        if _chr.get("lr_ind") is None:
+            _cc_clause = (
+                f"**Breach timing:** only {bt['breaches']} breach(es) in "
+                f"{bt['n']} days - too few consecutive-day transitions to "
+                "estimate P(breach | breach yesterday), so the Christoffersen "
+                "independence test is not defined here. Not a pass: undefined."
+            )
+        else:
+            _ind_word = "independent" if _chr["passed_ind"] else "CLUSTERED"
+            _cc_word = "passes" if _chr["passed_cc"] else "fails"
+            _cc_clause = (
+                f"**Breach timing (Christoffersen 1998):** breaches look "
+                f"{_ind_word} - P(breach | breach yesterday) = "
+                f"{_chr['pi11']:.1%} vs {_chr['pi01']:.1%} otherwise; "
+                f"LR_ind = {_chr['lr_ind']} against a 3.84 critical value "
+                f"(p = {_chr['p_ind']:.3f}). Combined conditional coverage "
+                f"{_cc_word}: LR_cc = LR_uc + LR_ind = {_chr['lr_cc']} "
+                f"against 5.99 on 2 dof (p = {_chr['p_cc']:.3f}). "
+                + ("Count and timing both hold up."
+                   if _chr["passed_cc"] else
+                   "A model can pass on count and still fail here - clustered "
+                   "breaches mean it works in calm markets and breaks in stress.")
+            )
         if not bt["testable"]:
             # Walk-forward needs an estimation window plus at least one day to
             # hold out. Say so rather than render a verdict from no days.
@@ -2259,11 +2296,9 @@ with tab_breakdown:
                 f"{_kupiec_clause}. Walk-forward: each day's VaR is estimated "
                 f"from the {bt['window']} trading days strictly before it, then "
                 f"tested against that day's actual return - {bt['n']} "
-                "out-of-sample days. Honest limit: Kupiec tests the breach "
-                "COUNT only. Breaches all landing in one week and breaches "
-                "spread evenly score identically; catching clustering needs "
-                "the Christoffersen independence test."
+                "out-of-sample days."
             )
+            st.caption(_cc_clause)
 
         # --- Named factor exposures ---
         panel_head("Factor exposures", "What systematic bets is this book taking?")
