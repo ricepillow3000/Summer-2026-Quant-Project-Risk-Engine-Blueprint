@@ -263,6 +263,31 @@ select {
   #histCv { width: 120px; }
 }
 
+/* ---- mid canvas: stop the identity chips overlapping the inspector ----
+   The HUD is a flex row of verdict + tiles + chips, absolutely positioned
+   with fixed side insets. Its contents need ~773px, but the insets only
+   leave W-650 (or W-556 under 1180px), so anything narrower than roughly
+   1423px overflows - and because .chip is `white-space: nowrap` it cannot
+   shrink, so the overflow paints straight over the Bon Voyage inspector.
+   Measured at a 1158px canvas: HUD 601px holding 773px of content, chips
+   ending 172px past the HUD and overlapping the inspector by 160px.
+
+   Below 1450px the chips stop competing for the row and take their own
+   full-width line inside the HUD. Nothing is hidden or truncated - the panel
+   simply grows a little taller, which it can afford as a floating overlay. */
+@media (max-width: 1450px) {
+  .hud { flex-wrap: wrap; }
+  .verdict, .tiles { min-width: 0; }
+  .chips {
+    flex: 1 1 100%;
+    flex-direction: row; flex-wrap: wrap;
+    justify-content: flex-start; gap: 6px;
+  }
+  /* nowrap is what made a chip unshrinkable; let a long one break rather
+     than force the row wider than the panel. */
+  .chip { white-space: normal; }
+}
+
 /* ---- narrow canvas (the app embeds this map at ~790px) ----------------
    The HUD is absolutely positioned with fixed side insets tuned for a wide
    screen: left 264px / right 386px leaves only ~140px of usable width inside

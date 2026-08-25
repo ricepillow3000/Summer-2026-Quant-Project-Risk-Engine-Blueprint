@@ -1159,6 +1159,18 @@ except OSError:
 # try/except and may not run. Anything earlier in the sheet is silently
 # shadowed - that is the failure this file has hit before.
 st.markdown("""<style>
+/* A 1080p laptop leaves roughly 900px of viewport after browser chrome, and
+   at full scale the CTA lands at 926px - just under the fold. So the first,
+   gentlest tier starts at 1000px rather than 860px; only genuinely tall
+   screens keep the untouched editorial scale. */
+@media (max-height: 1000px) {
+  .hero-section { padding-top: 46px !important; padding-bottom: 32px !important;
+                  min-height: 0 !important; }
+  .hero-title { font-size: clamp(34px, 6.6vw, 64px) !important;
+                line-height: 1.02 !important; }
+  .hero-sub { font-size: 17px !important; line-height: 1.5 !important; }
+  .hero-crest { width: 104px !important; height: 104px !important; }
+}
 @media (max-height: 860px) {
   .hero-section { padding-top: 30px !important; padding-bottom: 22px !important;
                   min-height: 0 !important; gap: 18px !important; }
@@ -1309,6 +1321,19 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+# Step 1 of a two-step journey. This used to jump straight to #gungnir, which
+# skipped the crisis record directly below - the four evidence slabs and their
+# provenance caption - and left the reader scrolling back up for the numbers
+# this very paragraph promises. It now lands on that record, and a second
+# button there carries on to the allocation. Relabelled to match where it
+# actually goes: "to the allocation" now belongs to the second button.
+st.markdown(
+    '<div style="text-align:center;margin:26px 0 2px;">'
+    '<a href="#crisis-record" class="cta-btn" '
+    'style="background:transparent;border:1px solid #B08A55;">'
+    'See the crisis record &darr;</a></div>',
+    unsafe_allow_html=True)
+
 
 # ---- Showcase: Crisis Conviction - the emotional problem, answered in numbers ----
 @st.cache_data(ttl=6 * 3600, show_spinner="Reading the crisis record…")
@@ -1328,6 +1353,12 @@ try:
     _bwin = int(((_decided["basket_days"].fillna(np.inf)
                   < _decided["bench_days"].fillna(np.inf))).sum())
     _nrace = int(len(_decided))
+
+    # Landing target for the GOTHAM button above. Zero-height marker rather
+    # than a heading, so the section keeps its current typography - the glide
+    # script scrolls to whatever element carries the id.
+    st.markdown('<div id="crisis-record" style="scroll-margin-top:18px;"></div>',
+                unsafe_allow_html=True)
 
     _sl1, _sl2, _sl3, _sl4 = st.columns(4)
     with _sl1:
