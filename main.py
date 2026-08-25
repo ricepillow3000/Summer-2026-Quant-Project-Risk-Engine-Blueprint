@@ -1190,6 +1190,24 @@ st.markdown("""<style>
   .hero-title { font-size: clamp(27px, 4.4vw, 40px) !important; }
   .hero-sub { font-size: 14.5px !important; }
 }
+/* A CTA sitting ON the dark showcase band needs the inverse treatment. The
+   default .cta-btn is a charcoal gradient (#4A453D -> #3A362F) built for the
+   beige field; against the band's own #3F3B35 that is barely eleven points of
+   luminance apart - invisible, the same complaint as a transparent button on
+   beige, just mirrored. This variant inverts to solid bronze with dark type,
+   which is the highest-contrast pairing available inside the palette.
+   Rule: choose the variant by the BACKGROUND the button sits on. */
+.cta-btn.on-dark {
+  background: linear-gradient(180deg, #B08A55 0%, #8A6A3C 100%) !important;
+  color: #241F1A !important;
+  border: 1px solid #C9A76B !important;
+  box-shadow: 0 10px 26px -16px rgba(0,0,0,.75) !important;
+}
+.cta-btn.on-dark:hover {
+  background: linear-gradient(180deg, #C9A76B 0%, #A07E48 100%) !important;
+  color: #1C1814 !important;
+}
+
 /* The Slice has to read as one screen: land on it and the controls AND the
    button onward are both in view. Its zone carries 178px of vertical chrome
    (64/84 padding plus a 30px margin) before any content, which is generous on
@@ -1333,28 +1351,12 @@ st.markdown("""
         stress-tests, computed live. Below is what a buyer earned on the scariest
         day of each crisis, and at the worst-timed entry, the pre-crash peak.
       </div>
+      <a href="#crisis-record" class="cta-btn on-dark" style="margin-top:22px;">
+        See the crisis record &darr;</a>
     </div>
   </div>
 </div>
 """, unsafe_allow_html=True)
-
-# Step 1 of a two-step journey. This used to jump straight to #gungnir, which
-# skipped the crisis record directly below - the four evidence slabs and their
-# provenance caption - and left the reader scrolling back up for the numbers
-# this very paragraph promises. It now lands on that record, and a second
-# button there carries on to the allocation. Relabelled to match where it
-# actually goes: "to the allocation" now belongs to the second button.
-st.markdown(
-    # No inline background here on purpose. The transparent/bronze-outline
-    # variant was written for the DARK Gotham band; on the beige field it
-    # renders as a pale ghost the reader cannot find - which is exactly how
-    # this button got reported as "missing" when it was present all along.
-    # Falling through to the default .cta-btn gives the solid charcoal
-    # gradient, which is the readable treatment on light ground.
-    '<div style="text-align:center;margin:26px 0 2px;">'
-    '<a href="#crisis-record" class="cta-btn">'
-    'See the crisis record &darr;</a></div>',
-    unsafe_allow_html=True)
 
 
 # ---- Showcase: Crisis Conviction - the emotional problem, answered in numbers ----
