@@ -346,7 +346,7 @@ select {
         <label class="tog"><input type="checkbox" id="tgAtmo" checked><span class="pip"></span></label></div>
       <div class="row"><label>Hazard &amp; VaR guides</label>
         <label class="tog"><input type="checkbox" id="tgMarks" checked><span class="pip"></span></label></div>
-      <div class="row"><label>Bon Voyage links</label>
+      <div class="row"><label>Defensive links</label>
         <label class="tog"><input type="checkbox" id="tgLinks" checked><span class="pip"></span></label></div>
     </div>
     <div class="foot" id="paramsFoot">
@@ -387,7 +387,7 @@ select {
   <!-- linkage inspector -->
   <div class="inspector glass" id="inspPanel">
     <div class="insp-h">
-      <div class="k">Bon Voyage Linkages</div>
+      <div class="k">Defensive Pairing</div>
       <div class="t">League table · ranked by cushion</div>
     </div>
     <div class="standings" id="standings"></div>
@@ -1022,7 +1022,7 @@ const EXPLAIN = {
     'Sits at its measured risk address: how hard it moves with the market (left-right) and how violently it moves day to day (up-down). Both measured from its actual price history.'],
   portfolio: () => ['Portfolio · you are here',
     'The whole book today, measured from rolling windows of its real returns. Every simulated future starts from this exact spot.'],
-  link: pr => [pr.fl + ' - ' + pr.an + ' · Bon Voyage pair',
+  link: pr => [pr.fl + ' - ' + pr.an + ' · defensive pair',
     'The flyer (' + pr.fl + ') holds most of the risk, the anchor (' + pr.an + ') holds most of the money. Tether them and a crash in the flyer digs a shallower hole. Click the link to see the replayed history.'],
   ring: pct => [pct + ' probability ring',
     'After 10,000 simulated 30-day futures, ' + pct + ' of them END inside this ring. Counted from the simulation, not assumed. The farther out, the darker: the fog is where the book almost never lands.'],

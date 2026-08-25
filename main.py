@@ -1190,6 +1190,23 @@ st.markdown("""<style>
   .hero-title { font-size: clamp(27px, 4.4vw, 40px) !important; }
   .hero-sub { font-size: 14.5px !important; }
 }
+/* The Slice has to read as one screen: land on it and the controls AND the
+   button onward are both in view. Its zone carries 178px of vertical chrome
+   (64/84 padding plus a 30px margin) before any content, which is generous on
+   a tall display and wasteful on a laptop. Same height-tiered treatment as
+   the hero - nothing removed, just tightened where the screen is short. */
+@media (max-height: 1000px) {
+  .st-key-gungnir_zone { padding: 30px 0 34px !important; margin-top: 14px !important; }
+  .gungnir-head .showcase-title { font-size: 26px !important; margin: 4px 0 8px !important; }
+  .gungnir-sub { font-size: 13.5px !important; }
+  .gungnir-plaque { margin-top: 18px !important; padding: 20px 24px 18px !important; }
+}
+@media (max-height: 860px) {
+  .st-key-gungnir_zone { padding: 20px 0 24px !important; margin-top: 10px !important; }
+  .gungnir-head .showcase-title { font-size: 23px !important; }
+  .gungnir-sub { font-size: 12.5px !important; }
+  .gungnir-plaque { margin-top: 12px !important; padding: 15px 18px 13px !important; }
+}
 </style>""", unsafe_allow_html=True)
 
 # Dark-band plate: the charcoal showcase band gets its own architectural
@@ -1328,9 +1345,14 @@ st.markdown("""
 # button there carries on to the allocation. Relabelled to match where it
 # actually goes: "to the allocation" now belongs to the second button.
 st.markdown(
+    # No inline background here on purpose. The transparent/bronze-outline
+    # variant was written for the DARK Gotham band; on the beige field it
+    # renders as a pale ghost the reader cannot find - which is exactly how
+    # this button got reported as "missing" when it was present all along.
+    # Falling through to the default .cta-btn gives the solid charcoal
+    # gradient, which is the readable treatment on light ground.
     '<div style="text-align:center;margin:26px 0 2px;">'
-    '<a href="#crisis-record" class="cta-btn" '
-    'style="background:transparent;border:1px solid #B08A55;">'
+    '<a href="#crisis-record" class="cta-btn">'
     'See the crisis record &darr;</a></div>',
     unsafe_allow_html=True)
 
@@ -1396,9 +1418,8 @@ try:
     # reader had to scroll back up to find it. Moved here, after the evidence,
     # so the button is the last thing in its own section and skips nothing.
     st.markdown(
-        '<div style="text-align:center;margin:22px 0 4px;">'
-        '<a href="#gungnir" class="cta-btn" '
-        'style="background:transparent;border:1px solid #B08A55;">'
+        '<div style="text-align:center;margin:18px 0 4px;">'
+        '<a href="#the-slice" class="cta-btn">'
         'From the record to the allocation &darr;</a></div>',
         unsafe_allow_html=True)
 except Exception as _exc:  # noqa: BLE001 - landing page must never crash on data
@@ -1419,14 +1440,14 @@ try:
 except Exception:  # noqa: BLE001 - asset missing: plain band, honest fallback
     _gungnir_bg = ""
 st.markdown(
-    f'<div id="gungnir"></div>'
+    f'<div id="the-slice"></div>'
     f'<style>.st-key-gungnir_zone::before {{ {_gungnir_bg} }}</style>',
     unsafe_allow_html=True)
 _gungnir_zone = st.container(key="gungnir_zone")
 with _gungnir_zone:
     st.markdown(
         '<div class="gungnir-head">'
-        '<div class="showcase-eyebrow">Gungnir · The Slice</div>'
+        '<div class="showcase-eyebrow">The Slice</div>'
         '<h2 class="showcase-title" style="font-size:30px;">From evidence to allocation.</h2>'
         '<div class="gungnir-sub">Everything above was the case. Everything below is the tool: '
         'choose a side, pick a universe.</div>'
@@ -1447,7 +1468,7 @@ with _gungnir_zone:
             ["Bullish - long the book", "Bearish - short the book"],
             horizontal=True, key="bv_direction",
             help="Bearish mode re-runs every tail metric, Monte Carlo path and "
-                 "the Bon Voyage pairing on a synthetic daily-rebalanced short "
+                 "the defensive pairing on a synthetic daily-rebalanced short "
                  "of the same assets. Borrow fees, margin interest and buy-ins "
                  "are NOT modeled - real short results are worse than shown.")
 bearish = direction.startswith("Bearish")
@@ -2700,7 +2721,7 @@ with tab_balance:
                 question ("who gets back up?") IS the Circle 2 screen."""
                 return grit_scores(list(tickers))["scores"]["grit_score"]
 
-            panel_head("Bon Voyage - the defensive pair",
+            panel_head("The defensive pair",
                        "What goes up must come down: tether a high-flyer "
                        "to an anchor and measure the cushion")
             try:
@@ -2776,7 +2797,7 @@ with tab_balance:
                 f'</svg>'
                 f'<div style="font-family:\'Helvetica Neue\',sans-serif;font-size:10px;'
                 f'letter-spacing:.22em;text-transform:uppercase;color:#9A7B4F;'
-                f'text-align:center;margin-top:10px;">Bon Voyage &middot; '
+                f'text-align:center;margin-top:10px;">Defensive pair &middot; '
                 f'{"the short and its squeeze cushion" if bearish else "what goes up must come down"}'
                 f' &middot; circle size reflects volatility, not capital</div>'
                 f'</div>'
@@ -2810,7 +2831,7 @@ with tab_balance:
                                    line=dict(color="#8A3B2E", width=1.4))
                 bv_fig.add_scatter(x=bt["pair_path"].index,
                                    y=(bt["pair_path"] - 1) * 100,
-                                   name="Bon Voyage pair",
+                                   name="defensive pair",
                                    line=dict(color=BRONZE, width=2))
                 bv_fig = _style_fig(bv_fig, height=280)
                 bv_fig.update_layout(yaxis_title="cumulative return (%)",
