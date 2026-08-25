@@ -74,6 +74,128 @@ def parametric_var(port_returns: pd.Series, confidence: float = 0.95) -> float:
     return float(-(mu + z * sigma))
 
 
+def gpd_tail_fit(port_returns: pd.Series, threshold_quantile: float = 0.95,
+                 tail_quantiles: tuple = (0.99, 0.999),
+                 n_boot: int = 200, seed: int = 0,
+                 min_exceedances: int = 50) -> dict:
+    """
+    Extreme Value Theory: peaks-over-threshold fit of a Generalized Pareto
+    to the loss tail. Answers "how heavy is the tail, and is there a worst
+    case at all" - which CVaR cannot.
+
+    Quant Deep Dive:
+    CVaR/ES already reports the MEAN loss beyond VaR. What neither VaR nor ES
+    tells you is the tail's SHAPE - how fast it decays, and therefore how much
+    worse things can get past the data you happen to own. The
+    Pickands-Balkema-de Haan theorem says that for a wide class of
+    distributions, exceedances over a high threshold u converge to a
+    Generalized Pareto:
+
+        G(y) = 1 - (1 + xi*y/beta)^(-1/xi)      y = L - u,  L = loss > u
+
+    The shape parameter xi is the whole story:
+      xi > 0   heavy tail, polynomial decay, NO finite worst case
+      xi = 0   exponential tail
+      xi < 0   bounded tail with a finite right endpoint at u - beta/xi
+
+    Equity daily losses fit xi > 0 essentially always, so THE HONEST ANSWER TO
+    "what is the absolute maximum I can lose" IS THAT NO FINITE MAXIMUM EXISTS
+    - only -100% from limited liability. This function reports that rather
+    than inventing a number. A fitted xi < 0 on equity data is far more likely
+    sample noise than a real bound, and is labelled as such.
+
+    xi also says when the engine's OWN numbers stop being meaningful, since
+    E[L^k] is finite only if xi < 1/k:
+      xi >= 0.5  infinite variance   (volatility is not estimable)
+      xi >= 1    infinite mean       (ES does not exist at all)
+
+    Tail estimates (McNeil-Frey / Embrechts et al.), with n total
+    observations and N_u exceedances:
+
+        VaR_q = u + (beta/xi) * [ ((n/N_u)(1-q))^(-xi) - 1 ]
+        ES_q  = VaR_q/(1-xi) + (beta - xi*u)/(1-xi)          (needs xi < 1)
+
+    Both are used in their xi -> 0 limiting forms near zero
+    (VaR_q -> u + beta*ln(N_u/(n(1-q))), ES_q -> VaR_q + beta) rather than
+    dividing by a near-zero xi.
+
+    Honest limits, stated because they change how the number should be read:
+    - POT assumes exceedances are i.i.d. The Christoffersen test in this same
+      module exists precisely to detect that they cluster; when it rejects
+      independence, xi here is biased upward and its interval is too narrow.
+      The fix is conditional EVT (McNeil-Frey: fit the GPD to EWMA-standardised
+      residuals rather than raw returns) - not implemented here, flagged.
+    - The confidence interval is a percentile bootstrap over exceedances. It
+      captures estimation noise, NOT threshold-choice risk.
+    - With fewer than `min_exceedances` points above u the asymptotics do not
+      apply. This refuses to fit rather than return a shaky number.
+    """
+    losses = -pd.Series(port_returns).dropna().astype(float)
+    n = int(len(losses))
+    out = {
+        "fitted": False, "reason": None, "xi": None, "beta": None,
+        "threshold": None, "n_exceedances": 0, "n": n,
+        "xi_ci": None, "tail": {}, "finite_endpoint": None,
+        "moments_finite": None, "threshold_quantile": threshold_quantile,
+    }
+    if n < 100:
+        out["reason"] = f"only {n} observations - too few for a tail fit"
+        return out
+
+    u = float(np.quantile(losses, threshold_quantile))
+    exceed = losses[losses > u].values - u
+    n_u = int(len(exceed))
+    out["threshold"], out["n_exceedances"] = u, n_u
+    if n_u < min_exceedances:
+        out["reason"] = (f"only {n_u} losses above the "
+                         f"{threshold_quantile:.0%} threshold; "
+                         f"{min_exceedances} needed for the GPD asymptotics")
+        return out
+
+    # floc=0 because exceedances are already measured FROM the threshold.
+    xi, _loc, beta = stats.genpareto.fit(exceed, floc=0.0)
+    xi, beta = float(xi), float(beta)
+    out["xi"], out["beta"], out["fitted"] = xi, beta, True
+
+    rng = np.random.default_rng(seed)   # fixed: a CI must not flicker on rerun
+    boot = []
+    for _ in range(n_boot):
+        sample = rng.choice(exceed, size=n_u, replace=True)
+        try:
+            b_xi, _, _ = stats.genpareto.fit(sample, floc=0.0)
+            boot.append(float(b_xi))
+        except Exception:  # noqa: BLE001 - a failed refit is dropped, not faked
+            continue
+    if len(boot) >= 50:
+        lo, hi = np.percentile(boot, [2.5, 97.5])
+        out["xi_ci"] = (float(lo), float(hi))
+
+    # Finite worst case exists only for xi < 0.
+    out["finite_endpoint"] = (u - beta / xi) if xi < 0 else None
+    out["moments_finite"] = {
+        "mean": xi < 1.0,          # ES exists only if the mean does
+        "variance": xi < 0.5,
+        "kurtosis": xi < 0.25,
+    }
+
+    tiny = 1e-6
+    for q in tail_quantiles:
+        ratio = (n / n_u) * (1.0 - q)
+        if abs(xi) < tiny:                       # exponential limit
+            var_q = u + beta * np.log(1.0 / ratio)
+        else:
+            var_q = u + (beta / xi) * (ratio ** (-xi) - 1.0)
+        if xi >= 1.0:
+            es_q = None                          # mean does not exist
+        elif abs(xi) < tiny:
+            es_q = var_q + beta
+        else:
+            es_q = var_q / (1.0 - xi) + (beta - xi * u) / (1.0 - xi)
+        out["tail"][q] = {"var": float(var_q),
+                          "es": None if es_q is None else float(es_q)}
+    return out
+
+
 def christoffersen_test(breach_flags, kupiec_lr: float | None = None) -> dict:
     """
     Christoffersen (1998) independence + conditional coverage tests.

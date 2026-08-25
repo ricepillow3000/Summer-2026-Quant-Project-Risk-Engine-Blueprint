@@ -18,7 +18,7 @@ import pandas as pd
 from src.analytics import covariance_matrix, correlation_matrix
 from src.risk import (
     var, cvar, monte_carlo, jump_diffusion_mc, calibrate_jump_diffusion, sharpe_ratio,
-    var_backtest, christoffersen_test,
+    var_backtest, christoffersen_test, gpd_tail_fit,
 )
 from src.strategies import (
     risk_parity_weights, risk_contributions, vol_target, portfolio_vol,
@@ -1220,6 +1220,77 @@ def test_var_backtest_has_no_lookahead():
     # ...and the mutated day itself must register as a breach.
     assert not bool(b1["breach_flags"].iloc[-1])
     assert bool(b2["breach_flags"].iloc[-1])
+
+
+def test_gpd_recovers_known_tail_index_from_theory():
+    """
+    Independent theory anchor: a Student-t with nu degrees of freedom has
+    tail index xi = 1/nu. Fitting the GPD to simulated t losses must recover
+    that, and must ORDER correctly - heavier t (lower nu) gives larger xi.
+
+    Tolerance is deliberately loose: MLE-POT at a 95% threshold is known to
+    sit slightly below the asymptotic value because the threshold is not
+    infinitely high. Asserting exact equality would be asserting a bias away.
+    """
+    from scipy import stats as _st
+    fits = {}
+    for nu in (3, 6):
+        losses = pd.Series(-_st.t.rvs(nu, size=20000, random_state=1) * 0.01)
+        f = gpd_tail_fit(losses, n_boot=0)
+        assert f["fitted"] is True
+        fits[nu] = f["xi"]
+        assert abs(f["xi"] - 1.0 / nu) < 0.12, f"t({nu}): xi={f['xi']}"
+
+    assert fits[3] > fits[6], "heavier tail must give the larger xi"
+
+
+def test_gpd_refuses_rather_than_fitting_too_few_exceedances():
+    """
+    Under the minimum exceedance count the GPD asymptotics do not apply.
+    Report why and return no numbers - never a shaky estimate presented
+    as if it were sound.
+    """
+    short = pd.Series(np.random.default_rng(31).normal(0, 0.01, 500))
+    f = gpd_tail_fit(short, n_boot=0)
+    assert f["fitted"] is False
+    assert f["xi"] is None and f["tail"] == {}
+    assert "needed for the GPD asymptotics" in f["reason"]
+
+
+def test_gpd_reports_no_finite_maximum_for_heavy_tails():
+    """
+    The honest answer to "what is the absolute maximum I can lose": for
+    xi >= 0 there is none. A finite right endpoint may only be reported when
+    xi < 0. And once xi >= 1 the mean does not exist, so ES must be None
+    rather than a number.
+    """
+    from scipy import stats as _st
+    heavy = pd.Series(-_st.t.rvs(4, size=20000, random_state=2) * 0.01)
+    f = gpd_tail_fit(heavy, n_boot=0)
+    assert f["xi"] > 0
+    assert f["finite_endpoint"] is None, "xi > 0 must NOT report a finite worst case"
+
+    # VaR must increase with the quantile, and ES must sit at or above VaR.
+    assert f["tail"][0.999]["var"] > f["tail"][0.99]["var"]
+    assert f["tail"][0.99]["es"] >= f["tail"][0.99]["var"]
+
+    # xi >= 1: infinite mean, so no ES exists.
+    infinite_mean = pd.Series(
+        -_st.genpareto.rvs(1.4, scale=0.01, size=6000, random_state=3))
+    g = gpd_tail_fit(infinite_mean, n_boot=0)
+    assert g["xi"] >= 1.0
+    assert g["moments_finite"]["mean"] is False
+    assert g["tail"][0.99]["es"] is None
+
+
+def test_gpd_bootstrap_interval_is_deterministic():
+    """A confidence interval that changes on every Streamlit rerun is noise
+    dressed as precision. Same input, same seed, same interval."""
+    r = pd.Series(np.random.default_rng(33).standard_t(4, 2515) * 0.01)
+    a = gpd_tail_fit(r, n_boot=120)
+    b = gpd_tail_fit(r, n_boot=120)
+    assert a["xi_ci"] == b["xi_ci"]
+    assert a["xi_ci"][0] <= a["xi"] <= a["xi_ci"][1]
 
 
 def test_christoffersen_matches_hand_computed_likelihood_ratio():

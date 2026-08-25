@@ -35,7 +35,7 @@ from src.ingestion import (
 from src.analytics import correlation_matrix, covariance_matrix
 from src.risk import (
     monte_carlo, jump_diffusion_mc, parametric_var, var_backtest, sharpe_ratio,
-    var, cvar, portfolio_daily_returns,
+    var, cvar, portfolio_daily_returns, gpd_tail_fit,
 )
 from src.comovement import (
     correlation_from_cov, rolling_correlation, most_correlated_pair,
@@ -1460,6 +1460,37 @@ def load_universe(tickers_tuple: tuple[str, ...], period: str = "2y"):
     return fetch_prices(list(tickers_tuple), period=period)
 
 
+@st.cache_data(ttl=3600, show_spinner="Fitting tail model…")
+def load_tail_fit(tickers_tuple: tuple[str, ...], weights_tuple: tuple[float, ...],
+                  bearish_flag: bool):
+    """
+    GPD tail fit on a LONG history, deliberately not the 2-year window the
+    rest of the app uses. Peaks-over-threshold needs enough points ABOVE the
+    threshold: 2y of daily data leaves ~25 exceedances at the 95% level, under
+    the 50 the asymptotics require, so the fit would (correctly) refuse. 10y
+    gives ~126. Cached because the bootstrap costs ~2s.
+
+    Names without the full history are dropped and the remaining weights are
+    rescaled to preserve the book's original gross notional - so the fit
+    describes the same leverage, on the names that actually have the history.
+    """
+    px = load_universe(tickers_tuple, period="10y")
+    rets = px.pct_change().dropna()
+    keep = [t for t in tickers_tuple if t in rets.columns]
+    if len(keep) < 2:
+        return None, 0, []
+    w = pd.Series(weights_tuple, index=list(tickers_tuple))[keep]
+    gross = float(np.abs(weights_tuple).sum())
+    if float(w.abs().sum()) == 0:
+        return None, 0, []
+    w = w * (gross / float(w.abs().sum()))
+    pr = rets[keep] @ w
+    if bearish_flag:
+        pr = -pr
+    dropped = [t for t in tickers_tuple if t not in keep]
+    return gpd_tail_fit(pr), int(len(pr)), dropped
+
+
 @st.cache_data(ttl=3600, show_spinner="Loading volume data…")
 def load_adv(tickers_tuple: tuple[str, ...]):
     """Average daily dollar volume per ticker (recent 3-month lookback)."""
@@ -2299,6 +2330,81 @@ with tab_breakdown:
                 "out-of-sample days."
             )
             st.caption(_cc_clause)
+
+        # --- Tail shape (EVT) - the question CVaR cannot answer -------------
+        panel_head("Tail shape - how bad can it get",
+                   "What the average of the tail still doesn't tell you")
+        try:
+            _tf, _tf_days, _tf_dropped = load_tail_fit(
+                tuple(loaded), tuple(float(x) for x in weights), bool(bearish))
+        except Exception as exc:  # noqa: BLE001 - never take the page down
+            _tf, _tf_days, _tf_dropped = None, 0, []
+            st.caption(f"Tail model unavailable: {exc}")
+
+        if _tf is not None and _tf["fitted"]:
+            _xi, _ci = _tf["xi"], _tf["xi_ci"]
+            t1, t2, t3 = st.columns(3)
+            t1.metric("Tail index ξ", f"{_xi:+.2f}",
+                      help="Shape of the loss tail from a Generalized Pareto "
+                           "fit. ξ>0 = heavy tail with NO finite worst case. "
+                           "ξ<0 would mean a bounded tail. Bigger ξ = fatter.")
+            t2.metric("Worst case",
+                      "None exists" if _xi >= 0 else f"{_tf['finite_endpoint']:.1%}",
+                      help="A finite maximum loss exists only if ξ<0. For "
+                           "equities ξ is essentially always >0, so the honest "
+                           "answer is that no finite worst case exists - the "
+                           "only hard floor is -100% from limited liability.")
+            _es999 = _tf["tail"][0.999]["es"]
+            t3.metric("ES 99.9%", "undefined" if _es999 is None else f"{_es999:.1%}",
+                      help="Average loss on the worst 1-in-1000 days, "
+                           "extrapolated from the fitted tail - beyond anything "
+                           "in the sample. 'undefined' means ξ≥1: the mean "
+                           "itself does not exist, so no ES can.")
+
+            _ci_txt = ("" if _ci is None else
+                       f" (95% bootstrap interval {_ci[0]:+.2f} to {_ci[1]:+.2f})")
+            _shape = ("**no finite worst case exists** - the tail decays "
+                      "polynomially, so there is no loss level the model rules "
+                      "out. The only hard floor is -100%."
+                      if _xi >= 0 else
+                      f"the fit implies a bounded tail ending at "
+                      f"{_tf['finite_endpoint']:.1%}. Treat that with suspicion: "
+                      "equity losses almost always fit ξ>0, so a negative ξ on "
+                      "this sample is more likely estimation noise than a real bound.")
+            _broken = [k for k, v in _tf["moments_finite"].items() if not v]
+            st.caption(
+                f"Fitted a Generalized Pareto to the "
+                f"{_tf['n_exceedances']} losses above the "
+                f"{_tf['threshold_quantile']:.0%} threshold "
+                f"({_tf['threshold']:.2%}), drawn from {_tf_days} trading days "
+                f"(~10 years - the 2-year window used elsewhere leaves too few "
+                f"exceedances to fit honestly). **ξ = {_xi:+.2f}**{_ci_txt}: {_shape}"
+                + (f" At this ξ the {', '.join(_broken)} of the loss "
+                   f"distribution {'is' if len(_broken) == 1 else 'are'} "
+                   "infinite, so any statistic relying on "
+                   f"{'it' if len(_broken) == 1 else 'them'} is meaningless here."
+                   if _broken else "")
+                + (f" *{', '.join(_tf_dropped)} lack{'s' if len(_tf_dropped) == 1 else ''}"
+                   " the full history and were excluded from this fit.*"
+                   if _tf_dropped else "")
+            )
+            st.caption(
+                "Honest limits: peaks-over-threshold assumes exceedances are "
+                "independent. The Christoffersen test above exists precisely to "
+                "check that - where it rejects independence, ξ here is biased "
+                "upward and its interval is too narrow; the fix is conditional "
+                "EVT (McNeil-Frey), fitting the GPD to volatility-standardised "
+                "residuals rather than raw returns. The interval is a "
+                "percentile bootstrap over exceedances: it captures estimation "
+                "noise, not the risk of having picked the wrong threshold."
+            )
+        elif _tf is not None:
+            st.caption(
+                f"No tail fit: {_tf['reason']}. Extreme Value Theory needs "
+                "enough observations above the threshold before it says "
+                "anything - reporting a shape from fewer would be a guess "
+                "wearing a parameter's name."
+            )
 
         # --- Named factor exposures ---
         panel_head("Factor exposures", "What systematic bets is this book taking?")
