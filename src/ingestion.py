@@ -20,6 +20,7 @@ Universe is fully configurable - equities, ETFs, FX (EURUSD=X), or futures
 """
 
 import os
+import re
 import json
 import hashlib
 import datetime
@@ -87,8 +88,29 @@ PRESETS = {
 }
 
 
+# Yahoo Finance symbols are letters, digits and a small punctuation set:
+# BRK-B, EURUSD=X, GC=F, ^IRX. Nothing else is a ticker.
+#
+# This is a SECURITY boundary, not just tidiness. The ticker box accepts
+# arbitrary user text (accept_new_options=True), and the app renders several
+# strings containing ticker names through `unsafe_allow_html=True` - the
+# headline verdict interpolates the excluded-ticker list straight into a
+# <div>. Without this filter a "ticker" of <IMG SRC=X ONERROR=...> is stored
+# HTML injection, and upper-casing does not help because HTML tags are
+# case-insensitive. Validating here, at the one funnel every ticker list
+# passes through, closes every downstream sink at once - far safer than
+# escaping at 32 separate render sites and hoping none is missed.
+VALID_TICKER = re.compile(r"^\^?[A-Z0-9][A-Z0-9.\-=]{0,14}$")
+
+
+def valid_ticker(symbol: str) -> bool:
+    """True if `symbol` is shaped like a Yahoo Finance ticker."""
+    return bool(VALID_TICKER.match(str(symbol).strip().upper()))
+
+
 def _clean(tickers: list[str] | None) -> list[str]:
-    return sorted({t.strip().upper() for t in (tickers or DEFAULT_UNIVERSE) if t.strip()})
+    cleaned = {t.strip().upper() for t in (tickers or DEFAULT_UNIVERSE) if t.strip()}
+    return sorted(t for t in cleaned if VALID_TICKER.match(t))
 
 
 def _cache_path(tickers: list[str], period: str, align: bool = True) -> str:

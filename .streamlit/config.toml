@@ -8,5 +8,16 @@ font = "serif"
 
 [server]
 headless = true
-enableCORS = false
-enableXsrfProtection = false
+
+# CORS and XSRF protection are Streamlit defaults (both true) and are left ON
+# deliberately - they were previously switched off, which is harmless on
+# localhost but a real weakness on a public URL. Do not disable them to fix an
+# embedding or iframe problem without understanding what that opens up.
+enableCORS = true
+enableXsrfProtection = true
+
+[client]
+# Never render Python tracebacks to visitors: a stack trace leaks file paths,
+# library versions and internal structure. Errors still appear in full in the
+# server logs, where they belong.
+showErrorDetails = false

@@ -30,7 +30,7 @@ import plotly.graph_objects as go
 
 from src.ingestion import (
     fetch_prices, get_returns, data_health, provenance, clear_cache,
-    average_dollar_volume, fetch_risk_free_rate, PRESETS,
+    average_dollar_volume, fetch_risk_free_rate, PRESETS, valid_ticker,
 )
 from src.analytics import correlation_matrix, covariance_matrix
 from src.risk import (
@@ -1446,7 +1446,21 @@ with st.expander("01 · Universe - which assets", expanded=False):
              "(e.g. BRK-B, EURUSD=X for FX, GC=F for gold futures).",
     )
 
-tickers = sorted({t.strip().upper() for t in chosen if t.strip()})
+_raw_syms = sorted({t.strip().upper() for t in chosen if t.strip()})
+# The ticker box takes free text, and ticker names get interpolated into
+# unsafe_allow_html blocks downstream (the headline verdict names excluded
+# symbols inside a <div>). Reject anything not shaped like a Yahoo symbol
+# HERE, and say so, rather than silently dropping it - a user who typos a
+# symbol deserves to know why it vanished.
+tickers = [t for t in _raw_syms if valid_ticker(t)]
+_rejected = [t for t in _raw_syms if not valid_ticker(t)]
+if _rejected:
+    st.warning(
+        "Ignored "
+        + ", ".join(f"`{t[:24]}`" for t in _rejected)
+        + " - not a valid Yahoo Finance symbol. Symbols are letters, digits "
+          "and `. - = ^` only (e.g. `BRK-B`, `EURUSD=X`, `GC=F`, `^IRX`)."
+    )
 if len(tickers) < 2:
     st.warning("Add at least two symbols to analyze a portfolio.")
     st.stop()

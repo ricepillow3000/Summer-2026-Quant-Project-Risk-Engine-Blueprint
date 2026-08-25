@@ -1223,6 +1223,40 @@ def test_var_backtest_has_no_lookahead():
     assert bool(b2["breach_flags"].iloc[-1])
 
 
+def test_ticker_validation_blocks_html_injection():
+    """
+    SECURITY regression guard. The ticker box accepts free text
+    (accept_new_options=True) and ticker names are interpolated into
+    `unsafe_allow_html=True` blocks downstream - the headline verdict names
+    excluded symbols inside a <div>. An unvalidated symbol is therefore stored
+    HTML injection. Upper-casing is NOT a defence: HTML tags are
+    case-insensitive, so <IMG ...> survives .upper() intact.
+
+    If this test fails, the app has an XSS hole on a public URL.
+    """
+    from src.ingestion import valid_ticker, _clean
+
+    payloads = [
+        "<IMG SRC=X ONERROR=ALERT(1)>",
+        "<script>alert(1)</script>",
+        "AAPL<B>",
+        '"><svg onload=alert(1)>',
+        "javascript:alert(1)",
+        "../../etc/passwd",
+        "A B",
+    ]
+    for p in payloads:
+        assert not valid_ticker(p), f"injection payload accepted: {p!r}"
+
+    # Real Yahoo symbol shapes must still pass - equities, class shares, FX,
+    # futures and the ^-prefixed index used for the risk-free rate.
+    for good in ("AAPL", "BRK-B", "EURUSD=X", "GC=F", "^IRX", "QQQ"):
+        assert valid_ticker(good), f"legitimate symbol rejected: {good}"
+
+    # The shared funnel drops bad symbols instead of passing them downstream.
+    assert _clean(["AAPL", "<IMG SRC=X ONERROR=1>"]) == ["AAPL"]
+
+
 def _garch11(n, omega=1e-6, alpha=0.09, beta=0.90, seed=0, innov="normal", df=5):
     """GARCH(1,1). With NORMAL innovations the residual tail is thin, so any
     fat unconditional tail is produced purely by volatility clustering."""
