@@ -18,6 +18,7 @@ import pandas as pd
 from src.analytics import covariance_matrix, correlation_matrix
 from src.risk import (
     var, cvar, monte_carlo, jump_diffusion_mc, calibrate_jump_diffusion, sharpe_ratio,
+    var_backtest,
 )
 from src.strategies import (
     risk_parity_weights, risk_contributions, vol_target, portfolio_vol,
@@ -1171,6 +1172,62 @@ def test_rolling_state_series_tracks_planted_beta():
     assert not state.isna().any().any()
     assert abs(state["beta"].median() - 1.5) < 0.1
     assert (state["vol"] > 0).all()
+
+
+def test_var_backtest_can_actually_fail():
+    """
+    Regression guard for a backtest that was arithmetic, not a test.
+
+    The old version took the 5th percentile of the WHOLE series and counted how
+    many of those same returns fell below it - which is exactly 5% by
+    definition. Calm normal returns and a series of catastrophic clustered
+    crashes both scored 75/1500 breaches, LR -0.0, passed True. It could not
+    fail, so it validated nothing.
+
+    A well-specified model must pass and a badly broken one must fail. If this
+    test ever goes green on both, the in-sample bug is back.
+    """
+    good = pd.Series(np.random.default_rng(11).normal(0.0005, 0.01, 1500))
+    bt_good = var_backtest(good)
+    assert bt_good["passed"] is True, "well-specified model should pass"
+
+    # Vol regime shift: VaR learned on 1200 calm days badly understates the
+    # 300 high-vol days that follow, so breaches must overshoot 5%.
+    rng = np.random.default_rng(12)
+    broken = pd.Series(np.r_[rng.normal(0, 0.01, 1200),
+                             rng.normal(-0.01, 0.05, 300)])
+    bt_broken = var_backtest(broken)
+    assert bt_broken["passed"] is False, "vol regime shift should fail Kupiec"
+    assert bt_broken["observed_rate"] > bt_broken["expected_rate"]
+    assert bt_broken["kupiec_lr"] > 3.841        # chi-square(1) at 95%
+
+    # The whole point: the two verdicts must differ.
+    assert bt_good["passed"] != bt_broken["passed"]
+
+
+def test_var_backtest_has_no_lookahead():
+    """
+    Day t's VaR must come only from days strictly before t. Proof: change ONLY
+    the final return to a catastrophic loss. Every earlier day's breach flag
+    must be untouched - a leak would let the last value bend earlier verdicts.
+    """
+    base = pd.Series(np.random.default_rng(13).normal(0, 0.01, 800))
+    mutated = base.copy()
+    mutated.iloc[-1] = -0.5
+
+    b1, b2 = var_backtest(base), var_backtest(mutated)
+    assert b1["breach_flags"].iloc[:-1].equals(b2["breach_flags"].iloc[:-1])
+    # ...and the mutated day itself must register as a breach.
+    assert not bool(b1["breach_flags"].iloc[-1])
+    assert bool(b2["breach_flags"].iloc[-1])
+
+
+def test_var_backtest_reports_untestable_on_short_sample():
+    """Too short to hold out any day: say so, don't invent a verdict."""
+    bt = var_backtest(pd.Series(np.random.default_rng(14).normal(0, 0.01, 40)))
+    assert bt["testable"] is False
+    assert bt["n"] == 0
+    assert bt["passed"] is None
 
 
 if __name__ == "__main__":

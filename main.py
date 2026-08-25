@@ -19,6 +19,13 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
+
+# ponytail: components.html is deprecated with removal announced for 2026-06-01
+# (still shipping in 1.62). st.iframe is NOT a migration path - it takes a URL,
+# not inline HTML, and the one call here injects a parent-document script. So
+# bind a no-op fallback: if a future Streamlit drops it we lose the CTA scroll
+# glide, not the whole app.
+_html = getattr(components, "html", lambda *a, **k: None)
 import plotly.graph_objects as go
 
 from src.ingestion import (
@@ -2235,13 +2242,28 @@ with tab_breakdown:
             else f"the model's breach rate of {bt['observed_rate']:.1%} is "
                  "statistically INCONSISTENT with the 5% it claims - the VaR "
                  "model misstates its own tail on this sample")
-        st.caption(
-            f"Daily VaR check {verdict_word} the Kupiec proportion-of-failures "
-            f"test (Kupiec 1995; LR = {bt['kupiec_lr']}, 95% critical = 3.84): "
-            f"{_kupiec_clause}. Honest limit: VaR here is estimated on the same "
-            "sample it is tested against (an in-sample consistency check, not a "
-            "true out-of-sample backtest), which biases the test toward passing."
-        )
+        if not bt["testable"]:
+            # Walk-forward needs an estimation window plus at least one day to
+            # hold out. Say so rather than render a verdict from no days.
+            st.caption(
+                f"Not enough history for a walk-forward check: "
+                f"{len(port_returns)} days is under the {bt['window']}-day "
+                "estimation window, so there are no out-of-sample days to "
+                "test. Widen the date range."
+            )
+        else:
+            st.caption(
+                f"Daily VaR check {verdict_word} the Kupiec "
+                f"proportion-of-failures test (Kupiec 1995; "
+                f"LR = {bt['kupiec_lr']}, 95% critical = 3.84): "
+                f"{_kupiec_clause}. Walk-forward: each day's VaR is estimated "
+                f"from the {bt['window']} trading days strictly before it, then "
+                f"tested against that day's actual return - {bt['n']} "
+                "out-of-sample days. Honest limit: Kupiec tests the breach "
+                "COUNT only. Breaches all landing in one week and breaches "
+                "spread evenly score identically; catching clustering needs "
+                "the Christoffersen independence test."
+            )
 
         # --- Named factor exposures ---
         panel_head("Factor exposures", "What systematic bets is this book taking?")
@@ -3128,7 +3150,7 @@ st.markdown("""
 # eased glide (easeInOutCubic) with a mid-scroll arrival animation on the
 # destination - a page turn, not a teleport. Guarded so Streamlit reruns
 # never stack duplicate listeners.
-components.html("""
+_html("""
 <script>
 (function() {
   const P = window.parent.document;

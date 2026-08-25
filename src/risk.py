@@ -74,20 +74,55 @@ def parametric_var(port_returns: pd.Series, confidence: float = 0.95) -> float:
     return float(-(mu + z * sigma))
 
 
-def var_backtest(port_returns: pd.Series, confidence: float = 0.95) -> dict:
+def var_backtest(port_returns: pd.Series, confidence: float = 0.95,
+                 window: int = 250) -> dict:
     """
-    Backtest historical VaR against its own history (Kupiec POF test).
+    WALK-FORWARD backtest of historical VaR (Kupiec POF test).
 
     A VaR model is only trustworthy if losses breach it about as often as it
     claims - a 95% VaR should be exceeded ~5% of days. Too many breaches = the
     model understates risk; too few = it's needlessly conservative. The Kupiec
     proportion-of-failures test turns "is the breach rate acceptable?" into a
     formal hypothesis test (chi-square, 1 dof, 95% critical value 3.841).
+
+    Why walk-forward, and why this used to be broken:
+    the previous version took `np.percentile(port_returns, 5)` over the WHOLE
+    series and counted how many of those same returns fell below it. That is
+    not a test - a sample's own 5th percentile has exactly 5% of the sample
+    below it by construction, so breaches were always ~5%, LR was always ~0,
+    and `passed` was always True no matter how broken the model was. Calm
+    normal returns and a series of catastrophic clustered crashes both scored
+    identically.
+
+    Here the VaR for day t is estimated ONLY from the `window` days strictly
+    before t, then tested against day t's actual return. `.shift(1)` is what
+    enforces that: without it the rolling quantile would include the very
+    return it is judging. Now the test can genuinely fail, which is the point.
     """
-    threshold = np.percentile(port_returns, (1 - confidence) * 100)
-    breaches = int((port_returns < threshold).sum())
-    n = len(port_returns)
-    expected_rate = 1 - confidence
+    q = 1.0 - confidence
+    n_obs = len(port_returns)
+    # Need at least one out-of-sample day. On a short sample shrink the
+    # estimation window rather than refusing to test - half the sample,
+    # floored at 60 days, is still an honest walk-forward.
+    win = window if n_obs > window else max(60, n_obs // 2)
+
+    var_line = port_returns.rolling(win).quantile(q).shift(1)
+    mask = var_line.notna()
+    tested, var_line = port_returns[mask], var_line[mask]
+    breach_flags = tested < var_line
+
+    breaches = int(breach_flags.sum())
+    n = int(len(tested))
+    expected_rate = q
+    if n == 0:
+        # Fewer than ~60 usable days: no out-of-sample day exists. Report that
+        # honestly instead of inventing a verdict.
+        return {
+            "breaches": 0, "n": 0, "expected_breaches": 0.0,
+            "observed_rate": float("nan"), "expected_rate": expected_rate,
+            "kupiec_lr": None, "passed": None, "testable": False,
+            "window": win, "breach_flags": breach_flags,
+        }
     observed_rate = breaches / n
 
     # Kupiec likelihood-ratio statistic for proportion of failures.
@@ -111,6 +146,11 @@ def var_backtest(port_returns: pd.Series, confidence: float = 0.95) -> dict:
         "expected_rate": expected_rate,
         "kupiec_lr": None if np.isnan(lr) else round(float(lr), 2),
         "passed": passed,
+        "testable": True,
+        "window": win,
+        # Kept for the Christoffersen independence test, which asks whether
+        # these breaches CLUSTER rather than just how many there are.
+        "breach_flags": breach_flags,
     }
 
 
