@@ -39,6 +39,11 @@ import numpy as np
 import pandas as pd
 
 TRADING_DAYS = 252
+
+# The published RiskMetrics decay factor for DAILY data (J.P. Morgan/Reuters,
+# RiskMetrics Technical Document, 4th ed., 1996 - 0.94 daily, 0.97 monthly).
+# An industry convention adopted as-is, NOT a value fitted here: it is cited
+# so the number is auditable rather than looking hand-picked.
 RISKMETRICS_LAMBDA = 0.94
 
 

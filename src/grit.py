@@ -280,6 +280,14 @@ def grit_scores(tickers: list[str], prices: pd.DataFrame | None = None,
 
     df = pd.DataFrame(rows).T
 
+    # These blend weights are a DISCLOSED JUDGEMENT CALL, not estimated from
+    # data and not claimed optimal. Recovery leans 60/40 toward whether a
+    # drawdown was recovered at all over how fast, because a name that never
+    # gets back is a different animal from one that takes its time. Resilience
+    # splits evenly, since depth and recovery matter equally there. Nothing in
+    # the engine fits or tunes these - change them and the ranking shifts,
+    # which is exactly why they are stated here rather than left as bare
+    # numbers in an expression.
     recovery_component = (
         0.6 * _score01(df["pct_recovered"], higher_is_better=True)
         + 0.4 * _score01(df["median_recovery_days"], higher_is_better=False)
