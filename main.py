@@ -214,6 +214,10 @@ html { scroll-behavior: smooth; }
 @media (max-width: 1100px) {
   .hero-section { grid-template-columns: 1fr; }
   .showcase-row { grid-template-columns: 1fr !important; } }
+/* Short-viewport hero compression lives at the END of the stylesheet stack
+   (search "SHORT-VIEWPORT HERO"), because .hero-title is redefined twice more
+   below and the hero padding is set by an injected <style> emitted later
+   still - a rule placed here loses on source order no matter how correct. */
 /* The stat deck lives in Casper's wash with no plate - but the TILES stay
    fully solid (John: fading them read unprofessional). The background does
    the fading; the instruments never do. */
@@ -1137,6 +1141,45 @@ try:
 except OSError:
     pass  # no photo on disk -> tiles render on the plain field, nothing breaks
 
+# --- SHORT-VIEWPORT HERO -----------------------------------------------------
+# The primary CTA must be clickable WITHOUT scrolling. Two things stop that on
+# a short screen: below 1100px wide the hero grid drops to ONE column, so the
+# stat deck stacks under the text instead of beside it, and the title clamp
+# pins to its maximum. Measured: a 1198px hero in a 631px viewport, CTA 279px
+# below the fold.
+#
+# The defect is VERTICAL, so this keys off viewport HEIGHT - a tall screen
+# keeps the full editorial scale untouched and only a short one compresses.
+# Nothing is hidden: the stat deck simply sits below the fold, where supporting
+# evidence belongs; the call to action does not.
+#
+# Emitted HERE, unconditionally, and last on purpose. `.hero-title` is
+# redefined twice further up (96px and 84px, both !important) and the hero
+# padding comes from the injected photo <style> just above, which is inside a
+# try/except and may not run. Anything earlier in the sheet is silently
+# shadowed - that is the failure this file has hit before.
+st.markdown("""<style>
+@media (max-height: 860px) {
+  .hero-section { padding-top: 30px !important; padding-bottom: 22px !important;
+                  min-height: 0 !important; gap: 18px !important; }
+  .hero-left { gap: 8px !important; }
+  .hero-title { font-size: clamp(30px, 5.2vw, 50px) !important;
+                line-height: 1.03 !important; margin: 0 !important; }
+  .hero-sub { font-size: 15.5px !important; line-height: 1.42 !important;
+              max-width: 540px !important; }
+  .hero-crest { width: 84px !important; height: 84px !important;
+                padding: 12px !important; }
+  .hero-stats { gap: 8px !important; }
+  .hstat { padding: 10px 12px 8px !important; }
+  .hstat .hnum { font-size: 26px !important; }
+}
+@media (max-height: 700px) {
+  .hero-section { padding-top: 20px !important; padding-bottom: 16px !important; }
+  .hero-title { font-size: clamp(27px, 4.4vw, 40px) !important; }
+  .hero-sub { font-size: 14.5px !important; }
+}
+</style>""", unsafe_allow_html=True)
+
 # Dark-band plate: the charcoal showcase band gets its own architectural
 # photograph (assets/band.jpg - Unsplash, free commercial license): fog-bound
 # towers, duotoned near-charcoal in CSS with a scrim baked in so the beige
@@ -1262,9 +1305,6 @@ st.markdown("""
         day of each crisis, and at the worst-timed entry, the pre-crash peak.
       </div>
     </div>
-    <a href="#gungnir" class="cta-btn"
-       style="margin-top:26px;background:transparent;border:1px solid #B08A55;">
-      From the record to the allocation &darr;</a>
   </div>
 </div>
 """, unsafe_allow_html=True)
@@ -1319,6 +1359,17 @@ try:
         "record, not a forecast - full tables, definitions, and honest limits "
         "in the tab below."
     )
+    # This CTA used to sit at the end of the narrative block ABOVE - which put
+    # it before the four evidence boxes and this caption, so clicking "from the
+    # record to the allocation" jumped 346px PAST the record it names and the
+    # reader had to scroll back up to find it. Moved here, after the evidence,
+    # so the button is the last thing in its own section and skips nothing.
+    st.markdown(
+        '<div style="text-align:center;margin:22px 0 4px;">'
+        '<a href="#gungnir" class="cta-btn" '
+        'style="background:transparent;border:1px solid #B08A55;">'
+        'From the record to the allocation &darr;</a></div>',
+        unsafe_allow_html=True)
 except Exception as _exc:  # noqa: BLE001 - landing page must never crash on data
     st.caption(f"Crisis record unavailable right now ({_exc}). "
                "The Crisis Conviction tab retries on load.")

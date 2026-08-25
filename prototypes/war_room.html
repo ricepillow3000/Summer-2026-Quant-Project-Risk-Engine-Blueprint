@@ -262,6 +262,33 @@ select {
   .verdict .n { font-size: 38px; }
   #histCv { width: 120px; }
 }
+
+/* ---- narrow canvas (the app embeds this map at ~790px) ----------------
+   The HUD is absolutely positioned with fixed side insets tuned for a wide
+   screen: left 264px / right 386px leaves only ~140px of usable width inside
+   a 790px canvas, while its contents need 600px+. That overflow pushed the
+   identity chips 210px past the right edge, where they were clipped.
+   Below 1000px the HUD stops being a fixed-inset strip and becomes a normal
+   wrapping row spanning the canvas, so the verdict, tiles and chips each get
+   a full line instead of fighting over a sliver. */
+@media (max-width: 1000px) {
+  .hud {
+    left: 12px; right: 12px; top: 10px;
+    min-height: 0; padding: 10px 12px;
+    flex-wrap: wrap; gap: 10px;
+  }
+  .verdict { min-width: 0; flex: 1 1 100%; }
+  .verdict .n { font-size: 34px; }
+  .tiles { flex: 1 1 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .chips {
+    flex: 1 1 100%;
+    flex-direction: row; flex-wrap: wrap; justify-content: flex-start; gap: 6px;
+  }
+  /* nowrap is what made a chip unshrinkable; let a long one break instead of
+     forcing the whole row wider than the canvas. */
+  .chip { white-space: normal; }
+  #histCv { width: 100px; }
+}
 </style>
 </head>
 <body>
