@@ -252,6 +252,10 @@ select {
 
 @media (max-width: 1680px) {
   .tiles { grid-template-columns: repeat(2, minmax(104px, 1fr)); }
+  /* Odd tile count: the last one takes the whole row so the grid never ends
+     ragged. Scoped to the 2-column breakpoints - at 3 columns it would push an
+     otherwise-fitting third tile onto a row of its own. */
+  .tiles .tile:last-child:nth-child(odd) { grid-column: 1 / -1; }
   .verdict { min-width: 280px; }
   .verdict .n { font-size: 42px; }
 }
@@ -261,6 +265,7 @@ select {
   .inspector { width: 304px; }
   .chipbar { left: 230px; }
   .tiles { grid-template-columns: repeat(2, 1fr); }
+  .tiles .tile:last-child:nth-child(odd) { grid-column: 1 / -1; }
   .verdict { min-width: 240px; }
   .verdict .n { font-size: 38px; }
   #histCv { width: 120px; }
