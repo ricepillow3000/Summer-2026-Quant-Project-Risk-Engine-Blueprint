@@ -1271,13 +1271,13 @@ st.markdown("""<style>
 @media (max-height: 1000px) {
   /* the sketch is the tallest thing in the row, and mostly air around the
      two circles - trim the drawing, not the labels */
-  .st-key-gungnir_zone svg[viewBox="0 0 320 214"] {
+  .st-key-gungnir_zone svg[viewBox="0 0 360 200"] {
     width: 400px !important; max-width: 100% !important; height: auto !important;
   }
   .st-key-gungnir_zone .gungnir-head { margin-bottom: 2px !important; }
 }
 @media (max-height: 860px) {
-  .st-key-gungnir_zone svg[viewBox="0 0 320 214"] { width: 348px !important; }
+  .st-key-gungnir_zone svg[viewBox="0 0 360 200"] { width: 348px !important; }
   .st-key-gungnir_zone .gungnir-plaque {
     padding: 14px 18px 12px !important; font-size: 13px !important;
   }
@@ -1564,19 +1564,31 @@ with _gungnir_zone:
     with _gg_sketch:
         st.markdown(
         f'<div class="showcase-section reveal" style="padding-top:2px;text-align:center;">'
-        f'<svg viewBox="0 0 320 214" width="460" height="308" xmlns="http://www.w3.org/2000/svg" style="opacity:.92;max-width:92vw;height:auto;">'
-        f'<line x1="105" y1="133" x2="204" y2="74" stroke="#9A7B4F" stroke-width="1.5" stroke-dasharray="5 4"/>'
-        f'<circle cx="240" cy="52" r="38" fill="rgba(154,123,79,.14)" stroke="#8A6A3C" stroke-width="1.6"/>'
-        f'<circle cx="240" cy="52" r="32" fill="none" stroke="rgba(154,123,79,.35)" stroke-width="1"/>'
-        f'<circle cx="76" cy="150" r="30" fill="rgba(63,59,53,.10)" stroke="#3F3B35" stroke-width="1.6"/>'
-        f'<circle cx="76" cy="150" r="24" fill="none" stroke="rgba(63,59,53,.3)" stroke-width="1"/>'
-        f'<text x="240" y="56" text-anchor="middle" font-family="Helvetica Neue" font-size="10.5" letter-spacing="1.4" fill="#3F3B35">CIRCLE 1</text>'
-        f'<text x="76" y="154" text-anchor="middle" font-family="Helvetica Neue" font-size="8.5" letter-spacing="1.2" fill="#3F3B35">CIRCLE 2</text>'
-        f'<text x="240" y="108" text-anchor="middle" font-family="Georgia" font-size="11" fill="#6B6459">{_bv_sk_a}</text>'
-        f'<text x="76" y="200" text-anchor="middle" font-family="Georgia" font-size="11" fill="#6B6459">{_bv_sk_b}</text>'
+        # The pairing drawn as the equation it actually is. w1*s1 = w2*s2 says
+        # two blocks of (capital x volatility) have EQUAL AREA, so that is the
+        # picture: one wide-and-short, one narrow-and-tall, same area, sharing
+        # a baseline. The old two-circles-and-a-line was decorative - the radii
+        # carried no quantity and the line asserted a relationship instead of
+        # showing one. Here the geometry is exact: 120x36 and 40x108 are both
+        # 4320, a true 3:1, which is the plaque's own sentence ("three times as
+        # volatile gets one third the capital") made visible.
+        # Schematic on purpose - no ticks, no numbers, qualitative axes only,
+        # so it can never be mistaken for a live chart of the user's book.
+        f'<svg viewBox="0 0 360 200" width="460" height="256" xmlns="http://www.w3.org/2000/svg" style="opacity:.96;max-width:92vw;height:auto;">'
+        f'<line x1="34" y1="152" x2="330" y2="152" stroke="#C4BDAE" stroke-width="1"/>'
+        f'<line x1="34" y1="24" x2="34" y2="152" stroke="#C4BDAE" stroke-width="1"/>'
+        f'<rect x="60" y="116" width="120" height="36" fill="rgba(63,59,53,.10)" stroke="#3F3B35" stroke-width="1.2"/>'
+        f'<rect x="248" y="44" width="40" height="108" fill="rgba(154,123,79,.20)" stroke="#8A6A3C" stroke-width="1.4"/>'
+        f'<text x="214" y="105" text-anchor="middle" font-family="Georgia" font-size="17" fill="#8A6A3C">=</text>'
+        f'<text x="42" y="17" font-family="Helvetica Neue" font-size="7.5" letter-spacing="1.5" fill="#9A7B4F">VOLATILITY</text>'
+        f'<text x="330" y="167" text-anchor="end" font-family="Helvetica Neue" font-size="7.5" letter-spacing="1.5" fill="#9A7B4F">CAPITAL</text>'
+        f'<text x="120" y="172" text-anchor="middle" font-family="Helvetica Neue" font-size="8.5" letter-spacing="1.6" fill="#9A7B4F">02</text>'
+        f'<text x="120" y="190" text-anchor="middle" font-family="Georgia" font-size="11.5" fill="#6B6459">{_bv_sk_b}</text>'
+        f'<text x="268" y="172" text-anchor="middle" font-family="Helvetica Neue" font-size="8.5" letter-spacing="1.6" fill="#9A7B4F">01</text>'
+        f'<text x="268" y="190" text-anchor="middle" font-family="Georgia" font-size="11.5" fill="#6B6459">{_bv_sk_a}</text>'
         f'</svg>'
         f'<div style="font-family:Georgia;font-size:12.5px;color:#6B6459;max-width:560px;margin:2px auto 0;">'
-        f'{"Shorting flips the sketch: Circle 1 is the position you are against, and Circle 2 - a correlated long - cushions the squeeze. Short losses can exceed 100%; borrow costs are not modeled." if bearish else "Circle 1 rides high and volatile; Circle 2 is the steadier partner this engine is built to find."}'
+        f'{"Shorting flips the sketch: block 01 is the position you are against, block 02 a correlated long that cushions the squeeze. Equal areas, equal risk share. Short losses can exceed 100%; borrow costs are not modeled." if bearish else "Block 01 is narrow and tall - little capital, high volatility. Block 02 is wide and short. Equal areas, so each name carries the same share of the risk."}'
         f'</div>'
         f'<a href="#engine" class="cta-btn" style="margin-top:14px;">'
         f'To the engine &darr;</a>'
