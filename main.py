@@ -13,6 +13,7 @@ so the engine speaks to any audience - not just one watchlist.
 
 import base64
 import html
+import os
 
 import numpy as np
 import pandas as pd
@@ -49,6 +50,8 @@ from src.pairing import (anchor_rank, backtest_pair, crisis_cushion,
                          tail_gap, DEFENSIVE_ANCHOR_TICKERS)
 from src.covariance import estimate_covariance
 from src.topology import build_map_payload, war_room_html
+from src.observability import (log_incident, log_session_start,
+                               new_session_ref, setup_logging)
 from src.eigenrisk import eigen_factors, marcenko_pastur_bounds, pc1_exposure
 from src.scenarios import HISTORICAL_REGIMES, replay_returns
 from src.liquidity import (days_to_liquidate, liquidity_profile,
@@ -69,6 +72,33 @@ from src.conviction import (
 )
 
 st.set_page_config(page_title="Meleona", layout="wide")
+
+# ---- Operations: kill switch, crash wire, session reference ----------------
+# SUPPORT_EMAIL is the one place the contact address lives; the footer, the
+# maintenance page and the error copy all read it from here.
+SUPPORT_EMAIL = "john4000.nguyen@gmail.com"
+
+# Kill switch. Set MELEONA_MAINTENANCE=1 in the host's environment and the next
+# page load serves this notice instead of the engine - no redeploy, no code
+# change, and it takes effect for everyone at once. MELEONA_MAINTENANCE_NOTE
+# optionally carries a one-line reason for visitors.
+if os.getenv("MELEONA_MAINTENANCE", "").strip().lower() in {"1", "true", "yes", "on"}:
+    st.title("Meleona is briefly offline")
+    st.write(os.getenv("MELEONA_MAINTENANCE_NOTE")
+             or "The engine is paused for maintenance. Please check back shortly.")
+    st.caption(f"Questions: {SUPPORT_EMAIL}")
+    st.stop()
+
+# Crash wire: attach the rotating log handler once, mint a per-session
+# reference, and record the session start. The reference shows in the footer so
+# a visitor reporting a problem can quote it and the operator can grep for that
+# exact session - the same correlation a hosted crash reporter gives, without
+# shipping anything about the visitor to a third party.
+setup_logging()
+if "session_ref" not in st.session_state:
+    st.session_state.session_ref = new_session_ref()
+    log_session_start(st.session_state.session_ref)
+SESSION_REF = st.session_state.session_ref
 
 # ---- Minimal institutional styling ----
 # Page background, slider color, and expander shade are set in .streamlit/config.toml.
@@ -3262,6 +3292,38 @@ with tab_lineage:
     )
     st.dataframe(pd.DataFrame(audit_log), width="stretch", hide_index=True)
 
+    # ---- Your data: the honest version of a "delete my account" control ----
+    panel_head("Your data", "What this app holds about you, and how to clear it")
+    st.markdown(
+        "**There is no account to delete, because there is no account.** "
+        "Meleona has no sign-up, no login, no password, no cookie beyond the "
+        "one Streamlit uses to keep this browser tab connected, and no "
+        "analytics or advertising SDK of any kind.\n\n"
+        f"- **Held in this session (memory only, gone when you close the tab):** "
+        f"the tickers you chose, the widget settings above, and the reference "
+        f"`{SESSION_REF}`, which is random and is not linked to you.\n"
+        "- **Held on the server:** cached Yahoo Finance price files, named by a "
+        "hash of the ticker set. They are public market data, shared by every "
+        "visitor who picks the same basket, and contain nothing about you.\n"
+        "- **Logs:** errors and a session-start line, tagged with the reference "
+        "above so a support email can be matched to a stack trace. They rotate "
+        "away on size and carry no personal data.\n"
+        "- **Sent to third parties:** nothing about you. The server fetches "
+        "prices from Yahoo Finance and, for ISIN lookups, Business Insider - "
+        "your browser talks only to this app.\n\n"
+        f"Questions, or want the logs for your reference purged early? Email "
+        f"[{SUPPORT_EMAIL}](mailto:{SUPPORT_EMAIL}) and quote `{SESSION_REF}`."
+    )
+    if st.button("Clear this session's data", key="wipe_session"):
+        # Deliberately session-scoped: it clears what THIS browser holds. It
+        # does not clear the shared market-data cache - that is an operator
+        # action, and visitors are viewers here (see .streamlit/config.toml).
+        keep = st.session_state.session_ref
+        st.session_state.clear()
+        st.session_state.session_ref = keep
+        st.success("Session settings cleared. Reloading with defaults.")
+        st.rerun()
+
 # ---- Signal Lab: does a simple signal actually carry information? ----
 with tab_signals:
     # Method greeting folds to one line so a cold viewer meets the three
@@ -3475,8 +3537,15 @@ st.markdown("""
     <div>Meleona &middot; Portfolio Risk Engine &middot; &copy; 2026 John Nguyen</div>
     <div>Live end-of-day data: Yahoo Finance &middot; Educational analysis, not investment advice</div>
   </div>
+  <div class="f-bar">
+    <div>Support: <a href="mailto:__SUPPORT__?subject=Meleona%20%E2%80%93%20session%20__REF__">__SUPPORT__</a>
+      &middot; <a href="https://github.com/ricepillow3000/Summer-2026-Quant-Project-Risk-Engine-Blueprint/blob/main/PRIVACY.md">Privacy</a>
+      &middot; <a href="https://github.com/ricepillow3000/Summer-2026-Quant-Project-Risk-Engine-Blueprint/blob/main/TERMS.md">Terms</a></div>
+    <div>No accounts &middot; no tracking &middot; session reference <code>__REF__</code> (quote it when you write in)</div>
+  </div>
 </div>
-""", unsafe_allow_html=True)
+""".replace("__SUPPORT__", SUPPORT_EMAIL).replace("__REF__", SESSION_REF),
+    unsafe_allow_html=True)
 
 # ---- Book-glide: eased anchor scrolling on the REAL scroll container ----
 # Streamlit scrolls its own <section>, so `scroll-behavior` on <html> never

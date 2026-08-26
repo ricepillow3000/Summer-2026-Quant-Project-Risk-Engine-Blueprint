@@ -221,6 +221,27 @@ risk-engine/
   surface, and read as checklist-following in an interview.
   5 new regression tests (108/108); batch audit still 404/404.
 
+- ✅ **Launch readiness pass** (2026-08-26) - the pre-beta checklist, mapped
+  onto an app with no accounts, no database, no payments, no LLM calls and no
+  outbound email. Built: crash wire (`src/observability.py`: rotating local
+  log, per-session reference in the footer, `log_incident()`; no third-party
+  SDK, because one would contradict the privacy note it sits beside), kill
+  switch (`MELEONA_MAINTENANCE=1` serves a maintenance page and stops before
+  any data call), outbound spend cap (`netguard.MAX_REQUESTS_PER_DAY`, charged
+  at the single chokepoint, degrading to cached data on exhaustion instead of
+  hammering Yahoo), a "Your data" privacy panel with a session-clear control
+  (the honest form of "delete my account" when there is no account), and a
+  footer carrying support/privacy/terms plus the session reference. Docs:
+  `PRIVACY.md`, `TERMS.md`, `SUPPORT.md`, `RUNBOOK.md` (kill switch, rollback,
+  crash triage, budgets, phased release, reviewer walkthrough, and the
+  SPF/DKIM/DMARC records for the day a custom domain exists) and
+  `LAUNCH_CHECKLIST.md` (all 19 asks, each built or marked N/A with its
+  reason and its trigger). N/A and stated as such: test sign-up, LLM credit
+  balance, database restore, demo accounts, restore purchases, reinstall
+  behaviour, sandbox keys, SPF/DKIM/DMARC today. 4 new regression tests
+  (112/112) covering the crash wire, the spend cap, the kill switch ordering
+  and the load-bearing claims in the policy docs.
+
 - ⬜ **Phase VI** - deploy to Railway/Render for the live recruiter link
   (Procfile + requirements.txt already set up)
 

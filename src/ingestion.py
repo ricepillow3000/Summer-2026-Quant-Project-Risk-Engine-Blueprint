@@ -28,7 +28,8 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 
-from src.netguard import guarded_session
+from src.netguard import (BudgetExhausted, budget_status, check_budget,
+                          guarded_session)
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 
@@ -219,6 +220,9 @@ def _download_close_volume(tickers: list[str], period: str) -> tuple[pd.DataFram
     """
     # Every outbound call goes through the egress allowlist (src/netguard.py):
     # the ticker funnel below is the primary control, this is the second line.
+    # The budget is checked up front so an exhausted cap reads as a cap, not as
+    # a mysterious "possibly delisted" from inside yfinance.
+    check_budget()
     raw = yf.download(tickers, period=period, auto_adjust=True, progress=False,
                       repair=True, timeout=30, session=guarded_session())
     if isinstance(raw.columns, pd.MultiIndex):
@@ -303,7 +307,17 @@ def fetch_prices(tickers: list[str] | None = None, period: str = "2y",
     if use_cache and os.path.exists(cache_path) and _cache_is_fresh(meta_path, max_age_hours):
         return pd.read_parquet(cache_path)
 
-    close, volume = _download_close_volume(tickers, period)
+    try:
+        close, volume = _download_close_volume(tickers, period)
+    except BudgetExhausted:
+        # The spend cap is spent. Degrade to stale cache rather than hammering
+        # a feed that is already rate-limiting us - and let the provenance
+        # panel keep reading the old .meta.json, so the page says how old the
+        # data is instead of pretending it is live. With no cache at all there
+        # is nothing honest to show, so the error stands.
+        if use_cache and os.path.exists(cache_path):
+            return pd.read_parquet(cache_path)
+        raise
     prices = _clean_price_frame(close, align)
     if prices.empty:
         raise RuntimeError("No overlapping price history for that universe.")

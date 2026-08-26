@@ -81,6 +81,18 @@ risk-engine/
 
 ---
 
+## Operations, support and policies
+
+- **Support:** john4000.nguyen@gmail.com - quote the session reference shown in
+  the page footer and it maps straight to that session's logs (`SUPPORT.md`).
+- **Policies:** `PRIVACY.md` (no accounts, no tracking, no third-party SDKs)
+  and `TERMS.md` (educational analysis, not investment advice).
+- **Runbook:** `RUNBOOK.md` - kill switch, hotfix/rollback, crash triage,
+  outbound spend caps, phased release, reviewer walkthrough.
+- **Launch checklist:** `LAUNCH_CHECKLIST.md` - every pre-launch item, what was
+  built, and what is deliberately not applicable to an app with no accounts,
+  no database, no payments and no email.
+
 ## Security posture
 
 The app is public, anonymous and single-process, so the threat model is

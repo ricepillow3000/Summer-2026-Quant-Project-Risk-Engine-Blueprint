@@ -54,6 +54,16 @@ No accounts, no roles, no secrets, no database - so the threat model is resource
 
 Two things are deliberately absent and should stay absent unless the app gains the surface: constant-time comparison (nothing secret is compared) and query depth/complexity limiting (no query language - `MAX_UNIVERSE` is its analogue). Adding either without a matching surface is checklist theatre and reads that way in an interview. When touching this area, keep the funnel first: widening `VALID_TICKER` weakens every downstream sink at once.
 
+## Launch operations
+
+- **Kill switch:** `MELEONA_MAINTENANCE=1` (plus optional `MELEONA_MAINTENANCE_NOTE`) in the host environment serves a maintenance page and `st.stop()`s before any market-data call. No redeploy.
+- **Crash wire:** `src/observability.py` - rotating local log under `logs/` (gitignored), one random `session_ref` per browser session shown in the page footer, `log_incident()` for handled failures. Deliberately NOT a hosted SDK: shipping visitor data to a vendor would contradict `PRIVACY.md`.
+- **Spend caps:** `netguard.MAX_REQUESTS_PER_DAY` charged at the single outbound chokepoint; exhaustion degrades `fetch_prices` to cached data rather than hammering Yahoo. `ingestion.MAX_UNIVERSE` and the cache size caps bound compute and disk.
+- **Support:** `SUPPORT_EMAIL` in `main.py` is the single source - footer, maintenance page and the privacy panel all read it. Users quote the session reference; `RUNBOOK.md` §3 turns it into a traceback.
+- **Docs:** `PRIVACY.md`, `TERMS.md`, `SUPPORT.md`, `RUNBOOK.md` (kill switch, rollback, triage, budgets, phased release, reviewer path, SPF/DKIM/DMARC for the day a domain exists) and `LAUNCH_CHECKLIST.md` (every launch ask, built or N/A with the reason).
+
+There is no database, no account, no payment and no email sending. When a launch-checklist item assumes one of those, the honest move is to build the analogue and say plainly why the original does not apply - see the N/A column in `LAUNCH_CHECKLIST.md`. Adding an account-deletion flow with no accounts, or SPF records with no sending domain, is theatre.
+
 ## Non-negotiable project constraints
 
 These come from the project's design intent and should guide any feature work, not just be treated as style preferences:

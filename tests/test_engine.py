@@ -1884,6 +1884,94 @@ def test_deploy_config_keeps_the_visitor_out_of_the_operator_seat():
     assert settings["headless"] == "true"
 
 
+# --- launch readiness (2026-08-26) ------------------------------------------
+
+def test_crash_wire_correlates_a_session_reference_to_a_traceback():
+    """The beta-test crash wire: a user quotes the footer reference, the
+    operator finds that exact traceback."""
+    from src.observability import (log_incident, log_session_start,
+                                   new_session_ref, recent_incidents,
+                                   setup_logging)
+
+    setup_logging()
+    ref = new_session_ref()
+    assert len(ref) == 8 and ref.isalnum()
+    log_session_start(ref, "regression test")
+    try:
+        raise RuntimeError("synthetic failure for the crash wire")
+    except RuntimeError as exc:
+        assert log_incident(ref, "test", exc) == ref
+    hit = [line for line in recent_incidents(50) if ref in line]
+    assert hit, "incident never reached the log"
+    assert "RuntimeError" in hit[-1]
+    # Two sessions must not collide - the reference is what makes a support
+    # email findable at all.
+    assert new_session_ref() != ref
+
+
+def test_outbound_spend_cap_charges_then_refuses():
+    """The API spend cap: counted at the one chokepoint, refuses when spent,
+    and reports what is left."""
+    import src.netguard as netguard
+
+    original_cap, original_spent = netguard.MAX_REQUESTS_PER_DAY, dict(netguard._SPENT)
+    try:
+        netguard.MAX_REQUESTS_PER_DAY = 3
+        netguard._SPENT.update({"day": 0.0, "count": 0.0})
+        netguard.check_budget()                    # budget available: no raise
+        for _ in range(3):
+            netguard._charge_budget()
+        assert netguard.budget_status() == {"spent": 3, "remaining": 0, "cap": 3}
+        for call in (netguard.check_budget, netguard._charge_budget):
+            try:
+                call()
+            except netguard.BudgetExhausted:
+                pass
+            else:
+                raise AssertionError(f"{call.__name__} ignored an exhausted budget")
+    finally:
+        netguard.MAX_REQUESTS_PER_DAY = original_cap
+        netguard._SPENT.update(original_spent)
+
+
+def test_kill_switch_and_support_address_are_wired():
+    """The kill switch must stop the script BEFORE any market-data call, and
+    the support address must live in exactly one place."""
+    source = (pathlib.Path(__file__).resolve().parent.parent
+              / "main.py").read_text(encoding="utf-8")
+    assert 'os.getenv("MELEONA_MAINTENANCE"' in source
+    kill = source.index("MELEONA_MAINTENANCE")
+    assert "st.stop()" in source[kill:kill + 900], "maintenance mode never stops the run"
+    assert kill < source.index("load_universe("), "kill switch runs after a data call"
+    assert source.count('SUPPORT_EMAIL = "') == 1, "support address is duplicated"
+    assert "john4000.nguyen@gmail.com" in source
+    # setup_logging() must run before anything can fail interestingly
+    assert source.index("setup_logging()") < source.index("with tab_3d:")
+
+
+def test_launch_documents_exist_and_say_the_load_bearing_things():
+    """Policies a public deploy needs, checked for the claims the app relies
+    on rather than for mere existence."""
+    root = pathlib.Path(__file__).resolve().parent.parent
+    privacy = (root / "PRIVACY.md").read_text(encoding="utf-8").lower()
+    terms = (root / "TERMS.md").read_text(encoding="utf-8").lower()
+    support = (root / "SUPPORT.md").read_text(encoding="utf-8").lower()
+    runbook = (root / "RUNBOOK.md").read_text(encoding="utf-8").lower()
+    checklist = (root / "LAUNCH_CHECKLIST.md").read_text(encoding="utf-8").lower()
+
+    for doc in (privacy, terms, support, checklist):
+        assert "john4000.nguyen@gmail.com" in doc
+    assert "no sign-up" in privacy and "session reference" in privacy
+    assert "yahoo finance" in privacy and "business insider" in privacy
+    assert "not investment advice" in terms
+    assert "session reference" in support
+    for section in ("kill switch", "meleona_maintenance", "rollback",
+                    "phased release", "dmarc", "spf"):
+        assert section in runbook, f"runbook missing: {section}"
+    # The checklist must stay honest about what does NOT apply here.
+    assert "n/a" in checklist and "llm" in checklist
+
+
 if __name__ == "__main__":
     import sys
 

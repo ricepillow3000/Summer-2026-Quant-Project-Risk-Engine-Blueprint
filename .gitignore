@@ -10,6 +10,10 @@ data/*.json
 # Local logs
 streamlit.log
 
+# Crash wire (src/observability.py): tracebacks and session refs, rotated
+# locally. Diagnostics, never an artifact - and never committed.
+logs/
+
 # Local agent-tool state
 .claude/
 

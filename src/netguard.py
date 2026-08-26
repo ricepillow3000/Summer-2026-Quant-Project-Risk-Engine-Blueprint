@@ -23,6 +23,7 @@ Design notes:
 - Scheme must be https: no http, no file://, no gopher://.
 """
 
+import time
 from urllib.parse import urlparse
 
 from curl_cffi import requests as _curl
@@ -50,8 +51,68 @@ ALLOWED_HOSTS = frozenset({
 IMPERSONATE = "chrome"
 
 
+# --- outbound budget --------------------------------------------------------
+# The spend cap, for an engine whose only external dependency is free. There
+# is no metered API and no LLM here (project constraint #1: no LLM-originated
+# data, ever), so nothing bills by the token - but Yahoo rate-limits and then
+# BANS by IP, and on a shared free-tier egress address that is the outage this
+# app can actually inflict on itself. So the budget is denominated in requests
+# per day rather than dollars, enforced at the same chokepoint as the
+# allowlist, and exhausting it degrades to cached data instead of hammering
+# the feed. If a paid feed is ever added, its key belongs behind this counter.
+MAX_REQUESTS_PER_DAY = 5000
+_SPENT: dict[str, float] = {"day": 0.0, "count": 0.0}
+
+
 class EgressBlocked(RuntimeError):
     """Raised when something tried to reach a host outside the allowlist."""
+
+
+class BudgetExhausted(RuntimeError):
+    """Raised when the daily outbound-request budget is spent."""
+
+
+def _day_number() -> float:
+    return float(int(time.time() // 86400))
+
+
+def budget_status() -> dict:
+    """Requests spent today and what is left - surfaced in the provenance UI."""
+    if _SPENT["day"] != _day_number():
+        return {"spent": 0, "remaining": MAX_REQUESTS_PER_DAY,
+                "cap": MAX_REQUESTS_PER_DAY}
+    spent = int(_SPENT["count"])
+    return {"spent": spent, "remaining": max(0, MAX_REQUESTS_PER_DAY - spent),
+            "cap": MAX_REQUESTS_PER_DAY}
+
+
+def check_budget(needed: int = 1) -> None:
+    """
+    Raise BudgetExhausted BEFORE starting a fetch that has no budget left.
+
+    The in-session charge below also guards every individual request, but
+    yfinance catches transport errors itself and reports them as "possibly
+    delisted", so a caller that only relied on the per-request charge would
+    see a confusing data error instead of a budget message. Checking up front
+    is what makes the cap legible.
+    """
+    status = budget_status()
+    if status["remaining"] < needed:
+        raise BudgetExhausted(
+            f"daily outbound budget of {status['cap']} market-data requests is "
+            "spent; serving cached data until it resets at UTC midnight")
+
+
+def _charge_budget() -> None:
+    """Count one outbound request, rolling over at UTC midnight."""
+    today = _day_number()
+    if _SPENT["day"] != today:
+        _SPENT["day"], _SPENT["count"] = today, 0.0
+    if _SPENT["count"] >= MAX_REQUESTS_PER_DAY:
+        raise BudgetExhausted(
+            f"daily outbound budget of {MAX_REQUESTS_PER_DAY} market-data "
+            "requests is spent; serving cached data until it resets")
+    _SPENT["count"] += 1.0
 
 
 def host_allowed(url: str) -> bool:
@@ -68,6 +129,7 @@ class _GuardedSession(_curl.Session):
             raise EgressBlocked(
                 f"blocked outbound {method} to {urlparse(url).hostname!r} - "
                 "not on the market-data allowlist")
+        _charge_budget()
         response = super().request(method, url, *args, **kwargs)
         final = getattr(response, "url", url)
         if not host_allowed(str(final)):
@@ -99,3 +161,4 @@ if __name__ == "__main__":
         else:                                  # pragma: no cover - would be a bug
             raise SystemExit(f"NOT BLOCKED: {bad}")
     print("egress allowlist holds")
+    print("budget:", budget_status())
