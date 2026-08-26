@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-08-26T202832Z",
+  "generated_utc": "2026-08-26T203339Z",
   "universes": [
     "Hedge-fund favorites (13F-popular)",
     "Mega-cap tech (Mag 7 + QQQ)",
@@ -13,9 +13,9 @@
     "Global macro (multi-asset ETFs)",
     "Small-cap liquidity stress (thin volume)"
   ],
-  "checks": 393,
+  "checks": 404,
   "failed": 0,
-  "warned": 0,
+  "warned": 1,
   "paths_per_map_simulation": 20000,
   "results": [
     {
@@ -273,6 +273,14 @@
       "status": "PASS",
       "detail": "state variance calm 0.05114 < base 0.10118 < stress 0.20557 (disclosed shock multipliers 0.7 / 1.4, +0.10 shock correlation under stress)",
       "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-12",
+      "scope": "Hedge-fund favorites (13F-popular)",
+      "check": "realized state lands where the map predicted",
+      "status": "PASS",
+      "detail": "walk-forward over 58 dates (30d ahead, refit each time on prior data only): 41.4% inside the 68.3% ring, 79.3% inside the 95.4% ring; median Mahalanobis distance 1.64 (chi2(2) median 1.18)",
+      "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
     },
     {
       "id": "MAP-11",
@@ -555,6 +563,14 @@
       "source": "This engine's own code, re-derived independently by this audit"
     },
     {
+      "id": "MAP-12",
+      "scope": "Mega-cap tech (Mag 7 + QQQ)",
+      "check": "realized state lands where the map predicted",
+      "status": "PASS",
+      "detail": "walk-forward over 58 dates (30d ahead, refit each time on prior data only): 63.8% inside the 68.3% ring, 98.3% inside the 95.4% ring; median Mahalanobis distance 1.20 (chi2(2) median 1.18)",
+      "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
+    },
+    {
       "id": "MAP-11",
       "scope": "Mega-cap tech (Mag 7 + QQQ)",
       "check": "every linkage number replayed from raw returns",
@@ -833,6 +849,14 @@
       "status": "PASS",
       "detail": "state variance calm 0.03606 < base 0.07135 < stress 0.14461 (disclosed shock multipliers 0.7 / 1.4, +0.10 shock correlation under stress)",
       "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-12",
+      "scope": "Multi-sector blue chips (institutional-style)",
+      "check": "realized state lands where the map predicted",
+      "status": "PASS",
+      "detail": "walk-forward over 58 dates (30d ahead, refit each time on prior data only): 53.4% inside the 68.3% ring, 74.1% inside the 95.4% ring; median Mahalanobis distance 1.40 (chi2(2) median 1.18)",
+      "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
     },
     {
       "id": "MAP-11",
@@ -1115,6 +1139,14 @@
       "source": "This engine's own code, re-derived independently by this audit"
     },
     {
+      "id": "MAP-12",
+      "scope": "Index core (S&P 500 & broad market ETFs)",
+      "check": "realized state lands where the map predicted",
+      "status": "PASS",
+      "detail": "walk-forward over 58 dates (30d ahead, refit each time on prior data only): 82.8% inside the 68.3% ring, 87.9% inside the 95.4% ring; median Mahalanobis distance 1.05 (chi2(2) median 1.18)",
+      "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
+    },
+    {
       "id": "MAP-11",
       "scope": "Index core (S&P 500 & broad market ETFs)",
       "check": "every linkage number replayed from raw returns",
@@ -1387,6 +1419,14 @@
       "source": "This engine's own code, re-derived independently by this audit"
     },
     {
+      "id": "MAP-12",
+      "scope": "S&P sector ETFs",
+      "check": "realized state lands where the map predicted",
+      "status": "PASS",
+      "detail": "walk-forward over 58 dates (30d ahead, refit each time on prior data only): 53.4% inside the 68.3% ring, 82.8% inside the 95.4% ring; median Mahalanobis distance 1.45 (chi2(2) median 1.18)",
+      "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
+    },
+    {
       "id": "MAP-11",
       "scope": "S&P sector ETFs",
       "check": "every linkage number replayed from raw returns",
@@ -1657,6 +1697,14 @@
       "status": "PASS",
       "detail": "state variance calm 0.04742 < base 0.09426 < stress 0.19086 (disclosed shock multipliers 0.7 / 1.4, +0.10 shock correlation under stress)",
       "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-12",
+      "scope": "FX majors",
+      "check": "realized state lands where the map predicted",
+      "status": "PASS",
+      "detail": "walk-forward over 58 dates (30d ahead, refit each time on prior data only): 69.0% inside the 68.3% ring, 93.1% inside the 95.4% ring; median Mahalanobis distance 1.22 (chi2(2) median 1.18)",
+      "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
     },
     {
       "id": "MAP-11",
@@ -1939,6 +1987,14 @@
       "source": "This engine's own code, re-derived independently by this audit"
     },
     {
+      "id": "MAP-12",
+      "scope": "Futures (index & commodity)",
+      "check": "realized state lands where the map predicted",
+      "status": "PASS",
+      "detail": "walk-forward over 58 dates (30d ahead, refit each time on prior data only): 34.5% inside the 68.3% ring, 67.2% inside the 95.4% ring; median Mahalanobis distance 1.93 (chi2(2) median 1.18)",
+      "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
+    },
+    {
       "id": "MAP-11",
       "scope": "Futures (index & commodity)",
       "check": "every linkage number replayed from raw returns",
@@ -2217,6 +2273,14 @@
       "status": "PASS",
       "detail": "state variance calm 0.02687 < base 0.05288 < stress 0.10786 (disclosed shock multipliers 0.7 / 1.4, +0.10 shock correlation under stress)",
       "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-12",
+      "scope": "Rates & credit (ETF proxies)",
+      "check": "realized state lands where the map predicted",
+      "status": "PASS",
+      "detail": "walk-forward over 58 dates (30d ahead, refit each time on prior data only): 56.9% inside the 68.3% ring, 81.0% inside the 95.4% ring; median Mahalanobis distance 1.45 (chi2(2) median 1.18)",
+      "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
     },
     {
       "id": "MAP-11",
@@ -2499,6 +2563,14 @@
       "source": "This engine's own code, re-derived independently by this audit"
     },
     {
+      "id": "MAP-12",
+      "scope": "Commodities & real assets",
+      "check": "realized state lands where the map predicted",
+      "status": "WARN",
+      "detail": "walk-forward over 58 dates (30d ahead, refit each time on prior data only): 32.8% inside the 68.3% ring, 63.8% inside the 95.4% ring; median Mahalanobis distance 1.84 (chi2(2) median 1.18)",
+      "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
+    },
+    {
       "id": "MAP-11",
       "scope": "Commodities & real assets",
       "check": "every linkage number replayed from raw returns",
@@ -2779,6 +2851,14 @@
       "source": "This engine's own code, re-derived independently by this audit"
     },
     {
+      "id": "MAP-12",
+      "scope": "Global macro (multi-asset ETFs)",
+      "check": "realized state lands where the map predicted",
+      "status": "PASS",
+      "detail": "walk-forward over 58 dates (30d ahead, refit each time on prior data only): 41.4% inside the 68.3% ring, 81.0% inside the 95.4% ring; median Mahalanobis distance 1.71 (chi2(2) median 1.18)",
+      "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
+    },
+    {
       "id": "MAP-11",
       "scope": "Global macro (multi-asset ETFs)",
       "check": "every linkage number replayed from raw returns",
@@ -3057,6 +3137,14 @@
       "status": "PASS",
       "detail": "state variance calm 0.05496 < base 0.11204 < stress 0.22015 (disclosed shock multipliers 0.7 / 1.4, +0.10 shock correlation under stress)",
       "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-12",
+      "scope": "Small-cap liquidity stress (thin volume)",
+      "check": "realized state lands where the map predicted",
+      "status": "PASS",
+      "detail": "walk-forward over 58 dates (30d ahead, refit each time on prior data only): 63.8% inside the 68.3% ring, 82.8% inside the 95.4% ring; median Mahalanobis distance 1.19 (chi2(2) median 1.18)",
+      "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
     },
     {
       "id": "MAP-11",

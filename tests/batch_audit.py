@@ -557,10 +557,81 @@ def audit_map(name: str, ctx: dict, n_paths: int) -> None:
         shown.append(f"{fl}->{an}: rho {rho:+.3f}, w_flyer {w_a:.3f}, ES solo "
                      f"{expect['esSolo']:.3%} vs paired {expect['esPair']:.3%}, "
                      f"drawdown cushion {expect['cushion']:+.3%} over {len(j)}d")
+    audit_map_state_coverage(name, state)
+
     record("MAP-11", name, "every linkage number replayed from raw returns",
            bool(payload["pairs"]) and not bad,
            "; ".join(bad[:3]) if bad else "; ".join(shown[:2])
            + f" ({len(payload['pairs'])} linkages re-derived)", "acerbi")
+
+
+def audit_map_state_coverage(name: str, state: pd.DataFrame,
+                             horizon: int = 30, step: int = 5) -> None:
+    """
+    MAP-12 - the only check that asks whether the terrain is TRUE, not merely
+    internally exact. Everything above proves the map draws its calibration
+    correctly; this walks history forward and asks whether the state actually
+    landed where the map said it would.
+
+    At each historical date t (every `step` days), the OU parameters are fitted
+    ONLY on state observations strictly before t, the closed-form transition
+    gives the predicted mean and covariance of (beta, ln vol) at t + horizon,
+    and the REALIZED state at t + horizon is scored by Mahalanobis distance.
+    Under the model d^2 ~ chi2(2), so the share of dates inside the 68.3% and
+    95.4% rings should match those labels.
+
+    Reported as WARN, never FAIL: the windows overlap heavily (a 2y sample
+    holds ~14 independent 30-day blocks), so the coverage estimate is noisy by
+    construction, and a real regime shift SHOULD push coverage down. It is
+    evidence about the map, not a gate on the build.
+    """
+    b = state["beta"]
+    lv = np.log(state["vol"])
+    idx, hits68, hits95, n = [], 0, 0, 0
+    r68 = float(np.sqrt(sstats.chi2.ppf(0.683, 2)))
+    r95 = float(np.sqrt(sstats.chi2.ppf(0.954, 2)))
+    for t in range(MIN_OBS, len(state) - horizon, step):
+        try:
+            fb = fit_ou(b.iloc[:t])
+            fv = fit_ou(lv.iloc[:t])
+        except ValueError:
+            continue
+        rho = float(pd.concat([fb["resid"], fv["resid"]], axis=1).dropna()
+                    .corr().iloc[0, 1])
+        if not np.isfinite(rho):
+            rho = 0.0
+        p = {"thB": fb["theta"], "sigB": fb["sigma"],
+             "thV": fv["theta"], "etaV": fv["sigma"], "rho": rho}
+        th = _ou_end_moments(p, fb["mu"], float(np.exp(fv["mu"])),
+                             float(b.iloc[t - 1]), float(state["vol"].iloc[t - 1]),
+                             horizon)
+        cov = np.array([[th["beta_var"], th["cov_beta_lnvol"]],
+                        [th["cov_beta_lnvol"], th["lnvol_var"]]])
+        if np.linalg.det(cov) <= 0:
+            continue
+        d = np.array([float(b.iloc[t - 1 + horizon]) - th["beta_mean"],
+                      float(lv.iloc[t - 1 + horizon]) - th["lnvol_mean"]])
+        maha = float(np.sqrt(d @ np.linalg.inv(cov) @ d))
+        hits68 += maha <= r68
+        hits95 += maha <= r95
+        n += 1
+        idx.append(maha)
+    if n < 10:
+        record("MAP-12", name, "realized state lands where the map predicted",
+               False, f"only {n} out-of-sample dates available", "engine", warn=True)
+        return
+    c68, c95 = hits68 / n, hits95 / n
+    # ~n/horizon independent blocks: widen the band accordingly, then be lenient.
+    eff = max(3.0, n * step / horizon)
+    band68 = 3 * float(np.sqrt(0.683 * 0.317 / eff))
+    band95 = 3 * float(np.sqrt(0.954 * 0.046 / eff))
+    record("MAP-12", name, "realized state lands where the map predicted",
+           abs(c68 - 0.683) < band68 + 0.12 and abs(c95 - 0.954) < band95 + 0.08,
+           f"walk-forward over {n} dates ({horizon}d ahead, refit each time on "
+           f"prior data only): {c68:.1%} inside the 68.3% ring, {c95:.1%} inside "
+           f"the 95.4% ring; median Mahalanobis distance {float(np.median(idx)):.2f} "
+           f"(chi2(2) median {float(np.sqrt(sstats.chi2.ppf(0.5, 2))):.2f})",
+           "glasserman", warn=True)
 
 
 def audit_map_control(n_paths: int) -> None:

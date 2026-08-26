@@ -147,6 +147,14 @@ risk-engine/
   (rho, equal-risk weight, ES 97.5 solo/paired, drawdown cushion) from raw
   returns. `src/topology.py` was extracted from `main.py` so the audited
   payload IS the shipped payload.
+  MAP-12 is the check that asks whether the terrain is TRUE rather than merely
+  self-consistent: it walks history forward, refits the OU parameters on prior
+  data only, and asks whether the realized state 30 days later landed inside
+  the ring the map would have drawn. Across 11 universes (58 dates each) the
+  68.3% ring covers 33-83% (median ~53%) and the 95.4% ring covers 64-98%
+  (median ~81%) - the terrain is systematically NARROWER than reality, which
+  is the overlapping-rolling-window bias `state_calibration.py` already
+  discloses in prose, now measured. Reported as WARN, never a build gate.
   Live findings, not defects: 99% historical VaR takes zero breaches on
   several baskets (Kupiec rejects as too conservative) and 95% historical VaR
   under-covers on Futures (8.6%) and Global macro (8.0%) - independence
