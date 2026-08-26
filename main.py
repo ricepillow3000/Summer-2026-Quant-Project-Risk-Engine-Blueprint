@@ -36,7 +36,7 @@ from src.ingestion import (
 from src.analytics import correlation_matrix, covariance_matrix
 from src.risk import (
     monte_carlo, jump_diffusion_mc, parametric_var, var_backtest, sharpe_ratio,
-    var, cvar, portfolio_daily_returns, gpd_tail_fit, mcneil_frey_tail,
+    cvar, portfolio_daily_returns, mcneil_frey_tail,
 )
 from src.comovement import (
     correlation_from_cov, rolling_correlation, most_correlated_pair,
@@ -1823,6 +1823,7 @@ def _audit(step: str, detail: str) -> None:
 try:
     prices = load_universe(tuple(tickers))
 except Exception as exc:  # noqa: BLE001 - surface any fetch failure to the user
+    log_incident(SESSION_REF, "load_universe", exc)
     st.error(f"Couldn't load market data: {exc}")
     st.stop()
 
@@ -1961,6 +1962,7 @@ else:
     try:
         shocked_returns = replay_returns(loaded, s_date, e_date)
     except Exception as exc:  # noqa: BLE001
+        log_incident(SESSION_REF, f"replay_returns/{mode}", exc)
         st.error(f"Couldn't load history for {mode}: {exc}")
         st.stop()
     sim_assets = list(shocked_returns.columns)
@@ -2335,6 +2337,7 @@ with tab_3d:
             "replay real history. Simulated estimates, not forecasts."
         )
     except Exception as _wr_exc:  # noqa: BLE001 - never fake the map
+        log_incident(SESSION_REF, "risk_topology", _wr_exc)
         st.info(
             "Risk Topology needs live market history to calibrate "
             f"({type(_wr_exc).__name__}: {_wr_exc}). No demo numbers are "

@@ -14,6 +14,11 @@ streamlit.log
 # locally. Diagnostics, never an artifact - and never committed.
 logs/
 
+# Batch-audit machine dumps: ~3,900 lines of JSON per run, fully regenerable
+# with `python -m tests.batch_audit`. The human-readable .md report of each run
+# IS committed - that is the evidence; the JSON is the raw feed for tooling.
+audit/*.json
+
 # Local agent-tool state
 .claude/
 

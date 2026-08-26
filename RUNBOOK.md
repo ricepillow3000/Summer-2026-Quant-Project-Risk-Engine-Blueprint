@@ -165,9 +165,14 @@ restart-on-failure policy, so the dashboard needs almost nothing:
 
 1. railway.app -> New Project -> Deploy from GitHub repo -> pick
    `Summer-2026-Quant-Project-Risk-Engine-Blueprint`.
-2. Variables -> add `MELEONA_CHANNEL=beta`. Add `MELEONA_SUPPORT_EMAIL` only if
-   the mailbox username differs from `meleona.support@gmail.com`. Leave
-   `MELEONA_MAINTENANCE` unset (it is the kill switch, section 1).
+2. Variables -> add `MELEONA_CHANNEL=beta` and
+   `STREAMLIT_SERVER_FILE_WATCHER_TYPE=none` (nothing edits source on the host,
+   so the watcher is pure overhead and could restart the script under a
+   visitor). Add `MELEONA_SUPPORT_EMAIL` only if the mailbox username differs
+   from `meleona.support@gmail.com`. Leave `MELEONA_MAINTENANCE` unset (it is
+   the kill switch, section 1). The watcher setting is an env var rather than a
+   line in `.streamlit/config.toml` on purpose: that file is shared with local
+   development, where hot reload is wanted.
 3. Settings -> Networking -> Generate Domain. That URL is the beta link.
 4. Deploy. Railway injects `$PORT`; the start command binds it on `0.0.0.0`.
    The first build installs from `requirements.txt` on Python 3.13

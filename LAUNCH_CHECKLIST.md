@@ -41,17 +41,13 @@ notices fastest.
       reference in the footer finds it in `logs/meleona.log`.
 - [ ] Budget counter sane after a browsing session (`budget_status()`).
 - [x] **Create `meleona.support@gmail.com`** - done 2026-08-26.
-- [ ] **Turn on forwarding to the personal inbox** (`RUNBOOK.md` §6b) -
-      blocking. Verified 2026-08-26: no Gmail forwarding-confirmation mail has
-      reached the personal inbox, so forwarding is not yet active. If the
-      username differs from the one above, set `MELEONA_SUPPORT_EMAIL` on the
-      host instead of editing code.
-- [ ] Send a test mail to the project address and confirm it forwards and is
-      labelled.
+- [x] **Turn on forwarding to the personal inbox** - done 2026-08-26.
+- [x] Test mail sent to the project address and confirmed arriving in both
+      mailboxes (2026-08-26).
 - [ ] Set `MELEONA_CHANNEL=beta` on the beta deploy, and unset it for public.
 - [ ] Run `python -m tools.warm_cache` after the deploy so the first visitor
       lands on a warm cache.
-- [ ] Deploy to Railway or Render (`RUNBOOK.md` §6c) with `MELEONA_CHANNEL=beta`
+- [ ] Deploy to Railway (`RUNBOOK.md` §6c) with `MELEONA_CHANNEL=beta`
       and confirm `/_stcore/health` answers.
 - [ ] Walk the deployed page once end to end, then trigger one deliberate error
       and confirm the footer reference finds it in the logs.

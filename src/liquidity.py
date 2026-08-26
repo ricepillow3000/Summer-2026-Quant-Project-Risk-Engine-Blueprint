@@ -138,7 +138,7 @@ def liquidity_adjusted_cvar(cvar: float, full_exit_days: float,
 
 
 if __name__ == "__main__":
-    from src.ingestion import fetch_prices, get_returns, average_dollar_volume
+    from src.ingestion import fetch_prices, average_dollar_volume
 
     prices = fetch_prices()
     loaded = list(prices.columns)

@@ -28,8 +28,7 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 
-from src.netguard import (BudgetExhausted, budget_status, check_budget,
-                          guarded_session)
+from src.netguard import BudgetExhausted, check_budget, guarded_session
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 

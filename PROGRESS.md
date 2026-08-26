@@ -256,6 +256,32 @@ risk-engine/
   `--drill` forces real fetches and prints the cold-refill time, which is the
   recovery-time objective for the only regenerable state this app has. 113/113.
 
+- ✅ **Security review + bloat sweep** (2026-08-26) - support mailbox
+  confirmed working end to end (test mail arrived in BOTH mailboxes), so the
+  last blocking launch item is closed. Project security: `pip-audit` over the
+  full dependency tree reports **no known vulnerabilities**; a secret sweep of
+  every tracked file (key/token/private-key patterns) finds nothing; effective
+  Streamlit settings verified at runtime rather than assumed - static serving
+  off, XSRF and CORS on, tracebacks off, toolbar `viewer`. Added
+  `STREAMLIT_SERVER_FILE_WATCHER_TYPE=none` as a HOST env var rather than a
+  config line, since `.streamlit/config.toml` is shared with local development
+  where hot reload is wanted. Bloat sweep (AST scan for unused imports and
+  unreferenced definitions across every module): removed four dead imports
+  (`var`, `gpd_tail_fit` in main.py, `numpy` in conviction.py - its only `np.`
+  was inside a docstring - `budget_status` in ingestion.py, `get_returns` in
+  liquidity.py); zero unreferenced functions or classes anywhere. The one
+  import that was dead because it was NOT wired, `log_incident`, is now
+  connected to the three visitor-visible failure paths (data load, scenario
+  replay, Risk Topology) so a degraded panel leaves a trace with the session
+  reference instead of failing silently. `_score01` (grit) and `_rank01`
+  (pairing) look like duplicates but differ in NaN and tie handling - left
+  alone deliberately, since merging them would change published numbers.
+  Repo slimmed: the ~3,900-line machine-readable JSON dump per audit run is
+  now gitignored (regenerable with one command) and only the newest
+  human-readable report is committed. Math re-verified after every edit:
+  113/113 unit tests, and the live-data batch audit is 404 checks, 404 pass,
+  0 warn, each traced to its source paper.
+
 - ⬜ **Phase VI** - deploy to Railway/Render for the live recruiter link
   (Procfile + requirements.txt already set up)
 

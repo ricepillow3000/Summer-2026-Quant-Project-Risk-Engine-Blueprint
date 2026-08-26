@@ -40,7 +40,6 @@ Honest limits:
   analysis, not investment advice.
 """
 
-import numpy as np
 import pandas as pd
 
 from src.ingestion import fetch_prices
