@@ -1678,6 +1678,100 @@ def test_factor_alpha_is_measured_over_the_risk_free_leg():
     assert "RAW" in raw["alpha_basis"]
 
 
+# --- dispersion correction (2026-08-26: the map's terrain was too narrow) ----
+
+def _ou_state_frame(n=700, theta_b=6.0, sigma_b=0.8, theta_v=4.0, eta_v=1.2,
+                    mu_b=1.0, mu_v=0.22, seed=5):
+    """A (beta, vol) state history drawn from EXACTLY the model the map
+    simulates - so a correctly-sized calibration should need no widening."""
+    from src.state_calibration import DT
+
+    rng = np.random.default_rng(seed)
+    phb, phv = np.exp(-theta_b * DT), np.exp(-theta_v * DT)
+    sb = sigma_b * np.sqrt((1 - phb ** 2) / (2 * theta_b))
+    sv = eta_v * np.sqrt((1 - phv ** 2) / (2 * theta_v))
+    b, lv = np.empty(n), np.empty(n)
+    b[0], lv[0] = mu_b, np.log(mu_v)
+    for i in range(1, n):
+        b[i] = mu_b + (b[i - 1] - mu_b) * phb + sb * rng.standard_normal()
+        lv[i] = np.log(mu_v) + (lv[i - 1] - np.log(mu_v)) * phv + sv * rng.standard_normal()
+    idx = pd.bdate_range("2019-01-01", periods=n)
+    return pd.DataFrame({"beta": b, "vol": np.exp(lv)}, index=idx)
+
+
+def test_dispersion_correction_prices_plug_in_estimation_error():
+    """
+    Even a state history drawn from EXACTLY the simulated model comes back
+    under-covered: the horizon-ahead distribution is built from point
+    estimates, so it ignores the uncertainty in theta, mu and sigma. Measured
+    here, ~47% of realized states land inside the nominal 68.3% ring. The
+    correction is therefore pricing plug-in estimation error as well as the
+    overlapping-window smoothing - and on a correctly specified model it must
+    stay modest and restore coverage, not run away.
+    """
+    from src.state_calibration import dispersion_correction
+
+    d = dispersion_correction(_ou_state_frame())
+    assert d["measured"] and d["n_dates"] >= 10
+    assert d["coverage_raw"] < 0.60               # plug-in prediction is too tight
+    assert 1.0 < d["k"] < 1.7, f"correction ran away on a correct model: {d['k']:.2f}"
+    assert abs(d["coverage_corrected"] - 0.683) < 0.05
+
+
+def test_dispersion_correction_widens_a_too_narrow_terrain():
+    """When the realized state lands outside the drawn rings more often than
+    the labels claim, the factor must fire and pull coverage back up."""
+    from scipy import stats as _st
+
+    from src.state_calibration import dispersion_correction, state_distances
+
+    frame = _ou_state_frame(seed=11)
+    d = dispersion_correction(frame)
+    raw = state_distances(frame)
+    # scaling every shock by k scales every distance by exactly 1/k
+    assert d["k"] == 1.0 or abs(float(np.quantile(raw, 0.683)) / d["k"]
+                                - float(np.sqrt(_st.chi2.ppf(0.683, 2)))) < 1e-9
+
+    narrow = frame.copy()                      # a book whose state moves 1.8x
+    narrow["beta"] = frame["beta"].mean() + (frame["beta"] - frame["beta"].mean()) * 1.8
+    dn = dispersion_correction(narrow)
+    assert dn["k"] > 1.0, "a too-narrow terrain was not widened"
+    assert dn["coverage_corrected"] > dn["coverage_raw"]
+    assert abs(dn["coverage_corrected"] - 0.683) < 0.10
+
+
+def test_calibration_applies_the_measured_factor_to_both_shocks():
+    """calibrate_state_dynamics must ship the widened shocks, report the factor
+    it used, and widen beta diffusion and vol-of-vol by the SAME k (a uniform
+    scale is what makes the corrected distance exactly raw / k)."""
+    from src.state_calibration import (calibrate_state_dynamics,
+                                       dispersion_correction, fit_ou,
+                                       rolling_state_series)
+
+    rng = np.random.default_rng(3)
+    n = 900
+    mkt = pd.Series(rng.normal(0.0003, 0.011, n),
+                    index=pd.bdate_range("2019-01-01", periods=n))
+    port = 1.2 * mkt + pd.Series(rng.normal(0, 0.006, n), index=mkt.index)
+
+    cal = calibrate_state_dynamics(port, mkt)
+    state = rolling_state_series(port, mkt)
+    k = dispersion_correction(state)["k"]
+    assert cal["dispersion"]["k"] == k
+
+    uncorrected_b = fit_ou(state["beta"])["sigma"]
+    uncorrected_v = fit_ou(np.log(state["vol"]))["sigma"]
+    base = cal["cal"]["base"]
+    assert base["sigB"] >= uncorrected_b - 1e-12    # never shrinks the terrain
+    assert base["etaV"] >= uncorrected_v - 1e-12
+    if k > 1.0 and not cal["clamp_flags"]:
+        assert abs(base["sigB"] / uncorrected_b - k) < 1e-9
+        assert abs(base["etaV"] / uncorrected_v - k) < 1e-9
+    # the policy multipliers still ride on top of the corrected base
+    assert abs(cal["cal"]["stress"]["sigB"] / base["sigB"] - 1.4) < 1e-9
+    assert abs(cal["cal"]["calm"]["etaV"] / base["etaV"] - 0.7) < 1e-9
+
+
 if __name__ == "__main__":
     import sys
 

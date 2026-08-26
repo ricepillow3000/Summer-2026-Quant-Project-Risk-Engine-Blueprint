@@ -41,7 +41,8 @@ from src.pairing import DEFENSIVE_ANCHOR_TICKERS, REBALANCE_DAYS
 from src.risk import (calibrate_jump_diffusion, cvar, jump_diffusion_mc,
                       mcneil_frey_tail, monte_carlo, portfolio_daily_returns,
                       var, var_backtest)
-from src.state_calibration import DT, MIN_OBS, fit_ou, rolling_state_series
+from src.state_calibration import (COVERAGE_P, DT, K_CLAMP, MIN_COVERAGE_DATES,
+                                   MIN_OBS, fit_ou, rolling_state_series)
 from src.strategies import risk_contributions, risk_parity_weights, vol_target
 from src.topology import (BETA_WINDOW, HAZARD_BETA_ADD, HAZARD_BETA_CAP,
                           HAZARD_VOL_CAP, HAZARD_VOL_FLOOR, HAZARD_VOL_MULT,
@@ -585,37 +586,58 @@ def audit_map_state_coverage(name: str, state: pd.DataFrame,
     construction, and a real regime shift SHOULD push coverage down. It is
     evidence about the map, not a gate on the build.
     """
-    b = state["beta"]
-    lv = np.log(state["vol"])
-    idx, hits68, hits95, n = [], 0, 0, 0
     r68 = float(np.sqrt(sstats.chi2.ppf(0.683, 2)))
     r95 = float(np.sqrt(sstats.chi2.ppf(0.954, 2)))
-    for t in range(MIN_OBS, len(state) - horizon, step):
-        try:
-            fb = fit_ou(b.iloc[:t])
-            fv = fit_ou(lv.iloc[:t])
-        except ValueError:
-            continue
-        rho = float(pd.concat([fb["resid"], fv["resid"]], axis=1).dropna()
-                    .corr().iloc[0, 1])
-        if not np.isfinite(rho):
-            rho = 0.0
-        p = {"thB": fb["theta"], "sigB": fb["sigma"],
-             "thV": fv["theta"], "etaV": fv["sigma"], "rho": rho}
-        th = _ou_end_moments(p, fb["mu"], float(np.exp(fv["mu"])),
-                             float(b.iloc[t - 1]), float(state["vol"].iloc[t - 1]),
-                             horizon)
-        cov = np.array([[th["beta_var"], th["cov_beta_lnvol"]],
-                        [th["cov_beta_lnvol"], th["lnvol_var"]]])
-        if np.linalg.det(cov) <= 0:
-            continue
-        d = np.array([float(b.iloc[t - 1 + horizon]) - th["beta_mean"],
-                      float(lv.iloc[t - 1 + horizon]) - th["lnvol_mean"]])
-        maha = float(np.sqrt(d @ np.linalg.inv(cov) @ d))
+
+    def distances(frame: pd.DataFrame, widen: float = 1.0) -> list[float]:
+        """Walk-forward Mahalanobis distances over `frame`, this audit's own
+        fits and closed form - deliberately NOT src.state_calibration's, so a
+        wrong formula there cannot agree with itself here."""
+        b, lv, out = frame["beta"], np.log(frame["vol"]), []
+        for t in range(MIN_OBS, len(frame) - horizon, step):
+            try:
+                fb = fit_ou(b.iloc[:t])
+                fv = fit_ou(lv.iloc[:t])
+            except ValueError:
+                continue
+            rho = float(pd.concat([fb["resid"], fv["resid"]], axis=1).dropna()
+                        .corr().iloc[0, 1])
+            if not np.isfinite(rho):
+                rho = 0.0
+            p = {"thB": fb["theta"], "sigB": fb["sigma"] * widen,
+                 "thV": fv["theta"], "etaV": fv["sigma"] * widen, "rho": rho}
+            th = _ou_end_moments(p, fb["mu"], float(np.exp(fv["mu"])),
+                                 float(b.iloc[t - 1]),
+                                 float(frame["vol"].iloc[t - 1]), horizon)
+            cov = np.array([[th["beta_var"], th["cov_beta_lnvol"]],
+                            [th["cov_beta_lnvol"], th["lnvol_var"]]])
+            if np.linalg.det(cov) <= 0:
+                continue
+            d = np.array([float(b.iloc[t - 1 + horizon]) - th["beta_mean"],
+                          float(lv.iloc[t - 1 + horizon]) - th["lnvol_mean"]])
+            out.append(float(np.sqrt(d @ np.linalg.inv(cov) @ d)))
+        return out
+
+    # Out-of-sample by construction: at each date the widening factor is
+    # measured ONLY on dates whose 30-day outcome had already happened by
+    # then, exactly as the shipped calibration measures it on history before
+    # today. An in-sample k would restore coverage arithmetically and prove
+    # nothing. Widening both shocks by k scales the predicted covariance by
+    # k^2, so the corrected distance is exactly raw / k - one pass, no refit.
+    raw = distances(state)
+    settled = max(1, horizon // step)          # dates already resolved at t_i
+    idx, hits68, hits95, n, ks = [], 0, 0, 0, []
+    raw68 = sum(d <= r68 for d in raw) / len(raw) if raw else float("nan")
+    for i in range(len(raw)):
+        prior = raw[:max(0, i - settled)]
+        k = 1.0 if len(prior) < MIN_COVERAGE_DATES else float(
+            np.clip(np.quantile(prior, COVERAGE_P) / r68, *K_CLAMP))
+        maha = raw[i] / k
         hits68 += maha <= r68
         hits95 += maha <= r95
         n += 1
         idx.append(maha)
+        ks.append(k)
     if n < 10:
         record("MAP-12", name, "realized state lands where the map predicted",
                False, f"only {n} out-of-sample dates available", "engine", warn=True)
@@ -628,9 +650,12 @@ def audit_map_state_coverage(name: str, state: pd.DataFrame,
     record("MAP-12", name, "realized state lands where the map predicted",
            abs(c68 - 0.683) < band68 + 0.12 and abs(c95 - 0.954) < band95 + 0.08,
            f"walk-forward over {n} dates ({horizon}d ahead, refit each time on "
-           f"prior data only): {c68:.1%} inside the 68.3% ring, {c95:.1%} inside "
-           f"the 95.4% ring; median Mahalanobis distance {float(np.median(idx)):.2f} "
-           f"(chi2(2) median {float(np.sqrt(sstats.chi2.ppf(0.5, 2))):.2f})",
+           f"prior data only, shocks widened by the factor measured on dates "
+           f"already resolved by then - median k {float(np.median(ks)):.2f}): "
+           f"{c68:.1%} inside the 68.3% ring, {c95:.1%} inside the 95.4% ring "
+           f"(uncorrected the 68.3% ring held {raw68:.1%}); median Mahalanobis "
+           f"distance {float(np.median(idx)):.2f} (chi2(2) median "
+           f"{float(np.sqrt(sstats.chi2.ppf(0.5, 2))):.2f})",
            "glasserman", warn=True)
 
 

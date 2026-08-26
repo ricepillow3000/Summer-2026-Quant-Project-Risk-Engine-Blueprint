@@ -27,12 +27,18 @@ Honest limits, disclosed wherever these numbers surface:
 - Rolling windows overlap, which smooths the series and biases phi upward
   (mean reversion looks slower than it is). This is a stylized state model
   for a probability TERRAIN, not a forecasting model.
+- That smoothing also drew the terrain too NARROW, which is now measured and
+  corrected: `dispersion_correction` walks the book's own history forward and
+  widens both shock sizes by the factor that makes the rings hold their
+  labelled mass out of sample (see the block above `_clamp`). The factor is
+  reported alongside the parameters and never shrinks the terrain.
 - The "calm" and "stressed" calibrations are the base estimate with
   disclosed policy multipliers on the shock sizes, not separate estimates.
 """
 
 import numpy as np
 import pandas as pd
+from scipy import stats as sstats
 
 TRADING_DAYS = 252
 DT = 1.0 / TRADING_DAYS
@@ -104,6 +110,123 @@ def fit_ou(series: pd.Series, dt: float = DT) -> dict:
             "phi": phi, "resid": pd.Series(resid, index=series.dropna().index[1:])}
 
 
+# --- dispersion correction -------------------------------------------------
+# Rolling windows overlap, so the observed state series is smoothed: the AR(1)
+# slope comes back too close to 1 and the fitted one-step shock too small. The
+# terrain the map draws is then NARROWER than what actually happens - measured
+# 2026-08-26 on 11 preset universes, where the nominal 68.3% ring covered a
+# median of ~53% of realized 30-day-ahead states.
+#
+# The fix is measured rather than assumed. Walk the book's own history forward:
+# refit on observations strictly before each date, form the closed-form
+# horizon-ahead distribution, and score where the state actually landed by
+# Mahalanobis distance. Under a correctly-sized model d^2 ~ chi2(2). Scaling
+# both shock sizes by k scales every d by exactly 1/k, so the k that restores
+# coverage is a ratio of quantiles - no search, no fitted parameter:
+#
+#     k = quantile_p(d_observed) / sqrt(chi2.ppf(p, 2))
+#
+# TWO effects share the blame, and k prices both:
+# - the overlapping-window smoothing above; and
+# - plug-in estimation error. The horizon-ahead distribution is built from
+#   POINT estimates of theta, mu and sigma, so it ignores their uncertainty.
+#   Measured on synthetic state paths drawn from exactly this model - no
+#   smoothing anywhere - the nominal 68.3% ring still held only ~47% of
+#   realized states, and k came back ~1.2-1.5 (see
+#   test_dispersion_correction_prices_plug_in_estimation_error).
+#
+# Honest limits, disclosed wherever the corrected numbers surface:
+# - k absorbs mean-prediction error too (a mis-estimated reversion speed shows
+#   up as distance, not as bias), so it is a COVERAGE correction, not a claim
+#   that the shocks were literally k times too small.
+# - The dates overlap heavily, so k is noisy; it is clamped, and a correction
+#   below 1 is never applied - this widens a too-narrow terrain, it does not
+#   shrink a conservative one into a tighter story.
+COVERAGE_P = 0.683               # ring the correction is calibrated to hold
+COVERAGE_HORIZON = 30            # trading days ahead, matches the map's horizon
+COVERAGE_STEP = 5               # walk-forward stride
+MIN_COVERAGE_DATES = 10          # below this, no correction is claimed
+K_CLAMP = (1.0, 3.0)
+
+
+def _end_moments(p: dict, mu_b: float, mu_v: float, b0: float, v0: float,
+                 days: int) -> tuple:
+    """
+    Mean vector and covariance of (beta, ln vol) `days` ahead under the exact
+    discrete OU recursion the simulator uses (Glasserman ch. 3):
+        mean = mu + (x0 - mu) phi^n,  var = s^2 (1 - phi^(2n)) / (1 - phi^2),
+        cov  = rho s_b s_v (1 - (phi_b phi_v)^n) / (1 - phi_b phi_v).
+    """
+    phb, phv = np.exp(-p["thB"] * DT), np.exp(-p["thV"] * DT)
+    sb = p["sigB"] * np.sqrt((1 - phb ** 2) / (2 * p["thB"]))
+    sv = p["etaV"] * np.sqrt((1 - phv ** 2) / (2 * p["thV"]))
+    mean = np.array([mu_b + (b0 - mu_b) * phb ** days,
+                     np.log(mu_v) + (np.log(v0) - np.log(mu_v)) * phv ** days])
+    vb = sb ** 2 * (1 - phb ** (2 * days)) / (1 - phb ** 2)
+    vv = sv ** 2 * (1 - phv ** (2 * days)) / (1 - phv ** 2)
+    cbv = p["rho"] * sb * sv * (1 - (phb * phv) ** days) / (1 - phb * phv)
+    return mean, np.array([[vb, cbv], [cbv, vv]])
+
+
+def _fit_state(state: pd.DataFrame) -> dict | None:
+    """OU parameters for both state coordinates plus their shock correlation."""
+    try:
+        fb = fit_ou(state["beta"])
+        fv = fit_ou(np.log(state["vol"]))
+    except ValueError:
+        return None
+    resid = pd.concat([fb["resid"].rename("b"), fv["resid"].rename("v")],
+                      axis=1).dropna()
+    rho = float(resid["b"].corr(resid["v"]))
+    if not np.isfinite(rho):
+        rho = 0.0
+    return {"thB": fb["theta"], "sigB": fb["sigma"], "thV": fv["theta"],
+            "etaV": fv["sigma"], "rho": float(np.clip(rho, -0.95, 0.95)),
+            "muB": fb["mu"], "muV": float(np.exp(fv["mu"]))}
+
+
+def state_distances(state: pd.DataFrame, horizon: int = COVERAGE_HORIZON,
+                    step: int = COVERAGE_STEP) -> np.ndarray:
+    """
+    Walk-forward Mahalanobis distances between the predicted state distribution
+    and what the state actually did `horizon` days later. Each fit uses only
+    observations strictly before the date it is judged on.
+    """
+    b, lv = state["beta"], np.log(state["vol"])
+    out = []
+    for t in range(MIN_OBS, len(state) - horizon, step):
+        p = _fit_state(state.iloc[:t])
+        if p is None:
+            continue
+        mean, cov = _end_moments(p, p["muB"], p["muV"], float(b.iloc[t - 1]),
+                                 float(state["vol"].iloc[t - 1]), horizon)
+        if np.linalg.det(cov) <= 0:
+            continue
+        d = np.array([float(b.iloc[t - 1 + horizon]), float(lv.iloc[t - 1 + horizon])]) - mean
+        out.append(float(np.sqrt(d @ np.linalg.inv(cov) @ d)))
+    return np.array(out)
+
+
+def dispersion_correction(state: pd.DataFrame, horizon: int = COVERAGE_HORIZON,
+                          step: int = COVERAGE_STEP) -> dict:
+    """
+    The measured factor the shock sizes are widened by, plus the coverage it
+    was measured from. `k = 1.0` (no correction) whenever there are too few
+    out-of-sample dates to measure one, or the terrain is already wide enough.
+    """
+    d = state_distances(state, horizon, step)
+    ring = float(np.sqrt(sstats.chi2.ppf(COVERAGE_P, 2)))
+    if len(d) < MIN_COVERAGE_DATES:
+        return {"k": 1.0, "n_dates": int(len(d)), "coverage_raw": None,
+                "coverage_corrected": None, "measured": False}
+    raw = float((d <= ring).mean())
+    k_raw = float(np.quantile(d, COVERAGE_P) / ring)
+    k = float(np.clip(k_raw, *K_CLAMP))
+    return {"k": k, "k_uncapped": k_raw, "n_dates": int(len(d)),
+            "coverage_raw": raw, "coverage_corrected": float((d / k <= ring).mean()),
+            "measured": True}
+
+
 def _clamp(value: float, key: str, flags: list) -> float:
     lo, hi = CLAMPS[key]
     clipped = float(np.clip(value, lo, hi))
@@ -154,6 +277,13 @@ def calibrate_state_dynamics(port_returns: pd.Series,
     port_aligned = port_returns.reindex(resid.index)
     lev = _clamp(float(port_aligned.corr(resid["v"])), "rho", flags)
 
+    # Widen the shocks by the factor measured against realized history, so the
+    # drawn terrain holds the mass its rings are labelled with out of sample.
+    disp = dispersion_correction(state)
+    if disp["k"] > 1.0:
+        sig_b = _clamp(sig_b * disp["k"], "sig_b", flags)
+        eta_v = _clamp(eta_v * disp["k"], "eta_v", flags)
+
     base = {"thB": th_b, "sigB": sig_b, "thV": th_v, "etaV": eta_v,
             "rho": rho, "lev": lev}
     calm = dict(base, sigB=sig_b * CALM_SHOCK_MULT, etaV=eta_v * CALM_SHOCK_MULT)
@@ -169,6 +299,7 @@ def calibrate_state_dynamics(port_returns: pd.Series,
         "beta_now": float(state["beta"].iloc[-1]),
         "vol_now": float(state["vol"].iloc[-1]),
         "clamp_flags": flags,
+        "dispersion": disp,
     }
 
 

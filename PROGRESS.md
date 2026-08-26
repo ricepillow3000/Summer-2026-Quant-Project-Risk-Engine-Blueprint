@@ -161,6 +161,29 @@ risk-engine/
   passes, so it is a level problem, which is what the jump-diffusion and EVT
   engines exist for.
 
+- ✅ **Map dispersion correction** (2026-08-26) - MAP-12 measured the Risk
+  Topology terrain as systematically too narrow, so the shocks are now widened
+  by a MEASURED factor rather than left disclosed-but-wrong.
+  `state_calibration.dispersion_correction()` walks the book's own history
+  forward - refit on prior data only, closed-form 30-day-ahead distribution,
+  Mahalanobis score against what the state actually did - and returns
+  `k = quantile_0.683(d) / sqrt(chi2.ppf(0.683, 2))`, the ratio that restores
+  coverage exactly (widening both shocks by k scales every distance by 1/k, so
+  no search and no fitted parameter). Clamped to [1.0, 3.0]: it widens a
+  too-narrow terrain, never narrows a conservative one. The map footnote
+  discloses k with its before/after coverage.
+  Out-of-sample result (MAP-12, k re-measured at each date from outcomes
+  already resolved by then): the nominal 68.3% ring went from a median 53.4%
+  to 69.0% across 11 universes - Commodities 32.8% -> 70.7%, Futures
+  34.5% -> 74.1%, Global macro 41.4% -> 67.2%. Baskets already wide enough
+  (FX majors, Index core) get k = 1.00 and are untouched. Shipped k today
+  ranges 1.00-1.92. Batch audit: 404 checks, 404 pass, 0 warn. Suite 103/103.
+  Finding worth keeping: a state path drawn from EXACTLY the simulated model
+  still under-covers (~47% inside the 68.3% ring), because the horizon
+  distribution is built from point estimates - so the correction prices
+  plug-in estimation error as well as the overlapping-window smoothing. That
+  is now a regression test, not a footnote.
+
 - ⬜ **Phase VI** - deploy to Railway/Render for the live recruiter link
   (Procfile + requirements.txt already set up)
 
