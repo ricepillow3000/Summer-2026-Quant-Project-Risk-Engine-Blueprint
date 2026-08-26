@@ -145,6 +145,53 @@ five minutes, once:
 If the address is ever retired, change `MELEONA_SUPPORT_EMAIL` on the host and
 keep forwarding for a month so nothing in flight is lost.
 
+## 6c. First deploy (Phase VI)
+
+The app is a single web process with no database, no build step and no
+secrets, so the whole deployment is: point a host at the repo, set two
+environment variables, and let it run `Procfile`.
+
+**Pinned for the host, not for this laptop:** `runtime.txt` (`python-3.13.7`)
+and `.python-version` (`3.13`) - Render reads the former, Railway/nixpacks the
+latter. Local development stays on whatever Python is installed; the pin
+exists so a host never silently picks a version without wheels for
+numpy/scipy/pyarrow/curl_cffi.
+
+### Railway
+
+1. railway.app -> New Project -> Deploy from GitHub repo -> pick
+   `Summer-2026-Quant-Project-Risk-Engine-Blueprint`.
+2. Variables -> add `MELEONA_CHANNEL=beta`. Add `MELEONA_SUPPORT_EMAIL` only if
+   the mailbox username differs from `meleona.support@gmail.com`. Leave
+   `MELEONA_MAINTENANCE` unset.
+3. Settings -> Networking -> Generate Domain. That URL is the beta link.
+4. Deploy. Railway injects `$PORT`; the `Procfile` already binds it on
+   `0.0.0.0`.
+
+### Render
+
+1. render.com -> New -> Web Service -> connect the repo.
+2. Runtime **Python 3**, Build `pip install -r requirements.txt`, Start
+   `streamlit run main.py --server.port=$PORT --server.address=0.0.0.0`.
+3. Environment -> `MELEONA_CHANNEL=beta` (plus `MELEONA_SUPPORT_EMAIL` if
+   needed). Health check path: `/_stcore/health`.
+4. Free instances sleep when idle; the first hit after a sleep is slow and
+   cold-fetches data. Warm it (below) before sharing the link with anyone.
+
+### After every deploy
+
+    python -m tools.warm_cache        # against the deployed host's shell, or locally to prime a shared cache
+
+Then walk the page once: hero -> The Engine -> a crisis scenario -> Risk
+Topology -> Lineage & Audit, and confirm the footer shows the support address
+and a session reference. Trigger one deliberate error and confirm that
+reference finds it in `logs/meleona.log` (section 3).
+
+### Rolling back a bad deploy
+
+Kill switch first (section 1) if visitors are seeing something broken, then
+revert and push (section 2). Both hosts redeploy on push.
+
 ## 7. Email deliverability (only once a custom domain exists)
 
 Support runs on a Gmail address today and the app **sends no email at all**, so
