@@ -282,6 +282,19 @@ def mcneil_frey_tail(port_returns: pd.Series, lam: float = RISKMETRICS_LAMBDA,
     z = pd.Series(r.values[burn_in:] / sigma[burn_in:], index=r.index[burn_in:])
 
     fit = gpd_tail_fit(z, **gpd_kwargs)
+    # EVERYTHING gpd_tail_fit returns here is in STANDARDISED-RESIDUAL units,
+    # because it was fitted on z = r / sigma. Only var/es were being rescaled
+    # below, so `threshold`, `beta` and `finite_endpoint` stayed in z-units
+    # while the UI printed them as percentage losses - a 2.1 residual read as
+    # "2.10%". Flag the scale explicitly and publish return-scale companions,
+    # so a caller can never mistake one for the other.
+    fit["scale"] = "standardised residuals (z = r / sigma)"
+    fit["threshold_z"] = fit.get("threshold")
+    fit["threshold_return"] = (None if fit.get("threshold") is None
+                               else sigma_next * fit["threshold"])
+    fit["finite_endpoint_z"] = fit.get("finite_endpoint")
+    fit["finite_endpoint_return"] = (None if fit.get("finite_endpoint") is None
+                                     else sigma_next * fit["finite_endpoint"])
     fit["sigma_next"] = sigma_next
     fit["lam"] = lam
     fit["n_standardised"] = int(len(z))
@@ -446,15 +459,25 @@ def var_backtest(port_returns: pd.Series, confidence: float = 0.95,
     # Kupiec likelihood-ratio statistic for proportion of failures.
     p = expected_rate
     x = breaches
-    if 0 < x < n:
-        lr = -2 * (
+    # x == 0 and x == n are NOT undefined. The unrestricted likelihood is
+    # (1-x/n)^(n-x) * (x/n)^x, which at x=0 equals 1, leaving LR = -2n*ln(1-p)
+    # - normally a decisive REJECTION, not a pass. The previous version sent
+    # both boundaries into the nan branch, and `np.isnan(lr) or ...` then
+    # reported passed=True: a zero-breach model scored a fabricated PASS on
+    # the one panel whose whole purpose is model validation. xlogy supplies
+    # the correct 0*log(0) = 0 limits, exactly as christoffersen_test already
+    # does in this module. Only n == 0 is genuinely undefined, and that is
+    # handled by the `testable` branch above.
+    if n > 0:
+        lr = -2.0 * (
             (n - x) * np.log(1 - p) + x * np.log(p)
-            - (n - x) * np.log(1 - x / n) - x * np.log(x / n)
+            - special.xlogy(n - x, 1 - x / n) - special.xlogy(x, x / n)
         )
     else:
         lr = float("nan")
     crit = 3.841  # chi-square(1) at 95%
-    passed = bool(np.isnan(lr) or lr <= crit)
+    # An incomputable statistic must never read as a pass.
+    passed = None if np.isnan(lr) else bool(lr <= crit)
 
     result = {
         "breaches": breaches,

@@ -2502,7 +2502,8 @@ with tab_breakdown:
                        "mean the model holds in calm markets and fails in stress - "
                        "exactly when the number matters. 'n/a' means too few "
                        "breaches to estimate it, not a pass.")
-        verdict_word = "passes" if bt["passed"] else "fails"
+        verdict_word = ("passes" if bt["passed"] else
+                        "fails" if bt["passed"] is False else "cannot be computed for")
         _kupiec_clause = (
             f"the model's breach rate of {bt['observed_rate']:.1%} is "
             "statistically consistent with the 5% it claims" if bt["passed"]
@@ -2576,7 +2577,7 @@ with tab_breakdown:
                            "with NO finite worst case; ξ<0 would mean a "
                            "bounded tail. Bigger ξ = fatter.")
             t2.metric("Worst case",
-                      "None exists" if _xi >= 0 else f"{_tf['finite_endpoint']:.1%}",
+                      "None exists" if _xi >= 0 else f"{_tf['finite_endpoint_return']:.1%}",
                       help="A finite maximum loss exists only if ξ<0. For "
                            "equities ξ is essentially always >0, so the honest "
                            "answer is that no finite worst case exists - the "
@@ -2598,7 +2599,7 @@ with tab_breakdown:
                       "out. The only hard floor is -100%."
                       if _xi >= 0 else
                       f"the fit implies a bounded tail ending at "
-                      f"{_tf['finite_endpoint']:.1%}. Treat that with suspicion: "
+                      f"{_tf['finite_endpoint_return']:.1%}. Treat that with suspicion: "
                       "equity losses almost always fit ξ>0, so a negative ξ on "
                       "this sample is more likely estimation noise than a real bound.")
             _broken = [k for k, v in _tf["moments_finite"].items() if not v]
@@ -2606,7 +2607,9 @@ with tab_breakdown:
                 f"Fitted a Generalized Pareto to the "
                 f"{_tf['n_exceedances']} losses above the "
                 f"{_tf['threshold_quantile']:.0%} threshold "
-                f"({_tf['threshold']:.2%}), drawn from {_tf_days} trading days "
+                f"({_tf['threshold_return']:.2%} of the book at today's volatility; "
+                f"{_tf['threshold_z']:.2f} in standardised units), drawn from "
+                f"{_tf_days} trading days "
                 f"(~10 years - the 2-year window used elsewhere leaves too few "
                 f"exceedances to fit honestly). **ξ = {_xi:+.2f}**{_ci_txt}: {_shape}"
                 + (f" At this ξ the {', '.join(_broken)} of the loss "

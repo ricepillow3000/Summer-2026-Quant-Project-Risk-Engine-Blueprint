@@ -1175,6 +1175,47 @@ def test_rolling_state_series_tracks_planted_beta():
     assert (state["vol"] > 0).all()
 
 
+def test_kupiec_rejects_zero_and_total_breaches():
+    """
+    Audit finding (2026-08-25, confirmed adversarially): x=0 and x=n were sent
+    into the nan branch, and `passed = bool(np.isnan(lr) or ...)` turned that
+    into True - a fabricated PASS on the model-validation panel. Kupiec is
+    perfectly defined at both boundaries: at x=0 the unrestricted likelihood is
+    1, so LR = -2n*ln(1-p), normally a decisive rejection.
+    """
+    import math
+    up = pd.Series(np.linspace(0.0, 0.5, 520))      # monotone: never breaches
+    b = var_backtest(up)
+    assert b["breaches"] == 0 and b["n"] > 0
+    assert b["passed"] is False, "zero breaches must FAIL, not pass"
+    n, p = b["n"], b["expected_rate"]
+    assert abs(b["kupiec_lr"] - round(-2.0 * n * math.log(1 - p), 2)) < 0.02
+
+    down = pd.Series(np.linspace(0.0, -0.5, 520))   # breaches every tested day
+    d = var_backtest(down)
+    if d["breaches"] == d["n"]:
+        assert d["passed"] is False, "all-breach must FAIL, not pass"
+
+
+def test_mcneil_frey_keeps_residual_and_return_scales_separate():
+    """
+    Audit finding: everything gpd_tail_fit returns is in standardised-residual
+    units, but only var/es were rescaled - so the UI printed a z-value of 2.1
+    as "2.10%". Return-scale companions must exist and be exactly sigma_next
+    times their residual counterparts.
+    """
+    r = pd.Series(np.random.default_rng(1).standard_t(5, 2600) * 0.01)
+    m = mcneil_frey_tail(r, n_boot=0)
+    assert m["fitted"] is True
+    assert "residual" in m["scale"]
+    s = m["sigma_next"]
+    assert abs(m["threshold_return"] - s * m["threshold_z"]) < 1e-12
+    # a return-scale daily threshold is a plausible loss, a z-score is not
+    assert 0.0 < m["threshold_return"] < 0.25
+    if m["finite_endpoint_z"] is None:
+        assert m["finite_endpoint_return"] is None
+
+
 def test_var_backtest_can_actually_fail():
     """
     Regression guard for a backtest that was arithmetic, not a test.
