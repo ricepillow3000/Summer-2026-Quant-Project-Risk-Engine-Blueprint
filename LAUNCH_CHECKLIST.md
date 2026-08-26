@@ -29,6 +29,7 @@ notices fastest.
 | 17 | Reinstall behaviour | **N/A** | Web app - a "reinstall" is a page refresh. Nothing is installed on the device, and no state is lost. |
 | 18 | Sandbox / test keys | **N/A** | The app holds no API keys at all: Yahoo Finance needs none. Nothing to rotate, sandbox or leak. |
 | 19 | Phased release | **Built (process + flag)** | `RUNBOOK.md` §5 - local -> unlisted preview -> small beta -> public, kill switch one variable away at every stage. `MELEONA_CHANNEL=beta` puts the beta notice and feedback link on the pre-release deploys only. |
+| 20 | Accessibility statement | **Built** | `ACCESSIBILITY.md`, linked in the page footer alongside Privacy and Terms, with a "report a barrier" route to the support mailbox. Seven text colours were measured failing WCAG AA and corrected; the canvas map gained a screen-reader description. Two regression tests keep both true. |
 
 ## Before the link goes public
 
@@ -47,6 +48,8 @@ notices fastest.
 - [ ] Set `MELEONA_CHANNEL=beta` on the beta deploy, and unset it for public.
 - [ ] Run `python -m tools.warm_cache` after the deploy so the first visitor
       lands on a warm cache.
+- [ ] Read `ACCESSIBILITY.md` once before sharing the link - it is the page a
+      complainant's lawyer reads first, and it must stay true of the app.
 - [ ] Deploy to Railway (`RUNBOOK.md` §6c) with `MELEONA_CHANNEL=beta`
       and confirm `/_stcore/health` answers.
 - [ ] Walk the deployed page once end to end, then trigger one deliberate error

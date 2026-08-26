@@ -282,6 +282,36 @@ risk-engine/
   113/113 unit tests, and the live-data batch audit is 404 checks, 404 pass,
   0 warn, each traced to its source paper.
 
+- ✅ **Accessibility + code-volume pass** (2026-08-26) - a council (skeptic /
+  pragmatist / critic) was asked what to cut; all three landed on the same
+  answer, and it was not "delete code": an AST sweep had already proved there
+  is no dead code, so the target was **repetition and file size**, not lines.
+  Shipped: the 778-line inline `<style>` block moved verbatim to
+  `static/app.css`, loaded once by `load_css()` - **main.py 3,690 -> 2,904
+  lines** with zero behaviour change. Not done, deliberately: collapsing the 36
+  `unsafe_allow_html` blocks into helpers (the critic was right - under
+  Streamlit rerun semantics that moves side effects, and there is no visual
+  regression test to catch a silent break), and deleting
+  `prototypes/war_room.html`, which the skeptic believed was retired - it is
+  loaded by `src/topology.py` and rendered every session. Verified before
+  acting on either claim.
+  **Accessibility, and it found real defects.** Contrast was computed for every
+  text colour against the ground it actually sits on: **seven failed**, worst
+  2.01:1 against a 4.5:1 floor, including the tab strip, every panel eyebrow
+  and the bronze links on the dark bands. All seven were lifted while leaving
+  decorative bronze untouched, so the palette still reads as bronze and the
+  words are legible. The Risk Topology map is canvas, invisible to a screen
+  reader, so its five layers are now `aria-hidden` and `updateSummary()` writes
+  the same numbers the HUD shows as sentences into an off-screen live region -
+  generated from the simulation, so picture and description cannot drift.
+  `ACCESSIBILITY.md` states the target (WCAG 2.2 AA), the measured table, and
+  four known gaps (Streamlit's own widgets, Plotly charts, map interaction, no
+  screen-reader user testing yet) - a statement claiming full conformance would
+  be the overclaim it exists to prevent. Footer carries the statement plus a
+  "report a barrier" route; barriers are treated as defects. Two regression
+  tests: one recomputes every contrast ratio from the stylesheet, one checks the
+  statement's claims against the code. 115/115.
+
 - ⬜ **Phase VI** - deploy to Railway/Render for the live recruiter link
   (Procfile + requirements.txt already set up)
 

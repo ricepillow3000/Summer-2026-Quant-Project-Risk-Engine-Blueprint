@@ -1998,6 +1998,74 @@ def test_restore_drill_reports_cost_per_universe():
     assert broken["ok"] is False and broken["detail"]
 
 
+# --- accessibility (2026-08-26) ---------------------------------------------
+
+def _contrast(fg: str, bg: str) -> float:
+    """WCAG 2.2 contrast ratio between two #rrggbb colours."""
+    def lum(h):
+        c = [int(h[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+        c = [x / 12.92 if x <= 0.03928 else ((x + 0.055) / 1.055) ** 2.4 for x in c]
+        return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+    a, b = lum(fg), lum(bg)
+    return (max(a, b) + 0.05) / (min(a, b) + 0.05)
+
+
+def test_text_colours_meet_wcag_aa():
+    """Every colour the stylesheet uses for TEXT must clear 4.5:1 on the ground
+    it sits on. Bronze #9A7B4F measured 2.50:1 and is why this test exists - it
+    may still be used for rules and hovers, never for words."""
+    import re as _re
+
+    css = (pathlib.Path(__file__).resolve().parent.parent
+           / "static" / "app.css").read_text(encoding="utf-8")
+
+    # sanity: the formula agrees with the published reference pair
+    assert abs(_contrast("#FFFFFF", "#000000") - 21.0) < 0.01
+
+    page, panel = "#D4CDBF", "#E9E4DB"
+    for fg in ("#4A4640", "#6A5030"):
+        assert _contrast(fg, page) >= 4.5, f"{fg} fails on the page ground"
+        assert _contrast(fg, panel) >= 4.5, f"{fg} fails on a panel"
+    assert _contrast("#EDE9E3", "#3F3B35") >= 4.5          # footer on charcoal
+
+    # Every text colour must clear 4.5:1 on the ground it actually sits on.
+    # Light tones live on the charcoal bands, everything else on beige - so
+    # check each against its own ground rather than excusing it from the test,
+    # which is how #A89F8F sat at 4.25:1 on charcoal unnoticed.
+    charcoal = "#3F3B35"
+    for colour in set(_re.findall(r"(?<![-\w])color:\s*(#[0-9A-Fa-f]{6})", css)):
+        on_beige = min(_contrast(colour, page), _contrast(colour, panel))
+        on_band = _contrast(colour, charcoal)
+        assert max(on_beige, on_band) >= 4.5, (
+            f"{colour} clears nothing: {on_beige:.2f}:1 on beige, "
+            f"{on_band:.2f}:1 on charcoal")
+    assert "#9A7B4F" in css, "decorative bronze should still exist"
+
+
+def test_accessibility_statement_matches_what_the_app_does():
+    """A statement claiming more than the code delivers is the liability the
+    statement exists to avoid, so check the load-bearing claims."""
+    root = pathlib.Path(__file__).resolve().parent.parent
+    doc = (root / "ACCESSIBILITY.md").read_text(encoding="utf-8")
+    app = (root / "main.py").read_text(encoding="utf-8")
+    map_html = (root / "prototypes" / "war_room.html").read_text(encoding="utf-8")
+
+    assert "meleona.support@gmail.com" in doc
+    assert "WCAG 2.2" in doc
+    assert "Known gaps" in doc, "a statement with no gaps section is an overclaim"
+    for gap in ("Streamlit", "Plotly", "No user testing"):
+        assert gap in doc, f"undisclosed known gap: {gap}"
+
+    # claims the document makes about the map must be true of the map
+    assert map_html.count('aria-hidden="true"') >= 5      # the five canvas layers
+    assert "sr-only" in map_html and "updateSummary()" in map_html
+    assert "prefers-reduced-motion" in map_html
+
+    # and the footer must carry the statement and the contact route
+    assert "ACCESSIBILITY.md" in app, "footer does not link the statement"
+    assert "WCAG 2.2 AA" in app and "barrier" in app.lower()
+
+
 if __name__ == "__main__":
     import sys
 

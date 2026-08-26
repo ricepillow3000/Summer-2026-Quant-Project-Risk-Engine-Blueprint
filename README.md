@@ -85,8 +85,10 @@ risk-engine/
 
 - **Support:** meleona.support@gmail.com - quote the session reference shown in
   the page footer and it maps straight to that session's logs (`SUPPORT.md`).
-- **Policies:** `PRIVACY.md` (no accounts, no tracking, no third-party SDKs)
-  and `TERMS.md` (educational analysis, not investment advice).
+- **Policies:** `PRIVACY.md` (no accounts, no tracking, no third-party SDKs),
+  `TERMS.md` (educational analysis, not investment advice) and
+  `ACCESSIBILITY.md` (WCAG 2.2 AA target, the measured contrast table, and the
+  four known gaps - stated rather than glossed).
 - **Runbook:** `RUNBOOK.md` - kill switch, hotfix/rollback, crash triage,
   outbound spend caps, phased release, reviewer walkthrough.
 - **Launch checklist:** `LAUNCH_CHECKLIST.md` - every pre-launch item, what was

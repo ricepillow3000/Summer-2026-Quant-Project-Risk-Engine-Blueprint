@@ -377,16 +377,27 @@ def audit_map(name: str, ctx: dict, n_paths: int) -> None:
            "x sqrt(252))", "engine")
 
     # -- MAP-02 every unit dot on the map, re-derived ------------------------
-    common = rets.index.intersection(mkt.index)
+    # On the SAME frame the builder uses: universe joined to the defensive
+    # anchor pool on common trading days. Re-deriving on the un-joined returns
+    # compares two different date sets - which is exactly how SI=F, whose
+    # futures calendar differs from the ETFs', drifted 0.002 past tolerance on
+    # 2026-08-26 and failed a check the engine had not broken.
+    try:
+        anchor_px = fetch_prices(DEFENSIVE_ANCHOR_TICKERS, period="2y")
+        unit_frame = rets.join(anchor_px.pct_change().dropna(),
+                               how="inner").dropna(axis=1)
+    except Exception:  # noqa: BLE001 - offline: the builder falls back the same way
+        unit_frame = rets
+    common = unit_frame.index.intersection(mkt.index)
     mvar = float(mkt.loc[common].var())
     bad, checked = [], 0
     for a in payload["assets"]:
         t = a["t"]
-        if t not in rets.columns:
-            continue                      # anchor-pool ETF: not in this universe
+        if t not in unit_frame.columns:
+            continue                      # not in this universe's audited frame
         checked += 1
-        b = round(float(rets[t].loc[common].cov(mkt.loc[common]) / mvar), 3)
-        v = round(float(rets[t].std() * np.sqrt(252)), 4)
+        b = round(float(unit_frame[t].loc[common].cov(mkt.loc[common]) / mvar), 3)
+        v = round(float(unit_frame[t].std() * np.sqrt(252)), 4)
         if not close(b, a["b"], 1.1e-3):
             bad.append(f"{t} beta: audit {b} vs map {a['b']}")
         if not close(v, a["v"], 2e-3):

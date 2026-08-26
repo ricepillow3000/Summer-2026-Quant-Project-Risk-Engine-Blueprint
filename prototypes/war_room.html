@@ -96,6 +96,8 @@ body {
   cursor: pointer; transition: color .2s, border-color .2s, background .2s;
 }
 .explbtn:hover { color: var(--beige); border-color: var(--bronze); }
+.sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+  overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
 .explbtn[aria-pressed="true"] {
   color: var(--beige); border-color: var(--bronze);
   background: rgba(154,123,79,0.18);
@@ -326,11 +328,18 @@ select {
 </head>
 <body>
 <div class="shell" id="shell">
-  <canvas id="cvBase"></canvas>
-  <canvas id="cvFog"></canvas>
-  <canvas id="cvIntel"></canvas>
-  <canvas id="cvTrail"></canvas>
-  <canvas id="cvAnim"></canvas>
+  <!-- Canvas is invisible to a screen reader: it has no DOM to read. The five
+       layers are therefore marked decorative, and #mapSummary carries the same
+       information as sentences, filled from the live payload by
+       updateSummary(). It is positioned off-screen rather than display:none,
+       because display:none is skipped by screen readers too. -->
+  <canvas id="cvBase" aria-hidden="true"></canvas>
+  <canvas id="cvFog" aria-hidden="true"></canvas>
+  <canvas id="cvIntel" aria-hidden="true"></canvas>
+  <canvas id="cvTrail" aria-hidden="true"></canvas>
+  <canvas id="cvAnim" aria-hidden="true"></canvas>
+  <p id="mapSummary" class="sr-only" role="region" aria-live="polite"
+     aria-label="Risk Topology map, described in text">Loading the map description.</p>
 
   <!-- settings and tools -->
   <aside class="side glass" id="sidePanel">
@@ -1143,6 +1152,23 @@ function drawHist() {
   g.strokeStyle = 'rgba(237,233,227,0.25)';
   g.beginPath(); g.moveTo(zX, ch - 4); g.lineTo(zX, ch); g.stroke();
 }
+function updateSummary() {
+  /* The map as sentences, for anyone who cannot see a canvas. Same numbers as
+     the HUD and the same source: the simulated paths, not a hand-written blurb. */
+  const st = S.stats, b = DEMO.base, hz = DEMO.hazard;
+  const units = DEMO.assets.length, links = DEMO.pairs.length;
+  document.getElementById('mapSummary').textContent =
+    'Risk Topology, described in text. The book starts at beta ' + b.beta.toFixed(2) +
+    ' and ' + Math.round(b.vol * 100) + '% annualised volatility. Over ' + DAYS +
+    ' trading days the simulation puts the average loss in the worst 2.5% of outcomes at ' +
+    (st.es * 100).toFixed(1) + '%, and the 95% value at risk at ' + (st.var95 * 100).toFixed(1) +
+    '%. ' + (st.pBreach * 100).toFixed(1) + '% of simulated paths touch the danger perimeter, ' +
+    'which this engine sets at ' + Math.round(hz.volMax * 100) + '% volatility or beta ' +
+    hz.betaMax.toFixed(2) + '. The map plots ' + units + ' assets by beta and volatility' +
+    (links ? ', with ' + links + ' defensive pairings drawn as links' : '') +
+    '. Long-run volatility is ' + Math.round(MU_V * 100) + '%. ' + (DEMO.provenance || '');
+}
+
 function updateHUD() {
   const st = S.stats;
   document.getElementById('hudES').innerHTML = '-' + (st.es * 100).toFixed(1) + '<em>%</em>';
@@ -1160,6 +1186,7 @@ function updateHUD() {
   document.getElementById('chipBase').textContent =
     'Base · β ' + DEMO.base.beta.toFixed(2) + ' · σ ' + Math.round(DEMO.base.vol * 100) + '%';
   drawHist();
+  updateSummary();
 }
 
 /* ---------- bon voyage inspector ---------- */
