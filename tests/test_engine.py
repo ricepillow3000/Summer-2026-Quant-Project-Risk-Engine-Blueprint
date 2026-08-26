@@ -1772,6 +1772,118 @@ def test_calibration_applies_the_measured_factor_to_both_shocks():
     assert abs(cal["cal"]["calm"]["etaV"] / base["etaV"] - 0.7) < 1e-9
 
 
+# --- pre-deploy security posture (2026-08-26) -------------------------------
+
+def test_egress_allowlist_blocks_everything_but_the_market_feed():
+    """The SSRF control: no request leaves the allowlist, and the checks that
+    matter are the ones a typo-squat or a metadata-service probe would hit."""
+    from src.netguard import ALLOWED_HOSTS, EgressBlocked, guarded_session, host_allowed
+
+    assert host_allowed("https://query1.finance.yahoo.com/v8/finance/chart/SPY")
+    assert host_allowed("https://query2.finance.yahoo.com/x")
+    assert not host_allowed("http://query1.finance.yahoo.com/x")     # https only
+    assert not host_allowed("https://169.254.169.254/latest/meta-data/")  # cloud metadata
+    assert not host_allowed("https://127.0.0.1:8501/")               # loopback
+    assert not host_allowed("https://query1.finance.yahoo.com.evil.com/")  # suffix trick
+    assert not host_allowed("file:///etc/passwd")
+    assert not host_allowed("https://evil.com/?u=query1.finance.yahoo.com")
+    # Every allowlisted host is a deliberate, named market-data dependency:
+    # Yahoo for prices, Business Insider for the ISIN lookup yfinance performs.
+    assert all(h.endswith("yahoo.com") or h == "markets.businessinsider.com"
+               for h in ALLOWED_HOSTS)
+
+    # The guard refuses BEFORE any socket is opened, so this needs no network.
+    session = guarded_session()
+    for blocked in ("https://169.254.169.254/latest/meta-data/",
+                    "http://query1.finance.yahoo.com/x"):
+        try:
+            session.get(blocked)
+        except EgressBlocked:
+            pass
+        else:
+            raise AssertionError(f"egress not blocked: {blocked}")
+
+
+def test_map_payload_cannot_break_out_of_its_script_block():
+    """The map's JSON is spliced inside a <script>. json.dumps does not escape
+    '<', so a string containing '</script>' would end the block early."""
+    from src.topology import war_room_html
+
+    payload = {
+        "base": {"beta": 1.0, "vol": 0.2}, "hazard": {"volMax": 0.6, "betaMax": 1.8},
+        "assets": [{"t": "</script><img src=x onerror=alert(1)>", "b": 1.0,
+                    "v": 0.2, "f": "Universe"}],
+        "pairs": [], "muFlyer": 0.0, "muAnchor": 0.0, "muBook": 0.0,
+        "cal": {"calm": {}, "base": {}, "stress": {}}, "muV": 0.2, "muB": 1.0,
+        "days": 30, "domain": {"b0": -1.0, "b1": 2.0, "v0": 0.0, "v1": 1.0},
+        "live": True, "provenance": "test",
+        "footnote": "</SCRIPT ><svg onload=alert(1)>",
+    }
+    page = war_room_html(payload)
+    begin, end = "/* __PAYLOAD_BEGIN__ */", "/* __PAYLOAD_END__ */"
+    body = page[page.index(begin) + len(begin):page.index(end)]
+    assert "<" not in body and ">" not in body, "raw angle bracket survived the splice"
+    import json as _json
+
+    blob = body.strip().removeprefix("const DEMO =").strip().rstrip(";")
+    assert _json.loads(blob) == payload            # escaping changed nothing semantically
+
+
+def test_universe_size_is_capped_at_the_funnel():
+    """The complexity budget: no caller can make the server work on an
+    unbounded universe, and junk symbols never reach a fetch."""
+    from src.ingestion import MAX_UNIVERSE, _clean
+
+    assert len(_clean([f"AA{i:03d}" for i in range(200)])) == MAX_UNIVERSE
+    assert _clean(["SPY", "<script>", "A A", "'; DROP TABLE--", "QQQ"]) == ["QQQ", "SPY"]
+    assert _clean(["../../etc/passwd", "https://evil.com"]) == []
+
+
+def test_cache_budget_drops_oldest_first():
+    """A visitor can mint a new cache key by typing a new basket. The budget
+    keeps that from filling an ephemeral disk, and evicts oldest first."""
+    import os
+    import tempfile
+
+    import src.ingestion as ingestion
+
+    with tempfile.TemporaryDirectory() as tmp:
+        paths = []
+        for i in range(6):
+            path = os.path.join(tmp, f"prices_{i:02d}.parquet")
+            with open(path, "wb") as fh:
+                fh.write(b"x" * 1024)
+            os.utime(path, (1_700_000_000 + i, 1_700_000_000 + i))  # oldest first
+            paths.append(path)
+        original = ingestion.DATA_DIR
+        ingestion.DATA_DIR = tmp
+        try:
+            dropped = ingestion._prune_cache(max_files=4, max_mb=1000)
+        finally:
+            ingestion.DATA_DIR = original
+        assert dropped == 2
+        survivors = sorted(os.listdir(tmp))
+        assert survivors == ["prices_02.parquet", "prices_03.parquet",
+                             "prices_04.parquet", "prices_05.parquet"]
+
+
+def test_deploy_config_keeps_the_visitor_out_of_the_operator_seat():
+    """Regression guard on the deployed posture: a visitor is a viewer, gets no
+    operator toolbar, no tracebacks, and XSRF/CORS stay on."""
+    config = (pathlib.Path(__file__).resolve().parent.parent
+              / ".streamlit" / "config.toml").read_text(encoding="utf-8")
+    settings = dict(
+        line.split("=", 1)[0].strip() and
+        (line.split("=", 1)[0].strip(), line.split("=", 1)[1].split("#")[0].strip())
+        for line in config.splitlines()
+        if "=" in line and not line.strip().startswith("#"))
+    assert settings["toolbarMode"] == '"viewer"'
+    assert settings["showErrorDetails"] == "false"
+    assert settings["enableXsrfProtection"] == "true"
+    assert settings["enableCORS"] == "true"
+    assert settings["headless"] == "true"
+
+
 if __name__ == "__main__":
     import sys
 

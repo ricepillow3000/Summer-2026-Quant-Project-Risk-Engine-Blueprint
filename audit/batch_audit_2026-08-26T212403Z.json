@@ -1,5 +1,5 @@
 {
-  "generated_utc": "2026-08-26T203339Z",
+  "generated_utc": "2026-08-26T212403Z",
   "universes": [
     "Hedge-fund favorites (13F-popular)",
     "Mega-cap tech (Mag 7 + QQQ)",
@@ -15,7 +15,7 @@
   ],
   "checks": 404,
   "failed": 0,
-  "warned": 1,
+  "warned": 0,
   "paths_per_map_simulation": 20000,
   "results": [
     {
@@ -239,7 +239,7 @@
       "scope": "Hedge-fund favorites (13F-popular)",
       "check": "simulated terrain matches closed-form OU moments",
       "status": "PASS",
-      "detail": "z vs theory: beta_mean -0.33, beta_var +1.30, lnvol_mean -0.77, lnvol_var -0.12, shock_cov -0.55 (n=20000); E[beta_T] theory 0.7559 vs simulated 0.7557; Var theory 0.004485 vs 0.004543",
+      "detail": "z vs theory: beta_mean -0.33, beta_var +1.30, lnvol_mean -0.77, lnvol_var -0.12, shock_cov -0.55 (n=20000); E[beta_T] theory 0.7559 vs simulated 0.7557; Var theory 0.009798 vs 0.009926",
       "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
     },
     {
@@ -255,7 +255,7 @@
       "scope": "Hedge-fund favorites (13F-popular)",
       "check": "breach probability counts paths that TOUCH the line",
       "status": "PASS",
-      "detail": "flagged 0.0005 equals any-touch 0.0005 (counting end-states only would read 0.0000); HUD shows 0.0006",
+      "detail": "flagged 0.0210 equals any-touch 0.0210 (counting end-states only would read 0.0065); HUD shows 0.0249",
       "source": "This engine's own code, re-derived independently by this audit"
     },
     {
@@ -263,7 +263,7 @@
       "scope": "Hedge-fund favorites (13F-popular)",
       "check": "HUD tail numbers come from the simulated path P&L",
       "status": "PASS",
-      "detail": "VaR95 8.3639% and ES97.5 12.3863% reproduced from the path P&L array; ES >= VaR holds; mean P&L +0.0096% (zero-drift risk view, as disclosed)",
+      "detail": "VaR95 8.8338% and ES97.5 13.9695% reproduced from the path P&L array; ES >= VaR holds; mean P&L +0.0152% (zero-drift risk view, as disclosed)",
       "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
     },
     {
@@ -271,7 +271,7 @@
       "scope": "Hedge-fund favorites (13F-popular)",
       "check": "calm < base < stressed terrain width",
       "status": "PASS",
-      "detail": "state variance calm 0.05114 < base 0.10118 < stress 0.20557 (disclosed shock multipliers 0.7 / 1.4, +0.10 shock correlation under stress)",
+      "detail": "state variance calm 0.11173 < base 0.22105 < stress 0.44913 (disclosed shock multipliers 0.7 / 1.4, +0.10 shock correlation under stress)",
       "source": "This engine's own code, re-derived independently by this audit"
     },
     {
@@ -279,7 +279,7 @@
       "scope": "Hedge-fund favorites (13F-popular)",
       "check": "realized state lands where the map predicted",
       "status": "PASS",
-      "detail": "walk-forward over 58 dates (30d ahead, refit each time on prior data only): 41.4% inside the 68.3% ring, 79.3% inside the 95.4% ring; median Mahalanobis distance 1.64 (chi2(2) median 1.18)",
+      "detail": "walk-forward over 58 dates (30d ahead, refit each time on prior data only, shocks widened by the factor measured on dates already resolved by then - median k 1.07): 41.4% inside the 68.3% ring, 82.8% inside the 95.4% ring (uncorrected the 68.3% ring held 41.4%); median Mahalanobis distance 1.60 (chi2(2) median 1.18)",
       "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
     },
     {
@@ -527,7 +527,7 @@
       "scope": "Mega-cap tech (Mag 7 + QQQ)",
       "check": "simulated terrain matches closed-form OU moments",
       "status": "PASS",
-      "detail": "z vs theory: beta_mean -0.09, beta_var +1.22, lnvol_mean -0.78, lnvol_var -0.12, shock_cov -0.64 (n=20000); E[beta_T] theory 1.4482 vs simulated 1.4481; Var theory 0.006468 vs 0.006547",
+      "detail": "z vs theory: beta_mean -0.09, beta_var +1.22, lnvol_mean -0.78, lnvol_var -0.12, shock_cov -0.64 (n=20000); E[beta_T] theory 1.4482 vs simulated 1.4481; Var theory 0.007655 vs 0.007748",
       "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
     },
     {
@@ -543,7 +543,7 @@
       "scope": "Mega-cap tech (Mag 7 + QQQ)",
       "check": "breach probability counts paths that TOUCH the line",
       "status": "PASS",
-      "detail": "flagged 0.0005 equals any-touch 0.0005 (counting end-states only would read 0.0000); HUD shows 0.0003",
+      "detail": "flagged 0.0005 equals any-touch 0.0005 (counting end-states only would read 0.0000); HUD shows 0.0008",
       "source": "This engine's own code, re-derived independently by this audit"
     },
     {
@@ -551,7 +551,7 @@
       "scope": "Mega-cap tech (Mag 7 + QQQ)",
       "check": "HUD tail numbers come from the simulated path P&L",
       "status": "PASS",
-      "detail": "VaR95 12.9660% and ES97.5 19.0502% reproduced from the path P&L array; ES >= VaR holds; mean P&L +0.0121% (zero-drift risk view, as disclosed)",
+      "detail": "VaR95 13.0840% and ES97.5 19.3618% reproduced from the path P&L array; ES >= VaR holds; mean P&L +0.0133% (zero-drift risk view, as disclosed)",
       "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
     },
     {
@@ -559,7 +559,7 @@
       "scope": "Mega-cap tech (Mag 7 + QQQ)",
       "check": "calm < base < stressed terrain width",
       "status": "PASS",
-      "detail": "state variance calm 0.04777 < base 0.09449 < stress 0.19198 (disclosed shock multipliers 0.7 / 1.4, +0.10 shock correlation under stress)",
+      "detail": "state variance calm 0.05654 < base 0.11183 < stress 0.22720 (disclosed shock multipliers 0.7 / 1.4, +0.10 shock correlation under stress)",
       "source": "This engine's own code, re-derived independently by this audit"
     },
     {
@@ -567,7 +567,7 @@
       "scope": "Mega-cap tech (Mag 7 + QQQ)",
       "check": "realized state lands where the map predicted",
       "status": "PASS",
-      "detail": "walk-forward over 58 dates (30d ahead, refit each time on prior data only): 63.8% inside the 68.3% ring, 98.3% inside the 95.4% ring; median Mahalanobis distance 1.20 (chi2(2) median 1.18)",
+      "detail": "walk-forward over 58 dates (30d ahead, refit each time on prior data only, shocks widened by the factor measured on dates already resolved by then - median k 1.10): 70.7% inside the 68.3% ring, 98.3% inside the 95.4% ring (uncorrected the 68.3% ring held 63.8%); median Mahalanobis distance 1.05 (chi2(2) median 1.18)",
       "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
     },
     {
@@ -815,7 +815,7 @@
       "scope": "Multi-sector blue chips (institutional-style)",
       "check": "simulated terrain matches closed-form OU moments",
       "status": "PASS",
-      "detail": "z vs theory: beta_mean -0.33, beta_var +1.30, lnvol_mean -0.78, lnvol_var -0.29, shock_cov -0.22 (n=20000); E[beta_T] theory -0.0129 vs simulated -0.0132; Var theory 0.010879 vs 0.011021",
+      "detail": "z vs theory: beta_mean -0.33, beta_var +1.30, lnvol_mean -0.78, lnvol_var -0.29, shock_cov -0.22 (n=20000); E[beta_T] theory -0.0129 vs simulated -0.0132; Var theory 0.017101 vs 0.017324",
       "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
     },
     {
@@ -831,7 +831,7 @@
       "scope": "Multi-sector blue chips (institutional-style)",
       "check": "breach probability counts paths that TOUCH the line",
       "status": "PASS",
-      "detail": "flagged 0.0000 equals any-touch 0.0000 (counting end-states only would read 0.0000); HUD shows 0.0000",
+      "detail": "flagged 0.0000 equals any-touch 0.0000 (counting end-states only would read 0.0000); HUD shows 0.0001",
       "source": "This engine's own code, re-derived independently by this audit"
     },
     {
@@ -839,7 +839,7 @@
       "scope": "Multi-sector blue chips (institutional-style)",
       "check": "HUD tail numbers come from the simulated path P&L",
       "status": "PASS",
-      "detail": "VaR95 6.1175% and ES97.5 8.8829% reproduced from the path P&L array; ES >= VaR holds; mean P&L +0.0049% (zero-drift risk view, as disclosed)",
+      "detail": "VaR95 6.2187% and ES97.5 9.1932% reproduced from the path P&L array; ES >= VaR holds; mean P&L +0.0063% (zero-drift risk view, as disclosed)",
       "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
     },
     {
@@ -847,7 +847,7 @@
       "scope": "Multi-sector blue chips (institutional-style)",
       "check": "calm < base < stressed terrain width",
       "status": "PASS",
-      "detail": "state variance calm 0.03606 < base 0.07135 < stress 0.14461 (disclosed shock multipliers 0.7 / 1.4, +0.10 shock correlation under stress)",
+      "detail": "state variance calm 0.05668 < base 0.11216 < stress 0.22731 (disclosed shock multipliers 0.7 / 1.4, +0.10 shock correlation under stress)",
       "source": "This engine's own code, re-derived independently by this audit"
     },
     {
@@ -855,7 +855,7 @@
       "scope": "Multi-sector blue chips (institutional-style)",
       "check": "realized state lands where the map predicted",
       "status": "PASS",
-      "detail": "walk-forward over 58 dates (30d ahead, refit each time on prior data only): 53.4% inside the 68.3% ring, 74.1% inside the 95.4% ring; median Mahalanobis distance 1.40 (chi2(2) median 1.18)",
+      "detail": "walk-forward over 58 dates (30d ahead, refit each time on prior data only, shocks widened by the factor measured on dates already resolved by then - median k 1.16): 58.6% inside the 68.3% ring, 82.8% inside the 95.4% ring (uncorrected the 68.3% ring held 53.4%); median Mahalanobis distance 1.30 (chi2(2) median 1.18)",
       "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
     },
     {
@@ -1143,7 +1143,7 @@
       "scope": "Index core (S&P 500 & broad market ETFs)",
       "check": "realized state lands where the map predicted",
       "status": "PASS",
-      "detail": "walk-forward over 58 dates (30d ahead, refit each time on prior data only): 82.8% inside the 68.3% ring, 87.9% inside the 95.4% ring; median Mahalanobis distance 1.05 (chi2(2) median 1.18)",
+      "detail": "walk-forward over 58 dates (30d ahead, refit each time on prior data only, shocks widened by the factor measured on dates already resolved by then - median k 1.00): 84.5% inside the 68.3% ring, 87.9% inside the 95.4% ring (uncorrected the 68.3% ring held 82.8%); median Mahalanobis distance 0.81 (chi2(2) median 1.18)",
       "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
     },
     {
@@ -1383,7 +1383,7 @@
       "scope": "S&P sector ETFs",
       "check": "simulated terrain matches closed-form OU moments",
       "status": "PASS",
-      "detail": "z vs theory: beta_mean -0.33, beta_var +1.30, lnvol_mean -0.80, lnvol_var -0.21, shock_cov -0.05 (n=20000); E[beta_T] theory 0.4310 vs simulated 0.4309; Var theory 0.003126 vs 0.003167",
+      "detail": "z vs theory: beta_mean -0.33, beta_var +1.30, lnvol_mean -0.80, lnvol_var -0.21, shock_cov -0.05 (n=20000); E[beta_T] theory 0.4310 vs simulated 0.4308; Var theory 0.004633 vs 0.004694",
       "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
     },
     {
@@ -1399,7 +1399,7 @@
       "scope": "S&P sector ETFs",
       "check": "breach probability counts paths that TOUCH the line",
       "status": "PASS",
-      "detail": "flagged 0.0000 equals any-touch 0.0000 (counting end-states only would read 0.0000); HUD shows 0.0000",
+      "detail": "flagged 0.0000 equals any-touch 0.0000 (counting end-states only would read 0.0000); HUD shows 0.0001",
       "source": "This engine's own code, re-derived independently by this audit"
     },
     {
@@ -1407,7 +1407,7 @@
       "scope": "S&P sector ETFs",
       "check": "HUD tail numbers come from the simulated path P&L",
       "status": "PASS",
-      "detail": "VaR95 4.9072% and ES97.5 7.4258% reproduced from the path P&L array; ES >= VaR holds; mean P&L +0.0068% (zero-drift risk view, as disclosed)",
+      "detail": "VaR95 5.0616% and ES97.5 7.8318% reproduced from the path P&L array; ES >= VaR holds; mean P&L +0.0080% (zero-drift risk view, as disclosed)",
       "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
     },
     {
@@ -1415,7 +1415,7 @@
       "scope": "S&P sector ETFs",
       "check": "calm < base < stressed terrain width",
       "status": "PASS",
-      "detail": "state variance calm 0.05087 < base 0.09936 < stress 0.20378 (disclosed shock multipliers 0.7 / 1.4, +0.10 shock correlation under stress)",
+      "detail": "state variance calm 0.07538 < base 0.14726 < stress 0.30201 (disclosed shock multipliers 0.7 / 1.4, +0.10 shock correlation under stress)",
       "source": "This engine's own code, re-derived independently by this audit"
     },
     {
@@ -1423,7 +1423,7 @@
       "scope": "S&P sector ETFs",
       "check": "realized state lands where the map predicted",
       "status": "PASS",
-      "detail": "walk-forward over 58 dates (30d ahead, refit each time on prior data only): 53.4% inside the 68.3% ring, 82.8% inside the 95.4% ring; median Mahalanobis distance 1.45 (chi2(2) median 1.18)",
+      "detail": "walk-forward over 58 dates (30d ahead, refit each time on prior data only, shocks widened by the factor measured on dates already resolved by then - median k 1.03): 56.9% inside the 68.3% ring, 86.2% inside the 95.4% ring (uncorrected the 68.3% ring held 53.4%); median Mahalanobis distance 1.36 (chi2(2) median 1.18)",
       "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
     },
     {
@@ -1703,7 +1703,7 @@
       "scope": "FX majors",
       "check": "realized state lands where the map predicted",
       "status": "PASS",
-      "detail": "walk-forward over 58 dates (30d ahead, refit each time on prior data only): 69.0% inside the 68.3% ring, 93.1% inside the 95.4% ring; median Mahalanobis distance 1.22 (chi2(2) median 1.18)",
+      "detail": "walk-forward over 58 dates (30d ahead, refit each time on prior data only, shocks widened by the factor measured on dates already resolved by then - median k 1.00): 69.0% inside the 68.3% ring, 93.1% inside the 95.4% ring (uncorrected the 68.3% ring held 69.0%); median Mahalanobis distance 1.11 (chi2(2) median 1.18)",
       "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
     },
     {
@@ -1951,7 +1951,7 @@
       "scope": "Futures (index & commodity)",
       "check": "simulated terrain matches closed-form OU moments",
       "status": "PASS",
-      "detail": "z vs theory: beta_mean -0.26, beta_var +1.30, lnvol_mean -0.79, lnvol_var -0.22, shock_cov -0.12 (n=20000); E[beta_T] theory 0.5225 vs simulated 0.5222; Var theory 0.019474 vs 0.019728",
+      "detail": "z vs theory: beta_mean -0.26, beta_var +1.30, lnvol_mean -0.79, lnvol_var -0.22, shock_cov -0.12 (n=20000); E[beta_T] theory 0.5225 vs simulated 0.5221; Var theory 0.053747 vs 0.054448",
       "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
     },
     {
@@ -1967,7 +1967,7 @@
       "scope": "Futures (index & commodity)",
       "check": "breach probability counts paths that TOUCH the line",
       "status": "PASS",
-      "detail": "flagged 0.0015 equals any-touch 0.0015 (counting end-states only would read 0.0010); HUD shows 0.0014",
+      "detail": "flagged 0.0570 equals any-touch 0.0570 (counting end-states only would read 0.0235); HUD shows 0.0593",
       "source": "This engine's own code, re-derived independently by this audit"
     },
     {
@@ -1975,7 +1975,7 @@
       "scope": "Futures (index & commodity)",
       "check": "HUD tail numbers come from the simulated path P&L",
       "status": "PASS",
-      "detail": "VaR95 7.1375% and ES97.5 11.1389% reproduced from the path P&L array; ES >= VaR holds; mean P&L +0.0123% (zero-drift risk view, as disclosed)",
+      "detail": "VaR95 8.0201% and ES97.5 14.0227% reproduced from the path P&L array; ES >= VaR holds; mean P&L +0.0193% (zero-drift risk view, as disclosed)",
       "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
     },
     {
@@ -1983,7 +1983,7 @@
       "scope": "Futures (index & commodity)",
       "check": "calm < base < stressed terrain width",
       "status": "PASS",
-      "detail": "state variance calm 0.06822 < base 0.13447 < stress 0.27332 (disclosed shock multipliers 0.7 / 1.4, +0.10 shock correlation under stress)",
+      "detail": "state variance calm 0.18828 < base 0.37112 < stress 0.75433 (disclosed shock multipliers 0.7 / 1.4, +0.10 shock correlation under stress)",
       "source": "This engine's own code, re-derived independently by this audit"
     },
     {
@@ -1991,7 +1991,7 @@
       "scope": "Futures (index & commodity)",
       "check": "realized state lands where the map predicted",
       "status": "PASS",
-      "detail": "walk-forward over 58 dates (30d ahead, refit each time on prior data only): 34.5% inside the 68.3% ring, 67.2% inside the 95.4% ring; median Mahalanobis distance 1.93 (chi2(2) median 1.18)",
+      "detail": "walk-forward over 58 dates (30d ahead, refit each time on prior data only, shocks widened by the factor measured on dates already resolved by then - median k 1.77): 74.1% inside the 68.3% ring, 84.5% inside the 95.4% ring (uncorrected the 68.3% ring held 34.5%); median Mahalanobis distance 1.04 (chi2(2) median 1.18)",
       "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
     },
     {
@@ -2239,7 +2239,7 @@
       "scope": "Rates & credit (ETF proxies)",
       "check": "simulated terrain matches closed-form OU moments",
       "status": "PASS",
-      "detail": "z vs theory: beta_mean -0.18, beta_var +1.28, lnvol_mean -0.78, lnvol_var -0.30, shock_cov -0.42 (n=20000); E[beta_T] theory 0.1362 vs simulated 0.1362; Var theory 0.002396 vs 0.002427",
+      "detail": "z vs theory: beta_mean -0.18, beta_var +1.28, lnvol_mean -0.78, lnvol_var -0.30, shock_cov -0.42 (n=20000); E[beta_T] theory 0.1362 vs simulated 0.1362; Var theory 0.003790 vs 0.003839",
       "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
     },
     {
@@ -2263,7 +2263,7 @@
       "scope": "Rates & credit (ETF proxies)",
       "check": "HUD tail numbers come from the simulated path P&L",
       "status": "PASS",
-      "detail": "VaR95 2.8207% and ES97.5 4.1211% reproduced from the path P&L array; ES >= VaR holds; mean P&L +0.0027% (zero-drift risk view, as disclosed)",
+      "detail": "VaR95 2.8821% and ES97.5 4.2649% reproduced from the path P&L array; ES >= VaR holds; mean P&L +0.0033% (zero-drift risk view, as disclosed)",
       "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
     },
     {
@@ -2271,7 +2271,7 @@
       "scope": "Rates & credit (ETF proxies)",
       "check": "calm < base < stressed terrain width",
       "status": "PASS",
-      "detail": "state variance calm 0.02687 < base 0.05288 < stress 0.10786 (disclosed shock multipliers 0.7 / 1.4, +0.10 shock correlation under stress)",
+      "detail": "state variance calm 0.04249 < base 0.08364 < stress 0.17060 (disclosed shock multipliers 0.7 / 1.4, +0.10 shock correlation under stress)",
       "source": "This engine's own code, re-derived independently by this audit"
     },
     {
@@ -2279,7 +2279,7 @@
       "scope": "Rates & credit (ETF proxies)",
       "check": "realized state lands where the map predicted",
       "status": "PASS",
-      "detail": "walk-forward over 58 dates (30d ahead, refit each time on prior data only): 56.9% inside the 68.3% ring, 81.0% inside the 95.4% ring; median Mahalanobis distance 1.45 (chi2(2) median 1.18)",
+      "detail": "walk-forward over 58 dates (30d ahead, refit each time on prior data only, shocks widened by the factor measured on dates already resolved by then - median k 1.21): 60.3% inside the 68.3% ring, 87.9% inside the 95.4% ring (uncorrected the 68.3% ring held 56.9%); median Mahalanobis distance 1.13 (chi2(2) median 1.18)",
       "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
     },
     {
@@ -2527,7 +2527,7 @@
       "scope": "Commodities & real assets",
       "check": "simulated terrain matches closed-form OU moments",
       "status": "PASS",
-      "detail": "z vs theory: beta_mean -0.25, beta_var +1.30, lnvol_mean -0.78, lnvol_var -0.25, shock_cov -0.44 (n=20000); E[beta_T] theory 0.1613 vs simulated 0.1609; Var theory 0.046836 vs 0.047446",
+      "detail": "z vs theory: beta_mean -0.25, beta_var +1.30, lnvol_mean -0.78, lnvol_var -0.25, shock_cov -0.44 (n=20000); E[beta_T] theory 0.1613 vs simulated 0.1606; Var theory 0.148732 vs 0.150669",
       "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
     },
     {
@@ -2543,7 +2543,7 @@
       "scope": "Commodities & real assets",
       "check": "breach probability counts paths that TOUCH the line",
       "status": "PASS",
-      "detail": "flagged 0.0000 equals any-touch 0.0000 (counting end-states only would read 0.0000); HUD shows 0.0004",
+      "detail": "flagged 0.0660 equals any-touch 0.0660 (counting end-states only would read 0.0255); HUD shows 0.0698",
       "source": "This engine's own code, re-derived independently by this audit"
     },
     {
@@ -2551,7 +2551,7 @@
       "scope": "Commodities & real assets",
       "check": "HUD tail numbers come from the simulated path P&L",
       "status": "PASS",
-      "detail": "VaR95 10.9348% and ES97.5 16.1963% reproduced from the path P&L array; ES >= VaR holds; mean P&L +0.0123% (zero-drift risk view, as disclosed)",
+      "detail": "VaR95 12.0863% and ES97.5 19.7696% reproduced from the path P&L array; ES >= VaR holds; mean P&L +0.0243% (zero-drift risk view, as disclosed)",
       "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
     },
     {
@@ -2559,15 +2559,15 @@
       "scope": "Commodities & real assets",
       "check": "calm < base < stressed terrain width",
       "status": "PASS",
-      "detail": "state variance calm 0.06593 < base 0.13271 < stress 0.26445 (disclosed shock multipliers 0.7 / 1.4, +0.10 shock correlation under stress)",
+      "detail": "state variance calm 0.20937 < base 0.42142 < stress 0.83979 (disclosed shock multipliers 0.7 / 1.4, +0.10 shock correlation under stress)",
       "source": "This engine's own code, re-derived independently by this audit"
     },
     {
       "id": "MAP-12",
       "scope": "Commodities & real assets",
       "check": "realized state lands where the map predicted",
-      "status": "WARN",
-      "detail": "walk-forward over 58 dates (30d ahead, refit each time on prior data only): 32.8% inside the 68.3% ring, 63.8% inside the 95.4% ring; median Mahalanobis distance 1.84 (chi2(2) median 1.18)",
+      "status": "PASS",
+      "detail": "walk-forward over 58 dates (30d ahead, refit each time on prior data only, shocks widened by the factor measured on dates already resolved by then - median k 1.92): 70.7% inside the 68.3% ring, 84.5% inside the 95.4% ring (uncorrected the 68.3% ring held 32.8%); median Mahalanobis distance 0.93 (chi2(2) median 1.18)",
       "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
     },
     {
@@ -2815,7 +2815,7 @@
       "scope": "Global macro (multi-asset ETFs)",
       "check": "simulated terrain matches closed-form OU moments",
       "status": "PASS",
-      "detail": "z vs theory: beta_mean -0.33, beta_var +1.30, lnvol_mean -0.80, lnvol_var -0.17, shock_cov -0.14 (n=20000); E[beta_T] theory 0.7737 vs simulated 0.7736; Var theory 0.004700 vs 0.004761",
+      "detail": "z vs theory: beta_mean -0.33, beta_var +1.30, lnvol_mean -0.80, lnvol_var -0.17, shock_cov -0.14 (n=20000); E[beta_T] theory 0.7737 vs simulated 0.7735; Var theory 0.009348 vs 0.009470",
       "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
     },
     {
@@ -2831,7 +2831,7 @@
       "scope": "Global macro (multi-asset ETFs)",
       "check": "breach probability counts paths that TOUCH the line",
       "status": "PASS",
-      "detail": "flagged 0.0000 equals any-touch 0.0000 (counting end-states only would read 0.0000); HUD shows 0.0001",
+      "detail": "flagged 0.0035 equals any-touch 0.0035 (counting end-states only would read 0.0015); HUD shows 0.0080",
       "source": "This engine's own code, re-derived independently by this audit"
     },
     {
@@ -2839,7 +2839,7 @@
       "scope": "Global macro (multi-asset ETFs)",
       "check": "HUD tail numbers come from the simulated path P&L",
       "status": "PASS",
-      "detail": "VaR95 6.0713% and ES97.5 9.1144% reproduced from the path P&L array; ES >= VaR holds; mean P&L +0.0062% (zero-drift risk view, as disclosed)",
+      "detail": "VaR95 6.4478% and ES97.5 10.1473% reproduced from the path P&L array; ES >= VaR holds; mean P&L +0.0096% (zero-drift risk view, as disclosed)",
       "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
     },
     {
@@ -2847,7 +2847,7 @@
       "scope": "Global macro (multi-asset ETFs)",
       "check": "calm < base < stressed terrain width",
       "status": "PASS",
-      "detail": "state variance calm 0.05739 < base 0.11228 < stress 0.23004 (disclosed shock multipliers 0.7 / 1.4, +0.10 shock correlation under stress)",
+      "detail": "state variance calm 0.11414 < base 0.22333 < stress 0.45754 (disclosed shock multipliers 0.7 / 1.4, +0.10 shock correlation under stress)",
       "source": "This engine's own code, re-derived independently by this audit"
     },
     {
@@ -2855,7 +2855,7 @@
       "scope": "Global macro (multi-asset ETFs)",
       "check": "realized state lands where the map predicted",
       "status": "PASS",
-      "detail": "walk-forward over 58 dates (30d ahead, refit each time on prior data only): 41.4% inside the 68.3% ring, 81.0% inside the 95.4% ring; median Mahalanobis distance 1.71 (chi2(2) median 1.18)",
+      "detail": "walk-forward over 58 dates (30d ahead, refit each time on prior data only, shocks widened by the factor measured on dates already resolved by then - median k 1.43): 67.2% inside the 68.3% ring, 93.1% inside the 95.4% ring (uncorrected the 68.3% ring held 41.4%); median Mahalanobis distance 1.18 (chi2(2) median 1.18)",
       "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
     },
     {
@@ -3103,7 +3103,7 @@
       "scope": "Small-cap liquidity stress (thin volume)",
       "check": "simulated terrain matches closed-form OU moments",
       "status": "PASS",
-      "detail": "z vs theory: beta_mean -0.32, beta_var +1.31, lnvol_mean -0.76, lnvol_var -0.49, shock_cov -0.21 (n=20000); E[beta_T] theory 0.5129 vs simulated 0.5124; Var theory 0.059813 vs 0.060595",
+      "detail": "z vs theory: beta_mean -0.32, beta_var +1.31, lnvol_mean -0.76, lnvol_var -0.49, shock_cov -0.21 (n=20000); E[beta_T] theory 0.5129 vs simulated 0.5124; Var theory 0.069719 vs 0.070631",
       "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
     },
     {
@@ -3119,7 +3119,7 @@
       "scope": "Small-cap liquidity stress (thin volume)",
       "check": "breach probability counts paths that TOUCH the line",
       "status": "PASS",
-      "detail": "flagged 0.0045 equals any-touch 0.0045 (counting end-states only would read 0.0025); HUD shows 0.0024",
+      "detail": "flagged 0.0070 equals any-touch 0.0070 (counting end-states only would read 0.0030); HUD shows 0.0052",
       "source": "This engine's own code, re-derived independently by this audit"
     },
     {
@@ -3127,7 +3127,7 @@
       "scope": "Small-cap liquidity stress (thin volume)",
       "check": "HUD tail numbers come from the simulated path P&L",
       "status": "PASS",
-      "detail": "VaR95 12.1541% and ES97.5 17.7854% reproduced from the path P&L array; ES >= VaR holds; mean P&L +0.0150% (zero-drift risk view, as disclosed)",
+      "detail": "VaR95 12.2564% and ES97.5 17.9638% reproduced from the path P&L array; ES >= VaR holds; mean P&L +0.0158% (zero-drift risk view, as disclosed)",
       "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
     },
     {
@@ -3135,7 +3135,7 @@
       "scope": "Small-cap liquidity stress (thin volume)",
       "check": "calm < base < stressed terrain width",
       "status": "PASS",
-      "detail": "state variance calm 0.05496 < base 0.11204 < stress 0.22015 (disclosed shock multipliers 0.7 / 1.4, +0.10 shock correlation under stress)",
+      "detail": "state variance calm 0.06406 < base 0.13059 < stress 0.25661 (disclosed shock multipliers 0.7 / 1.4, +0.10 shock correlation under stress)",
       "source": "This engine's own code, re-derived independently by this audit"
     },
     {
@@ -3143,7 +3143,7 @@
       "scope": "Small-cap liquidity stress (thin volume)",
       "check": "realized state lands where the map predicted",
       "status": "PASS",
-      "detail": "walk-forward over 58 dates (30d ahead, refit each time on prior data only): 63.8% inside the 68.3% ring, 82.8% inside the 95.4% ring; median Mahalanobis distance 1.19 (chi2(2) median 1.18)",
+      "detail": "walk-forward over 58 dates (30d ahead, refit each time on prior data only, shocks widened by the factor measured on dates already resolved by then - median k 1.50): 79.3% inside the 68.3% ring, 89.7% inside the 95.4% ring (uncorrected the 68.3% ring held 63.8%); median Mahalanobis distance 0.77 (chi2(2) median 1.18)",
       "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
     },
     {

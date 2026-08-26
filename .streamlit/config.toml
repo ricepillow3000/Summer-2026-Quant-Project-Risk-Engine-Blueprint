@@ -21,3 +21,18 @@ enableXsrfProtection = true
 # library versions and internal structure. Errors still appear in full in the
 # server logs, where they belong.
 showErrorDetails = false
+
+# A visitor is a VIEWER, not an operator. Streamlit's default toolbar hands
+# every anonymous visitor "Clear cache", "Rerun" and "Settings" - operator
+# actions against shared server state on a single-process deploy. "viewer"
+# removes that menu, which is the whole admin story here: this app has no
+# accounts, no roles and no privileged data, so there is no admin to
+# impersonate - only these operator buttons, and now they are gone.
+#
+# Honest limit: this hides the UI affordance. The underlying rerun/clear-cache
+# messages still exist in Streamlit's protocol, so a determined visitor
+# crafting websocket frames could still reach them. That is bounded to a
+# denial-of-service, never a data leak, because the cache holds only public
+# market data any visitor can already re-request - and it is bounded further
+# by MAX_UNIVERSE and the cache budget in src/ingestion.py.
+toolbarMode = "viewer"

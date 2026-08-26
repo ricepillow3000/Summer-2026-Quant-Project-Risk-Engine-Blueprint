@@ -181,5 +181,15 @@ def war_room_html(payload: dict) -> str:
     begin, end = "/* __PAYLOAD_BEGIN__ */", "/* __PAYLOAD_END__ */"
     i = html.index(begin) + len(begin)
     j = html.index(end)
-    blob = json.dumps(payload, allow_nan=False)
+    # The payload lands INSIDE a <script> block, and json.dumps does not escape
+    # "<": a string containing "</script>" would close the block early and
+    # everything after it would parse as markup. Ticker names cannot carry "<"
+    # (ingestion.VALID_TICKER), but this payload also carries engine prose and
+    # third-party strings, so escape at the splice rather than trusting the
+    # funnel. \u003c / \u003e / \u0026 are the same JSON string to the parser;
+    # \u2028 / \u2029 are JS line terminators that would break the literal.
+    blob = (json.dumps(payload, allow_nan=False)
+            .replace("<", "\\u003c").replace(">", "\\u003e")
+            .replace("&", "\\u0026")
+            .replace("\u2028", "\\u2028").replace("\u2029", "\\u2029"))
     return html[:i] + "\nconst DEMO = " + blob + ";\n" + html[j:]

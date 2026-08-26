@@ -26,6 +26,8 @@ Honest limits:
 import pandas as pd
 import yfinance as yf
 
+from src.netguard import guarded_session
+
 
 def corporate_actions(ticker: str, lookback_years: int = 5) -> dict:
     """
@@ -35,7 +37,7 @@ def corporate_actions(ticker: str, lookback_years: int = 5) -> dict:
         {"dividends": DataFrame[date, amount], "splits": DataFrame[date, ratio],
          "n_dividends": int, "n_splits": int, "last_split": dict | None}
     """
-    tk = yf.Ticker(ticker)
+    tk = yf.Ticker(ticker, session=guarded_session())
     cutoff = pd.Timestamp.now(tz="UTC") - pd.DateOffset(years=lookback_years)
 
     divs = tk.dividends
@@ -69,7 +71,7 @@ def identifier_lookup(ticker: str) -> dict:
     reference-data vendor (OpenFIGI's free tier covers some names but isn't
     reliable enough to present as ground truth) -- flagged, not faked.
     """
-    tk = yf.Ticker(ticker)
+    tk = yf.Ticker(ticker, session=guarded_session())
     try:
         isin = tk.isin
     except Exception:  # noqa: BLE001 - treat any lookup failure as "unavailable"

@@ -81,6 +81,33 @@ risk-engine/
 
 ---
 
+## Security posture
+
+The app is public, anonymous and single-process, so the threat model is
+**resource exhaustion and injection, not authorization** - there are no
+accounts, no roles, no secrets and no database to protect. Controls are
+matched to that model rather than to a checklist:
+
+| Control | Where | What it stops |
+|---|---|---|
+| Ticker funnel (`VALID_TICKER`) | `src/ingestion.py` | Free-text symbols reaching HTML sinks, fetch URLs or cache paths |
+| Egress allowlist | `src/netguard.py` | Any outbound request leaving the two enumerated market-data hosts, including via redirect - the SSRF control for an app with no user-supplied URLs |
+| Complexity budget (`MAX_UNIVERSE`, cache size caps) | `src/ingestion.py` | One visitor spending the whole server's compute, or filling the disk with novel cache keys |
+| Script-splice escaping | `src/topology.py` | A payload string closing the map's `<script>` block early |
+| `toolbarMode = "viewer"` | `.streamlit/config.toml` | Visitors reaching Streamlit's operator actions (Rerun, Clear cache, Settings) |
+| XSRF + CORS on, tracebacks off | `.streamlit/config.toml` | Cross-site request forgery; stack traces leaking paths and versions |
+
+Each one has a regression test in `tests/test_engine.py`. Two things are
+deliberately NOT done, because they would be theatre here: constant-time
+comparison (there is no secret to compare) and query depth limiting (there is
+no query language - the compute budget above is its real analogue).
+
+Known residual risks, stated rather than hidden: hiding the toolbar removes
+the affordance, not the underlying Streamlit protocol messages, so a crafted
+websocket frame could still force a rerun - bounded to denial-of-service over
+public market data; and cache hit/miss latency is a weak timing signal about
+which symbols other visitors requested.
+
 ## Design Principles
 
 - **No LLM-originated data, ever.** Every number traces to Yahoo Finance at runtime; the provenance panel proves it.

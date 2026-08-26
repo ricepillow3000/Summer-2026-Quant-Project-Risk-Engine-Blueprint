@@ -12,6 +12,7 @@ so the engine speaks to any audience - not just one watchlist.
 """
 
 import base64
+import html
 
 import numpy as np
 import pandas as pd
@@ -29,6 +30,7 @@ import plotly.graph_objects as go
 from src.ingestion import (
     fetch_prices, get_returns, data_health, provenance, clear_cache,
     average_dollar_volume, fetch_risk_free_rate, PRESETS, valid_ticker,
+    MAX_UNIVERSE,
 )
 from src.analytics import correlation_matrix, covariance_matrix
 from src.risk import (
@@ -1656,6 +1658,21 @@ if _rejected:
         + " - not a valid Yahoo Finance symbol. Symbols are letters, digits "
           "and `. - = ^` only (e.g. `BRK-B`, `EURUSD=X`, `GC=F`, `^IRX`)."
     )
+if len(tickers) > MAX_UNIVERSE:
+    # Complexity budget, enforced where the visitor can SEE it. Every extra
+    # symbol is another Yahoo leg, another covariance row, another full-history
+    # Grit pull and another map unit - on a single-process public deploy that
+    # cost lands on every other visitor. src/ingestion.py caps the funnel too,
+    # so a caller that skips this check still cannot exceed the budget; this
+    # branch exists so the cap is disclosed rather than silently applied.
+    st.warning(
+        f"This engine analyzes up to **{MAX_UNIVERSE}** symbols at once - a "
+        "deliberate compute budget on a public, single-process deployment. "
+        f"Using the first {MAX_UNIVERSE}; dropped "
+        + ", ".join(f"`{html.escape(t)}`" for t in tickers[MAX_UNIVERSE:])
+        + "."
+    )
+    tickers = tickers[:MAX_UNIVERSE]
 if len(tickers) < 2:
     st.warning("Add at least two symbols to analyze a portfolio.")
     st.stop()
@@ -1936,7 +1953,13 @@ if scenario_label:
         f"loses an average of <b>{mc['cvar']:.1%}</b> in the worst 5% of simulated years."
     )
     if excluded:
-        verdict += f" *(Excludes {', '.join(excluded)} - not trading in that period.)*"
+        # Ticker names are user-supplied and this string is rendered with
+        # unsafe_allow_html. VALID_TICKER already forbids "<", so this escape
+        # is the second line, not the first - defence that survives someone
+        # widening the regex later.
+        verdict += (" *(Excludes "
+                    + ", ".join(html.escape(t) for t in excluded)
+                    + " - not trading in that period.)*")
 else:
     verdict = (
         f"In the worst 5% of simulated years, {alloc_art} {alloc_label} portfolio of these "

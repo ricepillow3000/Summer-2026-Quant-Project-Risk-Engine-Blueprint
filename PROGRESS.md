@@ -184,6 +184,43 @@ risk-engine/
   plug-in estimation error as well as the overlapping-window smoothing. That
   is now a regression test, not a footnote.
 
+- ✅ **Pre-deploy security pass** (2026-08-26) - council-reviewed (four voices:
+  architect/skeptic/pragmatist/critic) rather than checklist-applied. Verdict:
+  of the four requested hardenings, two mapped onto real surfaces here and two
+  did not, because this app has no accounts, no roles, no secrets, no database,
+  no GraphQL and no webhooks. Threat model is **resource exhaustion and
+  injection, not authorization**. Shipped:
+  - **Egress allowlist** (`src/netguard.py`) - the SSRF control adapted to an
+    app with no user-supplied URLs. Every `yf.download`/`yf.Ticker` call runs
+    through a `curl_cffi` session that refuses any host outside
+    `ALLOWED_HOSTS` and re-checks the final URL so a redirect chain cannot
+    walk out. It subclasses curl_cffi, not `requests`: yfinance accepts a
+    plain requests session but Yahoo answers it with `YFRateLimitError`, so
+    the naive version would have broken the data path. The allowlist
+    immediately caught a real dependency nobody had noticed - `Ticker.isin`
+    queries Business Insider, not Yahoo - which is now an enumerated,
+    reviewed host instead of a silent one.
+  - **Complexity budget** (`MAX_UNIVERSE = 25`, `CACHE_MAX_FILES`,
+    `CACHE_MAX_MB`) - the real analogue of a query depth/complexity limit for
+    an app with no query language. Enforced at the ticker funnel so no caller
+    can exceed it, and disclosed in the UI rather than silently truncating.
+    Cache eviction is oldest-first over derived market data.
+  - **Visitor is not an operator** (`toolbarMode = "viewer"`) - Streamlit's
+    default toolbar hands every anonymous visitor Rerun / Clear cache /
+    Settings against shared server state. That menu was the entire "admin"
+    surface; it is gone. Residual stated honestly in the config: hiding the
+    affordance does not remove the protocol message, so a crafted websocket
+    frame could still force a rerun - bounded to DoS over public data.
+  - **Script-splice escaping** (`src/topology.py`) - the map payload lands
+    inside a `<script>`, and `json.dumps` does not escape `<`, so `</script>`
+    in any engine string would have closed the block early. Now escaped to
+    `<` at the splice, plus `html.escape` on ticker names at the one
+    HTML sink that renders them.
+  Deliberately NOT done: constant-time comparison (no secret is compared) and
+  query depth limiting (no query language). Both are theatre without the
+  surface, and read as checklist-following in an interview.
+  5 new regression tests (108/108); batch audit still 404/404.
+
 - ⬜ **Phase VI** - deploy to Railway/Render for the live recruiter link
   (Procfile + requirements.txt already set up)
 

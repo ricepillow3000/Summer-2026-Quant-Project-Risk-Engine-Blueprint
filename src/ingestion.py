@@ -28,6 +28,8 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 
+from src.netguard import guarded_session
+
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 
 # Default universe (used when none is supplied). Kept as TICKERS for backwards
@@ -40,6 +42,23 @@ MIN_ROWS = 60
 
 # How long a disk cache stays valid before we re-pull from Yahoo.
 CACHE_MAX_AGE_HOURS = 6
+
+# --- complexity budget ------------------------------------------------------
+# The public app has no login and no queue: one visitor's request is the whole
+# server's work. Cost scales with the number of tickers (each one is a Yahoo
+# leg, a covariance row, a Grit Zone full-history pull and a map unit), so the
+# universe size IS this engine's query-complexity dimension - the analogue of
+# a depth/complexity limit on a query language. Bounded here, at the same
+# funnel that validates ticker shape, so no caller can exceed it; the UI
+# enforces it visibly rather than letting the funnel truncate in silence.
+MAX_UNIVERSE = 25
+
+# Cache is derived data (re-fetchable, no secrets), but the disk it sits on is
+# a small ephemeral volume and any visitor can mint a new cache key by typing
+# a new ticker combination. Bound it so a stream of novel baskets cannot fill
+# the volume; oldest entries go first.
+CACHE_MAX_FILES = 240
+CACHE_MAX_MB = 200
 
 # One-click starting baskets for a wider audience. These are representative,
 # illustrative groupings - NOT any firm's actual holdings.
@@ -110,7 +129,10 @@ def valid_ticker(symbol: str) -> bool:
 
 def _clean(tickers: list[str] | None) -> list[str]:
     cleaned = {t.strip().upper() for t in (tickers or DEFAULT_UNIVERSE) if t.strip()}
-    return sorted(t for t in cleaned if VALID_TICKER.match(t))
+    valid = sorted(t for t in cleaned if VALID_TICKER.match(t))
+    # Hard complexity bound: a caller that ignores MAX_UNIVERSE still cannot
+    # make the server do unbounded work (see MAX_UNIVERSE above).
+    return valid[:MAX_UNIVERSE]
 
 
 def _cache_path(tickers: list[str], period: str, align: bool = True) -> str:
@@ -158,6 +180,35 @@ def clear_cache(tickers: list[str] | None = None, period: str = "2y") -> None:
             os.remove(path)
 
 
+def _prune_cache(max_files: int = CACHE_MAX_FILES,
+                 max_mb: float = CACHE_MAX_MB) -> int:
+    """
+    Keep the parquet cache inside its budget, oldest entry first. Returns how
+    many files were dropped. Cache entries are derived market data - dropping
+    one costs a re-fetch, never information.
+    """
+    try:
+        names = [f for f in os.listdir(DATA_DIR)
+                 if f.endswith(".parquet") or f.endswith(".meta.json")]
+        entries = [(os.path.getmtime(os.path.join(DATA_DIR, f)),
+                    os.path.getsize(os.path.join(DATA_DIR, f)),
+                    os.path.join(DATA_DIR, f)) for f in names]
+    except OSError:
+        return 0
+    entries.sort()                                   # oldest first
+    total_mb = sum(size for _, size, _ in entries) / 1e6
+    dropped = 0
+    while entries and (len(entries) > max_files or total_mb > max_mb):
+        _, size, path = entries.pop(0)
+        try:
+            os.unlink(path)
+        except OSError:
+            continue
+        total_mb -= size / 1e6
+        dropped += 1
+    return dropped
+
+
 def _download_close_volume(tickers: list[str], period: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     One Yahoo download → normalized (close, volume) frames, tickers-as-columns.
@@ -166,8 +217,10 @@ def _download_close_volume(tickers: list[str], period: str) -> tuple[pd.DataFram
     and the dollar-volume cache. yfinance returns a column MultiIndex for
     multiple tickers and a flat index for one - we normalize both shapes here.
     """
+    # Every outbound call goes through the egress allowlist (src/netguard.py):
+    # the ticker funnel below is the primary control, this is the second line.
     raw = yf.download(tickers, period=period, auto_adjust=True, progress=False,
-                      repair=True, timeout=30)
+                      repair=True, timeout=30, session=guarded_session())
     if isinstance(raw.columns, pd.MultiIndex):
         close, volume = raw["Close"], raw["Volume"]
     else:
@@ -197,6 +250,7 @@ def _write_dollar_volume_cache(tickers: list[str], period: str, dv: pd.DataFrame
         return
     cache_path = _dv_cache_path(tickers, period)
     dv.to_parquet(cache_path)
+    _prune_cache()          # keep the cache inside its disk budget
     meta = {
         "source": "Yahoo Finance (via yfinance)",
         "metric": "daily dollar volume (adj close x volume)",
@@ -256,6 +310,7 @@ def fetch_prices(tickers: list[str] | None = None, period: str = "2y",
 
     if use_cache:
         prices.to_parquet(cache_path)
+        _prune_cache()      # keep the cache inside its disk budget
         # Provenance: stamp exactly where this data came from and when, so every
         # downstream number is traceable to a real source - not the model.
         meta = {
@@ -368,7 +423,7 @@ def fetch_risk_free_rate(use_cache: bool = True,
 
     try:
         raw = yf.download("^IRX", period="5d", auto_adjust=True,
-                          progress=False, timeout=20)
+                          progress=False, timeout=20, session=guarded_session())
         close = raw["Close"]
         if isinstance(close, pd.DataFrame):
             close = close.iloc[:, 0]

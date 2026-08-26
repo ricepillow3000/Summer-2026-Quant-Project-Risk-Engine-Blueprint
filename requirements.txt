@@ -2,6 +2,8 @@ numpy>=1.26.0
 pandas>=2.2.0
 scipy>=1.12.0
 yfinance>=0.2.40
+curl_cffi>=0.7.0      # yfinance's HTTP transport; src/netguard.py
+                       # subclasses its Session for the egress allowlist
 scikit-learn>=1.4.0    # yfinance lazy-imports it on some download paths; without
                        # it individual tickers fail silently (observed: IWD, the
                        # Value factor proxy in src/factors.py)
