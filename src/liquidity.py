@@ -102,8 +102,8 @@ def liquidity_adjusted_cvar(cvar: float, full_exit_days: float,
     unwinding actually takes `full_exit_days` MORE trading days (the
     participation-rate model above, driven by real volume), the book's true
     exposure window is base_horizon + full_exit_days. Under square-root-of-time
-    scaling - the Basel / Bangia (1999) liquidity-horizon convention - risk
-    grows with the sqrt of the window, so:
+    scaling - the Basel liquidity-horizon convention - risk grows with the sqrt
+    of the window, so:
 
         multiplier = sqrt((base + full_exit) / base) = sqrt(1 + full_exit/base)
         LVaR       = CVaR * multiplier
@@ -116,7 +116,10 @@ def liquidity_adjusted_cvar(cvar: float, full_exit_days: float,
 
     Honest limit: sqrt-of-time assumes iid returns (no volatility clustering)
     and prices market-EXPOSURE risk over the unwind, NOT the bid/ask impact
-    cost of trading. It answers "how much more can the market move against me
+    cost of trading. That spread cost is what Bangia, Diebold, Schuermann and
+    Stroughair (1999) actually model - they ADD an exogenous bid/ask term to
+    VaR rather than stretching the horizon - so this function is deliberately
+    not an implementation of it, and does not cite it as one. It answers "how much more can the market move against me
     while I'm stuck holding?", not "what spread do I pay to get out?".
     """
     finite = np.isfinite(full_exit_days)

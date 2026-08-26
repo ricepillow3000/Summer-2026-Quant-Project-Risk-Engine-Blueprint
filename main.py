@@ -65,7 +65,7 @@ from src.signals import (
     fundamental_law_ir, effective_breadth,
 )
 from src.conviction import (
-    load_conviction, AI_CAPEX_BASKET, RECOVERY_HORIZON_DAYS,
+    load_conviction, AI_CAPEX_BASKET, RECOVERY_HORIZON_DAYS, race_days,
 )
 
 st.set_page_config(page_title="Meleona", layout="wide")
@@ -1060,9 +1060,14 @@ def outcome_hist(total_returns, cvar: float):
     return _style_fig(fig, height=280)
 
 
-def hbar(series: pd.Series, color=BRONZE, pct: bool = False, title_x: str = ""):
+def hbar(series: pd.Series, color=BRONZE, pct: bool = False, title_x: str = "",
+         top_first: bool = False):
     """Themed horizontal bar chart. Bars deepen with magnitude - the biggest
-    value wears the darkest bronze - so ranking reads at a glance."""
+    value wears the darkest bronze - so ranking reads at a glance.
+
+    Plotly draws the FIRST category at the BOTTOM of a horizontal bar chart.
+    Pass top_first=True for an already-ranked series so the leader lands where
+    the reader - and the caption - expects it."""
     x = series.values * (100 if pct else 1)
     span = float(np.max(np.abs(x))) or 1.0
     def _shade(v):  # lerp #CBBB94 (light) -> #8A6A3C (deep) by |value|
@@ -1076,7 +1081,10 @@ def hbar(series: pd.Series, color=BRONZE, pct: bool = False, title_x: str = ""):
         marker=dict(color=[_shade(v) for v in x], line=dict(width=0)),
         hovertemplate="%{y}: %{x:.2f}" + ("%" if pct else "") + "<extra></extra>"))
     fig.update_layout(xaxis_title=title_x)
-    return _style_fig(fig, height=max(160, 30 * len(series) + 40))
+    fig = _style_fig(fig, height=max(160, 30 * len(series) + 40))
+    if top_first:
+        fig.update_yaxes(autorange="reversed")
+    return fig
 
 
 def grit_breakdown_fig(scores: pd.DataFrame):
@@ -1446,11 +1454,14 @@ try:
     _t1, _t3 = _s["trough_1y_later"], _s["trough_3y_later"]
     _p3 = _s["peak_3y_later"]
     _race = _conv["race"]
-    # A race is decided when at least one side recovered; the basket wins a
-    # race the benchmark never finished (recovered vs. not within ~3y).
-    _decided = _race.dropna(subset=["basket_days", "bench_days"], how="all")
-    _bwin = int(((_decided["basket_days"].fillna(np.inf)
-                  < _decided["bench_days"].fillna(np.inf))).sum())
+    # A crisis counts as a race when at least one side actually fell. Ranking
+    # is by race_days: never fell (0) beats a reclaim, which beats never
+    # getting back (inf).
+    _decided = _race[_race["bench_fell"] | _race["basket_fell"]]
+    _bwin = int(sum(
+        race_days(r["basket_days"], r["basket_fell"], np.inf)
+        < race_days(r["bench_days"], r["bench_fell"], np.inf)
+        for _, r in _decided.iterrows()))
     _nrace = int(len(_decided))
 
     # Landing target for the GOTHAM button above. Zero-height marker rather
@@ -1746,7 +1757,10 @@ def _freshness_ticker(fetched_at_iso: str):
     fetched = pd.Timestamp(fetched_at_iso)
     now = pd.Timestamp.now(tz=fetched.tzinfo) if fetched.tzinfo else pd.Timestamp.now()
     secs = max(0, int((now - fetched).total_seconds()))
-    st.caption(f"⟳ Polling every 60s during market hours · data pulled {secs}s ago.")
+    # Nothing polls: this fragment only re-renders the counter. Quotes are
+    # cached for 60s and refetched on the next rerun after that TTL expires.
+    st.caption(f"⟳ Quotes cached 60s - refreshed on your next interaction, "
+               f"not on a timer · data pulled {secs}s ago.")
 
 
 # ---- Audit trail: what this run actually did, in order (see Lineage tab) ----
@@ -1811,8 +1825,9 @@ with deck_alloc, st.expander("02 · Allocation - how capital is weighted",
     st.caption(f"Risk matrix: {cov_info}.")
     if cov_method == "EWMA":
         st.caption(
-            "⚠️ **Reactive lens.** EWMA spikes on one bad day (≈11-day half-life, "
-            "~90% of its weight in the last month). It embodies exactly the panic "
+            "⚠️ **Reactive lens.** EWMA spikes on one bad day (≈11-day half-life; "
+            "at λ=0.94 about 73% of its weight sits in the last month, and it "
+            "takes ~37 trading days to reach 90%). It embodies exactly the panic "
             "[Crisis Conviction] argues against - shown for contrast, so you can see "
             "how twitchy risk looks, not because the engine recommends reacting."
         )
@@ -2383,7 +2398,12 @@ with tab_breakdown:
 
     # --- Risk-contribution decomposition (where the risk actually lives) ---
     panel_head("Risk contribution by asset", "Where the risk actually lives")
-    rc = risk_contributions(weights, cov)
+    # base_weights, NOT the vol-targeted ones: risk_pct is scale-invariant and
+    # always sums to 100%, so plotting LEVERED dollar weights beside it put two
+    # different denominators under one "% of portfolio" axis - at 0.6x leverage
+    # every weight bar shrank and read as a risk/weight gap that was pure
+    # leverage. Leverage scales the whole book and cannot change the split.
+    rc = risk_contributions(base_weights, cov)
     rc_fig = go.Figure()
     rc_fig.add_trace(go.Bar(
         y=list(rc.index), x=rc["weight"].values * 100, orientation="h",
@@ -2403,6 +2423,9 @@ with tab_breakdown:
         f"Share of total portfolio volatility per asset. {top} contributes the most "
         f"risk ({rc.loc[top, 'risk_pct']:.0%}). Equal dollar weight ≠ equal risk - "
         "switch Allocation to Risk parity to flatten these bars."
+        + (f" Both bars are shares of the book itself; the {leverage:.2f}× "
+           "vol-target overlay scales the whole book and does not change this "
+           "split." if use_vt else "")
     )
 
     panel_head("Risk-adjusted performance", "Sharpe vs the real T-bill rate")
@@ -2670,7 +2693,7 @@ with tab_breakdown:
             st.caption(
                 f"Market beta {fx['betas']['Market']:+.2f} · "
                 f"R-squared {fx['r_squared']:.0%} · "
-                f"annualized alpha {fx['alpha_annual']:+.1%}. "
+                f"annualized alpha {fx['alpha_annual']:+.1%} ({fx['alpha_basis']}). "
                 "Size/Value/Momentum are tilts vs. broad market (ETF-proxy factors)."
             )
         except Exception as exc:  # noqa: BLE001
@@ -2891,7 +2914,7 @@ with tab_balance:
                 f'letter-spacing:.22em;text-transform:uppercase;color:#9A7B4F;'
                 f'text-align:center;margin-top:10px;">Defensive pair &middot; '
                 f'{"the short and its squeeze cushion" if bearish else "what goes up must come down"}'
-                f' &middot; circle size reflects volatility, not capital</div>'
+                f' &middot; sizes are illustrative; the numbers carry the quantities</div>'
                 f'</div>'
                 f'<div style="flex:1 1 100%;min-width:0;max-width:980px;margin:0 auto;">'
                 f'<div style="font-family:Georgia;font-size:15px;color:#3F3B35;line-height:1.55;">'
@@ -3007,7 +3030,8 @@ with tab_grit:
             )
         else:
             st.plotly_chart(
-                hbar(gscores["grit_score"], color=BRONZE_DK, title_x="Grit Score (0–100)"),
+                hbar(gscores["grit_score"], color=BRONZE_DK,
+                     title_x="Grit Score (0–100)", top_first=True),
                 width="stretch", config=PLOTLY_CFG,
             )
             read_me(
@@ -3017,13 +3041,21 @@ with tab_grit:
                 "these names against each other, not against the whole market.")
             grittiest = gscores.index[0]
             g = gscores.loc[grittiest]
+            # NaN here means "no drawdown episode deep enough to measure",
+            # which is an unknown record - never render it as a perfect one.
+            if pd.isna(g["pct_recovered"]):
+                _rec = ("has not yet had a drawdown deep enough to time a "
+                        "recovery from")
+            else:
+                _med = g["median_recovery_days"]
+                _rec = (f"recovered {g['pct_recovered']:.0%} of its own drawdowns"
+                        + ("" if pd.isna(_med) else
+                           f" (median {_med:.0f} trading days to claw back)"))
             st.caption(
-                f"**{grittiest}** ranks grittiest here: recovered "
-                f"{g['pct_recovered']:.0%} of its own drawdowns "
-                f"(median {g['median_recovery_days']:.0f} trading days to claw "
-                f"back), stayed positive over {g['consistency']:.0%} of rolling "
-                f"1-year holding periods, and lived through "
-                f"{g['n_regimes_survived']:.0f} of the named crisis windows above."
+                f"**{grittiest}** ranks grittiest here: {_rec}, stayed positive "
+                f"over {g['consistency']:.0%} of rolling 1-year holding "
+                f"periods, and lived through {g['n_regimes_survived']:.0f} of "
+                f"the named crisis windows above."
             )
 
             panel_head("Grit breakdown", "Recovery · consistency · resilience")
@@ -3117,23 +3149,27 @@ with tab_conviction:
             f"trading days from each side's trough back to its own "
             f"pre-crisis level."
         )
-        rr = race.dropna(subset=["basket_days", "bench_days"], how="all")
+        # Show a crisis if at least one side actually fell in it.
+        rr = race[race["bench_fell"] | race["basket_fell"]]
         cap = RECOVERY_HORIZON_DAYS
+
+        def _lbl(days, fell):
+            if not fell:
+                return "never fell"
+            return "not within 3y" if pd.isna(days) else f"{days:.0f}d"
+
         race_fig = go.Figure()
-        race_fig.add_trace(go.Bar(
-            y=rr["crisis"], x=rr["bench_days"].fillna(cap), orientation="h",
-            name="S&P 500 (SPY)", marker=dict(color="#CBBB94"),
-            text=[("not within 3y" if pd.isna(v) else f"{v:.0f}d")
-                  for v in rr["bench_days"]],
-            textposition="outside", textfont=dict(size=11),
-            hovertemplate="%{y} - market: %{text}<extra></extra>"))
-        race_fig.add_trace(go.Bar(
-            y=rr["crisis"], x=rr["basket_days"].fillna(cap), orientation="h",
-            name="AI-capex basket", marker=dict(color=BRONZE_DK),
-            text=[("not within 3y" if pd.isna(v) else f"{v:.0f}d")
-                  for v in rr["basket_days"]],
-            textposition="outside", textfont=dict(size=11),
-            hovertemplate="%{y} - basket: %{text}<extra></extra>"))
+        for col, flag, nm, colr, who in (
+            ("bench_days", "bench_fell", "S&P 500 (SPY)", "#CBBB94", "market"),
+            ("basket_days", "basket_fell", "AI-capex basket", BRONZE_DK, "basket"),
+        ):
+            race_fig.add_trace(go.Bar(
+                y=rr["crisis"],
+                x=[race_days(d, f, cap) for d, f in zip(rr[col], rr[flag])],
+                orientation="h", name=nm, marker=dict(color=colr),
+                text=[_lbl(d, f) for d, f in zip(rr[col], rr[flag])],
+                textposition="outside", textfont=dict(size=11),
+                hovertemplate="%{y} - " + who + ": %{text}<extra></extra>"))
         race_fig = _style_fig(race_fig, height=max(340, 56 * len(rr) + 70))
         race_fig.update_layout(
             barmode="group", xaxis_title="trading days to reclaim pre-crisis level",
@@ -3144,14 +3180,18 @@ with tab_conviction:
         st.plotly_chart(race_fig, width="stretch", config=PLOTLY_CFG)
 
         decided = rr
-        bwin = int((decided["basket_days"].fillna(np.inf)
-                    < decided["bench_days"].fillna(np.inf)).sum())
+        bwin = int(sum(
+            race_days(r["basket_days"], r["basket_fell"], np.inf)
+            < race_days(r["bench_days"], r["bench_fell"], np.inf)
+            for _, r in decided.iterrows()))
         st.markdown(
             f'<div class="read-me"><b>How to read this.</b> Shorter bar = '
             f'faster recovery. The basket got back up faster in '
             f'<b>{bwin} of {len(decided)}</b> crises. Where a bar says '
             f'"not within 3y", that side never reclaimed its pre-crisis '
-            f'level inside ~3 trading years - shown, not hidden.</div>',
+            f'level inside ~3 trading years; "never fell" means it did not '
+            f'decline at all inside that window, so it had nothing to '
+            f'reclaim - shown, not hidden.</div>',
             unsafe_allow_html=True)
         st.caption(
             "*Honest limits: the basket carries today's \"AI capex\" label - "

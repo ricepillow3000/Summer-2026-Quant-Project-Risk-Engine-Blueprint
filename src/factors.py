@@ -15,7 +15,7 @@ Quant Deep Dive:
 
 import numpy as np
 import pandas as pd
-from src.ingestion import fetch_prices, get_returns
+from src.ingestion import fetch_prices, get_returns, fetch_risk_free_rate
 
 # ETF proxies used to construct the factors.
 #   Market   = SPY (broad market)
@@ -44,14 +44,25 @@ def factor_exposures(portfolio_returns: pd.Series, period: str = "2y") -> dict:
     Returns betas per factor, the regression R-squared, and the annualized
     alpha (intercept). Aligns on common dates so calendar mismatches can't
     distort the fit.
+
+    Alpha is return over the RISK-FREE leg, so the portfolio and the market
+    both enter in excess of the 13-week T-bill. Size/Value/Momentum are
+    long-short and already self-financing, so they take no adjustment. If the
+    T-bill fetch fails the intercept is a raw-return one and `alpha_basis`
+    says so - the same doctrine as Sharpe: never quietly pass off an
+    unadjusted number as the adjusted one.
     """
     factors = _build_factors(period)
     df = pd.concat([portfolio_returns.rename("port"), factors], axis=1).dropna()
     if len(df) < 30:
         raise RuntimeError("Not enough overlapping history to estimate factors.")
 
-    y = df["port"].values
-    X = df[["Market", "Size", "Value", "Momentum"]].values
+    rf_annual = fetch_risk_free_rate()
+    rf_daily = (rf_annual / 252.0) if rf_annual is not None else 0.0
+
+    y = df["port"].values - rf_daily
+    X = df[["Market", "Size", "Value", "Momentum"]].values.astype(float).copy()
+    X[:, 0] -= rf_daily                        # Market -> EXCESS market
     X = np.column_stack([np.ones(len(X)), X])  # intercept
 
     beta, *_ = np.linalg.lstsq(X, y, rcond=None)
@@ -63,6 +74,12 @@ def factor_exposures(portfolio_returns: pd.Series, period: str = "2y") -> dict:
     names = ["Market", "Size", "Value", "Momentum"]
     return {
         "alpha_annual": float(beta[0] * 252),
+        "risk_free_annual": rf_annual,
+        "alpha_basis": (
+            f"excess of the 13-week T-bill ({rf_annual:.2%} annual)"
+            if rf_annual is not None else
+            "RAW returns - no T-bill rate available, so this is NOT "
+            "risk-free-adjusted"),
         "betas": {name: float(b) for name, b in zip(names, beta[1:])},
         "r_squared": float(r2),
         "observations": len(df),

@@ -122,8 +122,11 @@ def recovery_stats(prices: pd.Series, threshold: float = DEFAULT_DD_THRESHOLD) -
     current_dd = float(prices.iloc[-1] / prices.cummax().iloc[-1] - 1.0)
 
     if episodes.empty:
+        # No episodes = an UNKNOWN recovery record, not a perfect one. NaN is
+        # the codebase's existing signal for it: _score01 maps NaN to 0.0
+        # ("an unknown is never rewarded as if it were resilient").
         return {
-            "n_episodes": 0, "n_recovered": 0, "pct_recovered": 1.0,
+            "n_episodes": 0, "n_recovered": 0, "pct_recovered": float("nan"),
             "median_recovery_days": float("nan"), "still_underwater": False,
             "current_drawdown": current_dd,
         }

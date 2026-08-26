@@ -12,6 +12,8 @@ app; it self-skips if the network or Streamlit's test harness is unavailable, so
 the suite stays reliable offline.
 """
 
+import pathlib
+
 import numpy as np
 import pandas as pd
 
@@ -34,6 +36,7 @@ from src.grit import (
     regime_drawdown_and_recovery, grit_scores, _score01,
 )
 from src.data_quality import validate_prices
+from src.covariance import RISKMETRICS_LAMBDA
 
 
 def _synthetic_returns(n_days: int = 500, n_assets: int = 5, seed: int = 0) -> pd.DataFrame:
@@ -294,15 +297,25 @@ def test_drawdown_episode_unresolved_flagged():
     assert abs(rec["current_drawdown"] - (89.5 / 110 - 1)) < 1e-12
 
 
-def test_recovery_stats_no_drawdown_is_full_credit():
-    """A monotonically rising series has no setbacks -- trivially 'fully recovered'."""
+def test_recovery_stats_no_drawdown_is_unknown_not_full_credit():
+    """A monotonically rising series has no setbacks - so its recovery record
+    is UNMEASURED, not perfect. The old contract returned 1.0 here, which the
+    UI rendered as 'recovered 100% of its own drawdowns' for a name that never
+    had one, and which handed it 60% of the recovery score for free."""
     idx = pd.bdate_range("2021-01-01", periods=50)
     s = pd.Series(np.linspace(100, 150, 50), index=idx)
     rec = recovery_stats(s)
     assert rec["n_episodes"] == 0
-    assert rec["pct_recovered"] == 1.0
+    assert np.isnan(rec["pct_recovered"])
     assert rec["still_underwater"] is False
     assert abs(rec["current_drawdown"]) < 1e-9
+
+    # ...and it must reach the ranking as an unknown: _score01's documented
+    # contract is that NaN scores 0.0, never top marks.
+    scored = _score01(pd.Series({"CALM": rec["pct_recovered"], "B": 0.5,
+                                 "C": 0.9}), higher_is_better=True)
+    assert scored["CALM"] == 0.0
+    assert scored["C"] > scored["B"] > scored["CALM"]
 
 
 def test_rolling_consistency_bounds():
@@ -476,7 +489,11 @@ def test_full_app_boots():
         print(f"[skip] AppTest unavailable: {exc}")
         return
     try:
-        at = AppTest.from_file("main.py", default_timeout=120)
+        # AppTest resolves relative paths against the CALLING file, i.e.
+        # tests/main.py - which does not exist, so this test silently skipped
+        # every run instead of booting the app. Absolute path, no guessing.
+        app = pathlib.Path(__file__).resolve().parent.parent / "main.py"
+        at = AppTest.from_file(str(app), default_timeout=180)
         at.run()
     except Exception as exc:                        # network/data hiccup - don't fail suite
         print(f"[skip] app integration (data/network): {exc}")
@@ -1521,6 +1538,144 @@ def test_var_backtest_reports_untestable_on_short_sample():
     assert bt["testable"] is False
     assert bt["n"] == 0
     assert bt["passed"] is None
+
+
+# --- 2026-08-26 audit follow-ups (a), (b), (c) --------------------------------
+
+def test_peak_trough_reports_no_crash_when_window_never_declined():
+    """A window whose minimum is its first bar never fell. That must read as
+    'no crash here', not as a crash reclaimed in zero days."""
+    from src.conviction import _peak_trough, _days_to_reclaim
+
+    idx = pd.bdate_range("2023-03-01", periods=20)
+    rising = pd.Series(np.linspace(100.0, 120.0, 20), index=idx)
+    assert _peak_trough(rising) == (None, None)
+
+    # The old code returned peak == trough == the first bar, and reclaiming a
+    # level you are already standing on takes zero days - the SVB "0d" bug.
+    t0 = rising.idxmin()
+    assert _days_to_reclaim(rising, t0, float(rising.loc[t0])) == 0
+
+    # A window that really does fall still reports a real peak and trough.
+    crash = pd.Series(
+        list(np.linspace(100.0, 130.0, 8)) + list(np.linspace(128.0, 90.0, 6))
+        + list(np.linspace(92.0, 135.0, 6)), index=idx)
+    pk, tr = _peak_trough(crash)
+    assert pk is not None and tr is not None and pk < tr
+    assert crash.loc[pk] > crash.loc[tr]
+
+
+def test_race_days_separates_never_fell_from_never_reclaimed():
+    """Three states must not collapse: not falling is the best outcome in a
+    recovery race, never getting back is the worst."""
+    from src.conviction import race_days
+
+    never_fell = race_days(None, False, np.inf)
+    reclaimed = race_days(42, True, np.inf)
+    never_back = race_days(None, True, np.inf)
+    assert never_fell == 0.0
+    assert never_fell < reclaimed < never_back
+    assert np.isinf(never_back)
+    # The chart passes the axis cap instead of inf so the bar stays drawable.
+    assert race_days(None, True, 756) == 756
+    assert race_days(float("nan"), True, 756) == 756
+
+
+def test_max_drawdown_counts_starting_capital_as_a_peak():
+    """The value paths start AFTER day one, so 1.0 of starting capital is not
+    in the series. Without clipping the running peak up to 1.0 a day-one loss
+    is invisible and every crisis cushion is understated."""
+    from src.pairing import _max_drawdown
+
+    idx = pd.bdate_range("2021-01-01", periods=4)
+    # -20% on day one, then flat: the true worst drawdown is -20%.
+    path = pd.Series([0.80, 0.80, 0.82, 0.85], index=idx)
+    assert abs(_max_drawdown(path) - (-0.20)) < 1e-12
+
+    # A path that only ever rises above starting capital still has no drawdown.
+    assert _max_drawdown(pd.Series([1.01, 1.05, 1.09, 1.20], index=idx)) == 0.0
+
+    # And a fall AFTER a peak above 1.0 is still measured from that peak.
+    fall = pd.Series([1.10, 1.20, 0.96, 1.00], index=idx)
+    assert abs(_max_drawdown(fall) - (0.96 / 1.20 - 1.0)) < 1e-12
+
+
+# --- 2026-08-26 audit follow-ups (f), (g), (k) --------------------------------
+
+def test_risk_contributions_are_leverage_invariant():
+    """risk_pct is scale-invariant and always sums to 100%; dollar weights sum
+    to the leverage. Plotting the LEVERED weights beside risk_pct put two
+    denominators under one '% of portfolio' axis, so at 0.6x every weight bar
+    shrank and read as a risk/weight gap that was pure leverage."""
+    cov = covariance_matrix(_synthetic_returns())
+    w = np.ones(len(cov)) / len(cov)
+    lev = 1.6
+
+    base = risk_contributions(w, cov)
+    levered = risk_contributions(w * lev, cov)
+
+    assert np.allclose(base["risk_pct"].values, levered["risk_pct"].values)
+    assert abs(base["risk_pct"].sum() - 1.0) < 1e-12
+    assert abs(levered["risk_pct"].sum() - 1.0) < 1e-12
+    # The mismatch the chart used to draw:
+    assert abs(base["weight"].sum() - 1.0) < 1e-12
+    assert abs(levered["weight"].sum() - lev) < 1e-12
+
+
+def test_ewma_weight_in_last_month_matches_the_caption():
+    """The EWMA panel states where λ=0.94's weight actually sits. It claimed
+    ~90% in the last month; the true figure is ~73%, and 90% needs ~37 days."""
+    lam = RISKMETRICS_LAMBDA
+    assert abs(lam - 0.94) < 1e-12
+    month = 1.0 - lam ** 21
+    assert 0.72 < month < 0.74                      # caption says ~73%
+    assert not (0.88 < month < 0.92)                # the old ~90% claim
+    days_to_90 = np.log(0.10) / np.log(lam)
+    assert 36 < days_to_90 < 38                     # caption says ~37 days
+    half_life = np.log(0.5) / np.log(lam)
+    assert 10.5 < half_life < 11.5                  # caption says ~11 days
+
+
+def test_factor_alpha_is_measured_over_the_risk_free_leg():
+    """Alpha is return over the risk-free leg. Estimating the intercept on RAW
+    returns overstates it by (1 - beta_market) * rf whenever beta != 1."""
+    import src.factors as fac
+
+    rng = np.random.default_rng(11)
+    n = 400
+    idx = pd.bdate_range("2022-01-03", periods=n)
+    rf_annual, beta_mkt = 0.0504, 0.5
+    rf_d = rf_annual / 252.0
+    alpha_d = 0.0002
+
+    mkt_excess = rng.normal(0.0004, 0.011, n)
+    factors = pd.DataFrame({
+        "Market": rf_d + mkt_excess,                      # raw market return
+        "Size": rng.normal(0, 0.006, n),                  # long-short, no rf
+        "Value": rng.normal(0, 0.006, n),
+        "Momentum": rng.normal(0, 0.006, n),
+    }, index=idx)
+    port = pd.Series(rf_d + beta_mkt * mkt_excess + alpha_d, index=idx)
+
+    orig_build, orig_rf = fac._build_factors, fac.fetch_risk_free_rate
+    try:
+        fac._build_factors = lambda period="2y": factors
+        fac.fetch_risk_free_rate = lambda *a, **k: rf_annual
+        got = fac.factor_exposures(port)
+
+        fac.fetch_risk_free_rate = lambda *a, **k: None
+        raw = fac.factor_exposures(port)
+    finally:
+        fac._build_factors, fac.fetch_risk_free_rate = orig_build, orig_rf
+
+    assert abs(got["betas"]["Market"] - beta_mkt) < 1e-6
+    assert abs(got["alpha_annual"] - alpha_d * 252) < 1e-6
+    assert "T-bill" in got["alpha_basis"]
+
+    # Raw-return intercept is inflated by exactly (1 - beta) * rf, and says so.
+    assert abs(raw["alpha_annual"] - (alpha_d * 252 + (1 - beta_mkt) * rf_annual)) < 1e-6
+    assert raw["alpha_annual"] > got["alpha_annual"]
+    assert "RAW" in raw["alpha_basis"]
 
 
 if __name__ == "__main__":

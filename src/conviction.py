@@ -60,11 +60,19 @@ RECOVERY_HORIZON_DAYS = 756
 MIN_WINDOW_ROWS = 5  # fewer rows than this and the window isn't usable
 
 
-def _peak_trough(window: pd.Series) -> tuple[pd.Timestamp, pd.Timestamp]:
+def _peak_trough(window: pd.Series):
     """Mechanical crash anatomy: trough = window minimum; peak = the running
-    maximum BEFORE that trough (a crash falls peak-first, trough-second)."""
+    maximum BEFORE that trough (a crash falls peak-first, trough-second).
+
+    Returns (None, None) when the window never declined - its minimum IS its
+    first bar, so there is no peak-to-trough fall to measure. "Never fell" and
+    "fell and was reclaimed in zero days" are different statements and the
+    callers must not render one as the other.
+    """
     trough_date = window.idxmin()
     peak_date = window.loc[:trough_date].idxmax()
+    if peak_date == trough_date:
+        return None, None
     return peak_date, trough_date
 
 
@@ -89,6 +97,20 @@ def _days_to_reclaim(prices: pd.Series, trough_date: pd.Timestamp,
     return int(after.index.get_loc(hit.index[0]))
 
 
+def race_days(days, fell, miss: float) -> float:
+    """Effective days-to-reclaim for one leg of a recovery race, collapsing
+    the three states into one comparable number:
+
+      never fell        -> 0.0   (nothing to reclaim; it wins by not falling)
+      fell, reclaimed   -> days
+      fell, never back  -> `miss` (np.inf to rank it last, the chart cap to
+                                   draw it as a full-width bar)
+    """
+    if not fell:
+        return 0.0
+    return miss if days is None or pd.isna(days) else float(days)
+
+
 def crisis_forward_returns(prices: pd.Series) -> pd.DataFrame:
     """
     One row per named crisis the series traded through: crash depth, plus
@@ -102,6 +124,8 @@ def crisis_forward_returns(prices: pd.Series) -> pd.DataFrame:
         if len(window) < MIN_WINDOW_ROWS:
             continue
         peak_date, trough_date = _peak_trough(window)
+        if peak_date is None:
+            continue            # never declined inside this window: no crash
         peak_val = float(window.loc[peak_date])
         trough_val = float(window.loc[trough_date])
         row = {
@@ -154,7 +178,9 @@ def recovery_race(basket: list[str] | None = None,
     """
     Crisis by crisis: trading days for the equal-weight basket composite vs
     the benchmark to reclaim their own pre-crisis peaks after the trough.
-    None = did not recover within RECOVERY_HORIZON_DAYS (shown, not hidden).
+    days = None means did not recover within RECOVERY_HORIZON_DAYS; the
+    companion `*_fell` flag is False when that side never declined in the
+    window at all. Both are shown, not hidden.
     """
     basket = basket or AI_CAPEX_BASKET
     px = fetch_prices(basket + [benchmark], period="max", align=False)
@@ -170,21 +196,27 @@ def recovery_race(basket: list[str] | None = None,
         cwin = comp.loc[s:e]
         row = {"crisis": name}
 
-        # Benchmark leg
+        # Benchmark leg. `*_fell` separates "never declined in this window"
+        # (nothing to reclaim) from "declined and never got back" (days=None).
         b_peak, b_trough = _peak_trough(bwin)
-        row["bench_days"] = _days_to_reclaim(
-            bench, b_trough, float(bwin.loc[b_peak]))
+        row["bench_fell"] = b_peak is not None
+        row["bench_days"] = (
+            _days_to_reclaim(bench, b_trough, float(bwin.loc[b_peak]))
+            if b_peak is not None else None)
 
         # Basket leg - needs enough members trading through the window
         if len(cwin) >= MIN_WINDOW_ROWS:
             c_peak, c_trough = _peak_trough(cwin)
-            row["basket_days"] = _days_to_reclaim(
-                comp, c_trough, float(cwin.loc[c_peak]))
+            row["basket_fell"] = c_peak is not None
+            row["basket_days"] = (
+                _days_to_reclaim(comp, c_trough, float(cwin.loc[c_peak]))
+                if c_peak is not None else None)
             # Same aliveness rule as _composite: trading at the window start.
             mwin = members.loc[s:e]
             row["basket_members"] = int(
                 mwin.iloc[:MIN_WINDOW_ROWS].notna().all().sum())
         else:
+            row["basket_fell"] = False
             row["basket_days"] = None
             row["basket_members"] = 0
         rows.append(row)

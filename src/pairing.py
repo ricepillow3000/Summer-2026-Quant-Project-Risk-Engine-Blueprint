@@ -177,8 +177,15 @@ def tail_gap(returns: pd.DataFrame, a: str, b: str,
 
 
 def _max_drawdown(path: pd.Series) -> float:
-    """Max peak-to-trough drawdown of a value path (negative number)."""
-    return float((path / path.cummax() - 1.0).min())
+    """Max peak-to-trough drawdown of a value path (negative number).
+
+    Both paths here begin AFTER day one - they are cumulative products of the
+    return series - so the 1.0 of starting capital never appears in the path
+    and `cummax` alone cannot see it. Clipping the running peak up to 1.0 puts
+    it back; without it a day-one loss is invisible and every cushion is
+    understated. Callers must pass a path normalised to 1.0 of capital.
+    """
+    return float((path / path.cummax().clip(lower=1.0) - 1.0).min())
 
 
 def backtest_pair(returns_a: pd.Series, returns_b: pd.Series,

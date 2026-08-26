@@ -154,7 +154,10 @@ select {
 .histcap { font-size: 8.5px; color: var(--dim); letter-spacing: 0.06em;
   text-transform: uppercase; margin-top: 3px; }
 .verdict .s { font-size: 11px; color: var(--dim); line-height: 1.45; max-width: 340px; }
-.tiles { display: grid; grid-template-columns: repeat(4, minmax(104px, 1fr)); gap: 10px;
+/* Three tiles: the old "Beyond 95% ring" tile was removed - r95 is defined as
+   a quantile of the same sorted distances it was counting past, so the figure
+   was an identity (always ~4.6%), not a measurement. */
+.tiles { display: grid; grid-template-columns: repeat(3, minmax(104px, 1fr)); gap: 10px;
   flex: 1; align-content: center; }
 .tile {
   background: rgba(21,18,13,0.45); border: 1px solid var(--line);
@@ -374,7 +377,6 @@ select {
       <div class="tile" title="If the next 30 days land in the worst 5% of simulated paths, the loss is at least this much."><div class="l">VaR 95 · T+30</div><div class="v" id="hudVaR">--</div><div class="d">simulated quantile</div></div>
       <div class="tile" title="The volatility level the book keeps returning to, estimated from its own history."><div class="l" id="hudT2L">Sharpe · simulated</div><div class="v" id="hudSharpe">--</div><div class="d" id="hudT2D">annualized, demo drift</div></div>
       <div class="tile" title="Share of the 10,000 simulated paths that touched the danger perimeter at any point in 30 days."><div class="l">Breach probability</div><div class="v" id="hudTail">--</div><div class="d">paths touching perimeter</div></div>
-      <div class="tile" title="Share of simulated end-states landing outside the 95% probability ring - measured, and by construction close to 4.6%."><div class="l">Beyond 95% ring</div><div class="v" id="hudSigma">--</div><div class="d">end-states past 2nd ring</div></div>
     </div>
     <div class="chips">
       <div class="chip" id="chipEngine">Engine · OU-state Monte Carlo</div>
@@ -1148,7 +1150,6 @@ function updateHUD() {
     document.getElementById('hudSharpe').textContent = st.sharpe.toFixed(2);
   }
   document.getElementById('hudTail').textContent = fmtPct(st.pBreach, 1);
-  document.getElementById('hudSigma').textContent = fmtPct(S.cloud.fracBeyond(S.cloud.r95), 1);
   document.getElementById('chipEngine').textContent =
     'Engine · OU-state Monte Carlo · ' + S.cal.toUpperCase();
   document.getElementById('chipBase').textContent =
