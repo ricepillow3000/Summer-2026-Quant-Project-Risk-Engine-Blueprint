@@ -126,6 +126,33 @@ risk-engine/
   Xs ago," reruns only itself, not the whole page/Monte Carlo computation.
 - ⬜ **Phase V polish remaining** - optional auto "executive summary";
   further UI refinement
+- ✅ **Batch automation audit** (`tests/batch_audit.py`, 2026-08-26) - a second
+  suite that runs the engine on LIVE data across all 11 preset universes and
+  re-derives every number a second, independent way, writing
+  `audit/batch_audit_<UTC>.{json,md}` where each check names its source paper.
+  393 checks, 393 pass. Covers: engine invariants (CVaR>=VaR, covariance
+  symmetry/PSD, portfolio-variance identity, ERC equalization, vol-target
+  accuracy, both Monte Carlo engines, the Merton mean identity, liquidity
+  monotonicity + LVaR, conditional EVT on the same 10y window the app uses);
+  a 44-row walk-forward VaR backtest matrix (equal-weight and risk-parity
+  books at 95%/99%, Kupiec LR re-derived from the likelihood ratio,
+  Christoffersen independence, LR_cc = LR_uc + LR_ind); and a full audit of
+  the Risk Topology map. The map audit runs the SHIPPED simulation - node
+  slices the real math region out of `prototypes/war_room.html`
+  (`tests/map_probe.mjs`) - and checks its end-state moments against the
+  closed-form OU recursion, ring masses against their labels (68.3/95.4/99.7%),
+  breach counting against the "touched the perimeter" caption, the HUD tail
+  numbers against the path P&L, calm<base<stress ordering, plus a
+  planted-parameter control run and a replay of every linkage statistic
+  (rho, equal-risk weight, ES 97.5 solo/paired, drawdown cushion) from raw
+  returns. `src/topology.py` was extracted from `main.py` so the audited
+  payload IS the shipped payload.
+  Live findings, not defects: 99% historical VaR takes zero breaches on
+  several baskets (Kupiec rejects as too conservative) and 95% historical VaR
+  under-covers on Futures (8.6%) and Global macro (8.0%) - independence
+  passes, so it is a level problem, which is what the jump-diffusion and EVT
+  engines exist for.
+
 - ⬜ **Phase VI** - deploy to Railway/Render for the live recruiter link
   (Procfile + requirements.txt already set up)
 

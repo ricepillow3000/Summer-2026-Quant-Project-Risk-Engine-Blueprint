@@ -1,0 +1,3784 @@
+{
+  "generated_utc": "2026-08-26T202832Z",
+  "universes": [
+    "Hedge-fund favorites (13F-popular)",
+    "Mega-cap tech (Mag 7 + QQQ)",
+    "Multi-sector blue chips (institutional-style)",
+    "Index core (S&P 500 & broad market ETFs)",
+    "S&P sector ETFs",
+    "FX majors",
+    "Futures (index & commodity)",
+    "Rates & credit (ETF proxies)",
+    "Commodities & real assets",
+    "Global macro (multi-asset ETFs)",
+    "Small-cap liquidity stress (thin volume)"
+  ],
+  "checks": 393,
+  "failed": 0,
+  "warned": 0,
+  "paths_per_map_simulation": 20000,
+  "results": [
+    {
+      "id": "DATA-01",
+      "scope": "Hedge-fund favorites (13F-popular)",
+      "check": "data-quality gate",
+      "status": "PASS",
+      "detail": "502 days x 12 names; clean",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "INV-01",
+      "scope": "Hedge-fund favorites (13F-popular)",
+      "check": "CVaR >= VaR (tail mean dominates the quantile)",
+      "status": "PASS",
+      "detail": "95%: VaR 1.7886%, CVaR 2.5769%; 99%: VaR 2.9910%, CVaR 3.9134%",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "INV-02",
+      "scope": "Hedge-fund favorites (13F-popular)",
+      "check": "covariance symmetric + PSD, |corr| <= 1, diag = 1",
+      "status": "PASS",
+      "detail": "max asymmetry 0.00e+00, min eigenvalue 5.96e-03, max off-diagonal |corr| 0.8712",
+      "source": "Markowitz (1952), portfolio variance identity w' Sigma w"
+    },
+    {
+      "id": "INV-03",
+      "scope": "Hedge-fund favorites (13F-popular)",
+      "check": "portfolio vol = sqrt(w' Sigma w)",
+      "status": "PASS",
+      "detail": "engine 0.18575593 vs re-derived 0.18575593",
+      "source": "Markowitz (1952), portfolio variance identity w' Sigma w"
+    },
+    {
+      "id": "INV-04",
+      "scope": "Hedge-fund favorites (13F-popular)",
+      "check": "risk-parity weights equalize risk contributions",
+      "status": "PASS",
+      "detail": "risk-share spread 1.17e-14 across 12 assets; weights sum 1.000000, min 0.0511",
+      "source": "Maillard, Roncalli & Teiletche (2010), 'The properties of equally weighted risk contribution portfolios'"
+    },
+    {
+      "id": "INV-05",
+      "scope": "Hedge-fund favorites (13F-popular)",
+      "check": "vol targeting reaches the requested volatility",
+      "status": "PASS",
+      "detail": "target 10.00%, achieved 10.000000%, leverage 0.538",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "INV-06.bootstrap",
+      "scope": "Hedge-fund favorites (13F-popular)",
+      "check": "bootstrap Monte Carlo coherent",
+      "status": "PASS",
+      "detail": "VaR 9.80%, CVaR 16.28%, P(loss) 14.0%, 20000 paths x 252 days",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "INV-06.jump-diffusion",
+      "scope": "Hedge-fund favorites (13F-popular)",
+      "check": "jump-diffusion Monte Carlo coherent",
+      "status": "PASS",
+      "detail": "VaR 9.94%, CVaR 16.49%, P(loss) 14.1%, 20000 paths x 252 days",
+      "source": "Merton (1976), 'Option pricing when underlying stock returns are discontinuous', J. Financial Economics 3"
+    },
+    {
+      "id": "INV-07",
+      "scope": "Hedge-fund favorites (13F-popular)",
+      "check": "jump calibration reproduces the empirical mean",
+      "status": "PASS",
+      "detail": "mu_d + lambda*mu_j = 0.0007915366 vs empirical mean log-return 0.0007915366; 5 jump days detected",
+      "source": "Merton (1976), 'Option pricing when underlying stock returns are discontinuous', J. Financial Economics 3"
+    },
+    {
+      "id": "INV-08",
+      "scope": "Hedge-fund favorites (13F-popular)",
+      "check": "days-to-liquidate monotone in book size; LVaR >= CVaR",
+      "status": "PASS",
+      "detail": "100x the book never shortens an exit (slowest liquid leg 0.02d); CVaR 3.18% -> LVaR 3.18% (x1.0000)",
+      "source": "Basel liquidity-horizon convention (square-root-of-time scaling) over a participation-rate unwind model"
+    },
+    {
+      "id": "INV-09",
+      "scope": "Hedge-fund favorites (13F-popular)",
+      "check": "conditional EVT: ES >= VaR at every quantile",
+      "status": "PASS",
+      "detail": "10y window, 2512 days; sigma_next 0.7953%, filtered xi 0.039550514441284, unconditional xi 0.15872132745260895; q=0.99: VaR 2.37%, ES 3.05%",
+      "source": "McNeil & Frey (2000), 'Estimation of tail-related risk measures for heteroscedastic financial time series'"
+    },
+    {
+      "id": "BT-01",
+      "scope": "Hedge-fund favorites (13F-popular)",
+      "check": "equal-weight @ 95% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 10 breaches / 251 tested days vs engine 10 / 251 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "Hedge-fund favorites (13F-popular)",
+      "check": "equal-weight @ 95% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 0.584 vs engine 0.58; chi2(1) p = 0.445; observed rate 3.98% vs expected 5.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "BT-03",
+      "scope": "Hedge-fund favorites (13F-popular)",
+      "check": "equal-weight @ 95% LR_cc = LR_uc + LR_ind",
+      "status": "PASS",
+      "detail": "LR_cc 1.3 = LR_uc 0.58 + LR_ind 0.71; independence p 0.3991930027590598",
+      "source": "Christoffersen (1998), 'Evaluating interval forecasts', International Economic Review 39(4)"
+    },
+    {
+      "id": "BT-01",
+      "scope": "Hedge-fund favorites (13F-popular)",
+      "check": "equal-weight @ 99% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 0 breaches / 251 tested days vs engine 0 / 251 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "Hedge-fund favorites (13F-popular)",
+      "check": "equal-weight @ 99% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 5.045 vs engine 5.05; chi2(1) p = 0.025; observed rate 0.00% vs expected 1.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "BT-01",
+      "scope": "Hedge-fund favorites (13F-popular)",
+      "check": "risk-parity @ 95% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 7 breaches / 251 tested days vs engine 7 / 251 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "Hedge-fund favorites (13F-popular)",
+      "check": "risk-parity @ 95% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 3.055 vs engine 3.05; chi2(1) p = 0.080; observed rate 2.79% vs expected 5.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "BT-03",
+      "scope": "Hedge-fund favorites (13F-popular)",
+      "check": "risk-parity @ 95% LR_cc = LR_uc + LR_ind",
+      "status": "PASS",
+      "detail": "LR_cc 3.46 = LR_uc 3.05 + LR_ind 0.4; independence p 0.525365268140247",
+      "source": "Christoffersen (1998), 'Evaluating interval forecasts', International Economic Review 39(4)"
+    },
+    {
+      "id": "BT-01",
+      "scope": "Hedge-fund favorites (13F-popular)",
+      "check": "risk-parity @ 99% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 0 breaches / 251 tested days vs engine 0 / 251 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "Hedge-fund favorites (13F-popular)",
+      "check": "risk-parity @ 99% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 5.045 vs engine 5.05; chi2(1) p = 0.025; observed rate 0.00% vs expected 1.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "MAP-00",
+      "scope": "Hedge-fund favorites (13F-popular)",
+      "check": "map payload builds from live data",
+      "status": "PASS",
+      "detail": "17 units, 4 linkages, Live \u00b7 yfinance EOD \u00b7 439 state obs",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-01",
+      "scope": "Hedge-fund favorites (13F-popular)",
+      "check": "book position = rolling beta / realized vol",
+      "status": "PASS",
+      "detail": "audit beta 0.745, vol 0.1355 vs map 0.745 / 0.1355 (63d Cov/Var; 21d sd x sqrt(252))",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-02",
+      "scope": "Hedge-fund favorites (13F-popular)",
+      "check": "unit coordinates = measured beta / annualized vol",
+      "status": "PASS",
+      "detail": "12 of 17 units re-derived from raw returns; all match",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-03",
+      "scope": "Hedge-fund favorites (13F-popular)",
+      "check": "hazard perimeter matches the disclosed policy",
+      "status": "PASS",
+      "detail": "volMax 0.41 = min(0.9, max(0.35, 3.0 x 0.1355)); betaMax 1.54 = min(1.9, 0.745 + 0.8); footnote states both",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-04",
+      "scope": "Hedge-fund favorites (13F-popular)",
+      "check": "drawn domain contains every unit and the perimeter",
+      "status": "PASS",
+      "detail": "beta axis [-1.0, 2.5], vol axis [0.0, 1.0]",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-05",
+      "scope": "Hedge-fund favorites (13F-popular)",
+      "check": "AR(1) -> OU inversion is exact",
+      "status": "PASS",
+      "detail": "theta = -ln(phi)/dt = 1.2632/yr (phi 0.99500), sigma = s sqrt(2 theta/(1-phi^2)) = 0.2089, 439 state observations (min 120)",
+      "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
+    },
+    {
+      "id": "MAP-06",
+      "scope": "Hedge-fund favorites (13F-popular)",
+      "check": "simulated terrain matches closed-form OU moments",
+      "status": "PASS",
+      "detail": "z vs theory: beta_mean -0.33, beta_var +1.30, lnvol_mean -0.77, lnvol_var -0.12, shock_cov -0.55 (n=20000); E[beta_T] theory 0.7559 vs simulated 0.7557; Var theory 0.004485 vs 0.004543",
+      "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
+    },
+    {
+      "id": "MAP-07",
+      "scope": "Hedge-fund favorites (13F-popular)",
+      "check": "fog rings hold the mass they are labelled with",
+      "status": "PASS",
+      "detail": "measured mass inside each drawn ring: 0.6831 / 0.9540 / 0.9970 vs labels 68.3 / 95.4 / 99.7% (empirical Mahalanobis quantiles, not 1-sigma ellipses)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-08",
+      "scope": "Hedge-fund favorites (13F-popular)",
+      "check": "breach probability counts paths that TOUCH the line",
+      "status": "PASS",
+      "detail": "flagged 0.0005 equals any-touch 0.0005 (counting end-states only would read 0.0000); HUD shows 0.0006",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-09",
+      "scope": "Hedge-fund favorites (13F-popular)",
+      "check": "HUD tail numbers come from the simulated path P&L",
+      "status": "PASS",
+      "detail": "VaR95 8.3639% and ES97.5 12.3863% reproduced from the path P&L array; ES >= VaR holds; mean P&L +0.0096% (zero-drift risk view, as disclosed)",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "MAP-10",
+      "scope": "Hedge-fund favorites (13F-popular)",
+      "check": "calm < base < stressed terrain width",
+      "status": "PASS",
+      "detail": "state variance calm 0.05114 < base 0.10118 < stress 0.20557 (disclosed shock multipliers 0.7 / 1.4, +0.10 shock correlation under stress)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-11",
+      "scope": "Hedge-fund favorites (13F-popular)",
+      "check": "every linkage number replayed from raw returns",
+      "status": "PASS",
+      "detail": "AVGO->TLT: rho +0.035, w_flyer 0.179, ES solo 8.895% vs paired 2.219%, drawdown cushion +31.718% over 501d; AVGO->XLP: rho -0.161, w_flyer 0.207, ES solo 8.895% vs paired 2.116%, drawdown cushion +28.347% over 501d (4 linkages re-derived)",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "DATA-01",
+      "scope": "Mega-cap tech (Mag 7 + QQQ)",
+      "check": "data-quality gate",
+      "status": "PASS",
+      "detail": "501 days x 8 names; clean",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "INV-01",
+      "scope": "Mega-cap tech (Mag 7 + QQQ)",
+      "check": "CVaR >= VaR (tail mean dominates the quantile)",
+      "status": "PASS",
+      "detail": "95%: VaR 2.4969%, CVaR 3.6608%; 99%: VaR 3.8844%, CVaR 5.4926%",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "INV-02",
+      "scope": "Mega-cap tech (Mag 7 + QQQ)",
+      "check": "covariance symmetric + PSD, |corr| <= 1, diag = 1",
+      "status": "PASS",
+      "detail": "max asymmetry 0.00e+00, min eigenvalue 8.01e-03, max off-diagonal |corr| 0.7524",
+      "source": "Markowitz (1952), portfolio variance identity w' Sigma w"
+    },
+    {
+      "id": "INV-03",
+      "scope": "Mega-cap tech (Mag 7 + QQQ)",
+      "check": "portfolio vol = sqrt(w' Sigma w)",
+      "status": "PASS",
+      "detail": "engine 0.26162840 vs re-derived 0.26162840",
+      "source": "Markowitz (1952), portfolio variance identity w' Sigma w"
+    },
+    {
+      "id": "INV-04",
+      "scope": "Mega-cap tech (Mag 7 + QQQ)",
+      "check": "risk-parity weights equalize risk contributions",
+      "status": "PASS",
+      "detail": "risk-share spread 4.00e-14 across 8 assets; weights sum 1.000000, min 0.0712",
+      "source": "Maillard, Roncalli & Teiletche (2010), 'The properties of equally weighted risk contribution portfolios'"
+    },
+    {
+      "id": "INV-05",
+      "scope": "Mega-cap tech (Mag 7 + QQQ)",
+      "check": "vol targeting reaches the requested volatility",
+      "status": "PASS",
+      "detail": "target 10.00%, achieved 10.000000%, leverage 0.382",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "INV-06.bootstrap",
+      "scope": "Mega-cap tech (Mag 7 + QQQ)",
+      "check": "bootstrap Monte Carlo coherent",
+      "status": "PASS",
+      "detail": "VaR 17.19%, CVaR 25.13%, P(loss) 18.2%, 20000 paths x 252 days",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "INV-06.jump-diffusion",
+      "scope": "Mega-cap tech (Mag 7 + QQQ)",
+      "check": "jump-diffusion Monte Carlo coherent",
+      "status": "PASS",
+      "detail": "VaR 17.56%, CVaR 26.13%, P(loss) 17.7%, 20000 paths x 252 days",
+      "source": "Merton (1976), 'Option pricing when underlying stock returns are discontinuous', J. Financial Economics 3"
+    },
+    {
+      "id": "INV-07",
+      "scope": "Mega-cap tech (Mag 7 + QQQ)",
+      "check": "jump calibration reproduces the empirical mean",
+      "status": "PASS",
+      "detail": "mu_d + lambda*mu_j = 0.0009424500 vs empirical mean log-return 0.0009424500; 6 jump days detected",
+      "source": "Merton (1976), 'Option pricing when underlying stock returns are discontinuous', J. Financial Economics 3"
+    },
+    {
+      "id": "INV-08",
+      "scope": "Mega-cap tech (Mag 7 + QQQ)",
+      "check": "days-to-liquidate monotone in book size; LVaR >= CVaR",
+      "status": "PASS",
+      "detail": "100x the book never shortens an exit (slowest liquid leg 0.01d); CVaR 4.33% -> LVaR 4.33% (x1.0000)",
+      "source": "Basel liquidity-horizon convention (square-root-of-time scaling) over a participation-rate unwind model"
+    },
+    {
+      "id": "INV-09",
+      "scope": "Mega-cap tech (Mag 7 + QQQ)",
+      "check": "conditional EVT: ES >= VaR at every quantile",
+      "status": "PASS",
+      "detail": "10y window, 2511 days; sigma_next 1.2933%, filtered xi -0.2377296951807566, unconditional xi 0.070587273855347; q=0.99: VaR 3.76%, ES 4.41%",
+      "source": "McNeil & Frey (2000), 'Estimation of tail-related risk measures for heteroscedastic financial time series'"
+    },
+    {
+      "id": "BT-01",
+      "scope": "Mega-cap tech (Mag 7 + QQQ)",
+      "check": "equal-weight @ 95% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 9 breaches / 250 tested days vs engine 9 / 250 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "Mega-cap tech (Mag 7 + QQQ)",
+      "check": "equal-weight @ 95% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 1.138 vs engine 1.14; chi2(1) p = 0.286; observed rate 3.60% vs expected 5.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "BT-03",
+      "scope": "Mega-cap tech (Mag 7 + QQQ)",
+      "check": "equal-weight @ 95% LR_cc = LR_uc + LR_ind",
+      "status": "PASS",
+      "detail": "LR_cc 2.14 = LR_uc 1.14 + LR_ind 1.01; independence p 0.3157762037622499",
+      "source": "Christoffersen (1998), 'Evaluating interval forecasts', International Economic Review 39(4)"
+    },
+    {
+      "id": "BT-01",
+      "scope": "Mega-cap tech (Mag 7 + QQQ)",
+      "check": "equal-weight @ 99% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 2 breaches / 250 tested days vs engine 2 / 250 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "Mega-cap tech (Mag 7 + QQQ)",
+      "check": "equal-weight @ 99% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 0.108 vs engine 0.11; chi2(1) p = 0.742; observed rate 0.80% vs expected 1.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "BT-03",
+      "scope": "Mega-cap tech (Mag 7 + QQQ)",
+      "check": "equal-weight @ 99% LR_cc = LR_uc + LR_ind",
+      "status": "PASS",
+      "detail": "LR_cc 0.14 = LR_uc 0.11 + LR_ind 0.03; independence p 0.8571765192955558",
+      "source": "Christoffersen (1998), 'Evaluating interval forecasts', International Economic Review 39(4)"
+    },
+    {
+      "id": "BT-01",
+      "scope": "Mega-cap tech (Mag 7 + QQQ)",
+      "check": "risk-parity @ 95% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 10 breaches / 250 tested days vs engine 10 / 250 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "Mega-cap tech (Mag 7 + QQQ)",
+      "check": "risk-parity @ 95% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 0.563 vs engine 0.56; chi2(1) p = 0.453; observed rate 4.00% vs expected 5.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "BT-03",
+      "scope": "Mega-cap tech (Mag 7 + QQQ)",
+      "check": "risk-parity @ 95% LR_cc = LR_uc + LR_ind",
+      "status": "PASS",
+      "detail": "LR_cc 1.27 = LR_uc 0.56 + LR_ind 0.71; independence p 0.40092508686903383",
+      "source": "Christoffersen (1998), 'Evaluating interval forecasts', International Economic Review 39(4)"
+    },
+    {
+      "id": "BT-01",
+      "scope": "Mega-cap tech (Mag 7 + QQQ)",
+      "check": "risk-parity @ 99% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 2 breaches / 250 tested days vs engine 2 / 250 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "Mega-cap tech (Mag 7 + QQQ)",
+      "check": "risk-parity @ 99% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 0.108 vs engine 0.11; chi2(1) p = 0.742; observed rate 0.80% vs expected 1.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "BT-03",
+      "scope": "Mega-cap tech (Mag 7 + QQQ)",
+      "check": "risk-parity @ 99% LR_cc = LR_uc + LR_ind",
+      "status": "PASS",
+      "detail": "LR_cc 0.14 = LR_uc 0.11 + LR_ind 0.03; independence p 0.8571765192955558",
+      "source": "Christoffersen (1998), 'Evaluating interval forecasts', International Economic Review 39(4)"
+    },
+    {
+      "id": "MAP-00",
+      "scope": "Mega-cap tech (Mag 7 + QQQ)",
+      "check": "map payload builds from live data",
+      "status": "PASS",
+      "detail": "13 units, 4 linkages, Live \u00b7 yfinance EOD \u00b7 438 state obs",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-01",
+      "scope": "Mega-cap tech (Mag 7 + QQQ)",
+      "check": "book position = rolling beta / realized vol",
+      "status": "PASS",
+      "detail": "audit beta 1.489, vol 0.2178 vs map 1.489 / 0.2178 (63d Cov/Var; 21d sd x sqrt(252))",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-02",
+      "scope": "Mega-cap tech (Mag 7 + QQQ)",
+      "check": "unit coordinates = measured beta / annualized vol",
+      "status": "PASS",
+      "detail": "8 of 13 units re-derived from raw returns; all match",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-03",
+      "scope": "Mega-cap tech (Mag 7 + QQQ)",
+      "check": "hazard perimeter matches the disclosed policy",
+      "status": "PASS",
+      "detail": "volMax 0.65 = min(0.9, max(0.35, 3.0 x 0.2178)); betaMax 1.9 = min(1.9, 1.489 + 0.8); footnote states both",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-04",
+      "scope": "Mega-cap tech (Mag 7 + QQQ)",
+      "check": "drawn domain contains every unit and the perimeter",
+      "status": "PASS",
+      "detail": "beta axis [-1.0, 3.0], vol axis [0.0, 1.0]",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-05",
+      "scope": "Mega-cap tech (Mag 7 + QQQ)",
+      "check": "AR(1) -> OU inversion is exact",
+      "status": "PASS",
+      "detail": "theta = -ln(phi)/dt = 7.7015/yr (phi 0.96990), sigma = s sqrt(2 theta/(1-phi^2)) = 0.3444, 438 state observations (min 120)",
+      "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
+    },
+    {
+      "id": "MAP-06",
+      "scope": "Mega-cap tech (Mag 7 + QQQ)",
+      "check": "simulated terrain matches closed-form OU moments",
+      "status": "PASS",
+      "detail": "z vs theory: beta_mean -0.09, beta_var +1.22, lnvol_mean -0.78, lnvol_var -0.12, shock_cov -0.64 (n=20000); E[beta_T] theory 1.4482 vs simulated 1.4481; Var theory 0.006468 vs 0.006547",
+      "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
+    },
+    {
+      "id": "MAP-07",
+      "scope": "Mega-cap tech (Mag 7 + QQQ)",
+      "check": "fog rings hold the mass they are labelled with",
+      "status": "PASS",
+      "detail": "measured mass inside each drawn ring: 0.6831 / 0.9540 / 0.9970 vs labels 68.3 / 95.4 / 99.7% (empirical Mahalanobis quantiles, not 1-sigma ellipses)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-08",
+      "scope": "Mega-cap tech (Mag 7 + QQQ)",
+      "check": "breach probability counts paths that TOUCH the line",
+      "status": "PASS",
+      "detail": "flagged 0.0005 equals any-touch 0.0005 (counting end-states only would read 0.0000); HUD shows 0.0003",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-09",
+      "scope": "Mega-cap tech (Mag 7 + QQQ)",
+      "check": "HUD tail numbers come from the simulated path P&L",
+      "status": "PASS",
+      "detail": "VaR95 12.9660% and ES97.5 19.0502% reproduced from the path P&L array; ES >= VaR holds; mean P&L +0.0121% (zero-drift risk view, as disclosed)",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "MAP-10",
+      "scope": "Mega-cap tech (Mag 7 + QQQ)",
+      "check": "calm < base < stressed terrain width",
+      "status": "PASS",
+      "detail": "state variance calm 0.04777 < base 0.09449 < stress 0.19198 (disclosed shock multipliers 0.7 / 1.4, +0.10 shock correlation under stress)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-11",
+      "scope": "Mega-cap tech (Mag 7 + QQQ)",
+      "check": "every linkage number replayed from raw returns",
+      "status": "PASS",
+      "detail": "TSLA->TLT: rho +0.047, w_flyer 0.162, ES solo 9.609% vs paired 2.384%, drawdown cushion +40.315% over 500d; TSLA->USMV: rho +0.315, w_flyer 0.156, ES solo 9.609% vs paired 2.604%, drawdown cushion +39.042% over 500d (4 linkages re-derived)",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "DATA-01",
+      "scope": "Multi-sector blue chips (institutional-style)",
+      "check": "data-quality gate",
+      "status": "PASS",
+      "detail": "501 days x 12 names; clean",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "INV-01",
+      "scope": "Multi-sector blue chips (institutional-style)",
+      "check": "CVaR >= VaR (tail mean dominates the quantile)",
+      "status": "PASS",
+      "detail": "95%: VaR 0.9827%, CVaR 1.5307%; 99%: VaR 1.6130%, CVaR 2.4856%",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "INV-02",
+      "scope": "Multi-sector blue chips (institutional-style)",
+      "check": "covariance symmetric + PSD, |corr| <= 1, diag = 1",
+      "status": "PASS",
+      "detail": "max asymmetry 0.00e+00, min eigenvalue 1.33e-02, max off-diagonal |corr| 0.5735",
+      "source": "Markowitz (1952), portfolio variance identity w' Sigma w"
+    },
+    {
+      "id": "INV-03",
+      "scope": "Multi-sector blue chips (institutional-style)",
+      "check": "portfolio vol = sqrt(w' Sigma w)",
+      "status": "PASS",
+      "detail": "engine 0.12188522 vs re-derived 0.12188522",
+      "source": "Markowitz (1952), portfolio variance identity w' Sigma w"
+    },
+    {
+      "id": "INV-04",
+      "scope": "Multi-sector blue chips (institutional-style)",
+      "check": "risk-parity weights equalize risk contributions",
+      "status": "PASS",
+      "detail": "risk-share spread 9.91e-15 across 12 assets; weights sum 1.000000, min 0.0650",
+      "source": "Maillard, Roncalli & Teiletche (2010), 'The properties of equally weighted risk contribution portfolios'"
+    },
+    {
+      "id": "INV-05",
+      "scope": "Multi-sector blue chips (institutional-style)",
+      "check": "vol targeting reaches the requested volatility",
+      "status": "PASS",
+      "detail": "target 10.00%, achieved 10.000000%, leverage 0.820",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "INV-06.bootstrap",
+      "scope": "Multi-sector blue chips (institutional-style)",
+      "check": "bootstrap Monte Carlo coherent",
+      "status": "PASS",
+      "detail": "VaR 5.14%, CVaR 9.81%, P(loss) 11.4%, 20000 paths x 252 days",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "INV-06.jump-diffusion",
+      "scope": "Multi-sector blue chips (institutional-style)",
+      "check": "jump-diffusion Monte Carlo coherent",
+      "status": "PASS",
+      "detail": "VaR 5.24%, CVaR 9.97%, P(loss) 11.5%, 20000 paths x 252 days",
+      "source": "Merton (1976), 'Option pricing when underlying stock returns are discontinuous', J. Financial Economics 3"
+    },
+    {
+      "id": "INV-07",
+      "scope": "Multi-sector blue chips (institutional-style)",
+      "check": "jump calibration reproduces the empirical mean",
+      "status": "PASS",
+      "detail": "mu_d + lambda*mu_j = 0.0005784606 vs empirical mean log-return 0.0005784606; 2 jump days detected",
+      "source": "Merton (1976), 'Option pricing when underlying stock returns are discontinuous', J. Financial Economics 3"
+    },
+    {
+      "id": "INV-08",
+      "scope": "Multi-sector blue chips (institutional-style)",
+      "check": "days-to-liquidate monotone in book size; LVaR >= CVaR",
+      "status": "PASS",
+      "detail": "100x the book never shortens an exit (slowest liquid leg 0.06d); CVaR 1.89% -> LVaR 1.89% (x1.0001)",
+      "source": "Basel liquidity-horizon convention (square-root-of-time scaling) over a participation-rate unwind model"
+    },
+    {
+      "id": "INV-09",
+      "scope": "Multi-sector blue chips (institutional-style)",
+      "check": "conditional EVT: ES >= VaR at every quantile",
+      "status": "PASS",
+      "detail": "10y window, 2511 days; sigma_next 0.6767%, filtered xi 0.06062952469300801, unconditional xi 0.32725965242705135; q=0.99: VaR 1.95%, ES 2.54%",
+      "source": "McNeil & Frey (2000), 'Estimation of tail-related risk measures for heteroscedastic financial time series'"
+    },
+    {
+      "id": "BT-01",
+      "scope": "Multi-sector blue chips (institutional-style)",
+      "check": "equal-weight @ 95% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 14 breaches / 250 tested days vs engine 14 / 250 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "Multi-sector blue chips (institutional-style)",
+      "check": "equal-weight @ 95% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 0.183 vs engine 0.18; chi2(1) p = 0.669; observed rate 5.60% vs expected 5.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "BT-03",
+      "scope": "Multi-sector blue chips (institutional-style)",
+      "check": "equal-weight @ 95% LR_cc = LR_uc + LR_ind",
+      "status": "PASS",
+      "detail": "LR_cc 1.85 = LR_uc 0.18 + LR_ind 1.67; independence p 0.1963827156889873",
+      "source": "Christoffersen (1998), 'Evaluating interval forecasts', International Economic Review 39(4)"
+    },
+    {
+      "id": "BT-01",
+      "scope": "Multi-sector blue chips (institutional-style)",
+      "check": "equal-weight @ 99% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 2 breaches / 250 tested days vs engine 2 / 250 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "Multi-sector blue chips (institutional-style)",
+      "check": "equal-weight @ 99% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 0.108 vs engine 0.11; chi2(1) p = 0.742; observed rate 0.80% vs expected 1.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "BT-03",
+      "scope": "Multi-sector blue chips (institutional-style)",
+      "check": "equal-weight @ 99% LR_cc = LR_uc + LR_ind",
+      "status": "PASS",
+      "detail": "LR_cc 0.14 = LR_uc 0.11 + LR_ind 0.03; independence p 0.8571765192955558",
+      "source": "Christoffersen (1998), 'Evaluating interval forecasts', International Economic Review 39(4)"
+    },
+    {
+      "id": "BT-01",
+      "scope": "Multi-sector blue chips (institutional-style)",
+      "check": "risk-parity @ 95% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 13 breaches / 250 tested days vs engine 13 / 250 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "Multi-sector blue chips (institutional-style)",
+      "check": "risk-parity @ 95% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 0.021 vs engine 0.02; chi2(1) p = 0.885; observed rate 5.20% vs expected 5.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "BT-03",
+      "scope": "Multi-sector blue chips (institutional-style)",
+      "check": "risk-parity @ 95% LR_cc = LR_uc + LR_ind",
+      "status": "PASS",
+      "detail": "LR_cc 1.45 = LR_uc 0.02 + LR_ind 1.43; independence p 0.23128708892805855",
+      "source": "Christoffersen (1998), 'Evaluating interval forecasts', International Economic Review 39(4)"
+    },
+    {
+      "id": "BT-01",
+      "scope": "Multi-sector blue chips (institutional-style)",
+      "check": "risk-parity @ 99% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 2 breaches / 250 tested days vs engine 2 / 250 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "Multi-sector blue chips (institutional-style)",
+      "check": "risk-parity @ 99% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 0.108 vs engine 0.11; chi2(1) p = 0.742; observed rate 0.80% vs expected 1.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "BT-03",
+      "scope": "Multi-sector blue chips (institutional-style)",
+      "check": "risk-parity @ 99% LR_cc = LR_uc + LR_ind",
+      "status": "PASS",
+      "detail": "LR_cc 0.14 = LR_uc 0.11 + LR_ind 0.03; independence p 0.8571765192955558",
+      "source": "Christoffersen (1998), 'Evaluating interval forecasts', International Economic Review 39(4)"
+    },
+    {
+      "id": "MAP-00",
+      "scope": "Multi-sector blue chips (institutional-style)",
+      "check": "map payload builds from live data",
+      "status": "PASS",
+      "detail": "17 units, 4 linkages, Live \u00b7 yfinance EOD \u00b7 438 state obs",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-01",
+      "scope": "Multi-sector blue chips (institutional-style)",
+      "check": "book position = rolling beta / realized vol",
+      "status": "PASS",
+      "detail": "audit beta -0.04, vol 0.1022 vs map -0.04 / 0.1022 (63d Cov/Var; 21d sd x sqrt(252))",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-02",
+      "scope": "Multi-sector blue chips (institutional-style)",
+      "check": "unit coordinates = measured beta / annualized vol",
+      "status": "PASS",
+      "detail": "12 of 17 units re-derived from raw returns; all match",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-03",
+      "scope": "Multi-sector blue chips (institutional-style)",
+      "check": "hazard perimeter matches the disclosed policy",
+      "status": "PASS",
+      "detail": "volMax 0.35 = min(0.9, max(0.35, 3.0 x 0.1022)); betaMax 0.76 = min(1.9, -0.04 + 0.8); footnote states both",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-04",
+      "scope": "Multi-sector blue chips (institutional-style)",
+      "check": "drawn domain contains every unit and the perimeter",
+      "status": "PASS",
+      "detail": "beta axis [-1.0, 2.0], vol axis [0.0, 1.0]",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-05",
+      "scope": "Multi-sector blue chips (institutional-style)",
+      "check": "AR(1) -> OU inversion is exact",
+      "status": "PASS",
+      "detail": "theta = -ln(phi)/dt = 1.2632/yr (phi 0.99500), sigma = s sqrt(2 theta/(1-phi^2)) = 0.3253, 438 state observations (min 120)",
+      "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
+    },
+    {
+      "id": "MAP-06",
+      "scope": "Multi-sector blue chips (institutional-style)",
+      "check": "simulated terrain matches closed-form OU moments",
+      "status": "PASS",
+      "detail": "z vs theory: beta_mean -0.33, beta_var +1.30, lnvol_mean -0.78, lnvol_var -0.29, shock_cov -0.22 (n=20000); E[beta_T] theory -0.0129 vs simulated -0.0132; Var theory 0.010879 vs 0.011021",
+      "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
+    },
+    {
+      "id": "MAP-07",
+      "scope": "Multi-sector blue chips (institutional-style)",
+      "check": "fog rings hold the mass they are labelled with",
+      "status": "PASS",
+      "detail": "measured mass inside each drawn ring: 0.6831 / 0.9540 / 0.9970 vs labels 68.3 / 95.4 / 99.7% (empirical Mahalanobis quantiles, not 1-sigma ellipses)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-08",
+      "scope": "Multi-sector blue chips (institutional-style)",
+      "check": "breach probability counts paths that TOUCH the line",
+      "status": "PASS",
+      "detail": "flagged 0.0000 equals any-touch 0.0000 (counting end-states only would read 0.0000); HUD shows 0.0000",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-09",
+      "scope": "Multi-sector blue chips (institutional-style)",
+      "check": "HUD tail numbers come from the simulated path P&L",
+      "status": "PASS",
+      "detail": "VaR95 6.1175% and ES97.5 8.8829% reproduced from the path P&L array; ES >= VaR holds; mean P&L +0.0049% (zero-drift risk view, as disclosed)",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "MAP-10",
+      "scope": "Multi-sector blue chips (institutional-style)",
+      "check": "calm < base < stressed terrain width",
+      "status": "PASS",
+      "detail": "state variance calm 0.03606 < base 0.07135 < stress 0.14461 (disclosed shock multipliers 0.7 / 1.4, +0.10 shock correlation under stress)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-11",
+      "scope": "Multi-sector blue chips (institutional-style)",
+      "check": "every linkage number replayed from raw returns",
+      "status": "PASS",
+      "detail": "UNH->TLT: rho +0.009, w_flyer 0.216, ES solo 9.930% vs paired 2.671%, drawdown cushion +38.796% over 500d; UNH->USMV: rho +0.228, w_flyer 0.208, ES solo 9.930% vs paired 2.795%, drawdown cushion +44.866% over 500d (4 linkages re-derived)",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "DATA-01",
+      "scope": "Index core (S&P 500 & broad market ETFs)",
+      "check": "data-quality gate",
+      "status": "PASS",
+      "detail": "501 days x 8 names; clean",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "INV-01",
+      "scope": "Index core (S&P 500 & broad market ETFs)",
+      "check": "CVaR >= VaR (tail mean dominates the quantile)",
+      "status": "PASS",
+      "detail": "95%: VaR 1.6096%, CVaR 2.3239%; 99%: VaR 2.6714%, CVaR 4.0558%",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "INV-02",
+      "scope": "Index core (S&P 500 & broad market ETFs)",
+      "check": "covariance symmetric + PSD, |corr| <= 1, diag = 1",
+      "status": "PASS",
+      "detail": "max asymmetry 0.00e+00, min eigenvalue 1.53e-05, max off-diagonal |corr| 0.9993",
+      "source": "Markowitz (1952), portfolio variance identity w' Sigma w"
+    },
+    {
+      "id": "INV-03",
+      "scope": "Index core (S&P 500 & broad market ETFs)",
+      "check": "portfolio vol = sqrt(w' Sigma w)",
+      "status": "PASS",
+      "detail": "engine 0.16507805 vs re-derived 0.16507805",
+      "source": "Markowitz (1952), portfolio variance identity w' Sigma w"
+    },
+    {
+      "id": "INV-04",
+      "scope": "Index core (S&P 500 & broad market ETFs)",
+      "check": "risk-parity weights equalize risk contributions",
+      "status": "PASS",
+      "detail": "risk-share spread 9.10e-15 across 8 assets; weights sum 1.000000, min 0.1000",
+      "source": "Maillard, Roncalli & Teiletche (2010), 'The properties of equally weighted risk contribution portfolios'"
+    },
+    {
+      "id": "INV-05",
+      "scope": "Index core (S&P 500 & broad market ETFs)",
+      "check": "vol targeting reaches the requested volatility",
+      "status": "PASS",
+      "detail": "target 10.00%, achieved 10.000000%, leverage 0.606",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "INV-06.bootstrap",
+      "scope": "Index core (S&P 500 & broad market ETFs)",
+      "check": "bootstrap Monte Carlo coherent",
+      "status": "PASS",
+      "detail": "VaR 9.67%, CVaR 15.64%, P(loss) 15.1%, 20000 paths x 252 days",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "INV-06.jump-diffusion",
+      "scope": "Index core (S&P 500 & broad market ETFs)",
+      "check": "jump-diffusion Monte Carlo coherent",
+      "status": "PASS",
+      "detail": "VaR 9.97%, CVaR 16.41%, P(loss) 14.8%, 20000 paths x 252 days",
+      "source": "Merton (1976), 'Option pricing when underlying stock returns are discontinuous', J. Financial Economics 3"
+    },
+    {
+      "id": "INV-07",
+      "scope": "Index core (S&P 500 & broad market ETFs)",
+      "check": "jump calibration reproduces the empirical mean",
+      "status": "PASS",
+      "detail": "mu_d + lambda*mu_j = 0.0006685982 vs empirical mean log-return 0.0006685982; 6 jump days detected",
+      "source": "Merton (1976), 'Option pricing when underlying stock returns are discontinuous', J. Financial Economics 3"
+    },
+    {
+      "id": "INV-08",
+      "scope": "Index core (S&P 500 & broad market ETFs)",
+      "check": "days-to-liquidate monotone in book size; LVaR >= CVaR",
+      "status": "PASS",
+      "detail": "100x the book never shortens an exit (slowest liquid leg 0.05d); CVaR 2.90% -> LVaR 2.90% (x1.0001)",
+      "source": "Basel liquidity-horizon convention (square-root-of-time scaling) over a participation-rate unwind model"
+    },
+    {
+      "id": "INV-09",
+      "scope": "Index core (S&P 500 & broad market ETFs)",
+      "check": "conditional EVT: ES >= VaR at every quantile",
+      "status": "PASS",
+      "detail": "10y window, 2511 days; sigma_next 0.7136%, filtered xi 0.08887807043076912, unconditional xi 0.22305020431761832; q=0.99: VaR 2.22%, ES 2.95%",
+      "source": "McNeil & Frey (2000), 'Estimation of tail-related risk measures for heteroscedastic financial time series'"
+    },
+    {
+      "id": "BT-01",
+      "scope": "Index core (S&P 500 & broad market ETFs)",
+      "check": "equal-weight @ 95% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 9 breaches / 250 tested days vs engine 9 / 250 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "Index core (S&P 500 & broad market ETFs)",
+      "check": "equal-weight @ 95% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 1.138 vs engine 1.14; chi2(1) p = 0.286; observed rate 3.60% vs expected 5.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "BT-03",
+      "scope": "Index core (S&P 500 & broad market ETFs)",
+      "check": "equal-weight @ 95% LR_cc = LR_uc + LR_ind",
+      "status": "PASS",
+      "detail": "LR_cc 2.14 = LR_uc 1.14 + LR_ind 1.01; independence p 0.3157762037622499",
+      "source": "Christoffersen (1998), 'Evaluating interval forecasts', International Economic Review 39(4)"
+    },
+    {
+      "id": "BT-01",
+      "scope": "Index core (S&P 500 & broad market ETFs)",
+      "check": "equal-weight @ 99% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 1 breaches / 250 tested days vs engine 1 / 250 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "Index core (S&P 500 & broad market ETFs)",
+      "check": "equal-weight @ 99% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 1.176 vs engine 1.18; chi2(1) p = 0.278; observed rate 0.40% vs expected 1.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "BT-03",
+      "scope": "Index core (S&P 500 & broad market ETFs)",
+      "check": "equal-weight @ 99% LR_cc = LR_uc + LR_ind",
+      "status": "PASS",
+      "detail": "LR_cc 1.18 = LR_uc 1.18 + LR_ind 0.01; independence p 0.9284439448072724",
+      "source": "Christoffersen (1998), 'Evaluating interval forecasts', International Economic Review 39(4)"
+    },
+    {
+      "id": "BT-01",
+      "scope": "Index core (S&P 500 & broad market ETFs)",
+      "check": "risk-parity @ 95% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 9 breaches / 250 tested days vs engine 9 / 250 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "Index core (S&P 500 & broad market ETFs)",
+      "check": "risk-parity @ 95% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 1.138 vs engine 1.14; chi2(1) p = 0.286; observed rate 3.60% vs expected 5.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "BT-03",
+      "scope": "Index core (S&P 500 & broad market ETFs)",
+      "check": "risk-parity @ 95% LR_cc = LR_uc + LR_ind",
+      "status": "PASS",
+      "detail": "LR_cc 2.14 = LR_uc 1.14 + LR_ind 1.01; independence p 0.3157762037622499",
+      "source": "Christoffersen (1998), 'Evaluating interval forecasts', International Economic Review 39(4)"
+    },
+    {
+      "id": "BT-01",
+      "scope": "Index core (S&P 500 & broad market ETFs)",
+      "check": "risk-parity @ 99% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 1 breaches / 250 tested days vs engine 1 / 250 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "Index core (S&P 500 & broad market ETFs)",
+      "check": "risk-parity @ 99% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 1.176 vs engine 1.18; chi2(1) p = 0.278; observed rate 0.40% vs expected 1.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "BT-03",
+      "scope": "Index core (S&P 500 & broad market ETFs)",
+      "check": "risk-parity @ 99% LR_cc = LR_uc + LR_ind",
+      "status": "PASS",
+      "detail": "LR_cc 1.18 = LR_uc 1.18 + LR_ind 0.01; independence p 0.9284439448072724",
+      "source": "Christoffersen (1998), 'Evaluating interval forecasts', International Economic Review 39(4)"
+    },
+    {
+      "id": "MAP-00",
+      "scope": "Index core (S&P 500 & broad market ETFs)",
+      "check": "map payload builds from live data",
+      "status": "PASS",
+      "detail": "13 units, 4 linkages, Live \u00b7 yfinance EOD \u00b7 438 state obs",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-01",
+      "scope": "Index core (S&P 500 & broad market ETFs)",
+      "check": "book position = rolling beta / realized vol",
+      "status": "PASS",
+      "detail": "audit beta 0.991, vol 0.1338 vs map 0.991 / 0.1338 (63d Cov/Var; 21d sd x sqrt(252))",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-02",
+      "scope": "Index core (S&P 500 & broad market ETFs)",
+      "check": "unit coordinates = measured beta / annualized vol",
+      "status": "PASS",
+      "detail": "8 of 13 units re-derived from raw returns; all match",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-03",
+      "scope": "Index core (S&P 500 & broad market ETFs)",
+      "check": "hazard perimeter matches the disclosed policy",
+      "status": "PASS",
+      "detail": "volMax 0.4 = min(0.9, max(0.35, 3.0 x 0.1338)); betaMax 1.79 = min(1.9, 0.991 + 0.8); footnote states both",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-04",
+      "scope": "Index core (S&P 500 & broad market ETFs)",
+      "check": "drawn domain contains every unit and the perimeter",
+      "status": "PASS",
+      "detail": "beta axis [-1.0, 2.5], vol axis [0.0, 1.0]",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-05",
+      "scope": "Index core (S&P 500 & broad market ETFs)",
+      "check": "AR(1) -> OU inversion is exact",
+      "status": "PASS",
+      "detail": "theta = -ln(phi)/dt = 2.7473/yr (phi 0.98916), sigma = s sqrt(2 theta/(1-phi^2)) = 0.0877, 438 state observations (min 120)",
+      "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
+    },
+    {
+      "id": "MAP-06",
+      "scope": "Index core (S&P 500 & broad market ETFs)",
+      "check": "simulated terrain matches closed-form OU moments",
+      "status": "PASS",
+      "detail": "z vs theory: beta_mean -0.28, beta_var +1.31, lnvol_mean -0.75, lnvol_var -0.06, shock_cov -0.80 (n=20000); E[beta_T] theory 0.9946 vs simulated 0.9946; Var theory 0.000672 vs 0.000680",
+      "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
+    },
+    {
+      "id": "MAP-07",
+      "scope": "Index core (S&P 500 & broad market ETFs)",
+      "check": "fog rings hold the mass they are labelled with",
+      "status": "PASS",
+      "detail": "measured mass inside each drawn ring: 0.6831 / 0.9540 / 0.9970 vs labels 68.3 / 95.4 / 99.7% (empirical Mahalanobis quantiles, not 1-sigma ellipses)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-08",
+      "scope": "Index core (S&P 500 & broad market ETFs)",
+      "check": "breach probability counts paths that TOUCH the line",
+      "status": "PASS",
+      "detail": "flagged 0.0005 equals any-touch 0.0005 (counting end-states only would read 0.0000); HUD shows 0.0009",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-09",
+      "scope": "Index core (S&P 500 & broad market ETFs)",
+      "check": "HUD tail numbers come from the simulated path P&L",
+      "status": "PASS",
+      "detail": "VaR95 8.1781% and ES97.5 12.2596% reproduced from the path P&L array; ES >= VaR holds; mean P&L +0.0105% (zero-drift risk view, as disclosed)",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "MAP-10",
+      "scope": "Index core (S&P 500 & broad market ETFs)",
+      "check": "calm < base < stressed terrain width",
+      "status": "PASS",
+      "detail": "state variance calm 0.05263 < base 0.10488 < stress 0.21184 (disclosed shock multipliers 0.7 / 1.4, +0.10 shock correlation under stress)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-11",
+      "scope": "Index core (S&P 500 & broad market ETFs)",
+      "check": "every linkage number replayed from raw returns",
+      "status": "PASS",
+      "detail": "QQQ->TLT: rho +0.077, w_flyer 0.346, ES solo 3.797% vs paired 1.886%, drawdown cushion +11.461% over 500d; QQQ->USMV: rho +0.527, w_flyer 0.336, ES solo 3.797% vs paired 2.276%, drawdown cushion +9.247% over 500d (4 linkages re-derived)",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "DATA-01",
+      "scope": "S&P sector ETFs",
+      "check": "data-quality gate",
+      "status": "PASS",
+      "detail": "501 days x 9 names; clean",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "INV-01",
+      "scope": "S&P sector ETFs",
+      "check": "CVaR >= VaR (tail mean dominates the quantile)",
+      "status": "PASS",
+      "detail": "95%: VaR 1.1257%, CVaR 1.8227%; 99%: VaR 1.9935%, CVaR 3.6172%",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "INV-02",
+      "scope": "S&P sector ETFs",
+      "check": "covariance symmetric + PSD, |corr| <= 1, diag = 1",
+      "status": "PASS",
+      "detail": "max asymmetry 0.00e+00, min eigenvalue 5.59e-03, max off-diagonal |corr| 0.7606",
+      "source": "Markowitz (1952), portfolio variance identity w' Sigma w"
+    },
+    {
+      "id": "INV-03",
+      "scope": "S&P sector ETFs",
+      "check": "portfolio vol = sqrt(w' Sigma w)",
+      "status": "PASS",
+      "detail": "engine 0.13297367 vs re-derived 0.13297367",
+      "source": "Markowitz (1952), portfolio variance identity w' Sigma w"
+    },
+    {
+      "id": "INV-04",
+      "scope": "S&P sector ETFs",
+      "check": "risk-parity weights equalize risk contributions",
+      "status": "PASS",
+      "detail": "risk-share spread 6.31e-15 across 9 assets; weights sum 1.000000, min 0.0833",
+      "source": "Maillard, Roncalli & Teiletche (2010), 'The properties of equally weighted risk contribution portfolios'"
+    },
+    {
+      "id": "INV-05",
+      "scope": "S&P sector ETFs",
+      "check": "vol targeting reaches the requested volatility",
+      "status": "PASS",
+      "detail": "target 10.00%, achieved 10.000000%, leverage 0.752",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "INV-06.bootstrap",
+      "scope": "S&P sector ETFs",
+      "check": "bootstrap Monte Carlo coherent",
+      "status": "PASS",
+      "detail": "VaR 7.19%, CVaR 12.25%, P(loss) 13.4%, 20000 paths x 252 days",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "INV-06.jump-diffusion",
+      "scope": "S&P sector ETFs",
+      "check": "jump-diffusion Monte Carlo coherent",
+      "status": "PASS",
+      "detail": "VaR 7.40%, CVaR 12.91%, P(loss) 13.5%, 20000 paths x 252 days",
+      "source": "Merton (1976), 'Option pricing when underlying stock returns are discontinuous', J. Financial Economics 3"
+    },
+    {
+      "id": "INV-07",
+      "scope": "S&P sector ETFs",
+      "check": "jump calibration reproduces the empirical mean",
+      "status": "PASS",
+      "detail": "mu_d + lambda*mu_j = 0.0005787262 vs empirical mean log-return 0.0005787262; 5 jump days detected",
+      "source": "Merton (1976), 'Option pricing when underlying stock returns are discontinuous', J. Financial Economics 3"
+    },
+    {
+      "id": "INV-08",
+      "scope": "S&P sector ETFs",
+      "check": "days-to-liquidate monotone in book size; LVaR >= CVaR",
+      "status": "PASS",
+      "detail": "100x the book never shortens an exit (slowest liquid leg 0.09d); CVaR 2.36% -> LVaR 2.36% (x1.0002)",
+      "source": "Basel liquidity-horizon convention (square-root-of-time scaling) over a participation-rate unwind model"
+    },
+    {
+      "id": "INV-09",
+      "scope": "S&P sector ETFs",
+      "check": "conditional EVT: ES >= VaR at every quantile",
+      "status": "PASS",
+      "detail": "10y window, 2511 days; sigma_next 0.4604%, filtered xi 0.15804430127418928, unconditional xi 0.25944270761552457; q=0.99: VaR 1.39%, ES 1.88%",
+      "source": "McNeil & Frey (2000), 'Estimation of tail-related risk measures for heteroscedastic financial time series'"
+    },
+    {
+      "id": "BT-01",
+      "scope": "S&P sector ETFs",
+      "check": "equal-weight @ 95% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 9 breaches / 250 tested days vs engine 9 / 250 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "S&P sector ETFs",
+      "check": "equal-weight @ 95% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 1.138 vs engine 1.14; chi2(1) p = 0.286; observed rate 3.60% vs expected 5.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "BT-03",
+      "scope": "S&P sector ETFs",
+      "check": "equal-weight @ 95% LR_cc = LR_uc + LR_ind",
+      "status": "PASS",
+      "detail": "LR_cc 1.81 = LR_uc 1.14 + LR_ind 0.68; independence p 0.4112589513766345",
+      "source": "Christoffersen (1998), 'Evaluating interval forecasts', International Economic Review 39(4)"
+    },
+    {
+      "id": "BT-01",
+      "scope": "S&P sector ETFs",
+      "check": "equal-weight @ 99% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 0 breaches / 250 tested days vs engine 0 / 250 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "S&P sector ETFs",
+      "check": "equal-weight @ 99% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 5.025 vs engine 5.03; chi2(1) p = 0.025; observed rate 0.00% vs expected 1.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "BT-01",
+      "scope": "S&P sector ETFs",
+      "check": "risk-parity @ 95% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 10 breaches / 250 tested days vs engine 10 / 250 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "S&P sector ETFs",
+      "check": "risk-parity @ 95% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 0.563 vs engine 0.56; chi2(1) p = 0.453; observed rate 4.00% vs expected 5.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "BT-03",
+      "scope": "S&P sector ETFs",
+      "check": "risk-parity @ 95% LR_cc = LR_uc + LR_ind",
+      "status": "PASS",
+      "detail": "LR_cc 1.4 = LR_uc 0.56 + LR_ind 0.84; independence p 0.3602376998478066",
+      "source": "Christoffersen (1998), 'Evaluating interval forecasts', International Economic Review 39(4)"
+    },
+    {
+      "id": "BT-01",
+      "scope": "S&P sector ETFs",
+      "check": "risk-parity @ 99% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 1 breaches / 250 tested days vs engine 1 / 250 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "S&P sector ETFs",
+      "check": "risk-parity @ 99% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 1.176 vs engine 1.18; chi2(1) p = 0.278; observed rate 0.40% vs expected 1.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "BT-03",
+      "scope": "S&P sector ETFs",
+      "check": "risk-parity @ 99% LR_cc = LR_uc + LR_ind",
+      "status": "PASS",
+      "detail": "LR_cc 1.18 = LR_uc 1.18 + LR_ind 0.01; independence p 0.9284439448072724",
+      "source": "Christoffersen (1998), 'Evaluating interval forecasts', International Economic Review 39(4)"
+    },
+    {
+      "id": "MAP-00",
+      "scope": "S&P sector ETFs",
+      "check": "map payload builds from live data",
+      "status": "PASS",
+      "detail": "9 units, 4 linkages, Live \u00b7 yfinance EOD \u00b7 438 state obs",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-01",
+      "scope": "S&P sector ETFs",
+      "check": "book position = rolling beta / realized vol",
+      "status": "PASS",
+      "detail": "audit beta 0.412, vol 0.0764 vs map 0.412 / 0.0764 (63d Cov/Var; 21d sd x sqrt(252))",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-02",
+      "scope": "S&P sector ETFs",
+      "check": "unit coordinates = measured beta / annualized vol",
+      "status": "PASS",
+      "detail": "9 of 9 units re-derived from raw returns; all match",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-03",
+      "scope": "S&P sector ETFs",
+      "check": "hazard perimeter matches the disclosed policy",
+      "status": "PASS",
+      "detail": "volMax 0.35 = min(0.9, max(0.35, 3.0 x 0.0764)); betaMax 1.21 = min(1.9, 0.412 + 0.8); footnote states both",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-04",
+      "scope": "S&P sector ETFs",
+      "check": "drawn domain contains every unit and the perimeter",
+      "status": "PASS",
+      "detail": "beta axis [-1.0, 2.0], vol axis [0.0, 1.0]",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-05",
+      "scope": "S&P sector ETFs",
+      "check": "AR(1) -> OU inversion is exact",
+      "status": "PASS",
+      "detail": "theta = -ln(phi)/dt = 1.2632/yr (phi 0.99500), sigma = s sqrt(2 theta/(1-phi^2)) = 0.1744, 438 state observations (min 120)",
+      "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
+    },
+    {
+      "id": "MAP-06",
+      "scope": "S&P sector ETFs",
+      "check": "simulated terrain matches closed-form OU moments",
+      "status": "PASS",
+      "detail": "z vs theory: beta_mean -0.33, beta_var +1.30, lnvol_mean -0.80, lnvol_var -0.21, shock_cov -0.05 (n=20000); E[beta_T] theory 0.4310 vs simulated 0.4309; Var theory 0.003126 vs 0.003167",
+      "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
+    },
+    {
+      "id": "MAP-07",
+      "scope": "S&P sector ETFs",
+      "check": "fog rings hold the mass they are labelled with",
+      "status": "PASS",
+      "detail": "measured mass inside each drawn ring: 0.6831 / 0.9540 / 0.9970 vs labels 68.3 / 95.4 / 99.7% (empirical Mahalanobis quantiles, not 1-sigma ellipses)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-08",
+      "scope": "S&P sector ETFs",
+      "check": "breach probability counts paths that TOUCH the line",
+      "status": "PASS",
+      "detail": "flagged 0.0000 equals any-touch 0.0000 (counting end-states only would read 0.0000); HUD shows 0.0000",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-09",
+      "scope": "S&P sector ETFs",
+      "check": "HUD tail numbers come from the simulated path P&L",
+      "status": "PASS",
+      "detail": "VaR95 4.9072% and ES97.5 7.4258% reproduced from the path P&L array; ES >= VaR holds; mean P&L +0.0068% (zero-drift risk view, as disclosed)",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "MAP-10",
+      "scope": "S&P sector ETFs",
+      "check": "calm < base < stressed terrain width",
+      "status": "PASS",
+      "detail": "state variance calm 0.05087 < base 0.09936 < stress 0.20378 (disclosed shock multipliers 0.7 / 1.4, +0.10 shock correlation under stress)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-11",
+      "scope": "S&P sector ETFs",
+      "check": "every linkage number replayed from raw returns",
+      "status": "PASS",
+      "detail": "XLK->XLP: rho -0.093, w_flyer 0.340, ES solo 4.634% vs paired 1.956%, drawdown cushion +12.623% over 500d; XLK->XLU: rho +0.162, w_flyer 0.372, ES solo 4.634% vs paired 2.739%, drawdown cushion +10.471% over 500d (4 linkages re-derived)",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "DATA-01",
+      "scope": "FX majors",
+      "check": "data-quality gate",
+      "status": "PASS",
+      "detail": "523 days x 6 names; clean",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "INV-01",
+      "scope": "FX majors",
+      "check": "CVaR >= VaR (tail mean dominates the quantile)",
+      "status": "PASS",
+      "detail": "95%: VaR 0.2376%, CVaR 0.3619%; 99%: VaR 0.3676%, CVaR 0.6072%",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "INV-02",
+      "scope": "FX majors",
+      "check": "covariance symmetric + PSD, |corr| <= 1, diag = 1",
+      "status": "PASS",
+      "detail": "max asymmetry 0.00e+00, min eigenvalue 1.22e-03, max off-diagonal |corr| 0.7157",
+      "source": "Markowitz (1952), portfolio variance identity w' Sigma w"
+    },
+    {
+      "id": "INV-03",
+      "scope": "FX majors",
+      "check": "portfolio vol = sqrt(w' Sigma w)",
+      "status": "PASS",
+      "detail": "engine 0.02635138 vs re-derived 0.02635138",
+      "source": "Markowitz (1952), portfolio variance identity w' Sigma w"
+    },
+    {
+      "id": "INV-04",
+      "scope": "FX majors",
+      "check": "risk-parity weights equalize risk contributions",
+      "status": "PASS",
+      "detail": "risk-share spread 3.38e-13 across 6 assets; weights sum 1.000000, min 0.1008",
+      "source": "Maillard, Roncalli & Teiletche (2010), 'The properties of equally weighted risk contribution portfolios'"
+    },
+    {
+      "id": "INV-05",
+      "scope": "FX majors",
+      "check": "vol targeting reaches the requested volatility",
+      "status": "PASS",
+      "detail": "target 10.00%, achieved 10.000000%, leverage 3.795",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "INV-06.bootstrap",
+      "scope": "FX majors",
+      "check": "bootstrap Monte Carlo coherent",
+      "status": "PASS",
+      "detail": "VaR 2.44%, CVaR 3.55%, P(loss) 23.7%, 20000 paths x 252 days",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "INV-06.jump-diffusion",
+      "scope": "FX majors",
+      "check": "jump-diffusion Monte Carlo coherent",
+      "status": "PASS",
+      "detail": "VaR 2.45%, CVaR 3.57%, P(loss) 22.8%, 20000 paths x 252 days",
+      "source": "Merton (1976), 'Option pricing when underlying stock returns are discontinuous', J. Financial Economics 3"
+    },
+    {
+      "id": "INV-07",
+      "scope": "FX majors",
+      "check": "jump calibration reproduces the empirical mean",
+      "status": "PASS",
+      "detail": "mu_d + lambda*mu_j = 0.0000754159 vs empirical mean log-return 0.0000754159; 4 jump days detected",
+      "source": "Merton (1976), 'Option pricing when underlying stock returns are discontinuous', J. Financial Economics 3"
+    },
+    {
+      "id": "INV-08",
+      "scope": "FX majors",
+      "check": "days-to-liquidate monotone in book size; LVaR >= CVaR",
+      "status": "PASS",
+      "detail": "100x the book never shortens an exit (slowest liquid leg 0.00d); CVaR 0.45% -> LVaR 0.45% (x1.0000)",
+      "source": "Basel liquidity-horizon convention (square-root-of-time scaling) over a participation-rate unwind model"
+    },
+    {
+      "id": "INV-09",
+      "scope": "FX majors",
+      "check": "conditional EVT: ES >= VaR at every quantile",
+      "status": "PASS",
+      "detail": "10y window, 2605 days; sigma_next 0.1017%, filtered xi 0.23717962995430053, unconditional xi 0.22098488961417523; q=0.99: VaR 0.27%, ES 0.36%",
+      "source": "McNeil & Frey (2000), 'Estimation of tail-related risk measures for heteroscedastic financial time series'"
+    },
+    {
+      "id": "BT-01",
+      "scope": "FX majors",
+      "check": "equal-weight @ 95% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 10 breaches / 272 tested days vs engine 10 / 272 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "FX majors",
+      "check": "equal-weight @ 95% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 1.100 vs engine 1.1; chi2(1) p = 0.294; observed rate 3.68% vs expected 5.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "BT-03",
+      "scope": "FX majors",
+      "check": "equal-weight @ 95% LR_cc = LR_uc + LR_ind",
+      "status": "PASS",
+      "detail": "LR_cc 1.92 = LR_uc 1.1 + LR_ind 0.82; independence p 0.3657547729895718",
+      "source": "Christoffersen (1998), 'Evaluating interval forecasts', International Economic Review 39(4)"
+    },
+    {
+      "id": "BT-01",
+      "scope": "FX majors",
+      "check": "equal-weight @ 99% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 0 breaches / 272 tested days vs engine 0 / 272 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "FX majors",
+      "check": "equal-weight @ 99% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 5.467 vs engine 5.47; chi2(1) p = 0.019; observed rate 0.00% vs expected 1.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "BT-01",
+      "scope": "FX majors",
+      "check": "risk-parity @ 95% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 10 breaches / 272 tested days vs engine 10 / 272 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "FX majors",
+      "check": "risk-parity @ 95% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 1.100 vs engine 1.1; chi2(1) p = 0.294; observed rate 3.68% vs expected 5.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "BT-03",
+      "scope": "FX majors",
+      "check": "risk-parity @ 95% LR_cc = LR_uc + LR_ind",
+      "status": "PASS",
+      "detail": "LR_cc 1.87 = LR_uc 1.1 + LR_ind 0.77; independence p 0.38131095956309957",
+      "source": "Christoffersen (1998), 'Evaluating interval forecasts', International Economic Review 39(4)"
+    },
+    {
+      "id": "BT-01",
+      "scope": "FX majors",
+      "check": "risk-parity @ 99% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 2 breaches / 272 tested days vs engine 2 / 272 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "FX majors",
+      "check": "risk-parity @ 99% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 0.212 vs engine 0.21; chi2(1) p = 0.645; observed rate 0.74% vs expected 1.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "BT-03",
+      "scope": "FX majors",
+      "check": "risk-parity @ 99% LR_cc = LR_uc + LR_ind",
+      "status": "PASS",
+      "detail": "LR_cc 0.24 = LR_uc 0.21 + LR_ind 0.03; independence p 0.8630813769525372",
+      "source": "Christoffersen (1998), 'Evaluating interval forecasts', International Economic Review 39(4)"
+    },
+    {
+      "id": "MAP-00",
+      "scope": "FX majors",
+      "check": "map payload builds from live data",
+      "status": "PASS",
+      "detail": "11 units, 4 linkages, Live \u00b7 yfinance EOD \u00b7 439 state obs",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-01",
+      "scope": "FX majors",
+      "check": "book position = rolling beta / realized vol",
+      "status": "PASS",
+      "detail": "audit beta -0.004, vol 0.0174 vs map -0.004 / 0.0174 (63d Cov/Var; 21d sd x sqrt(252))",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-02",
+      "scope": "FX majors",
+      "check": "unit coordinates = measured beta / annualized vol",
+      "status": "PASS",
+      "detail": "6 of 11 units re-derived from raw returns; all match",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-03",
+      "scope": "FX majors",
+      "check": "hazard perimeter matches the disclosed policy",
+      "status": "PASS",
+      "detail": "volMax 0.35 = min(0.9, max(0.35, 3.0 x 0.0174)); betaMax 0.8 = min(1.9, -0.004 + 0.8); footnote states both",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-04",
+      "scope": "FX majors",
+      "check": "drawn domain contains every unit and the perimeter",
+      "status": "PASS",
+      "detail": "beta axis [-1.0, 2.0], vol axis [0.0, 1.0]",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-05",
+      "scope": "FX majors",
+      "check": "AR(1) -> OU inversion is exact",
+      "status": "PASS",
+      "detail": "theta = -ln(phi)/dt = 9.7403/yr (phi 0.96209), sigma = s sqrt(2 theta/(1-phi^2)) = 0.0968, 439 state observations (min 120)",
+      "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
+    },
+    {
+      "id": "MAP-06",
+      "scope": "FX majors",
+      "check": "simulated terrain matches closed-form OU moments",
+      "status": "PASS",
+      "detail": "z vs theory: beta_mean -0.00, beta_var +1.15, lnvol_mean -0.75, lnvol_var +0.00, shock_cov -0.90 (n=20000); E[beta_T] theory -0.0054 vs simulated -0.0054; Var theory 0.000433 vs 0.000438",
+      "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
+    },
+    {
+      "id": "MAP-07",
+      "scope": "FX majors",
+      "check": "fog rings hold the mass they are labelled with",
+      "status": "PASS",
+      "detail": "measured mass inside each drawn ring: 0.6831 / 0.9540 / 0.9970 vs labels 68.3 / 95.4 / 99.7% (empirical Mahalanobis quantiles, not 1-sigma ellipses)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-08",
+      "scope": "FX majors",
+      "check": "breach probability counts paths that TOUCH the line",
+      "status": "PASS",
+      "detail": "flagged 0.0000 equals any-touch 0.0000 (counting end-states only would read 0.0000); HUD shows 0.0000",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-09",
+      "scope": "FX majors",
+      "check": "HUD tail numbers come from the simulated path P&L",
+      "status": "PASS",
+      "detail": "VaR95 1.3458% and ES97.5 2.0319% reproduced from the path P&L array; ES >= VaR holds; mean P&L +0.0026% (zero-drift risk view, as disclosed)",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "MAP-10",
+      "scope": "FX majors",
+      "check": "calm < base < stressed terrain width",
+      "status": "PASS",
+      "detail": "state variance calm 0.04742 < base 0.09426 < stress 0.19086 (disclosed shock multipliers 0.7 / 1.4, +0.10 shock correlation under stress)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-11",
+      "scope": "FX majors",
+      "check": "every linkage number replayed from raw returns",
+      "status": "PASS",
+      "detail": "AUDUSD=X->USDCAD=X: rho -0.606, w_flyer 0.355, ES solo 1.648% vs paired 0.602%, drawdown cushion +11.291% over 501d; AUDUSD=X->EURUSD=X: rho +0.561, w_flyer 0.415, ES solo 1.648% vs paired 1.153%, drawdown cushion +4.728% over 501d (4 linkages re-derived)",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "DATA-01",
+      "scope": "Futures (index & commodity)",
+      "check": "data-quality gate",
+      "status": "PASS",
+      "detail": "506 days x 6 names; clean",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "INV-01",
+      "scope": "Futures (index & commodity)",
+      "check": "CVaR >= VaR (tail mean dominates the quantile)",
+      "status": "PASS",
+      "detail": "95%: VaR 1.4747%, CVaR 2.4033%; 99%: VaR 2.5459%, CVaR 4.2864%",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "INV-02",
+      "scope": "Futures (index & commodity)",
+      "check": "covariance symmetric + PSD, |corr| <= 1, diag = 1",
+      "status": "PASS",
+      "detail": "max asymmetry 0.00e+00, min eigenvalue 1.56e-03, max off-diagonal |corr| 0.9538",
+      "source": "Markowitz (1952), portfolio variance identity w' Sigma w"
+    },
+    {
+      "id": "INV-03",
+      "scope": "Futures (index & commodity)",
+      "check": "portfolio vol = sqrt(w' Sigma w)",
+      "status": "PASS",
+      "detail": "engine 0.15923570 vs re-derived 0.15923570",
+      "source": "Markowitz (1952), portfolio variance identity w' Sigma w"
+    },
+    {
+      "id": "INV-04",
+      "scope": "Futures (index & commodity)",
+      "check": "risk-parity weights equalize risk contributions",
+      "status": "PASS",
+      "detail": "risk-share spread 3.95e-14 across 6 assets; weights sum 1.000000, min 0.0318",
+      "source": "Maillard, Roncalli & Teiletche (2010), 'The properties of equally weighted risk contribution portfolios'"
+    },
+    {
+      "id": "INV-05",
+      "scope": "Futures (index & commodity)",
+      "check": "vol targeting reaches the requested volatility",
+      "status": "PASS",
+      "detail": "target 10.00%, achieved 10.000000%, leverage 0.628",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "INV-06.bootstrap",
+      "scope": "Futures (index & commodity)",
+      "check": "bootstrap Monte Carlo coherent",
+      "status": "PASS",
+      "detail": "VaR 4.82%, CVaR 10.93%, P(loss) 8.9%, 20000 paths x 252 days",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "INV-06.jump-diffusion",
+      "scope": "Futures (index & commodity)",
+      "check": "jump-diffusion Monte Carlo coherent",
+      "status": "PASS",
+      "detail": "VaR 4.93%, CVaR 11.71%, P(loss) 8.8%, 20000 paths x 252 days",
+      "source": "Merton (1976), 'Option pricing when underlying stock returns are discontinuous', J. Financial Economics 3"
+    },
+    {
+      "id": "INV-07",
+      "scope": "Futures (index & commodity)",
+      "check": "jump calibration reproduces the empirical mean",
+      "status": "PASS",
+      "detail": "mu_d + lambda*mu_j = 0.0008634828 vs empirical mean log-return 0.0008634828; 6 jump days detected",
+      "source": "Merton (1976), 'Option pricing when underlying stock returns are discontinuous', J. Financial Economics 3"
+    },
+    {
+      "id": "INV-08",
+      "scope": "Futures (index & commodity)",
+      "check": "days-to-liquidate monotone in book size; LVaR >= CVaR",
+      "status": "PASS",
+      "detail": "100x the book never shortens an exit (slowest liquid leg 618.11d); CVaR 3.17% -> LVaR 5.89% (x1.8582)",
+      "source": "Basel liquidity-horizon convention (square-root-of-time scaling) over a participation-rate unwind model"
+    },
+    {
+      "id": "INV-09",
+      "scope": "Futures (index & commodity)",
+      "check": "conditional EVT: ES >= VaR at every quantile",
+      "status": "PASS",
+      "detail": "10y window, 2515 days; sigma_next 0.8050%, filtered xi 0.34696941925787794, unconditional xi 0.5393446825883577; q=0.99: VaR 2.35%, ES 3.52%",
+      "source": "McNeil & Frey (2000), 'Estimation of tail-related risk measures for heteroscedastic financial time series'"
+    },
+    {
+      "id": "BT-01",
+      "scope": "Futures (index & commodity)",
+      "check": "equal-weight @ 95% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 22 breaches / 255 tested days vs engine 22 / 255 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "Futures (index & commodity)",
+      "check": "equal-weight @ 95% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 5.860 vs engine 5.86; chi2(1) p = 0.015; observed rate 8.63% vs expected 5.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "BT-03",
+      "scope": "Futures (index & commodity)",
+      "check": "equal-weight @ 95% LR_cc = LR_uc + LR_ind",
+      "status": "PASS",
+      "detail": "LR_cc 8.08 = LR_uc 5.86 + LR_ind 2.22; independence p 0.13652931310544236",
+      "source": "Christoffersen (1998), 'Evaluating interval forecasts', International Economic Review 39(4)"
+    },
+    {
+      "id": "BT-01",
+      "scope": "Futures (index & commodity)",
+      "check": "equal-weight @ 99% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 5 breaches / 255 tested days vs engine 5 / 255 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "Futures (index & commodity)",
+      "check": "equal-weight @ 99% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 1.857 vs engine 1.86; chi2(1) p = 0.173; observed rate 1.96% vs expected 1.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "BT-03",
+      "scope": "Futures (index & commodity)",
+      "check": "equal-weight @ 99% LR_cc = LR_uc + LR_ind",
+      "status": "PASS",
+      "detail": "LR_cc 2.06 = LR_uc 1.86 + LR_ind 0.2; independence p 0.6540624275885729",
+      "source": "Christoffersen (1998), 'Evaluating interval forecasts', International Economic Review 39(4)"
+    },
+    {
+      "id": "BT-01",
+      "scope": "Futures (index & commodity)",
+      "check": "risk-parity @ 95% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 17 breaches / 255 tested days vs engine 17 / 255 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "Futures (index & commodity)",
+      "check": "risk-parity @ 95% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 1.356 vs engine 1.36; chi2(1) p = 0.244; observed rate 6.67% vs expected 5.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "BT-03",
+      "scope": "Futures (index & commodity)",
+      "check": "risk-parity @ 95% LR_cc = LR_uc + LR_ind",
+      "status": "PASS",
+      "detail": "LR_cc 3.92 = LR_uc 1.36 + LR_ind 2.56; independence p 0.1093368275002635",
+      "source": "Christoffersen (1998), 'Evaluating interval forecasts', International Economic Review 39(4)"
+    },
+    {
+      "id": "BT-01",
+      "scope": "Futures (index & commodity)",
+      "check": "risk-parity @ 99% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 3 breaches / 255 tested days vs engine 3 / 255 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "Futures (index & commodity)",
+      "check": "risk-parity @ 99% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 0.076 vs engine 0.08; chi2(1) p = 0.783; observed rate 1.18% vs expected 1.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "BT-03",
+      "scope": "Futures (index & commodity)",
+      "check": "risk-parity @ 99% LR_cc = LR_uc + LR_ind",
+      "status": "PASS",
+      "detail": "LR_cc 0.15 = LR_uc 0.08 + LR_ind 0.07; independence p 0.7888561237387977",
+      "source": "Christoffersen (1998), 'Evaluating interval forecasts', International Economic Review 39(4)"
+    },
+    {
+      "id": "MAP-00",
+      "scope": "Futures (index & commodity)",
+      "check": "map payload builds from live data",
+      "status": "PASS",
+      "detail": "11 units, 4 linkages, Live \u00b7 yfinance EOD \u00b7 439 state obs",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-01",
+      "scope": "Futures (index & commodity)",
+      "check": "book position = rolling beta / realized vol",
+      "status": "PASS",
+      "detail": "audit beta 0.55, vol 0.1105 vs map 0.55 / 0.1105 (63d Cov/Var; 21d sd x sqrt(252))",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-02",
+      "scope": "Futures (index & commodity)",
+      "check": "unit coordinates = measured beta / annualized vol",
+      "status": "PASS",
+      "detail": "6 of 11 units re-derived from raw returns; all match",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-03",
+      "scope": "Futures (index & commodity)",
+      "check": "hazard perimeter matches the disclosed policy",
+      "status": "PASS",
+      "detail": "volMax 0.35 = min(0.9, max(0.35, 3.0 x 0.1105)); betaMax 1.35 = min(1.9, 0.55 + 0.8); footnote states both",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-04",
+      "scope": "Futures (index & commodity)",
+      "check": "drawn domain contains every unit and the perimeter",
+      "status": "PASS",
+      "detail": "beta axis [-1.0, 2.0], vol axis [0.0, 1.0]",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-05",
+      "scope": "Futures (index & commodity)",
+      "check": "AR(1) -> OU inversion is exact",
+      "status": "PASS",
+      "detail": "theta = -ln(phi)/dt = 3.4358/yr (phi 0.98646), sigma = s sqrt(2 theta/(1-phi^2)) = 0.4894, 439 state observations (min 120)",
+      "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
+    },
+    {
+      "id": "MAP-06",
+      "scope": "Futures (index & commodity)",
+      "check": "simulated terrain matches closed-form OU moments",
+      "status": "PASS",
+      "detail": "z vs theory: beta_mean -0.26, beta_var +1.30, lnvol_mean -0.79, lnvol_var -0.22, shock_cov -0.12 (n=20000); E[beta_T] theory 0.5225 vs simulated 0.5222; Var theory 0.019474 vs 0.019728",
+      "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
+    },
+    {
+      "id": "MAP-07",
+      "scope": "Futures (index & commodity)",
+      "check": "fog rings hold the mass they are labelled with",
+      "status": "PASS",
+      "detail": "measured mass inside each drawn ring: 0.6831 / 0.9540 / 0.9970 vs labels 68.3 / 95.4 / 99.7% (empirical Mahalanobis quantiles, not 1-sigma ellipses)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-08",
+      "scope": "Futures (index & commodity)",
+      "check": "breach probability counts paths that TOUCH the line",
+      "status": "PASS",
+      "detail": "flagged 0.0015 equals any-touch 0.0015 (counting end-states only would read 0.0010); HUD shows 0.0014",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-09",
+      "scope": "Futures (index & commodity)",
+      "check": "HUD tail numbers come from the simulated path P&L",
+      "status": "PASS",
+      "detail": "VaR95 7.1375% and ES97.5 11.1389% reproduced from the path P&L array; ES >= VaR holds; mean P&L +0.0123% (zero-drift risk view, as disclosed)",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "MAP-10",
+      "scope": "Futures (index & commodity)",
+      "check": "calm < base < stressed terrain width",
+      "status": "PASS",
+      "detail": "state variance calm 0.06822 < base 0.13447 < stress 0.27332 (disclosed shock multipliers 0.7 / 1.4, +0.10 shock correlation under stress)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-11",
+      "scope": "Futures (index & commodity)",
+      "check": "every linkage number replayed from raw returns",
+      "status": "PASS",
+      "detail": "SI=F->ZN=F: rho +0.043, w_flyer 0.087, ES solo 10.027% vs paired 1.131%, drawdown cushion +43.096% over 501d; SI=F->TLT: rho +0.021, w_flyer 0.186, ES solo 10.027% vs paired 2.567%, drawdown cushion +36.822% over 501d (4 linkages re-derived)",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "DATA-01",
+      "scope": "Rates & credit (ETF proxies)",
+      "check": "data-quality gate",
+      "status": "PASS",
+      "detail": "501 days x 6 names; clean",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "INV-01",
+      "scope": "Rates & credit (ETF proxies)",
+      "check": "CVaR >= VaR (tail mean dominates the quantile)",
+      "status": "PASS",
+      "detail": "95%: VaR 0.4770%, CVaR 0.6914%; 99%: VaR 0.8014%, CVaR 1.0817%",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "INV-02",
+      "scope": "Rates & credit (ETF proxies)",
+      "check": "covariance symmetric + PSD, |corr| <= 1, diag = 1",
+      "status": "PASS",
+      "detail": "max asymmetry 0.00e+00, min eigenvalue 3.19e-05, max off-diagonal |corr| 0.9010",
+      "source": "Markowitz (1952), portfolio variance identity w' Sigma w"
+    },
+    {
+      "id": "INV-03",
+      "scope": "Rates & credit (ETF proxies)",
+      "check": "portfolio vol = sqrt(w' Sigma w)",
+      "status": "PASS",
+      "detail": "engine 0.04984709 vs re-derived 0.04984709",
+      "source": "Markowitz (1952), portfolio variance identity w' Sigma w"
+    },
+    {
+      "id": "INV-04",
+      "scope": "Rates & credit (ETF proxies)",
+      "check": "risk-parity weights equalize risk contributions",
+      "status": "PASS",
+      "detail": "risk-share spread 1.43e-14 across 6 assets; weights sum 1.000000, min 0.0514",
+      "source": "Maillard, Roncalli & Teiletche (2010), 'The properties of equally weighted risk contribution portfolios'"
+    },
+    {
+      "id": "INV-05",
+      "scope": "Rates & credit (ETF proxies)",
+      "check": "vol targeting reaches the requested volatility",
+      "status": "PASS",
+      "detail": "target 10.00%, achieved 10.000000%, leverage 2.006",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "INV-06.bootstrap",
+      "scope": "Rates & credit (ETF proxies)",
+      "check": "bootstrap Monte Carlo coherent",
+      "status": "PASS",
+      "detail": "VaR 6.10%, CVaR 8.11%, P(loss) 34.2%, 20000 paths x 252 days",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "INV-06.jump-diffusion",
+      "scope": "Rates & credit (ETF proxies)",
+      "check": "jump-diffusion Monte Carlo coherent",
+      "status": "PASS",
+      "detail": "VaR 6.06%, CVaR 7.98%, P(loss) 33.7%, 20000 paths x 252 days",
+      "source": "Merton (1976), 'Option pricing when underlying stock returns are discontinuous', J. Financial Economics 3"
+    },
+    {
+      "id": "INV-07",
+      "scope": "Rates & credit (ETF proxies)",
+      "check": "jump calibration reproduces the empirical mean",
+      "status": "PASS",
+      "detail": "mu_d + lambda*mu_j = 0.0000804077 vs empirical mean log-return 0.0000804077; 5 jump days detected",
+      "source": "Merton (1976), 'Option pricing when underlying stock returns are discontinuous', J. Financial Economics 3"
+    },
+    {
+      "id": "INV-08",
+      "scope": "Rates & credit (ETF proxies)",
+      "check": "days-to-liquidate monotone in book size; LVaR >= CVaR",
+      "status": "PASS",
+      "detail": "100x the book never shortens an exit (slowest liquid leg 0.42d); CVaR 0.85% -> LVaR 0.85% (x1.0008)",
+      "source": "Basel liquidity-horizon convention (square-root-of-time scaling) over a participation-rate unwind model"
+    },
+    {
+      "id": "INV-09",
+      "scope": "Rates & credit (ETF proxies)",
+      "check": "conditional EVT: ES >= VaR at every quantile",
+      "status": "PASS",
+      "detail": "10y window, 2511 days; sigma_next 0.2856%, filtered xi -0.037767869460111646, unconditional xi 0.22797346994370685; q=0.99: VaR 0.75%, ES 0.91%",
+      "source": "McNeil & Frey (2000), 'Estimation of tail-related risk measures for heteroscedastic financial time series'"
+    },
+    {
+      "id": "BT-01",
+      "scope": "Rates & credit (ETF proxies)",
+      "check": "equal-weight @ 95% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 14 breaches / 250 tested days vs engine 14 / 250 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "Rates & credit (ETF proxies)",
+      "check": "equal-weight @ 95% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 0.183 vs engine 0.18; chi2(1) p = 0.669; observed rate 5.60% vs expected 5.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "BT-03",
+      "scope": "Rates & credit (ETF proxies)",
+      "check": "equal-weight @ 95% LR_cc = LR_uc + LR_ind",
+      "status": "PASS",
+      "detail": "LR_cc 0.24 = LR_uc 0.18 + LR_ind 0.06; independence p 0.8063808750423658",
+      "source": "Christoffersen (1998), 'Evaluating interval forecasts', International Economic Review 39(4)"
+    },
+    {
+      "id": "BT-01",
+      "scope": "Rates & credit (ETF proxies)",
+      "check": "equal-weight @ 99% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 2 breaches / 250 tested days vs engine 2 / 250 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "Rates & credit (ETF proxies)",
+      "check": "equal-weight @ 99% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 0.108 vs engine 0.11; chi2(1) p = 0.742; observed rate 0.80% vs expected 1.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "BT-03",
+      "scope": "Rates & credit (ETF proxies)",
+      "check": "equal-weight @ 99% LR_cc = LR_uc + LR_ind",
+      "status": "PASS",
+      "detail": "LR_cc 0.14 = LR_uc 0.11 + LR_ind 0.03; independence p 0.8571765192955558",
+      "source": "Christoffersen (1998), 'Evaluating interval forecasts', International Economic Review 39(4)"
+    },
+    {
+      "id": "BT-01",
+      "scope": "Rates & credit (ETF proxies)",
+      "check": "risk-parity @ 95% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 15 breaches / 250 tested days vs engine 15 / 250 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "Rates & credit (ETF proxies)",
+      "check": "risk-parity @ 95% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 0.496 vs engine 0.5; chi2(1) p = 0.481; observed rate 6.00% vs expected 5.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "BT-03",
+      "scope": "Rates & credit (ETF proxies)",
+      "check": "risk-parity @ 95% LR_cc = LR_uc + LR_ind",
+      "status": "PASS",
+      "detail": "LR_cc 1.66 = LR_uc 0.5 + LR_ind 1.17; independence p 0.28025853070844525",
+      "source": "Christoffersen (1998), 'Evaluating interval forecasts', International Economic Review 39(4)"
+    },
+    {
+      "id": "BT-01",
+      "scope": "Rates & credit (ETF proxies)",
+      "check": "risk-parity @ 99% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 1 breaches / 250 tested days vs engine 1 / 250 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "Rates & credit (ETF proxies)",
+      "check": "risk-parity @ 99% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 1.176 vs engine 1.18; chi2(1) p = 0.278; observed rate 0.40% vs expected 1.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "BT-03",
+      "scope": "Rates & credit (ETF proxies)",
+      "check": "risk-parity @ 99% LR_cc = LR_uc + LR_ind",
+      "status": "PASS",
+      "detail": "LR_cc 1.18 = LR_uc 1.18 + LR_ind 0.01; independence p 0.9284439448072724",
+      "source": "Christoffersen (1998), 'Evaluating interval forecasts', International Economic Review 39(4)"
+    },
+    {
+      "id": "MAP-00",
+      "scope": "Rates & credit (ETF proxies)",
+      "check": "map payload builds from live data",
+      "status": "PASS",
+      "detail": "6 units, 4 linkages, Live \u00b7 yfinance EOD \u00b7 438 state obs",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-01",
+      "scope": "Rates & credit (ETF proxies)",
+      "check": "book position = rolling beta / realized vol",
+      "status": "PASS",
+      "detail": "audit beta 0.153, vol 0.0476 vs map 0.153 / 0.0476 (63d Cov/Var; 21d sd x sqrt(252))",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-02",
+      "scope": "Rates & credit (ETF proxies)",
+      "check": "unit coordinates = measured beta / annualized vol",
+      "status": "PASS",
+      "detail": "6 of 6 units re-derived from raw returns; all match",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-03",
+      "scope": "Rates & credit (ETF proxies)",
+      "check": "hazard perimeter matches the disclosed policy",
+      "status": "PASS",
+      "detail": "volMax 0.35 = min(0.9, max(0.35, 3.0 x 0.0476)); betaMax 0.95 = min(1.9, 0.153 + 0.8); footnote states both",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-04",
+      "scope": "Rates & credit (ETF proxies)",
+      "check": "drawn domain contains every unit and the perimeter",
+      "status": "PASS",
+      "detail": "beta axis [-1.0, 2.0], vol axis [0.0, 1.0]",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-05",
+      "scope": "Rates & credit (ETF proxies)",
+      "check": "AR(1) -> OU inversion is exact",
+      "status": "PASS",
+      "detail": "theta = -ln(phi)/dt = 5.4758/yr (phi 0.97851), sigma = s sqrt(2 theta/(1-phi^2)) = 0.1898, 438 state observations (min 120)",
+      "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
+    },
+    {
+      "id": "MAP-06",
+      "scope": "Rates & credit (ETF proxies)",
+      "check": "simulated terrain matches closed-form OU moments",
+      "status": "PASS",
+      "detail": "z vs theory: beta_mean -0.18, beta_var +1.28, lnvol_mean -0.78, lnvol_var -0.30, shock_cov -0.42 (n=20000); E[beta_T] theory 0.1362 vs simulated 0.1362; Var theory 0.002396 vs 0.002427",
+      "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
+    },
+    {
+      "id": "MAP-07",
+      "scope": "Rates & credit (ETF proxies)",
+      "check": "fog rings hold the mass they are labelled with",
+      "status": "PASS",
+      "detail": "measured mass inside each drawn ring: 0.6831 / 0.9540 / 0.9970 vs labels 68.3 / 95.4 / 99.7% (empirical Mahalanobis quantiles, not 1-sigma ellipses)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-08",
+      "scope": "Rates & credit (ETF proxies)",
+      "check": "breach probability counts paths that TOUCH the line",
+      "status": "PASS",
+      "detail": "flagged 0.0000 equals any-touch 0.0000 (counting end-states only would read 0.0000); HUD shows 0.0000",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-09",
+      "scope": "Rates & credit (ETF proxies)",
+      "check": "HUD tail numbers come from the simulated path P&L",
+      "status": "PASS",
+      "detail": "VaR95 2.8207% and ES97.5 4.1211% reproduced from the path P&L array; ES >= VaR holds; mean P&L +0.0027% (zero-drift risk view, as disclosed)",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "MAP-10",
+      "scope": "Rates & credit (ETF proxies)",
+      "check": "calm < base < stressed terrain width",
+      "status": "PASS",
+      "detail": "state variance calm 0.02687 < base 0.05288 < stress 0.10786 (disclosed shock multipliers 0.7 / 1.4, +0.10 shock correlation under stress)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-11",
+      "scope": "Rates & credit (ETF proxies)",
+      "check": "every linkage number replayed from raw returns",
+      "status": "PASS",
+      "detail": "TLT->SHY: rho +0.584, w_flyer 0.113, ES solo 1.941% vs paired 0.353%, drawdown cushion +12.741% over 500d; TLT->TIP: rho +0.808, w_flyer 0.257, ES solo 1.941% vs paired 0.965%, drawdown cushion +8.442% over 500d (4 linkages re-derived)",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "DATA-01",
+      "scope": "Commodities & real assets",
+      "check": "data-quality gate",
+      "status": "PASS",
+      "detail": "501 days x 6 names; clean",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "INV-01",
+      "scope": "Commodities & real assets",
+      "check": "CVaR >= VaR (tail mean dominates the quantile)",
+      "status": "PASS",
+      "detail": "95%: VaR 1.8014%, CVaR 2.8538%; 99%: VaR 3.2300%, CVaR 4.7693%",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "INV-02",
+      "scope": "Commodities & real assets",
+      "check": "covariance symmetric + PSD, |corr| <= 1, diag = 1",
+      "status": "PASS",
+      "detail": "max asymmetry 0.00e+00, min eigenvalue 2.30e-03, max off-diagonal |corr| 0.8904",
+      "source": "Markowitz (1952), portfolio variance identity w' Sigma w"
+    },
+    {
+      "id": "INV-03",
+      "scope": "Commodities & real assets",
+      "check": "portfolio vol = sqrt(w' Sigma w)",
+      "status": "PASS",
+      "detail": "engine 0.20307787 vs re-derived 0.20307787",
+      "source": "Markowitz (1952), portfolio variance identity w' Sigma w"
+    },
+    {
+      "id": "INV-04",
+      "scope": "Commodities & real assets",
+      "check": "risk-parity weights equalize risk contributions",
+      "status": "PASS",
+      "detail": "risk-share spread 2.46e-14 across 6 assets; weights sum 1.000000, min 0.0879",
+      "source": "Maillard, Roncalli & Teiletche (2010), 'The properties of equally weighted risk contribution portfolios'"
+    },
+    {
+      "id": "INV-05",
+      "scope": "Commodities & real assets",
+      "check": "vol targeting reaches the requested volatility",
+      "status": "PASS",
+      "detail": "target 10.00%, achieved 10.000000%, leverage 0.492",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "INV-06.bootstrap",
+      "scope": "Commodities & real assets",
+      "check": "bootstrap Monte Carlo coherent",
+      "status": "PASS",
+      "detail": "VaR 8.51%, CVaR 16.04%, P(loss) 11.2%, 20000 paths x 252 days",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "INV-06.jump-diffusion",
+      "scope": "Commodities & real assets",
+      "check": "jump-diffusion Monte Carlo coherent",
+      "status": "PASS",
+      "detail": "VaR 8.77%, CVaR 16.27%, P(loss) 11.2%, 20000 paths x 252 days",
+      "source": "Merton (1976), 'Option pricing when underlying stock returns are discontinuous', J. Financial Economics 3"
+    },
+    {
+      "id": "INV-07",
+      "scope": "Commodities & real assets",
+      "check": "jump calibration reproduces the empirical mean",
+      "status": "PASS",
+      "detail": "mu_d + lambda*mu_j = 0.0009693737 vs empirical mean log-return 0.0009693737; 6 jump days detected",
+      "source": "Merton (1976), 'Option pricing when underlying stock returns are discontinuous', J. Financial Economics 3"
+    },
+    {
+      "id": "INV-08",
+      "scope": "Commodities & real assets",
+      "check": "days-to-liquidate monotone in book size; LVaR >= CVaR",
+      "status": "PASS",
+      "detail": "100x the book never shortens an exit (slowest liquid leg 2.95d); CVaR 3.54% -> LVaR 3.56% (x1.0058)",
+      "source": "Basel liquidity-horizon convention (square-root-of-time scaling) over a participation-rate unwind model"
+    },
+    {
+      "id": "INV-09",
+      "scope": "Commodities & real assets",
+      "check": "conditional EVT: ES >= VaR at every quantile",
+      "status": "PASS",
+      "detail": "10y window, 2511 days; sigma_next 1.1896%, filtered xi -0.10903452412525291, unconditional xi 0.17726103925908504; q=0.99: VaR 3.20%, ES 3.81%",
+      "source": "McNeil & Frey (2000), 'Estimation of tail-related risk measures for heteroscedastic financial time series'"
+    },
+    {
+      "id": "BT-01",
+      "scope": "Commodities & real assets",
+      "check": "equal-weight @ 95% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 17 breaches / 250 tested days vs engine 17 / 250 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "Commodities & real assets",
+      "check": "equal-weight @ 95% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 1.540 vs engine 1.54; chi2(1) p = 0.215; observed rate 6.80% vs expected 5.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "BT-03",
+      "scope": "Commodities & real assets",
+      "check": "equal-weight @ 95% LR_cc = LR_uc + LR_ind",
+      "status": "PASS",
+      "detail": "LR_cc 2.13 = LR_uc 1.54 + LR_ind 0.59; independence p 0.44172145854034306",
+      "source": "Christoffersen (1998), 'Evaluating interval forecasts', International Economic Review 39(4)"
+    },
+    {
+      "id": "BT-01",
+      "scope": "Commodities & real assets",
+      "check": "equal-weight @ 99% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 4 breaches / 250 tested days vs engine 4 / 250 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "Commodities & real assets",
+      "check": "equal-weight @ 99% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 0.769 vs engine 0.77; chi2(1) p = 0.380; observed rate 1.60% vs expected 1.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "BT-03",
+      "scope": "Commodities & real assets",
+      "check": "equal-weight @ 99% LR_cc = LR_uc + LR_ind",
+      "status": "PASS",
+      "detail": "LR_cc 4.88 = LR_uc 0.77 + LR_ind 4.11; independence p 0.042706223183830654",
+      "source": "Christoffersen (1998), 'Evaluating interval forecasts', International Economic Review 39(4)"
+    },
+    {
+      "id": "BT-01",
+      "scope": "Commodities & real assets",
+      "check": "risk-parity @ 95% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 18 breaches / 250 tested days vs engine 18 / 250 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "Commodities & real assets",
+      "check": "risk-parity @ 95% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 2.256 vs engine 2.26; chi2(1) p = 0.133; observed rate 7.20% vs expected 5.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "BT-03",
+      "scope": "Commodities & real assets",
+      "check": "risk-parity @ 95% LR_cc = LR_uc + LR_ind",
+      "status": "PASS",
+      "detail": "LR_cc 2.34 = LR_uc 2.26 + LR_ind 0.09; independence p 0.7679574042983214",
+      "source": "Christoffersen (1998), 'Evaluating interval forecasts', International Economic Review 39(4)"
+    },
+    {
+      "id": "BT-01",
+      "scope": "Commodities & real assets",
+      "check": "risk-parity @ 99% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 3 breaches / 250 tested days vs engine 3 / 250 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "Commodities & real assets",
+      "check": "risk-parity @ 99% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 0.095 vs engine 0.09; chi2(1) p = 0.758; observed rate 1.20% vs expected 1.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "BT-03",
+      "scope": "Commodities & real assets",
+      "check": "risk-parity @ 99% LR_cc = LR_uc + LR_ind",
+      "status": "PASS",
+      "detail": "LR_cc 5.52 = LR_uc 0.09 + LR_ind 5.43; independence p 0.01984776403273412",
+      "source": "Christoffersen (1998), 'Evaluating interval forecasts', International Economic Review 39(4)"
+    },
+    {
+      "id": "MAP-00",
+      "scope": "Commodities & real assets",
+      "check": "map payload builds from live data",
+      "status": "PASS",
+      "detail": "6 units, 4 linkages, Live \u00b7 yfinance EOD \u00b7 438 state obs",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-01",
+      "scope": "Commodities & real assets",
+      "check": "book position = rolling beta / realized vol",
+      "status": "PASS",
+      "detail": "audit beta 0.205, vol 0.1819 vs map 0.205 / 0.1819 (63d Cov/Var; 21d sd x sqrt(252))",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-02",
+      "scope": "Commodities & real assets",
+      "check": "unit coordinates = measured beta / annualized vol",
+      "status": "PASS",
+      "detail": "6 of 6 units re-derived from raw returns; all match",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-03",
+      "scope": "Commodities & real assets",
+      "check": "hazard perimeter matches the disclosed policy",
+      "status": "PASS",
+      "detail": "volMax 0.55 = min(0.9, max(0.35, 3.0 x 0.1819)); betaMax 1.01 = min(1.9, 0.205 + 0.8); footnote states both",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-04",
+      "scope": "Commodities & real assets",
+      "check": "drawn domain contains every unit and the perimeter",
+      "status": "PASS",
+      "detail": "beta axis [-1.0, 2.0], vol axis [0.0, 1.0]",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-05",
+      "scope": "Commodities & real assets",
+      "check": "AR(1) -> OU inversion is exact",
+      "status": "PASS",
+      "detail": "theta = -ln(phi)/dt = 3.6551/yr (phi 0.98560), sigma = s sqrt(2 theta/(1-phi^2)) = 0.7676, 438 state observations (min 120)",
+      "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
+    },
+    {
+      "id": "MAP-06",
+      "scope": "Commodities & real assets",
+      "check": "simulated terrain matches closed-form OU moments",
+      "status": "PASS",
+      "detail": "z vs theory: beta_mean -0.25, beta_var +1.30, lnvol_mean -0.78, lnvol_var -0.25, shock_cov -0.44 (n=20000); E[beta_T] theory 0.1613 vs simulated 0.1609; Var theory 0.046836 vs 0.047446",
+      "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
+    },
+    {
+      "id": "MAP-07",
+      "scope": "Commodities & real assets",
+      "check": "fog rings hold the mass they are labelled with",
+      "status": "PASS",
+      "detail": "measured mass inside each drawn ring: 0.6831 / 0.9540 / 0.9970 vs labels 68.3 / 95.4 / 99.7% (empirical Mahalanobis quantiles, not 1-sigma ellipses)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-08",
+      "scope": "Commodities & real assets",
+      "check": "breach probability counts paths that TOUCH the line",
+      "status": "PASS",
+      "detail": "flagged 0.0000 equals any-touch 0.0000 (counting end-states only would read 0.0000); HUD shows 0.0004",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-09",
+      "scope": "Commodities & real assets",
+      "check": "HUD tail numbers come from the simulated path P&L",
+      "status": "PASS",
+      "detail": "VaR95 10.9348% and ES97.5 16.1963% reproduced from the path P&L array; ES >= VaR holds; mean P&L +0.0123% (zero-drift risk view, as disclosed)",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "MAP-10",
+      "scope": "Commodities & real assets",
+      "check": "calm < base < stressed terrain width",
+      "status": "PASS",
+      "detail": "state variance calm 0.06593 < base 0.13271 < stress 0.26445 (disclosed shock multipliers 0.7 / 1.4, +0.10 shock correlation under stress)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-11",
+      "scope": "Commodities & real assets",
+      "check": "every linkage number replayed from raw returns",
+      "status": "PASS",
+      "detail": "UNG->DBA: rho +0.074, w_flyer 0.175, ES solo 9.322% vs paired 2.380%, drawdown cushion +43.249% over 500d; UNG->DBC: rho +0.281, w_flyer 0.237, ES solo 9.322% vs paired 3.722%, drawdown cushion +42.323% over 500d (4 linkages re-derived)",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "DATA-01",
+      "scope": "Global macro (multi-asset ETFs)",
+      "check": "data-quality gate",
+      "status": "PASS",
+      "detail": "501 days x 6 names; clean",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "INV-01",
+      "scope": "Global macro (multi-asset ETFs)",
+      "check": "CVaR >= VaR (tail mean dominates the quantile)",
+      "status": "PASS",
+      "detail": "95%: VaR 0.9829%, CVaR 1.5905%; 99%: VaR 1.9107%, CVaR 2.4111%",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "INV-02",
+      "scope": "Global macro (multi-asset ETFs)",
+      "check": "covariance symmetric + PSD, |corr| <= 1, diag = 1",
+      "status": "PASS",
+      "detail": "max asymmetry 0.00e+00, min eigenvalue 2.08e-03, max off-diagonal |corr| 0.7928",
+      "source": "Markowitz (1952), portfolio variance identity w' Sigma w"
+    },
+    {
+      "id": "INV-03",
+      "scope": "Global macro (multi-asset ETFs)",
+      "check": "portfolio vol = sqrt(w' Sigma w)",
+      "status": "PASS",
+      "detail": "engine 0.10536901 vs re-derived 0.10536901",
+      "source": "Markowitz (1952), portfolio variance identity w' Sigma w"
+    },
+    {
+      "id": "INV-04",
+      "scope": "Global macro (multi-asset ETFs)",
+      "check": "risk-parity weights equalize risk contributions",
+      "status": "PASS",
+      "detail": "risk-share spread 1.47e-13 across 6 assets; weights sum 1.000000, min 0.0601",
+      "source": "Maillard, Roncalli & Teiletche (2010), 'The properties of equally weighted risk contribution portfolios'"
+    },
+    {
+      "id": "INV-05",
+      "scope": "Global macro (multi-asset ETFs)",
+      "check": "vol targeting reaches the requested volatility",
+      "status": "PASS",
+      "detail": "target 10.00%, achieved 10.000000%, leverage 0.949",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "INV-06.bootstrap",
+      "scope": "Global macro (multi-asset ETFs)",
+      "check": "bootstrap Monte Carlo coherent",
+      "status": "PASS",
+      "detail": "VaR 1.83%, CVaR 6.08%, P(loss) 6.9%, 20000 paths x 252 days",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "INV-06.jump-diffusion",
+      "scope": "Global macro (multi-asset ETFs)",
+      "check": "jump-diffusion Monte Carlo coherent",
+      "status": "PASS",
+      "detail": "VaR 1.96%, CVaR 6.16%, P(loss) 7.4%, 20000 paths x 252 days",
+      "source": "Merton (1976), 'Option pricing when underlying stock returns are discontinuous', J. Financial Economics 3"
+    },
+    {
+      "id": "INV-07",
+      "scope": "Global macro (multi-asset ETFs)",
+      "check": "jump calibration reproduces the empirical mean",
+      "status": "PASS",
+      "detail": "mu_d + lambda*mu_j = 0.0006165897 vs empirical mean log-return 0.0006165897; 9 jump days detected",
+      "source": "Merton (1976), 'Option pricing when underlying stock returns are discontinuous', J. Financial Economics 3"
+    },
+    {
+      "id": "INV-08",
+      "scope": "Global macro (multi-asset ETFs)",
+      "check": "days-to-liquidate monotone in book size; LVaR >= CVaR",
+      "status": "PASS",
+      "detail": "100x the book never shortens an exit (slowest liquid leg 1.51d); CVaR 1.99% -> LVaR 2.00% (x1.0030)",
+      "source": "Basel liquidity-horizon convention (square-root-of-time scaling) over a participation-rate unwind model"
+    },
+    {
+      "id": "INV-09",
+      "scope": "Global macro (multi-asset ETFs)",
+      "check": "conditional EVT: ES >= VaR at every quantile",
+      "status": "PASS",
+      "detail": "10y window, 2511 days; sigma_next 0.6476%, filtered xi -0.1055135541659429, unconditional xi 0.30385532811249605; q=0.99: VaR 1.92%, ES 2.35%",
+      "source": "McNeil & Frey (2000), 'Estimation of tail-related risk measures for heteroscedastic financial time series'"
+    },
+    {
+      "id": "BT-01",
+      "scope": "Global macro (multi-asset ETFs)",
+      "check": "equal-weight @ 95% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 20 breaches / 250 tested days vs engine 20 / 250 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "Global macro (multi-asset ETFs)",
+      "check": "equal-weight @ 95% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 4.040 vs engine 4.04; chi2(1) p = 0.044; observed rate 8.00% vs expected 5.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "BT-03",
+      "scope": "Global macro (multi-asset ETFs)",
+      "check": "equal-weight @ 95% LR_cc = LR_uc + LR_ind",
+      "status": "PASS",
+      "detail": "LR_cc 7.54 = LR_uc 4.04 + LR_ind 3.5; independence p 0.06144653251543997",
+      "source": "Christoffersen (1998), 'Evaluating interval forecasts', International Economic Review 39(4)"
+    },
+    {
+      "id": "BT-01",
+      "scope": "Global macro (multi-asset ETFs)",
+      "check": "equal-weight @ 99% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 4 breaches / 250 tested days vs engine 4 / 250 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "Global macro (multi-asset ETFs)",
+      "check": "equal-weight @ 99% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 0.769 vs engine 0.77; chi2(1) p = 0.380; observed rate 1.60% vs expected 1.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "BT-03",
+      "scope": "Global macro (multi-asset ETFs)",
+      "check": "equal-weight @ 99% LR_cc = LR_uc + LR_ind",
+      "status": "PASS",
+      "detail": "LR_cc 0.9 = LR_uc 0.77 + LR_ind 0.13; independence p 0.7177920842954111",
+      "source": "Christoffersen (1998), 'Evaluating interval forecasts', International Economic Review 39(4)"
+    },
+    {
+      "id": "BT-01",
+      "scope": "Global macro (multi-asset ETFs)",
+      "check": "risk-parity @ 95% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 18 breaches / 250 tested days vs engine 18 / 250 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "Global macro (multi-asset ETFs)",
+      "check": "risk-parity @ 95% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 2.256 vs engine 2.26; chi2(1) p = 0.133; observed rate 7.20% vs expected 5.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "BT-03",
+      "scope": "Global macro (multi-asset ETFs)",
+      "check": "risk-parity @ 95% LR_cc = LR_uc + LR_ind",
+      "status": "PASS",
+      "detail": "LR_cc 2.64 = LR_uc 2.26 + LR_ind 0.38; independence p 0.5357730438512787",
+      "source": "Christoffersen (1998), 'Evaluating interval forecasts', International Economic Review 39(4)"
+    },
+    {
+      "id": "BT-01",
+      "scope": "Global macro (multi-asset ETFs)",
+      "check": "risk-parity @ 99% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 3 breaches / 250 tested days vs engine 3 / 250 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "Global macro (multi-asset ETFs)",
+      "check": "risk-parity @ 99% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 0.095 vs engine 0.09; chi2(1) p = 0.758; observed rate 1.20% vs expected 1.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "BT-03",
+      "scope": "Global macro (multi-asset ETFs)",
+      "check": "risk-parity @ 99% LR_cc = LR_uc + LR_ind",
+      "status": "PASS",
+      "detail": "LR_cc 0.17 = LR_uc 0.09 + LR_ind 0.07; independence p 0.7867723531107524",
+      "source": "Christoffersen (1998), 'Evaluating interval forecasts', International Economic Review 39(4)"
+    },
+    {
+      "id": "MAP-00",
+      "scope": "Global macro (multi-asset ETFs)",
+      "check": "map payload builds from live data",
+      "status": "PASS",
+      "detail": "6 units, 4 linkages, Live \u00b7 yfinance EOD \u00b7 438 state obs",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-01",
+      "scope": "Global macro (multi-asset ETFs)",
+      "check": "book position = rolling beta / realized vol",
+      "status": "PASS",
+      "detail": "audit beta 0.781, vol 0.103 vs map 0.781 / 0.103 (63d Cov/Var; 21d sd x sqrt(252))",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-02",
+      "scope": "Global macro (multi-asset ETFs)",
+      "check": "unit coordinates = measured beta / annualized vol",
+      "status": "PASS",
+      "detail": "6 of 6 units re-derived from raw returns; all match",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-03",
+      "scope": "Global macro (multi-asset ETFs)",
+      "check": "hazard perimeter matches the disclosed policy",
+      "status": "PASS",
+      "detail": "volMax 0.35 = min(0.9, max(0.35, 3.0 x 0.103)); betaMax 1.58 = min(1.9, 0.781 + 0.8); footnote states both",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-04",
+      "scope": "Global macro (multi-asset ETFs)",
+      "check": "drawn domain contains every unit and the perimeter",
+      "status": "PASS",
+      "detail": "beta axis [-1.0, 2.0], vol axis [0.0, 1.0]",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-05",
+      "scope": "Global macro (multi-asset ETFs)",
+      "check": "AR(1) -> OU inversion is exact",
+      "status": "PASS",
+      "detail": "theta = -ln(phi)/dt = 1.2632/yr (phi 0.99500), sigma = s sqrt(2 theta/(1-phi^2)) = 0.2138, 438 state observations (min 120)",
+      "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
+    },
+    {
+      "id": "MAP-06",
+      "scope": "Global macro (multi-asset ETFs)",
+      "check": "simulated terrain matches closed-form OU moments",
+      "status": "PASS",
+      "detail": "z vs theory: beta_mean -0.33, beta_var +1.30, lnvol_mean -0.80, lnvol_var -0.17, shock_cov -0.14 (n=20000); E[beta_T] theory 0.7737 vs simulated 0.7736; Var theory 0.004700 vs 0.004761",
+      "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
+    },
+    {
+      "id": "MAP-07",
+      "scope": "Global macro (multi-asset ETFs)",
+      "check": "fog rings hold the mass they are labelled with",
+      "status": "PASS",
+      "detail": "measured mass inside each drawn ring: 0.6831 / 0.9540 / 0.9970 vs labels 68.3 / 95.4 / 99.7% (empirical Mahalanobis quantiles, not 1-sigma ellipses)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-08",
+      "scope": "Global macro (multi-asset ETFs)",
+      "check": "breach probability counts paths that TOUCH the line",
+      "status": "PASS",
+      "detail": "flagged 0.0000 equals any-touch 0.0000 (counting end-states only would read 0.0000); HUD shows 0.0001",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-09",
+      "scope": "Global macro (multi-asset ETFs)",
+      "check": "HUD tail numbers come from the simulated path P&L",
+      "status": "PASS",
+      "detail": "VaR95 6.0713% and ES97.5 9.1144% reproduced from the path P&L array; ES >= VaR holds; mean P&L +0.0062% (zero-drift risk view, as disclosed)",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "MAP-10",
+      "scope": "Global macro (multi-asset ETFs)",
+      "check": "calm < base < stressed terrain width",
+      "status": "PASS",
+      "detail": "state variance calm 0.05739 < base 0.11228 < stress 0.23004 (disclosed shock multipliers 0.7 / 1.4, +0.10 shock correlation under stress)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-11",
+      "scope": "Global macro (multi-asset ETFs)",
+      "check": "every linkage number replayed from raw returns",
+      "status": "PASS",
+      "detail": "GLD->UUP: rho -0.423, w_flyer 0.224, ES solo 4.462% vs paired 1.114%, drawdown cushion +22.274% over 500d; GLD->TLT: rho +0.097, w_flyer 0.327, ES solo 4.462% vs paired 2.057%, drawdown cushion +13.388% over 500d (4 linkages re-derived)",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "DATA-01",
+      "scope": "Small-cap liquidity stress (thin volume)",
+      "check": "data-quality gate",
+      "status": "PASS",
+      "detail": "501 days x 10 names; clean",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "INV-01",
+      "scope": "Small-cap liquidity stress (thin volume)",
+      "check": "CVaR >= VaR (tail mean dominates the quantile)",
+      "status": "PASS",
+      "detail": "95%: VaR 2.6313%, CVaR 3.5381%; 99%: VaR 3.5694%, CVaR 5.2315%",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "INV-02",
+      "scope": "Small-cap liquidity stress (thin volume)",
+      "check": "covariance symmetric + PSD, |corr| <= 1, diag = 1",
+      "status": "PASS",
+      "detail": "max asymmetry 0.00e+00, min eigenvalue 5.35e-02, max off-diagonal |corr| 0.5384",
+      "source": "Markowitz (1952), portfolio variance identity w' Sigma w"
+    },
+    {
+      "id": "INV-03",
+      "scope": "Small-cap liquidity stress (thin volume)",
+      "check": "portfolio vol = sqrt(w' Sigma w)",
+      "status": "PASS",
+      "detail": "engine 0.27309738 vs re-derived 0.27309738",
+      "source": "Markowitz (1952), portfolio variance identity w' Sigma w"
+    },
+    {
+      "id": "INV-04",
+      "scope": "Small-cap liquidity stress (thin volume)",
+      "check": "risk-parity weights equalize risk contributions",
+      "status": "PASS",
+      "detail": "risk-share spread 1.60e-14 across 10 assets; weights sum 1.000000, min 0.0560",
+      "source": "Maillard, Roncalli & Teiletche (2010), 'The properties of equally weighted risk contribution portfolios'"
+    },
+    {
+      "id": "INV-05",
+      "scope": "Small-cap liquidity stress (thin volume)",
+      "check": "vol targeting reaches the requested volatility",
+      "status": "PASS",
+      "detail": "target 10.00%, achieved 10.000000%, leverage 0.366",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "INV-06.bootstrap",
+      "scope": "Small-cap liquidity stress (thin volume)",
+      "check": "bootstrap Monte Carlo coherent",
+      "status": "PASS",
+      "detail": "VaR 30.28%, CVaR 37.54%, P(loss) 37.3%, 20000 paths x 252 days",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "INV-06.jump-diffusion",
+      "scope": "Small-cap liquidity stress (thin volume)",
+      "check": "jump-diffusion Monte Carlo coherent",
+      "status": "PASS",
+      "detail": "VaR 30.45%, CVaR 37.34%, P(loss) 37.0%, 20000 paths x 252 days",
+      "source": "Merton (1976), 'Option pricing when underlying stock returns are discontinuous', J. Financial Economics 3"
+    },
+    {
+      "id": "INV-07",
+      "scope": "Small-cap liquidity stress (thin volume)",
+      "check": "jump calibration reproduces the empirical mean",
+      "status": "PASS",
+      "detail": "mu_d + lambda*mu_j = 0.0003491664 vs empirical mean log-return 0.0003491664; 5 jump days detected",
+      "source": "Merton (1976), 'Option pricing when underlying stock returns are discontinuous', J. Financial Economics 3"
+    },
+    {
+      "id": "INV-08",
+      "scope": "Small-cap liquidity stress (thin volume)",
+      "check": "days-to-liquidate monotone in book size; LVaR >= CVaR",
+      "status": "PASS",
+      "detail": "100x the book never shortens an exit (slowest liquid leg 235.10d); CVaR 4.11% -> LVaR 5.71% (x1.3903)",
+      "source": "Basel liquidity-horizon convention (square-root-of-time scaling) over a participation-rate unwind model"
+    },
+    {
+      "id": "INV-09",
+      "scope": "Small-cap liquidity stress (thin volume)",
+      "check": "conditional EVT: ES >= VaR at every quantile",
+      "status": "PASS",
+      "detail": "10y window, 2240 days; sigma_next 1.1879%, filtered xi 0.06807619455988982, unconditional xi 0.37251502936890635; q=0.99: VaR 3.08%, ES 3.87%",
+      "source": "McNeil & Frey (2000), 'Estimation of tail-related risk measures for heteroscedastic financial time series'"
+    },
+    {
+      "id": "BT-01",
+      "scope": "Small-cap liquidity stress (thin volume)",
+      "check": "equal-weight @ 95% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 9 breaches / 250 tested days vs engine 9 / 250 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "Small-cap liquidity stress (thin volume)",
+      "check": "equal-weight @ 95% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 1.138 vs engine 1.14; chi2(1) p = 0.286; observed rate 3.60% vs expected 5.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "BT-03",
+      "scope": "Small-cap liquidity stress (thin volume)",
+      "check": "equal-weight @ 95% LR_cc = LR_uc + LR_ind",
+      "status": "PASS",
+      "detail": "LR_cc 2.14 = LR_uc 1.14 + LR_ind 1.01; independence p 0.3157762037622499",
+      "source": "Christoffersen (1998), 'Evaluating interval forecasts', International Economic Review 39(4)"
+    },
+    {
+      "id": "BT-01",
+      "scope": "Small-cap liquidity stress (thin volume)",
+      "check": "equal-weight @ 99% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 1 breaches / 250 tested days vs engine 1 / 250 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "Small-cap liquidity stress (thin volume)",
+      "check": "equal-weight @ 99% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 1.176 vs engine 1.18; chi2(1) p = 0.278; observed rate 0.40% vs expected 1.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "BT-03",
+      "scope": "Small-cap liquidity stress (thin volume)",
+      "check": "equal-weight @ 99% LR_cc = LR_uc + LR_ind",
+      "status": "PASS",
+      "detail": "LR_cc 1.18 = LR_uc 1.18 + LR_ind 0.01; independence p 0.9284439448072724",
+      "source": "Christoffersen (1998), 'Evaluating interval forecasts', International Economic Review 39(4)"
+    },
+    {
+      "id": "BT-01",
+      "scope": "Small-cap liquidity stress (thin volume)",
+      "check": "risk-parity @ 95% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 10 breaches / 250 tested days vs engine 10 / 250 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "Small-cap liquidity stress (thin volume)",
+      "check": "risk-parity @ 95% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 0.563 vs engine 0.56; chi2(1) p = 0.453; observed rate 4.00% vs expected 5.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "BT-03",
+      "scope": "Small-cap liquidity stress (thin volume)",
+      "check": "risk-parity @ 95% LR_cc = LR_uc + LR_ind",
+      "status": "PASS",
+      "detail": "LR_cc 1.4 = LR_uc 0.56 + LR_ind 0.84; independence p 0.3602376998478066",
+      "source": "Christoffersen (1998), 'Evaluating interval forecasts', International Economic Review 39(4)"
+    },
+    {
+      "id": "BT-01",
+      "scope": "Small-cap liquidity stress (thin volume)",
+      "check": "risk-parity @ 99% walk-forward, no lookahead",
+      "status": "PASS",
+      "detail": "audit 2 breaches / 250 tested days vs engine 2 / 250 (window 250d)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "BT-02",
+      "scope": "Small-cap liquidity stress (thin volume)",
+      "check": "risk-parity @ 99% Kupiec LR re-derived",
+      "status": "PASS",
+      "detail": "audit LR 0.108 vs engine 0.11; chi2(1) p = 0.742; observed rate 0.80% vs expected 1.00%",
+      "source": "Kupiec (1995), 'Techniques for verifying the accuracy of risk measurement models', J. Derivatives 3(2)"
+    },
+    {
+      "id": "BT-03",
+      "scope": "Small-cap liquidity stress (thin volume)",
+      "check": "risk-parity @ 99% LR_cc = LR_uc + LR_ind",
+      "status": "PASS",
+      "detail": "LR_cc 0.14 = LR_uc 0.11 + LR_ind 0.03; independence p 0.8571765192955558",
+      "source": "Christoffersen (1998), 'Evaluating interval forecasts', International Economic Review 39(4)"
+    },
+    {
+      "id": "MAP-00",
+      "scope": "Small-cap liquidity stress (thin volume)",
+      "check": "map payload builds from live data",
+      "status": "PASS",
+      "detail": "15 units, 4 linkages, Live \u00b7 yfinance EOD \u00b7 438 state obs",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-01",
+      "scope": "Small-cap liquidity stress (thin volume)",
+      "check": "book position = rolling beta / realized vol",
+      "status": "PASS",
+      "detail": "audit beta 0.452, vol 0.1826 vs map 0.452 / 0.1826 (63d Cov/Var; 21d sd x sqrt(252))",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-02",
+      "scope": "Small-cap liquidity stress (thin volume)",
+      "check": "unit coordinates = measured beta / annualized vol",
+      "status": "PASS",
+      "detail": "10 of 15 units re-derived from raw returns; all match",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-03",
+      "scope": "Small-cap liquidity stress (thin volume)",
+      "check": "hazard perimeter matches the disclosed policy",
+      "status": "PASS",
+      "detail": "volMax 0.55 = min(0.9, max(0.35, 3.0 x 0.1826)); betaMax 1.25 = min(1.9, 0.452 + 0.8); footnote states both",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-04",
+      "scope": "Small-cap liquidity stress (thin volume)",
+      "check": "drawn domain contains every unit and the perimeter",
+      "status": "PASS",
+      "detail": "beta axis [-1.0, 2.0], vol axis [0.0, 1.0]",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-05",
+      "scope": "Small-cap liquidity stress (thin volume)",
+      "check": "AR(1) -> OU inversion is exact",
+      "status": "PASS",
+      "detail": "theta = -ln(phi)/dt = 1.7933/yr (phi 0.99291), sigma = s sqrt(2 theta/(1-phi^2)) = 0.7857, 438 state observations (min 120)",
+      "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
+    },
+    {
+      "id": "MAP-06",
+      "scope": "Small-cap liquidity stress (thin volume)",
+      "check": "simulated terrain matches closed-form OU moments",
+      "status": "PASS",
+      "detail": "z vs theory: beta_mean -0.32, beta_var +1.31, lnvol_mean -0.76, lnvol_var -0.49, shock_cov -0.21 (n=20000); E[beta_T] theory 0.5129 vs simulated 0.5124; Var theory 0.059813 vs 0.060595",
+      "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
+    },
+    {
+      "id": "MAP-07",
+      "scope": "Small-cap liquidity stress (thin volume)",
+      "check": "fog rings hold the mass they are labelled with",
+      "status": "PASS",
+      "detail": "measured mass inside each drawn ring: 0.6831 / 0.9540 / 0.9970 vs labels 68.3 / 95.4 / 99.7% (empirical Mahalanobis quantiles, not 1-sigma ellipses)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-08",
+      "scope": "Small-cap liquidity stress (thin volume)",
+      "check": "breach probability counts paths that TOUCH the line",
+      "status": "PASS",
+      "detail": "flagged 0.0045 equals any-touch 0.0045 (counting end-states only would read 0.0025); HUD shows 0.0024",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-09",
+      "scope": "Small-cap liquidity stress (thin volume)",
+      "check": "HUD tail numbers come from the simulated path P&L",
+      "status": "PASS",
+      "detail": "VaR95 12.1541% and ES97.5 17.7854% reproduced from the path P&L array; ES >= VaR holds; mean P&L +0.0150% (zero-drift risk view, as disclosed)",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "MAP-10",
+      "scope": "Small-cap liquidity stress (thin volume)",
+      "check": "calm < base < stressed terrain width",
+      "status": "PASS",
+      "detail": "state variance calm 0.05496 < base 0.11204 < stress 0.22015 (disclosed shock multipliers 0.7 / 1.4, +0.10 shock correlation under stress)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-11",
+      "scope": "Small-cap liquidity stress (thin volume)",
+      "check": "every linkage number replayed from raw returns",
+      "status": "PASS",
+      "detail": "VRA->TLT: rho +0.087, w_flyer 0.123, ES solo 12.576% vs paired 2.403%, drawdown cushion +49.637% over 500d; VRA->GLD: rho -0.004, w_flyer 0.224, ES solo 12.576% vs paired 4.425%, drawdown cushion +53.736% over 500d (4 linkages re-derived)",
+      "source": "Acerbi & Tasche (2002), 'On the coherence of expected shortfall'"
+    },
+    {
+      "id": "MAP-CTRL",
+      "scope": "control (planted parameters)",
+      "check": "map simulation recovers hand-set OU parameters",
+      "status": "PASS",
+      "detail": "planted theta_b 6.0, theta_v 4.0, rho 0.5, b0 1.2, vol0 25%: z(beta mean) +0.17, z(lnvol var) +0.34, z(shock cov) +0.96 over 20000 paths",
+      "source": "Glasserman (2003), 'Monte Carlo Methods in Financial Engineering', ch. 3 (exact OU / Vasicek discretization)"
+    },
+    {
+      "id": "MAP-S1",
+      "scope": "map source",
+      "check": "iso-VaR guide uses the Gaussian 95% quantile",
+      "status": "PASS",
+      "detail": "contour drawn at vol = VaR sqrt(252) / 1.645; scipy norm.ppf(0.95) = 1.644854",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-S2",
+      "scope": "map source",
+      "check": "live splice replaces the demo block wholesale",
+      "status": "PASS",
+      "detail": "spliced payload round-trips to the exact engine dict; the file's demo constants are absent from the rendered page",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-S4",
+      "scope": "map source",
+      "check": "live linkage label names the right statistic",
+      "status": "PASS",
+      "detail": "in live mode the inspector labels the backtested number 'Drawdown cushion' (max-drawdown difference), not the demo-mode 'Crisis cushion' computed from an ES difference",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "MAP-S3",
+      "scope": "map source",
+      "check": "shared constants survive the splice",
+      "status": "PASS",
+      "detail": "ISO_LEVELS is declared before the payload markers, so the drawn contour and the hover explanation cannot disagree",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "TRACE",
+      "scope": "src/risk.py",
+      "check": "every method cites a source in the module itself",
+      "status": "PASS",
+      "detail": "VaR backtest -> Kupiec; breach clustering -> Christoffersen; conditional EVT -> McNeil; jump diffusion -> Merton; GPD tail -> Pickands",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "TRACE",
+      "scope": "src/strategies.py",
+      "check": "every method cites a source in the module itself",
+      "status": "PASS",
+      "detail": "ERC solver -> Spinu; risk budgeting -> risk parity",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "TRACE",
+      "scope": "src/state_calibration.py",
+      "check": "every method cites a source in the module itself",
+      "status": "PASS",
+      "detail": "OU discretization -> Glasserman; estimator -> AR(1)",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "TRACE",
+      "scope": "src/pairing.py",
+      "check": "every method cites a source in the module itself",
+      "status": "PASS",
+      "detail": "tail measure -> expected shortfall; Basel ES level -> 97.5",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "TRACE",
+      "scope": "src/liquidity.py",
+      "check": "every method cites a source in the module itself",
+      "status": "PASS",
+      "detail": "unwind model -> participation; horizon scaling -> square-root-of-time",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "TRACE",
+      "scope": "src/regimes.py",
+      "check": "every method cites a source in the module itself",
+      "status": "PASS",
+      "detail": "regime distance -> Wasserstein",
+      "source": "This engine's own code, re-derived independently by this audit"
+    },
+    {
+      "id": "TRACE",
+      "scope": "src/covariance.py",
+      "check": "every method cites a source in the module itself",
+      "status": "PASS",
+      "detail": "shrinkage -> Ledoit",
+      "source": "This engine's own code, re-derived independently by this audit"
+    }
+  ],
+  "var_backtests": [
+    {
+      "universe": "Hedge-fund favorites (13F-popular)",
+      "book": "equal-weight",
+      "confidence": 0.95,
+      "tested_days": 251,
+      "breaches": 10,
+      "expected": 12.6,
+      "observed_rate": 0.0398,
+      "kupiec_lr": 0.58,
+      "kupiec_pass": true,
+      "independence_pass": true,
+      "conditional_coverage_pass": true,
+      "window": 250
+    },
+    {
+      "universe": "Hedge-fund favorites (13F-popular)",
+      "book": "equal-weight",
+      "confidence": 0.99,
+      "tested_days": 251,
+      "breaches": 0,
+      "expected": 2.5,
+      "observed_rate": 0.0,
+      "kupiec_lr": 5.05,
+      "kupiec_pass": false,
+      "independence_pass": null,
+      "conditional_coverage_pass": null,
+      "window": 250
+    },
+    {
+      "universe": "Hedge-fund favorites (13F-popular)",
+      "book": "risk-parity",
+      "confidence": 0.95,
+      "tested_days": 251,
+      "breaches": 7,
+      "expected": 12.6,
+      "observed_rate": 0.0279,
+      "kupiec_lr": 3.05,
+      "kupiec_pass": true,
+      "independence_pass": true,
+      "conditional_coverage_pass": true,
+      "window": 250
+    },
+    {
+      "universe": "Hedge-fund favorites (13F-popular)",
+      "book": "risk-parity",
+      "confidence": 0.99,
+      "tested_days": 251,
+      "breaches": 0,
+      "expected": 2.5,
+      "observed_rate": 0.0,
+      "kupiec_lr": 5.05,
+      "kupiec_pass": false,
+      "independence_pass": null,
+      "conditional_coverage_pass": null,
+      "window": 250
+    },
+    {
+      "universe": "Mega-cap tech (Mag 7 + QQQ)",
+      "book": "equal-weight",
+      "confidence": 0.95,
+      "tested_days": 250,
+      "breaches": 9,
+      "expected": 12.5,
+      "observed_rate": 0.036,
+      "kupiec_lr": 1.14,
+      "kupiec_pass": true,
+      "independence_pass": true,
+      "conditional_coverage_pass": true,
+      "window": 250
+    },
+    {
+      "universe": "Mega-cap tech (Mag 7 + QQQ)",
+      "book": "equal-weight",
+      "confidence": 0.99,
+      "tested_days": 250,
+      "breaches": 2,
+      "expected": 2.5,
+      "observed_rate": 0.008,
+      "kupiec_lr": 0.11,
+      "kupiec_pass": true,
+      "independence_pass": true,
+      "conditional_coverage_pass": true,
+      "window": 250
+    },
+    {
+      "universe": "Mega-cap tech (Mag 7 + QQQ)",
+      "book": "risk-parity",
+      "confidence": 0.95,
+      "tested_days": 250,
+      "breaches": 10,
+      "expected": 12.5,
+      "observed_rate": 0.04,
+      "kupiec_lr": 0.56,
+      "kupiec_pass": true,
+      "independence_pass": true,
+      "conditional_coverage_pass": true,
+      "window": 250
+    },
+    {
+      "universe": "Mega-cap tech (Mag 7 + QQQ)",
+      "book": "risk-parity",
+      "confidence": 0.99,
+      "tested_days": 250,
+      "breaches": 2,
+      "expected": 2.5,
+      "observed_rate": 0.008,
+      "kupiec_lr": 0.11,
+      "kupiec_pass": true,
+      "independence_pass": true,
+      "conditional_coverage_pass": true,
+      "window": 250
+    },
+    {
+      "universe": "Multi-sector blue chips (institutional-style)",
+      "book": "equal-weight",
+      "confidence": 0.95,
+      "tested_days": 250,
+      "breaches": 14,
+      "expected": 12.5,
+      "observed_rate": 0.056,
+      "kupiec_lr": 0.18,
+      "kupiec_pass": true,
+      "independence_pass": true,
+      "conditional_coverage_pass": true,
+      "window": 250
+    },
+    {
+      "universe": "Multi-sector blue chips (institutional-style)",
+      "book": "equal-weight",
+      "confidence": 0.99,
+      "tested_days": 250,
+      "breaches": 2,
+      "expected": 2.5,
+      "observed_rate": 0.008,
+      "kupiec_lr": 0.11,
+      "kupiec_pass": true,
+      "independence_pass": true,
+      "conditional_coverage_pass": true,
+      "window": 250
+    },
+    {
+      "universe": "Multi-sector blue chips (institutional-style)",
+      "book": "risk-parity",
+      "confidence": 0.95,
+      "tested_days": 250,
+      "breaches": 13,
+      "expected": 12.5,
+      "observed_rate": 0.052,
+      "kupiec_lr": 0.02,
+      "kupiec_pass": true,
+      "independence_pass": true,
+      "conditional_coverage_pass": true,
+      "window": 250
+    },
+    {
+      "universe": "Multi-sector blue chips (institutional-style)",
+      "book": "risk-parity",
+      "confidence": 0.99,
+      "tested_days": 250,
+      "breaches": 2,
+      "expected": 2.5,
+      "observed_rate": 0.008,
+      "kupiec_lr": 0.11,
+      "kupiec_pass": true,
+      "independence_pass": true,
+      "conditional_coverage_pass": true,
+      "window": 250
+    },
+    {
+      "universe": "Index core (S&P 500 & broad market ETFs)",
+      "book": "equal-weight",
+      "confidence": 0.95,
+      "tested_days": 250,
+      "breaches": 9,
+      "expected": 12.5,
+      "observed_rate": 0.036,
+      "kupiec_lr": 1.14,
+      "kupiec_pass": true,
+      "independence_pass": true,
+      "conditional_coverage_pass": true,
+      "window": 250
+    },
+    {
+      "universe": "Index core (S&P 500 & broad market ETFs)",
+      "book": "equal-weight",
+      "confidence": 0.99,
+      "tested_days": 250,
+      "breaches": 1,
+      "expected": 2.5,
+      "observed_rate": 0.004,
+      "kupiec_lr": 1.18,
+      "kupiec_pass": true,
+      "independence_pass": true,
+      "conditional_coverage_pass": true,
+      "window": 250
+    },
+    {
+      "universe": "Index core (S&P 500 & broad market ETFs)",
+      "book": "risk-parity",
+      "confidence": 0.95,
+      "tested_days": 250,
+      "breaches": 9,
+      "expected": 12.5,
+      "observed_rate": 0.036,
+      "kupiec_lr": 1.14,
+      "kupiec_pass": true,
+      "independence_pass": true,
+      "conditional_coverage_pass": true,
+      "window": 250
+    },
+    {
+      "universe": "Index core (S&P 500 & broad market ETFs)",
+      "book": "risk-parity",
+      "confidence": 0.99,
+      "tested_days": 250,
+      "breaches": 1,
+      "expected": 2.5,
+      "observed_rate": 0.004,
+      "kupiec_lr": 1.18,
+      "kupiec_pass": true,
+      "independence_pass": true,
+      "conditional_coverage_pass": true,
+      "window": 250
+    },
+    {
+      "universe": "S&P sector ETFs",
+      "book": "equal-weight",
+      "confidence": 0.95,
+      "tested_days": 250,
+      "breaches": 9,
+      "expected": 12.5,
+      "observed_rate": 0.036,
+      "kupiec_lr": 1.14,
+      "kupiec_pass": true,
+      "independence_pass": true,
+      "conditional_coverage_pass": true,
+      "window": 250
+    },
+    {
+      "universe": "S&P sector ETFs",
+      "book": "equal-weight",
+      "confidence": 0.99,
+      "tested_days": 250,
+      "breaches": 0,
+      "expected": 2.5,
+      "observed_rate": 0.0,
+      "kupiec_lr": 5.03,
+      "kupiec_pass": false,
+      "independence_pass": null,
+      "conditional_coverage_pass": null,
+      "window": 250
+    },
+    {
+      "universe": "S&P sector ETFs",
+      "book": "risk-parity",
+      "confidence": 0.95,
+      "tested_days": 250,
+      "breaches": 10,
+      "expected": 12.5,
+      "observed_rate": 0.04,
+      "kupiec_lr": 0.56,
+      "kupiec_pass": true,
+      "independence_pass": true,
+      "conditional_coverage_pass": true,
+      "window": 250
+    },
+    {
+      "universe": "S&P sector ETFs",
+      "book": "risk-parity",
+      "confidence": 0.99,
+      "tested_days": 250,
+      "breaches": 1,
+      "expected": 2.5,
+      "observed_rate": 0.004,
+      "kupiec_lr": 1.18,
+      "kupiec_pass": true,
+      "independence_pass": true,
+      "conditional_coverage_pass": true,
+      "window": 250
+    },
+    {
+      "universe": "FX majors",
+      "book": "equal-weight",
+      "confidence": 0.95,
+      "tested_days": 272,
+      "breaches": 10,
+      "expected": 13.6,
+      "observed_rate": 0.0368,
+      "kupiec_lr": 1.1,
+      "kupiec_pass": true,
+      "independence_pass": true,
+      "conditional_coverage_pass": true,
+      "window": 250
+    },
+    {
+      "universe": "FX majors",
+      "book": "equal-weight",
+      "confidence": 0.99,
+      "tested_days": 272,
+      "breaches": 0,
+      "expected": 2.7,
+      "observed_rate": 0.0,
+      "kupiec_lr": 5.47,
+      "kupiec_pass": false,
+      "independence_pass": null,
+      "conditional_coverage_pass": null,
+      "window": 250
+    },
+    {
+      "universe": "FX majors",
+      "book": "risk-parity",
+      "confidence": 0.95,
+      "tested_days": 272,
+      "breaches": 10,
+      "expected": 13.6,
+      "observed_rate": 0.0368,
+      "kupiec_lr": 1.1,
+      "kupiec_pass": true,
+      "independence_pass": true,
+      "conditional_coverage_pass": true,
+      "window": 250
+    },
+    {
+      "universe": "FX majors",
+      "book": "risk-parity",
+      "confidence": 0.99,
+      "tested_days": 272,
+      "breaches": 2,
+      "expected": 2.7,
+      "observed_rate": 0.0074,
+      "kupiec_lr": 0.21,
+      "kupiec_pass": true,
+      "independence_pass": true,
+      "conditional_coverage_pass": true,
+      "window": 250
+    },
+    {
+      "universe": "Futures (index & commodity)",
+      "book": "equal-weight",
+      "confidence": 0.95,
+      "tested_days": 255,
+      "breaches": 22,
+      "expected": 12.8,
+      "observed_rate": 0.0863,
+      "kupiec_lr": 5.86,
+      "kupiec_pass": false,
+      "independence_pass": true,
+      "conditional_coverage_pass": false,
+      "window": 250
+    },
+    {
+      "universe": "Futures (index & commodity)",
+      "book": "equal-weight",
+      "confidence": 0.99,
+      "tested_days": 255,
+      "breaches": 5,
+      "expected": 2.6,
+      "observed_rate": 0.0196,
+      "kupiec_lr": 1.86,
+      "kupiec_pass": true,
+      "independence_pass": true,
+      "conditional_coverage_pass": true,
+      "window": 250
+    },
+    {
+      "universe": "Futures (index & commodity)",
+      "book": "risk-parity",
+      "confidence": 0.95,
+      "tested_days": 255,
+      "breaches": 17,
+      "expected": 12.8,
+      "observed_rate": 0.0667,
+      "kupiec_lr": 1.36,
+      "kupiec_pass": true,
+      "independence_pass": true,
+      "conditional_coverage_pass": true,
+      "window": 250
+    },
+    {
+      "universe": "Futures (index & commodity)",
+      "book": "risk-parity",
+      "confidence": 0.99,
+      "tested_days": 255,
+      "breaches": 3,
+      "expected": 2.6,
+      "observed_rate": 0.0118,
+      "kupiec_lr": 0.08,
+      "kupiec_pass": true,
+      "independence_pass": true,
+      "conditional_coverage_pass": true,
+      "window": 250
+    },
+    {
+      "universe": "Rates & credit (ETF proxies)",
+      "book": "equal-weight",
+      "confidence": 0.95,
+      "tested_days": 250,
+      "breaches": 14,
+      "expected": 12.5,
+      "observed_rate": 0.056,
+      "kupiec_lr": 0.18,
+      "kupiec_pass": true,
+      "independence_pass": true,
+      "conditional_coverage_pass": true,
+      "window": 250
+    },
+    {
+      "universe": "Rates & credit (ETF proxies)",
+      "book": "equal-weight",
+      "confidence": 0.99,
+      "tested_days": 250,
+      "breaches": 2,
+      "expected": 2.5,
+      "observed_rate": 0.008,
+      "kupiec_lr": 0.11,
+      "kupiec_pass": true,
+      "independence_pass": true,
+      "conditional_coverage_pass": true,
+      "window": 250
+    },
+    {
+      "universe": "Rates & credit (ETF proxies)",
+      "book": "risk-parity",
+      "confidence": 0.95,
+      "tested_days": 250,
+      "breaches": 15,
+      "expected": 12.5,
+      "observed_rate": 0.06,
+      "kupiec_lr": 0.5,
+      "kupiec_pass": true,
+      "independence_pass": true,
+      "conditional_coverage_pass": true,
+      "window": 250
+    },
+    {
+      "universe": "Rates & credit (ETF proxies)",
+      "book": "risk-parity",
+      "confidence": 0.99,
+      "tested_days": 250,
+      "breaches": 1,
+      "expected": 2.5,
+      "observed_rate": 0.004,
+      "kupiec_lr": 1.18,
+      "kupiec_pass": true,
+      "independence_pass": true,
+      "conditional_coverage_pass": true,
+      "window": 250
+    },
+    {
+      "universe": "Commodities & real assets",
+      "book": "equal-weight",
+      "confidence": 0.95,
+      "tested_days": 250,
+      "breaches": 17,
+      "expected": 12.5,
+      "observed_rate": 0.068,
+      "kupiec_lr": 1.54,
+      "kupiec_pass": true,
+      "independence_pass": true,
+      "conditional_coverage_pass": true,
+      "window": 250
+    },
+    {
+      "universe": "Commodities & real assets",
+      "book": "equal-weight",
+      "confidence": 0.99,
+      "tested_days": 250,
+      "breaches": 4,
+      "expected": 2.5,
+      "observed_rate": 0.016,
+      "kupiec_lr": 0.77,
+      "kupiec_pass": true,
+      "independence_pass": false,
+      "conditional_coverage_pass": true,
+      "window": 250
+    },
+    {
+      "universe": "Commodities & real assets",
+      "book": "risk-parity",
+      "confidence": 0.95,
+      "tested_days": 250,
+      "breaches": 18,
+      "expected": 12.5,
+      "observed_rate": 0.072,
+      "kupiec_lr": 2.26,
+      "kupiec_pass": true,
+      "independence_pass": true,
+      "conditional_coverage_pass": true,
+      "window": 250
+    },
+    {
+      "universe": "Commodities & real assets",
+      "book": "risk-parity",
+      "confidence": 0.99,
+      "tested_days": 250,
+      "breaches": 3,
+      "expected": 2.5,
+      "observed_rate": 0.012,
+      "kupiec_lr": 0.09,
+      "kupiec_pass": true,
+      "independence_pass": false,
+      "conditional_coverage_pass": true,
+      "window": 250
+    },
+    {
+      "universe": "Global macro (multi-asset ETFs)",
+      "book": "equal-weight",
+      "confidence": 0.95,
+      "tested_days": 250,
+      "breaches": 20,
+      "expected": 12.5,
+      "observed_rate": 0.08,
+      "kupiec_lr": 4.04,
+      "kupiec_pass": false,
+      "independence_pass": true,
+      "conditional_coverage_pass": false,
+      "window": 250
+    },
+    {
+      "universe": "Global macro (multi-asset ETFs)",
+      "book": "equal-weight",
+      "confidence": 0.99,
+      "tested_days": 250,
+      "breaches": 4,
+      "expected": 2.5,
+      "observed_rate": 0.016,
+      "kupiec_lr": 0.77,
+      "kupiec_pass": true,
+      "independence_pass": true,
+      "conditional_coverage_pass": true,
+      "window": 250
+    },
+    {
+      "universe": "Global macro (multi-asset ETFs)",
+      "book": "risk-parity",
+      "confidence": 0.95,
+      "tested_days": 250,
+      "breaches": 18,
+      "expected": 12.5,
+      "observed_rate": 0.072,
+      "kupiec_lr": 2.26,
+      "kupiec_pass": true,
+      "independence_pass": true,
+      "conditional_coverage_pass": true,
+      "window": 250
+    },
+    {
+      "universe": "Global macro (multi-asset ETFs)",
+      "book": "risk-parity",
+      "confidence": 0.99,
+      "tested_days": 250,
+      "breaches": 3,
+      "expected": 2.5,
+      "observed_rate": 0.012,
+      "kupiec_lr": 0.09,
+      "kupiec_pass": true,
+      "independence_pass": true,
+      "conditional_coverage_pass": true,
+      "window": 250
+    },
+    {
+      "universe": "Small-cap liquidity stress (thin volume)",
+      "book": "equal-weight",
+      "confidence": 0.95,
+      "tested_days": 250,
+      "breaches": 9,
+      "expected": 12.5,
+      "observed_rate": 0.036,
+      "kupiec_lr": 1.14,
+      "kupiec_pass": true,
+      "independence_pass": true,
+      "conditional_coverage_pass": true,
+      "window": 250
+    },
+    {
+      "universe": "Small-cap liquidity stress (thin volume)",
+      "book": "equal-weight",
+      "confidence": 0.99,
+      "tested_days": 250,
+      "breaches": 1,
+      "expected": 2.5,
+      "observed_rate": 0.004,
+      "kupiec_lr": 1.18,
+      "kupiec_pass": true,
+      "independence_pass": true,
+      "conditional_coverage_pass": true,
+      "window": 250
+    },
+    {
+      "universe": "Small-cap liquidity stress (thin volume)",
+      "book": "risk-parity",
+      "confidence": 0.95,
+      "tested_days": 250,
+      "breaches": 10,
+      "expected": 12.5,
+      "observed_rate": 0.04,
+      "kupiec_lr": 0.56,
+      "kupiec_pass": true,
+      "independence_pass": true,
+      "conditional_coverage_pass": true,
+      "window": 250
+    },
+    {
+      "universe": "Small-cap liquidity stress (thin volume)",
+      "book": "risk-parity",
+      "confidence": 0.99,
+      "tested_days": 250,
+      "breaches": 2,
+      "expected": 2.5,
+      "observed_rate": 0.008,
+      "kupiec_lr": 0.11,
+      "kupiec_pass": true,
+      "independence_pass": true,
+      "conditional_coverage_pass": true,
+      "window": 250
+    }
+  ]
+}

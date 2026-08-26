@@ -12,8 +12,6 @@ so the engine speaks to any audience - not just one watchlist.
 """
 
 import base64
-import json
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -48,7 +46,7 @@ from src.pairing import (anchor_rank, backtest_pair, crisis_cushion,
                          es_confidence_interval, pair_weights, regime_labels,
                          tail_gap, DEFENSIVE_ANCHOR_TICKERS)
 from src.covariance import estimate_covariance
-from src.state_calibration import calibrate_state_dynamics
+from src.topology import build_map_payload, war_room_html
 from src.eigenrisk import eigen_factors, marcenko_pastur_bounds, pc1_exposure
 from src.scenarios import HISTORICAL_REGIMES, replay_returns
 from src.liquidity import (days_to_liquidate, liquidity_profile,
@@ -996,26 +994,6 @@ def fan_chart(bands: dict):
     fig.update_xaxes(ticks="", showspikes=False)
     fig.update_yaxes(ticks="", ticksuffix="%")
     return fig
-
-
-WAR_ROOM_FILE = Path(__file__).parent / "prototypes" / "war_room.html"
-
-
-def war_room_html(payload: dict) -> str:
-    """
-    The Risk Topology map (prototypes/war_room.html) with the LIVE engine
-    payload spliced between its __PAYLOAD__ markers. The page renders only
-    what this payload carries: every number traces back to the yfinance
-    returns and the calibration/backtest code in src/. The file's built-in
-    demo block is replaced wholesale here, so no demo number can leak into
-    the product.
-    """
-    html = WAR_ROOM_FILE.read_text(encoding="utf-8")
-    begin, end = "/* __PAYLOAD_BEGIN__ */", "/* __PAYLOAD_END__ */"
-    i = html.index(begin) + len(begin)
-    j = html.index(end)
-    blob = json.dumps(payload, allow_nan=False)
-    return html[:i] + "\nconst DEMO = " + blob + ";\n" + html[j:]
 
 
 def panel_head(title: str, subtitle: str = "") -> None:
@@ -2269,109 +2247,7 @@ with tab_3d:
     # positions from rolling windows, dynamics from the OU calibration,
     # pair statistics from the real-history backtest. Nothing typed in.
     try:
-        try:
-            _wr_mkt = fetch_prices(["SPY"], period="2y").pct_change().dropna()["SPY"]
-            _wr_proxy = "S&P 500 via SPY"
-        except Exception:  # noqa: BLE001 - offline: basket proxies the market
-            _wr_mkt = returns.mean(axis=1)
-            _wr_proxy = "equal-weight basket (SPY unavailable)"
-        _wr_port = portfolio_daily_returns(returns, weights)
-        if bearish:
-            _wr_port = -_wr_port
-        _wr_cal = calibrate_state_dynamics(_wr_port, _wr_mkt)
-
-        # every unit on the map: universe + defensive anchor pool
-        try:
-            _wr_etf = fetch_prices(DEFENSIVE_ANCHOR_TICKERS, period="2y")
-            _wr_frame = returns.join(_wr_etf.pct_change().dropna(),
-                                     how="inner").dropna(axis=1)
-        except Exception:  # noqa: BLE001 - offline: universe only
-            _wr_frame = returns
-        _wr_common = _wr_frame.index.intersection(_wr_mkt.index)
-        _wr_mvar = float(_wr_mkt.loc[_wr_common].var())
-        _wr_assets = []
-        for _t in _wr_frame.columns:
-            _b = float(_wr_frame[_t].loc[_wr_common].cov(
-                _wr_mkt.loc[_wr_common]) / _wr_mvar)
-            _v = float(_wr_frame[_t].std() * np.sqrt(252))
-            if np.isfinite(_b) and np.isfinite(_v):
-                _wr_assets.append({"t": _t, "b": round(_b, 3), "v": round(_v, 4),
-                                   "f": "Universe" if _t in loaded else "Anchor pool"})
-
-        # Bon Voyage tournament: the flyer against the top anchor candidates,
-        # each linkage backtested on actual overlapping history
-        _wr_pairs = []
-        try:
-            _wr_vols = returns.std() * np.sqrt(252)
-            _wr_fly = str(_wr_vols.idxmax())
-            _wr_bt_frame = _wr_frame.copy()
-            if bearish:
-                _wr_bt_frame[_wr_fly] = -_wr_bt_frame[_wr_fly]
-            _wr_rank = anchor_rank(_wr_bt_frame, _wr_fly,
-                                   direction="short" if bearish else "long")
-            _wr_corr = _wr_bt_frame.corr()
-            for _an in list(_wr_rank.index[:4]):
-                _pw = pair_weights(_wr_bt_frame[_wr_fly], _wr_bt_frame[_an])
-                _bt = backtest_pair(_wr_bt_frame[_wr_fly], _wr_bt_frame[_an],
-                                    _pw["w_a"])
-                _wr_pairs.append({
-                    "fl": _wr_fly, "an": str(_an),
-                    "rho": round(float(_wr_corr.loc[_wr_fly, _an]), 3),
-                    "wFlyer": round(float(_pw["w_a"]), 4),
-                    "real": {
-                        "esSolo": round(float(_bt["es_solo"]), 5),
-                        "esPair": round(float(_bt["es_pair"]), 5),
-                        "cushion": round(float(_bt["cushion"]), 5),
-                        "volPair": round(float(_bt["ann_vol_pair"]), 4),
-                        "nDays": int(_bt["n_days"]),
-                    },
-                })
-        except Exception:  # noqa: BLE001 - map still works without linkages
-            _wr_pairs = []
-
-        _wr_beta0 = round(float(_wr_cal["beta_now"]), 3)
-        _wr_vol0 = round(float(_wr_cal["vol_now"]), 4)
-        # hazard policy, disclosed: 3x today's vol (floored/capped), +0.8 beta
-        _wr_hvol = round(float(min(0.90, max(0.35, 3.0 * _wr_vol0))), 2)
-        _wr_hbeta = round(float(min(1.9, _wr_beta0 + 0.8)), 2)
-        _wr_bmax = max([a["b"] for a in _wr_assets] + [_wr_hbeta, _wr_beta0])
-        _wr_bmin = min([a["b"] for a in _wr_assets] + [_wr_beta0])
-        _wr_vmax = max([a["v"] for a in _wr_assets] + [_wr_hvol, _wr_vol0])
-        _wr_dom = {
-            "b0": float(min(-1.0, np.floor((_wr_bmin - 0.25) * 2) / 2)),
-            "b1": float(max(2.0, np.ceil((_wr_bmax + 0.25) * 2) / 2)),
-            "v0": 0.0,
-            "v1": float(max(1.0, np.ceil((_wr_vmax + 0.1) * 10) / 10)),
-        }
-        _wr_base_cal = _wr_cal["cal"]["base"]
-        _wr_payload = {
-            "base": {"beta": _wr_beta0, "vol": _wr_vol0},
-            "hazard": {"volMax": _wr_hvol, "betaMax": _wr_hbeta},
-            "assets": _wr_assets,
-            "pairs": _wr_pairs,
-            "muFlyer": 0.0, "muAnchor": 0.0, "muBook": 0.0,
-            "cal": _wr_cal["cal"], "muV": round(float(_wr_cal["muV"]), 4),
-            "muB": round(float(_wr_cal["muB"]), 3),
-            "days": 30,
-            "domain": _wr_dom,
-            "live": True,
-            "provenance": f"Live · yfinance EOD · {_wr_cal['n_obs']} state obs",
-            "footnote": (
-                "<b>State model:</b> OU beta and log-OU volatility, calibrated "
-                f"by AR(1) on rolling windows of the book's own daily returns "
-                f"(market: {_wr_proxy}; {_wr_cal['n_obs']} state observations; "
-                "overlapping windows smooth the mean-reversion estimate). "
-                f"Shock corr {_wr_base_cal['rho']:+.2f}, leverage "
-                f"{_wr_base_cal['lev']:+.2f}. Stressed = calibrated shocks x 1.4 "
-                "plus +0.10 shock corr, calm = x 0.7 (disclosed policy, not "
-                "data). Zero-drift risk view. Hazard: 3x today's vol (floored "
-                "at 35%, capped at 90%) and beta +0.8 (capped at 1.9). Pair "
-                "numbers replay real history: monthly rebalance, no lookahead."
-                + (" <b>Calibration clamps hit:</b> "
-                   + "; ".join(_wr_cal["clamp_flags"]) + "."
-                   if _wr_cal.get("clamp_flags") else "")
-            ),
-        }
+        _wr_payload = build_map_payload(returns, weights, loaded, bearish)
         st.iframe(war_room_html(_wr_payload), height=820)
         st.caption(
             "The Monte Carlo as a strategy map: the grid is (beta, realized "
