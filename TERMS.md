@@ -1,6 +1,6 @@
 # Terms of Use
 
-_Last updated: 2026-08-26. Contact: john4000.nguyen@gmail.com_
+_Last updated: 2026-08-26. Contact: meleona.support@gmail.com_
 
 ## What this is
 

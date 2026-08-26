@@ -1943,8 +1943,13 @@ def test_kill_switch_and_support_address_are_wired():
     kill = source.index("MELEONA_MAINTENANCE")
     assert "st.stop()" in source[kill:kill + 900], "maintenance mode never stops the run"
     assert kill < source.index("load_universe("), "kill switch runs after a data call"
-    assert source.count('SUPPORT_EMAIL = "') == 1, "support address is duplicated"
-    assert "john4000.nguyen@gmail.com" in source
+    assert source.count("SUPPORT_EMAIL = os.getenv(") == 1, "support address is duplicated"
+    assert "meleona.support@gmail.com" in source, "project mailbox not wired"
+    assert "john4000.nguyen@gmail.com" not in source, (
+        "personal address is published in the app - use the project mailbox")
+    assert "MELEONA_SUPPORT_EMAIL" in source, "address is not env-overridable"
+    # Phased release: the beta banner is opt-in per deployment.
+    assert 'MELEONA_CHANNEL' in source and 'RELEASE_CHANNEL == "beta"' in source
     # setup_logging() must run before anything can fail interestingly
     assert source.index("setup_logging()") < source.index("with tab_3d:")
 
@@ -1960,7 +1965,11 @@ def test_launch_documents_exist_and_say_the_load_bearing_things():
     checklist = (root / "LAUNCH_CHECKLIST.md").read_text(encoding="utf-8").lower()
 
     for doc in (privacy, terms, support, checklist):
-        assert "john4000.nguyen@gmail.com" in doc
+        assert "meleona.support@gmail.com" in doc
+        assert "john4000.nguyen@gmail.com" not in doc, (
+            "a personal address leaked into a public document")
+    # The mailbox is a manual, pre-launch step - the runbook must carry it.
+    assert "forwarding" in runbook and "meleona.support@gmail.com" in runbook
     assert "no sign-up" in privacy and "session reference" in privacy
     assert "yahoo finance" in privacy and "business insider" in privacy
     assert "not investment advice" in terms
@@ -1970,6 +1979,23 @@ def test_launch_documents_exist_and_say_the_load_bearing_things():
         assert section in runbook, f"runbook missing: {section}"
     # The checklist must stay honest about what does NOT apply here.
     assert "n/a" in checklist and "llm" in checklist
+
+
+def test_restore_drill_reports_cost_per_universe():
+    """RUNBOOK's restore claim, executable: warming a universe must report
+    whether it worked, how long it took and what it spent from the budget."""
+    from src.ingestion import PRESETS
+    from tools.warm_cache import warm
+
+    name = "Index core (S&P 500 & broad market ETFs)"
+    row = warm(name, PRESETS[name])         # cached path: no network needed
+    assert row["universe"] == name
+    assert set(row) == {"universe", "ok", "detail", "seconds", "requests"}
+    assert row["seconds"] >= 0 and row["requests"] >= 0
+    # A failure must be reported, never raised - a warm-up cannot take a deploy
+    # down, which is the whole point of running it after a restore.
+    broken = warm("bad", ["THIS-IS-NOT-A-TICKER-AT-ALL"])
+    assert broken["ok"] is False and broken["detail"]
 
 
 if __name__ == "__main__":

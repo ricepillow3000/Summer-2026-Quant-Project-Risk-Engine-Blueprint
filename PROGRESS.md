@@ -242,6 +242,20 @@ risk-engine/
   (112/112) covering the crash wire, the spend cap, the kill switch ordering
   and the load-bearing claims in the policy docs.
 
+- ✅ **Support mailbox + beta channel + restore drill** (2026-08-26) - support
+  moved off the personal address to the project mailbox
+  `meleona.support@gmail.com`, forwarded to the personal inbox, overridable per
+  deployment with `MELEONA_SUPPORT_EMAIL`; a regression test now FAILS if the
+  personal address reappears in the app or in any public document. Creating the
+  mailbox and turning on forwarding is a manual, phone-verified step, so it is
+  written up in `RUNBOOK.md` §6b and is a blocking item in
+  `LAUNCH_CHECKLIST.md`. Also shipped from the remaining checklist items:
+  `MELEONA_CHANNEL=beta` puts a beta notice plus a one-click "report this
+  session" mailto (session reference already in the subject) on pre-release
+  deploys only, and `tools/warm_cache.py` warms every preset after a deploy -
+  `--drill` forces real fetches and prints the cold-refill time, which is the
+  recovery-time objective for the only regenerable state this app has. 113/113.
+
 - ⬜ **Phase VI** - deploy to Railway/Render for the live recruiter link
   (Procfile + requirements.txt already set up)
 

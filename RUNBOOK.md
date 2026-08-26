@@ -8,7 +8,7 @@ usually needed. One person runs this; the procedures assume that.
 | State | Durable? | Restore |
 |---|---|---|
 | Code and config | Yes - git, mirrored on GitHub | `git checkout <sha>` and redeploy |
-| Market-data cache (`data/*.parquet`) | No - derived, regenerable | Delete it; the next page load refetches |
+| Market-data cache (`data/*.parquet`) | No - derived, regenerable | Delete it; the next page load refetches, or run `python -m tools.warm_cache` |
 | Crash logs (`logs/`) | No - rotating, size-capped | Nothing to restore; they are diagnostics |
 | User data | **None exists** | Nothing to restore (no accounts, no database) |
 
@@ -87,7 +87,15 @@ Other bounds: `ingestion.MAX_UNIVERSE` (25 symbols), `CACHE_MAX_FILES` /
 3. **Beta** - share that link with a handful of people. Watch
    `logs/meleona.log` and the budget counter; keep the kill switch one variable
    away.
-4. **Public** - promote to the production URL and put it on the resume.
+4. **Public** - promote to the production URL, unset `MELEONA_CHANNEL`, and
+   put it on the resume.
+
+Set `MELEONA_CHANNEL=beta` on the preview and beta deploys: it shows a beta
+notice with a one-click "report this session" link whose subject already
+carries the session reference. Unset on production. After any deploy or
+restore, run `python -m tools.warm_cache` so the first visitor is not paying
+for eleven cold fetches; `--drill` forces real fetches and prints the
+cold-refill time, which is this app's recovery-time objective.
 
 Roll back at any stage with section 2 - there is no staged store rollout to
 wait on.
@@ -108,6 +116,34 @@ five-minute reviewer path:
    model and its measured widening factor disclosed in the footnote.
 5. Open **Lineage & Audit** for provenance, the run's audit trail, and the
    privacy panel with the session-clear control.
+
+## 6b. Support mailbox setup (do this before the link is public)
+
+Support runs on `meleona.support@gmail.com`, forwarded to the personal inbox.
+Creating a Gmail account requires phone verification, so it is a manual step -
+five minutes, once:
+
+1. **Create it.** accounts.google.com -> create account -> "for my personal
+   use" -> username `meleona.support`. If that exact username is taken, pick
+   the next best (`meleona.risk.support`, `meleona.engine`) and set
+   `MELEONA_SUPPORT_EMAIL` on the host to the one you got - the footer,
+   maintenance page, feedback link and privacy panel all follow that variable.
+2. **Forward it to yourself.** In the new mailbox: Settings -> See all
+   settings -> Forwarding and POP/IMAP -> Add a forwarding address -> enter the
+   personal address -> Google emails a confirmation link to the personal inbox
+   -> click it -> back in the new mailbox select **Forward a copy of incoming
+   mail** and *keep Gmail's copy in the Inbox* (so nothing is lost if
+   forwarding is ever turned off).
+3. **Label it on arrival.** In the personal inbox: Settings -> Filters ->
+   Create filter -> To: `meleona.support@gmail.com` -> Apply label "Meleona
+   support". Support mail then lands sorted rather than mixed in.
+4. **Verify.** Send a test message to the project address from any other
+   account and confirm it arrives in the personal inbox under that label.
+   Do this before the public link goes out - a support address that bounces is
+   worse than none.
+
+If the address is ever retired, change `MELEONA_SUPPORT_EMAIL` on the host and
+keep forwarding for a month so nothing in flight is lost.
 
 ## 7. Email deliverability (only once a custom domain exists)
 

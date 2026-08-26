@@ -83,7 +83,7 @@ risk-engine/
 
 ## Operations, support and policies
 
-- **Support:** john4000.nguyen@gmail.com - quote the session reference shown in
+- **Support:** meleona.support@gmail.com - quote the session reference shown in
   the page footer and it maps straight to that session's logs (`SUPPORT.md`).
 - **Policies:** `PRIVACY.md` (no accounts, no tracking, no third-party SDKs)
   and `TERMS.md` (educational analysis, not investment advice).

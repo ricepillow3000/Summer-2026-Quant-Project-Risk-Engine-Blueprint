@@ -1,6 +1,6 @@
 # Support
 
-**Email: john4000.nguyen@gmail.com**
+**Email: meleona.support@gmail.com**
 
 This is a student portfolio project run by one person. Support is best-effort:
 expect a reply in days, not minutes, and no service-level guarantee.
@@ -44,18 +44,14 @@ that fixes it.
 See `PRIVACY.md`. There is no account to delete. To have log lines carrying
 your session reference purged early, email that reference.
 
-## A note on this address
+## About this address
 
-`john4000.nguyen@gmail.com` is a personal address published on a public page,
-so it will attract spam and it ties the project to a personal inbox forever.
-Two cheap alternatives, either of which keeps every link in the app working
-(the address lives in ONE constant, `SUPPORT_EMAIL` in `main.py`):
+`meleona.support@gmail.com` is a project mailbox, not a personal one: it is
+published on a public page, so it will attract spam, and a dedicated address
+can be filtered, forwarded or handed on without touching a personal inbox.
+Mail sent to it is **forwarded to the maintainer's personal inbox**, so there
+is one place to watch.
 
-- a Gmail **alias** - `john4000.nguyen+meleona@gmail.com` filters cleanly into
-  its own label, but is trivially strippable by a spammer;
-- a dedicated free address such as `meleona.support@gmail.com`, forwarded to
-  the personal inbox - a clean break, and the one to pick if the project keeps
-  going.
-
-Changing it is a one-line edit; the footer, maintenance page and privacy panel
-all follow.
+The address lives in a single constant (`SUPPORT_EMAIL` in `main.py`) and can
+be overridden per deployment with the `MELEONA_SUPPORT_EMAIL` environment
+variable - no redeploy needed to change where support mail goes.

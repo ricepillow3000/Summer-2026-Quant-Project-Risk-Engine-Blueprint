@@ -1,6 +1,6 @@
 # Privacy
 
-_Last updated: 2026-08-26. Contact: john4000.nguyen@gmail.com_
+_Last updated: 2026-08-26. Contact: meleona.support@gmail.com_
 
 Meleona is a public, read-only market-risk dashboard. It has **no sign-up, no
 login, no password, and no user accounts**. This note describes everything the
@@ -61,7 +61,7 @@ There is no account to delete. Closing the tab discards everything the session
 held; **Clear this session's data** (Lineage & Audit tab) does it immediately
 without closing the page. If you want the log lines carrying your session
 reference removed sooner than rotation removes them, email
-john4000.nguyen@gmail.com with that reference and they will be purged.
+meleona.support@gmail.com with that reference and they will be purged.
 
 ## Changes
 

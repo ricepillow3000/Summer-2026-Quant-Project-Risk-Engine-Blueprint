@@ -75,8 +75,17 @@ st.set_page_config(page_title="Meleona", layout="wide")
 
 # ---- Operations: kill switch, crash wire, session reference ----------------
 # SUPPORT_EMAIL is the one place the contact address lives; the footer, the
-# maintenance page and the error copy all read it from here.
-SUPPORT_EMAIL = "john4000.nguyen@gmail.com"
+# maintenance page, the feedback link and the privacy panel all read it from
+# here. A project mailbox rather than a personal one: it is published on a
+# public page, so it will attract spam, and a dedicated address can be
+# forwarded, filtered or handed on without touching a personal inbox.
+# MELEONA_SUPPORT_EMAIL overrides it per environment without a redeploy.
+SUPPORT_EMAIL = os.getenv("MELEONA_SUPPORT_EMAIL", "meleona.support@gmail.com")
+
+# Release channel, for the phased rollout in RUNBOOK.md section 5. Setting
+# MELEONA_CHANNEL=beta on the preview/beta deploy marks the page as a beta and
+# invites feedback; production leaves it unset and shows nothing.
+RELEASE_CHANNEL = os.getenv("MELEONA_CHANNEL", "").strip().lower()
 
 # Kill switch. Set MELEONA_MAINTENANCE=1 in the host's environment and the next
 # page load serves this notice instead of the engine - no redeploy, no code
@@ -99,6 +108,21 @@ if "session_ref" not in st.session_state:
     st.session_state.session_ref = new_session_ref()
     log_session_start(st.session_state.session_ref)
 SESSION_REF = st.session_state.session_ref
+
+# One prefilled mailto, reused by the beta banner and the privacy panel: the
+# subject already carries the session reference, so a report arrives with the
+# one thing that makes it diagnosable (see RUNBOOK.md section 3).
+FEEDBACK_LINK = (f"mailto:{SUPPORT_EMAIL}?subject=Meleona%20feedback%20"
+                 f"%E2%80%93%20session%20{SESSION_REF}")
+
+if RELEASE_CHANNEL == "beta":
+    st.info(
+        f"**Beta.** This is a pre-release deployment - features and numbers "
+        f"may change, and data is live *end-of-day*, never real-time. Found "
+        f"something wrong? [Email the session]({FEEDBACK_LINK}) - reference "
+        f"`{SESSION_REF}` is already in the subject line.",
+        icon=":material/science:",
+    )
 
 # ---- Minimal institutional styling ----
 # Page background, slider color, and expander shade are set in .streamlit/config.toml.
@@ -3312,7 +3336,9 @@ with tab_lineage:
         "prices from Yahoo Finance and, for ISIN lookups, Business Insider - "
         "your browser talks only to this app.\n\n"
         f"Questions, or want the logs for your reference purged early? Email "
-        f"[{SUPPORT_EMAIL}](mailto:{SUPPORT_EMAIL}) and quote `{SESSION_REF}`."
+        f"[{SUPPORT_EMAIL}](mailto:{SUPPORT_EMAIL}) and quote `{SESSION_REF}` "
+        f"- or [report this session]({FEEDBACK_LINK}) with the reference "
+        f"already filled in."
     )
     if st.button("Clear this session's data", key="wipe_session"):
         # Deliberately session-scoped: it clears what THIS browser holds. It
