@@ -1257,6 +1257,32 @@ st.markdown("""<style>
 }
 .cta-btn.on-dark:active { background-color: #D4CDBF !important; }
 
+/* ---- The Slice: fill the width, shorten the column, free the button ----
+   Measured at 1920x860: the row is 465px tall and driven ENTIRELY by the
+   left sketch, while the maths plaque is capped at max-width 560px inside a
+   694px column - 134px of dead width that forces its text into more lines
+   than it needs. Letting the plaque use its column does two jobs at once:
+   the empty space fills, and the same words occupy fewer lines, so the block
+   gets shorter rather than taller. The sketch then comes down to match, and
+   the CTA underneath rises into view instead of sitting on the fold.
+   Widths and rhythm are untouched on tall screens. */
+.st-key-gungnir_zone .gungnir-plaque { max-width: 100% !important; }
+
+@media (max-height: 1000px) {
+  /* the sketch is the tallest thing in the row, and mostly air around the
+     two circles - trim the drawing, not the labels */
+  .st-key-gungnir_zone svg[viewBox="0 0 320 214"] {
+    width: 400px !important; max-width: 100% !important; height: auto !important;
+  }
+  .st-key-gungnir_zone .gungnir-head { margin-bottom: 2px !important; }
+}
+@media (max-height: 860px) {
+  .st-key-gungnir_zone svg[viewBox="0 0 320 214"] { width: 348px !important; }
+  .st-key-gungnir_zone .gungnir-plaque {
+    padding: 14px 18px 12px !important; font-size: 13px !important;
+  }
+}
+
 /* The Slice has to read as one screen: land on it and the controls AND the
    button onward are both in view. Its zone carries 178px of vertical chrome
    (64/84 padding plus a 30px margin) before any content, which is generous on
