@@ -157,16 +157,23 @@ latter. Local development stays on whatever Python is installed; the pin
 exists so a host never silently picks a version without wheels for
 numpy/scipy/pyarrow/curl_cffi.
 
-### Railway
+### Railway (the chosen host)
+
+`railway.json` in the repo root already sets the start command, the health
+check (`/_stcore/health`, verified locally to answer `ok`), one replica and a
+restart-on-failure policy, so the dashboard needs almost nothing:
 
 1. railway.app -> New Project -> Deploy from GitHub repo -> pick
    `Summer-2026-Quant-Project-Risk-Engine-Blueprint`.
 2. Variables -> add `MELEONA_CHANNEL=beta`. Add `MELEONA_SUPPORT_EMAIL` only if
    the mailbox username differs from `meleona.support@gmail.com`. Leave
-   `MELEONA_MAINTENANCE` unset.
+   `MELEONA_MAINTENANCE` unset (it is the kill switch, section 1).
 3. Settings -> Networking -> Generate Domain. That URL is the beta link.
-4. Deploy. Railway injects `$PORT`; the `Procfile` already binds it on
-   `0.0.0.0`.
+4. Deploy. Railway injects `$PORT`; the start command binds it on `0.0.0.0`.
+   The first build installs from `requirements.txt` on Python 3.13
+   (`.python-version`) and takes a few minutes; later deploys are faster.
+5. Watch the deploy log for `You can now view your Streamlit app` and confirm
+   the health check goes green before sharing the URL.
 
 ### Render
 
