@@ -1190,6 +1190,47 @@ st.markdown("""<style>
   .hero-title { font-size: clamp(27px, 4.4vw, 40px) !important; }
   .hero-sub { font-size: 14.5px !important; }
 }
+/* ---- CTA: matte rectangle, Citadel reference -------------------------
+   The buttons read bland because a later rule overrode the flat base with a
+   180deg gradient, an inset white gloss line, a drop shadow and a ::before
+   skew "shine" sweep, with a hover that lifted 2px and animated its own
+   letter-spacing. That is a glossy game pill wearing a serif label, and the
+   motion is doing the work the colour should do.
+
+   Citadel's own buttons are the opposite: a hard rectangle, ONE flat colour,
+   no bevel, no shadow, no shine - and the entire interaction is a confident
+   colour change. That is where the presence comes from, so the dazzle here is
+   the inversion on hover, not an effect layered on top.
+
+   Colours stay strictly inside the palette, and each hover lands on a colour
+   that belongs to the surface the button sits on:
+     light beige field  charcoal -> bronze
+     dark showcase band bronze   -> beige (a clean inversion into the page)
+   Bronze always carries DARK type: cream on bronze measures about 1.8:1,
+   which fails badly, while charcoal on bronze is about 6.8:1. */
+.cta-btn {
+  background-image: none !important;
+  background-color: #3F3B35 !important;
+  color: #F4F1EA !important;
+  border: 1px solid #3F3B35 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  transition: background-color .22s ease, border-color .22s ease,
+              color .22s ease !important;
+}
+/* the shine sweep - the least matte thing in the file */
+.cta-btn::before { display: none !important; }
+.cta-btn:hover {
+  background-image: none !important;
+  background-color: #9A7B4F !important;
+  border-color: #9A7B4F !important;
+  color: #241F1A !important;
+  transform: none !important;
+  letter-spacing: 0.11em !important;
+  box-shadow: none !important;
+}
+.cta-btn:active { transform: none !important; background-color: #8A6A3C !important; }
+
 /* A CTA sitting ON the dark showcase band needs the inverse treatment. The
    default .cta-btn is a charcoal gradient (#4A453D -> #3A362F) built for the
    beige field; against the band's own #3F3B35 that is barely eleven points of
@@ -1198,15 +1239,23 @@ st.markdown("""<style>
    which is the highest-contrast pairing available inside the palette.
    Rule: choose the variant by the BACKGROUND the button sits on. */
 .cta-btn.on-dark {
-  background: linear-gradient(180deg, #B08A55 0%, #8A6A3C 100%) !important;
+  background-image: none !important;
+  /* the palette's LIGHTER bronze. It raises BOTH the type contrast on the
+     button and its separation from the #3F3B35 band (4.1 -> ~5.3 and
+     2.8 -> ~3.6); the darker #9A7B4F missed the 4.5 and 3.0 thresholds. */
+  background-color: #B08A55 !important;
   color: #241F1A !important;
-  border: 1px solid #C9A76B !important;
-  box-shadow: 0 10px 26px -16px rgba(0,0,0,.75) !important;
+  border: 1px solid #B08A55 !important;
+  box-shadow: none !important;
 }
+/* Inverts into the page's own beige - maximum separation from the charcoal
+   band without introducing a colour the palette does not already own. */
 .cta-btn.on-dark:hover {
-  background: linear-gradient(180deg, #C9A76B 0%, #A07E48 100%) !important;
-  color: #1C1814 !important;
+  background-color: #EDE9E3 !important;
+  border-color: #EDE9E3 !important;
+  color: #2E2B26 !important;
 }
+.cta-btn.on-dark:active { background-color: #D4CDBF !important; }
 
 /* The Slice has to read as one screen: land on it and the controls AND the
    button onward are both in view. Its zone carries 178px of vertical chrome
