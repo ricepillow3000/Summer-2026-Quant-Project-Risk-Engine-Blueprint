@@ -613,7 +613,7 @@ st.markdown(f"""
       But every stock has drawdowns. What sets a name apart is what happens
       after one - that's what we call <strong>grit</strong>.
     </div>
-    <a href="#grit-showcase" class="cta-btn">Explore what we do &darr;</a>
+    <a href="#grit-showcase" class="cta-btn">Explore what we do<span class="cta-arrow" aria-hidden="true"><svg viewBox="0 0 16 30" fill="none" xmlns="http://www.w3.org/2000/svg"><path class="shaft" d="M8 1 V22" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path class="head" d="M2.5 16.5 L8 22.5 L13.5 16.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a>
   </div>
   <div class="hero-stats">
     <div class="hstat"><div class="n">10,000</div><div class="l">Simulated paths</div></div>
@@ -676,7 +676,7 @@ st.markdown("""
         day of each crisis, and at the worst-timed entry, the pre-crash peak.
       </div>
       <a href="#crisis-record" class="cta-btn on-dark" style="margin-top:22px;">
-        See the crisis record &darr;</a>
+        See the crisis record<span class="cta-arrow" aria-hidden="true"><svg viewBox="0 0 16 30" fill="none" xmlns="http://www.w3.org/2000/svg"><path class="shaft" d="M8 1 V22" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path class="head" d="M2.5 16.5 L8 22.5 L13.5 16.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a>
     </div>
   </div>
 </div>
@@ -749,7 +749,7 @@ try:
     st.markdown(
         '<div style="text-align:center;margin:18px 0 4px;">'
         '<a href="#the-slice" class="cta-btn">'
-        'From the record to the allocation &darr;</a></div>',
+        'From the record to the allocation<span class="cta-arrow" aria-hidden="true"><svg viewBox="0 0 16 30" fill="none" xmlns="http://www.w3.org/2000/svg"><path class="shaft" d="M8 1 V22" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path class="head" d="M2.5 16.5 L8 22.5 L13.5 16.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a></div>',
         unsafe_allow_html=True)
 except Exception as _exc:  # noqa: BLE001 - landing page must never crash on data
     st.caption(f"Crisis record unavailable right now ({_exc}). "
@@ -843,7 +843,7 @@ with _gungnir_zone:
         f'{"Shorting flips the sketch: block 01 is the position you are against, block 02 a correlated long that cushions the squeeze. Equal areas, equal risk share. Short losses can exceed 100%; borrow costs are not modeled." if bearish else "Block 01 is narrow and tall - little capital, high volatility. Block 02 is wide and short. Equal areas, so each name carries the same share of the risk."}'
         f'</div>'
         f'<a href="#engine" class="cta-btn" style="margin-top:14px;">'
-        f'To the engine &darr;</a>'
+        f'To the engine<span class="cta-arrow" aria-hidden="true"><svg viewBox="0 0 16 30" fill="none" xmlns="http://www.w3.org/2000/svg"><path class="shaft" d="M8 1 V22" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path class="head" d="M2.5 16.5 L8 22.5 L13.5 16.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a>'
         f'</div>',
         unsafe_allow_html=True)
     with _gg_plaque:
@@ -880,7 +880,7 @@ st.markdown(
     f'font-family:\'Helvetica Neue\',sans-serif;font-size:11px;letter-spacing:.14em;'
     f'text-transform:uppercase;color:#6A5030;text-decoration:none;'
     f'border-bottom:1px solid rgba(154,123,79,.4);padding-bottom:2px;">'
-    f'Skip to the risk map &darr;</a>'
+    f'Skip to the risk map<span class="cta-arrow" aria-hidden="true"><svg viewBox="0 0 16 30" fill="none" xmlns="http://www.w3.org/2000/svg"><path class="shaft" d="M8 1 V22" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path class="head" d="M2.5 16.5 L8 22.5 L13.5 16.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a>'
     f'</div>',
     unsafe_allow_html=True)
 
@@ -1468,8 +1468,12 @@ panel_head("Research & controls", "The workshop - signals, regimes, plumbing")
 # Declutter (Breez-inspired spacing pass): the workshop is for the reader who
 # wants the plumbing - fold the entire second tab strip behind one door so
 # the default scroll ends at the analysis, not a second wall of charts.
-_workshop = st.expander("Open the workshop - signal research, regimes, "
-                        "liquidity, reference data, audit trail")
+# expanded=True since 2026-08-26: collapsed, this door hid Signal Lab and
+# Regime Atlas so completely that they read as missing features. The declutter
+# it was built for is still served by the tab strip inside - one row of tabs,
+# not a wall of charts.
+_workshop = st.expander("The workshop - signal research, regimes, liquidity, "
+                        "reference data, audit trail", expanded=True)
 with _workshop:
     (tab_signals, tab_regimes, tab_liquidity, tab_secmaster, tab_dq,
      tab_lineage) = st.tabs([
@@ -2895,7 +2899,10 @@ _html("""
       });
     }
   }, true);
-  const ease = t => t < .5 ? 4*t*t*t : 1 - Math.pow(-2*t + 2, 3) / 2;
+  /* easeInOutQuart, gentler on the tail than the cubic it replaced: the
+     last third of the flight is almost a drift, which is what makes an
+     arrival feel guided rather than halted. */
+  const ease = t => t < .5 ? 8*t*t*t*t : 1 - Math.pow(-2*t + 2, 4) / 2;
   /* Streamlit's scroll container has moved between releases - never trust
      a hardcoded selector. Walk UP from the destination to the first
      ancestor that really scrolls (proved by a nudge test). */
@@ -2956,7 +2963,15 @@ _html("""
     const scroller = findScroller(el);
     if (!scroller) return;               // nothing scrolls: let native run
     e.preventDefault(); e.stopPropagation();
-    glide(scroller, el, 1100, false);
+    /* Calm over speed: 1500ms on a slow-out curve reads as being LED
+       somewhere, where a fast jump reads as a slide change. */
+    glide(scroller, el, 1500, false);
+    /* release the arrow so it falls ahead of the page it is pulling */
+    if (a.classList.contains('cta-btn')) {
+      a.classList.remove('is-launching'); void a.offsetWidth;
+      a.classList.add('is-launching');
+      setTimeout(function () { a.classList.remove('is-launching'); }, 1250);
+    }
     // destination rises into place as the glide lands
     const dest = el.clientHeight === 0 ? el.nextElementSibling : el;
     if (dest) {

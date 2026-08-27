@@ -816,3 +816,45 @@ div[data-baseweb="select"]>div, .stNumberInput input,
 .orient-l b { color: #3F3B35; }
 .orient-f { margin-top: 13px; padding-top: 11px; border-top: 1px solid #D6CFC0;
     font-family: Georgia, serif; font-size: 13.5px; color: #5D574D; }
+
+/* --- GUIDED DESCENT ------------------------------------------------------
+   The CTA arrow is drawn, not printed. Resting, it is invisible. On hover the
+   shaft draws downward and the head lands a beat later, so the mark assembles
+   itself in the reading direction - the eye is told where the page is about to
+   go before it moves. On click the finished arrow is released: it accelerates
+   down, fades, and the page glides after it.
+
+   Two rules keep it calm rather than busy. The draw is slow (520ms, gentle
+   ease) so it reads as deliberate; and the whole thing is a no-op under
+   prefers-reduced-motion, where the arrow simply sits there fully drawn. --- */
+.cta-arrow { display: inline-block; width: 11px; height: 21px; margin-left: 11px;
+    vertical-align: -3px; }
+.cta-arrow svg { width: 100%; height: 100%; overflow: visible; display: block; }
+
+.cta-arrow .shaft { stroke-dasharray: 21; stroke-dashoffset: 21; }
+.cta-arrow .head  { stroke-dasharray: 17; stroke-dashoffset: 17; }
+.cta-arrow .shaft, .cta-arrow .head {
+    transition: stroke-dashoffset .52s cubic-bezier(.22,.61,.36,1); }
+/* the head waits for the shaft to arrive - constructed one stroke at a time */
+.cta-arrow .head { transition-delay: 0s; }
+.cta-btn:hover .cta-arrow .shaft,
+.cta-btn:focus-visible .cta-arrow .shaft { stroke-dashoffset: 0; }
+.cta-btn:hover .cta-arrow .head,
+.cta-btn:focus-visible .cta-arrow .head { stroke-dashoffset: 0; transition-delay: .34s; }
+
+/* Released on click: the arrow completes instantly, then flies. */
+.cta-btn.is-launching .cta-arrow .shaft,
+.cta-btn.is-launching .cta-arrow .head { stroke-dashoffset: 0; transition: none; }
+.cta-btn.is-launching .cta-arrow { animation: arrow-descend 1.15s cubic-bezier(.5,0,.75,0) both; }
+@keyframes arrow-descend {
+    0%   { transform: translateY(0);    opacity: 1; }
+    55%  { transform: translateY(26px); opacity: .55; }
+    100% { transform: translateY(76px); opacity: 0; }
+}
+
+/* A visitor who asked the system for less motion gets a plain, finished arrow. */
+@media (prefers-reduced-motion: reduce) {
+    .cta-arrow .shaft, .cta-arrow .head {
+        stroke-dashoffset: 0; transition: none; }
+    .cta-btn.is-launching .cta-arrow { animation: none; }
+}

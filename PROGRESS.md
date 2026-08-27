@@ -349,6 +349,30 @@ risk-engine/
   118/118 tests (3 new proving the block bootstrap preserves clustering,
   leaves the mean alone, and reports its scheme); live audit 154/154 quick.
 
+- ✅ **Guided descent + the workshop reopened** (2026-08-26) - John reported
+  Signal Lab and Regime Atlas "do not show up". They were not missing: both sit
+  inside the workshop expander, which a past declutter pass left COLLAPSED, so
+  six tabs were invisible unless you thought to open a door. It now opens by
+  default; the declutter it was built for is still served by the tab strip
+  inside. All 12 tabs verified reachable.
+  Motion, to his brief ("guiding them, a sense of calmness", "like an airline
+  commercial"): the five CTA arrows are no longer `&darr;` glyphs but drawn
+  SVG marks. At rest they are invisible; on hover the shaft draws downward over
+  520ms and the head lands 340ms later, so the arrow assembles itself one
+  stroke at a time in the reading direction. On click it completes instantly
+  and is released - `arrow-descend` carries it down and fades it while the page
+  glides after it. The glide itself went 1100ms -> 1500ms and its easing from
+  easeInOutCubic to easeInOutQuart, so the last third is a drift rather than a
+  stop. Measured live in Chrome: 0 -> 749px across 11 distinct positions in
+  1.4s, slow-out profile intact.
+  Verified in the browser rather than assumed, which caught two things worth
+  recording: (1) this Chrome requests `prefers-reduced-motion: reduce`, so the
+  arrow animation is correctly suppressed and the mark renders fully drawn -
+  anyone with Windows animation effects off sees the static version by design;
+  (2) an early "clicking does nothing" reading was a measurement artefact - the
+  page was already parked at the destination (target top = 26px, exactly the
+  glide's own offset). 118/118, walkthrough clean.
+
 - ⬜ **Phase VI** - deploy to Railway/Render for the live recruiter link
   (Procfile + requirements.txt already set up)
 
