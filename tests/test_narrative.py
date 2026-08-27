@@ -19,9 +19,9 @@ import pandas as pd
 
 from src.liquidity import days_to_liquidate
 from src.narrative import (
-    SENTENCES, FORBIDDEN_WORDS, ExcludedReason, Role, SentenceKey,
+    SENTENCES, FORBIDDEN_WORDS, ExcludedReason, ExitBucket, Role, SentenceKey,
     TickerDossier, book_breakpoint, build_book, capacity_weight_per_day,
-    headline, MIN_MEANINGFUL_WEIGHT,
+    exit_bucket, headline, MIN_MEANINGFUL_WEIGHT,
 )
 
 # Six names chosen to exercise every ExcludedReason:
@@ -188,7 +188,8 @@ def test_dossier_has_no_free_text_field():
         for f in fields(TickerDossier):
             v = getattr(d, f.name)
             if v is None or isinstance(v, (bool, int, float, Role,
-                                           ExcludedReason, SentenceKey)):
+                                           ExcludedReason, SentenceKey,
+                                           ExitBucket)):
                 continue
             assert isinstance(v, str) and f.name in allowed_str, \
                 f"{f.name} is a free-text field carrying {v!r}"
@@ -243,6 +244,57 @@ def test_flyers_are_ranked_on_momentum_not_grit():
     for d in flyers:
         assert d.grit_score is not None, "a flyer cleared the gate unmeasured"
         assert d.momentum_rank is not None and d.momentum_rank >= 1
+
+
+def test_tail_wording_follows_the_sign_of_the_gap():
+    """The bug this test exists for: the paired templates asserted the anchor's
+    tail was "shallower" unconditionally, so a negative gap rendered as
+    "-0.8% shallower" - which states the opposite of what the number says.
+    tail_gap is ES(flyer) - ES(cushion) for BOTH legs, so > 0 means the anchor
+    is the thinner one, and the sentence key must follow that sign."""
+    shallower = {SentenceKey.FLYER_PAIRED, SentenceKey.CUSHION_ANCHOR}
+    deeper = {SentenceKey.FLYER_PAIRED_DEEPER, SentenceKey.CUSHION_ANCHOR_DEEPER}
+
+    # The claim each template makes, checked against the sign it is used for.
+    for k in shallower:
+        assert "shallower" in SENTENCES[k] and "DEEPER" not in SENTENCES[k]
+    for k in deeper:
+        assert "DEEPER" in SENTENCES[k]
+        assert "shallower" not in SENTENCES[k]
+        # A deeper tail must be printed as a positive magnitude, never as a
+        # negative number sitting next to the word DEEPER.
+        assert "{tail_gap_abs" in SENTENCES[k] and "{tail_gap:" not in SENTENCES[k]
+
+    prices, dv = _book_fixture()
+    for book_value in (1e6, 5e8, 2e6):
+        for d in build_book(prices, dv, book_value=book_value, n_flyers=2):
+            if d.sentence_key in shallower:
+                assert d.tail_gap is not None and d.tail_gap > 0, d.ticker
+                assert "shallower" in d.sentence()
+            elif d.sentence_key in deeper:
+                assert d.tail_gap is not None and d.tail_gap <= 0, d.ticker
+                s_out = d.sentence()
+                assert "DEEPER" in s_out
+                assert "-" not in s_out.split("DEEPER")[0].split("tail is")[-1]
+            # A partner is only ever narrated when the gap was measurable.
+            if d.partner is not None:
+                assert d.tail_gap is not None, d.ticker
+
+
+def test_exit_bucket_boundaries_and_no_collapsed_zero():
+    """days_to_exit collapses to "0.00" for a mega-cap at a small book, which
+    reads as broken rather than as instant. Sentences quote the bucket."""
+    assert exit_bucket(0.004) is ExitBucket.SAME_DAY
+    assert exit_bucket(0.99) is ExitBucket.SAME_DAY
+    assert exit_bucket(1.0) is ExitBucket.DAYS
+    assert exit_bucket(4.99) is ExitBucket.DAYS
+    assert exit_bucket(5.0) is ExitBucket.WEEKS
+    assert exit_bucket(float("inf")) is ExitBucket.NEVER
+
+    prices, dv = _book_fixture()
+    for d in build_book(prices, dv, book_value=1e6):
+        assert d.exit_bucket is exit_bucket(d.days_to_exit)
+        assert "0.00 days" not in d.sentence()
 
 
 def test_pairs_are_reciprocal_and_never_self_referential():

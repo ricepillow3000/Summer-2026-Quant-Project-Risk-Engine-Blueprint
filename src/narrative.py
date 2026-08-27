@@ -112,10 +112,23 @@ class ExcludedReason(str, Enum):
     RANK_BELOW_CUT = "rank_below_cut"      # eligible, simply not selected
 
 
+class ExitBucket(str, Enum):
+    """How long the exit takes, in words. `days_to_exit` collapses to "0.00"
+    for a mega-cap at a small book, which reads as broken rather than as
+    instant; the bucket is what the sentence says and the number stays in the
+    dossier for the table."""
+    SAME_DAY = "the same day"
+    DAYS = "within a few days"
+    WEEKS = "over weeks"
+    NEVER = "not at all on this feed"
+
+
 class SentenceKey(str, Enum):
     FLYER_PAIRED = "flyer_paired"
+    FLYER_PAIRED_DEEPER = "flyer_paired_deeper"
     FLYER_UNPAIRED = "flyer_unpaired"
     CUSHION_ANCHOR = "cushion_anchor"
+    CUSHION_ANCHOR_DEEPER = "cushion_anchor_deeper"
     EXCLUDED_NO_VOLUME = "excluded_no_volume"
     EXCLUDED_SHORT_HISTORY = "excluded_short_history"
     EXCLUDED_CAPACITY = "excluded_capacity"
@@ -128,18 +141,29 @@ class SentenceKey(str, Enum):
 # already contain. Every verb here describes something that has been measured.
 SENTENCES: dict[SentenceKey, str] = {
     SentenceKey.FLYER_PAIRED: (
-        "{ticker} carries {final_weight:.1%} of the book and would take "
-        "{days_to_exit:.2f} days to leave at {participation_rate:.0%} of its "
-        "quiet-tape volume. It ranks {momentum_rank} of {n_eligible} eligible "
-        "names on {momentum_lookback}-day return per unit of volatility "
+        "{ticker} carries {final_weight:.1%} of the book and would clear "
+        "{exit_bucket} at {participation_rate:.0%} of its quiet-tape volume. "
+        "It ranks {momentum_rank} of {n_eligible} eligible names on "
+        "{momentum_lookback}-day return per unit of volatility "
         "({momentum_per_vol:+.2f}), and it has a recovery record: grit "
         "{grit_score:.0f} of 100 across {n_universe} names. Paired with "
-        "{partner}, whose tail sits {tail_gap:.1%} shallower at ES 97.5."
+        "{partner}, whose own tail is {tail_gap:.1%} shallower at ES 97.5."
+    ),
+    SentenceKey.FLYER_PAIRED_DEEPER: (
+        "{ticker} carries {final_weight:.1%} of the book and would clear "
+        "{exit_bucket} at {participation_rate:.0%} of its quiet-tape volume. "
+        "It ranks {momentum_rank} of {n_eligible} eligible names on "
+        "{momentum_lookback}-day return per unit of volatility "
+        "({momentum_per_vol:+.2f}), and it has a recovery record: grit "
+        "{grit_score:.0f} of 100 across {n_universe} names. Its anchor "
+        "{partner} won the screen on factor independence and steadiness, but "
+        "its own tail is {tail_gap_abs:.1%} DEEPER at ES 97.5 - on this "
+        "measure the pairing does not thin the tail."
     ),
     SentenceKey.FLYER_UNPAIRED: (
-        "{ticker} carries {final_weight:.1%} of the book and would take "
-        "{days_to_exit:.2f} days to leave. It ranks {momentum_rank} of "
-        "{n_eligible} on {momentum_lookback}-day return per unit of volatility "
+        "{ticker} carries {final_weight:.1%} of the book and would clear "
+        "{exit_bucket}. It ranks {momentum_rank} of {n_eligible} on "
+        "{momentum_lookback}-day return per unit of volatility "
         "({momentum_per_vol:+.2f}). No eligible name cleared the anchor screen "
         "beside it, so it is shown unpaired rather than paired with a name that "
         "did not qualify."
@@ -150,8 +174,18 @@ SENTENCES: dict[SentenceKey, str] = {
         "{anchor_score:.0f} of 100 - least tied to the dominant factor, "
         "steadiest, thinnest own tail - with grit {grit_score:.0f} of 100 "
         "across {n_universe} names. It holds {final_weight:.1%} of the book, "
-        "leaves in {days_to_exit:.2f} days, and its tail sits {tail_gap:.1%} "
-        "shallower at ES 97.5 than the name beside it."
+        "clears {exit_bucket}, and its tail sits {tail_gap:.1%} shallower at "
+        "ES 97.5 than the name beside it."
+    ),
+    SentenceKey.CUSHION_ANCHOR_DEEPER: (
+        "{ticker} is the anchor beside {partner}. Among the grittiest half of "
+        "the eligible names it came top of the anchor screen at "
+        "{anchor_score:.0f} of 100 - least tied to the dominant factor, "
+        "steadiest - with grit {grit_score:.0f} of 100 across {n_universe} "
+        "names. It holds {final_weight:.1%} of the book and clears "
+        "{exit_bucket}. Its own tail is {tail_gap_abs:.1%} DEEPER at ES 97.5 "
+        "than the name it sits beside, so it earns its place on independence "
+        "rather than on a thinner tail."
     ),
     SentenceKey.EXCLUDED_NO_VOLUME: (
         "{ticker} reports no volume on this feed, so the exit horizon cannot be "
@@ -168,18 +202,29 @@ SENTENCES: dict[SentenceKey, str] = {
         "of this book above ${book_breakpoint:,.0f}."
     ),
     SentenceKey.EXCLUDED_MOMENTUM: (
-        "{ticker} clears the liquidity and history gates - {days_to_exit:.2f} "
-        "days to exit, grit {grit_score:.0f} of 100 - but its "
+        "{ticker} clears the liquidity and history gates - it would leave "
+        "{exit_bucket}, grit {grit_score:.0f} of 100 - but its "
         "{momentum_lookback}-day return per unit of volatility is "
         "{momentum_per_vol:+.2f}. It is not rising, so it is not offered as a "
         "high-flyer."
     ),
     SentenceKey.EXCLUDED_RANK: (
-        "{ticker} clears every gate - {days_to_exit:.2f} days to exit, grit "
+        "{ticker} clears every gate - it would leave {exit_bucket}, grit "
         "{grit_score:.0f} of 100 - and simply did not rank in the top "
         "{n_flyers} on {momentum_lookback}-day return per unit of volatility."
     ),
 }
+
+
+def exit_bucket(days: float) -> ExitBucket:
+    """Bucket an exit horizon. The boundaries are disclosed, not fitted."""
+    if not np.isfinite(days):
+        return ExitBucket.NEVER
+    if days < 1.0:
+        return ExitBucket.SAME_DAY
+    if days < 5.0:
+        return ExitBucket.DAYS
+    return ExitBucket.WEEKS
 
 
 @dataclass(frozen=True)
@@ -232,16 +277,26 @@ class TickerDossier:
 
     # pairing (pairing.py), populated only for flyers and their anchors
     partner: str | None
-    tail_gap: float | None
+    tail_gap: float | None          # ES(self) - ES(partner); >0 = partner thinner
     anchor_score: float | None      # anchor_rank composite, 0-100; cushions only
+    exit_bucket: ExitBucket
 
     # narrative
     sentence_key: SentenceKey
     momentum_lookback: int = MOMENTUM_LOOKBACK
 
     def sentence(self) -> str:
-        """Render this dossier's one sentence. Pure function of the fields."""
-        return SENTENCES[self.sentence_key].format(**asdict(self))
+        """Render this dossier's one sentence. Pure function of the fields.
+
+        Enum values are substituted as their text, and `tail_gap_abs` is
+        offered so a template can state a deeper tail as a positive magnitude
+        without ever printing "-0.8% shallower", which asserts the opposite of
+        what the number says.
+        """
+        d = {k: (v.value if isinstance(v, Enum) else v)
+             for k, v in asdict(self).items()}
+        d["tail_gap_abs"] = abs(self.tail_gap) if self.tail_gap is not None else None
+        return SENTENCES[self.sentence_key].format(**d)
 
 
 def _universe_hash(tickers) -> str:
@@ -391,13 +446,15 @@ def build_book(prices: pd.DataFrame, dollar_volume: pd.DataFrame,
         if ar.empty:
             continue
         best = ar.index[0]
-        partner[f], partner[best] = best, f
-        anchor[best] = float(ar.loc[best, "anchor_score"])
         try:
             g = tail_gap(sub[[f, best]], f, best)["gap"]
             g = None if g is None or not np.isfinite(g) else float(g)
         except (ValueError, KeyError):
             g = None
+        if g is None:
+            continue        # a pairing we cannot measure is not narrated as one
+        partner[f], partner[best] = best, f
+        anchor[best] = float(ar.loc[best, "anchor_score"])
         gap[f] = gap[best] = g
 
     cushions = {v for k, v in partner.items() if k in flyers}
@@ -410,14 +467,23 @@ def build_book(prices: pd.DataFrame, dollar_volume: pd.DataFrame,
     out = []
     for t in universe:
         is_flyer, is_cushion = t in flyers, t in cushions
+        # gap is ES(flyer) - ES(cushion) for BOTH legs, so > 0 always means the
+        # anchor's own tail is the thinner one. The wording follows the sign
+        # rather than assuming it: "-0.8% shallower" says the opposite of what
+        # the number says.
+        g_t = gap.get(t)
+        thinner = g_t is not None and g_t > 0
         if is_flyer:
-            role = Role.FLYER
-            key = (SentenceKey.FLYER_PAIRED if partner.get(t)
-                   else SentenceKey.FLYER_UNPAIRED)
-            why = ExcludedReason.NONE
+            role, why = Role.FLYER, ExcludedReason.NONE
+            if partner.get(t) is None:
+                key = SentenceKey.FLYER_UNPAIRED
+            else:
+                key = (SentenceKey.FLYER_PAIRED if thinner
+                       else SentenceKey.FLYER_PAIRED_DEEPER)
         elif is_cushion:
-            role, key = Role.CUSHION, SentenceKey.CUSHION_ANCHOR
-            why = ExcludedReason.NONE
+            role, why = Role.CUSHION, ExcludedReason.NONE
+            key = (SentenceKey.CUSHION_ANCHOR if thinner
+                   else SentenceKey.CUSHION_ANCHOR_DEEPER)
         else:
             role = Role.EXCLUDED
             why = reason[t]
@@ -461,7 +527,8 @@ def build_book(prices: pd.DataFrame, dollar_volume: pd.DataFrame,
             momentum_per_vol=_num(mpv, t), momentum_rank=mom_rank.get(t),
             eligible=bool(eligible.get(t, False)), role=role, excluded_reason=why,
             partner=partner.get(t), tail_gap=gap.get(t),
-            anchor_score=anchor.get(t), sentence_key=key,
+            anchor_score=anchor.get(t), exit_bucket=exit_bucket(days),
+            sentence_key=key,
         ))
 
     order = {Role.FLYER: 0, Role.CUSHION: 1, Role.EXCLUDED: 2}
