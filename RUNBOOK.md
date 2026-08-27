@@ -224,3 +224,51 @@ Order that works: publish SPF and DKIM, run DMARC at `p=none` for a week or two
 and read the aggregate reports, then move to `p=quarantine` and finally
 `p=reject`. Going straight to `reject` before the reports are clean is how
 legitimate mail gets silently dropped.
+
+## 8. Repository and credential hygiene
+
+The repo is **public** on a free personal GitHub account with one owner. What
+follows is the whole policy; anything not listed here was considered and
+deliberately left out.
+
+**Access.** Add no collaborators. A repo owned by a personal account has no
+read-only collaborator role - adding someone grants *write*. Recruiters and
+reviewers already have exactly the read access they need, because the repo is
+public and needs no invitation. If a real code collaborator ever appears, that
+is the moment to add branch protection, not before: required review with one
+human means self-approval or a rule switched off at midnight.
+
+**Tokens.** Authenticate with `gh auth login`, which stores an OAuth token in
+the Windows credential keyring. Never create a *classic* personal access token
+- classic tokens are all-or-nothing across every repo on the account, including
+the private ones. If a token is genuinely needed (CI, a deploy hook), use a
+**fine-grained** PAT scoped to this one repository, with the minimum
+permissions and an expiry date. A token never goes in a file inside the repo,
+in a commit, in a screenshot or in a chat window; it goes in the host's
+environment-variable settings (Railway) or the OS keyring. If one is ever
+exposed: revoke first, rotate second, in that order.
+
+**Secrets.** There are none in this project - config arrives as environment
+variables from the host (section 0). `.gitignore` blocks `.env`, `.env.*`,
+`secrets.toml`, `.streamlit/secrets.toml`, `*.pem`, `*.key`, `*.pfx` and
+`credentials.json` so that stays true by default rather than by memory.
+
+**Server-side scanning.** GitHub secret scanning, push protection and
+Dependabot security *alerts* are enabled (default-on for public repos) and
+cover every machine that pushes, including any future one. Two sub-features -
+`secret_scanning_non_provider_patterns` and `secret_scanning_validity_checks` -
+are GitHub Advanced Security and stay off on the free tier; a PATCH to enable
+them is accepted and silently ignored. The practical gap: default scanning
+matches known vendor token shapes (`ghp_`, `sk-`, AWS keys) and would not flag
+a home-made credential pasted into a tracked `.py`. Dependabot *version-update*
+PRs are deliberately not enabled - there is no CI here, and merging unverified
+dependency bumps into a live deploy is worse than stale pins.
+
+**Two-factor auth.** Required on the GitHub account, TOTP or passkey rather
+than SMS, with the recovery codes stored off this machine.
+
+**Working copies.** Keep exactly one clone, at
+`C:\Users\john4\Claude\Projects\risk-engine`. Never keep a clone inside a
+OneDrive-synced folder: a `.env` written there uploads to Microsoft's cloud
+before git is ever involved, which no `.gitignore` or scanner can see, and
+syncing a live `.git` directory risks index corruption.

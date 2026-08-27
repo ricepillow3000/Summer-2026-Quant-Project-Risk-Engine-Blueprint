@@ -23,3 +23,16 @@ audit/*.json
 .claude/
 
 graphify-out/
+
+# Secrets - never commit. Config comes from the host environment
+# (MELEONA_CHANNEL / MELEONA_SUPPORT_EMAIL / MELEONA_MAINTENANCE), set on
+# Railway, so a .env here is only ever a local convenience.
+.env
+.env.*
+!.env.example
+secrets.toml
+.streamlit/secrets.toml
+*.pem
+*.key
+*.pfx
+credentials.json
