@@ -31,7 +31,8 @@ import plotly.graph_objects as go
 
 from src.ingestion import (
     fetch_prices, get_returns, data_health, provenance, clear_cache,
-    average_dollar_volume, fetch_risk_free_rate, PRESETS, valid_ticker,
+    average_dollar_volume, fetch_dollar_volume, fetch_risk_free_rate,
+    PRESETS, valid_ticker,
     MAX_UNIVERSE, MIN_ROWS, SUGGESTIONS,
 )
 from src.analytics import correlation_matrix, covariance_matrix
@@ -44,6 +45,7 @@ from src.comovement import (
     defensive_shift, least_correlated_to_pair,
 )
 from src.factors import factor_exposures
+from src.narrative import build_book, headline, Role
 from src.strategies import risk_contributions, risk_parity_weights, vol_target
 from src.hedge import min_variance_pair, rank_hedges
 from src.pairing import (anchor_rank, backtest_pair, crisis_cushion,
@@ -1012,6 +1014,22 @@ def load_adv(tickers_tuple: tuple[str, ...]):
     return average_dollar_volume(list(tickers_tuple))
 
 
+@st.cache_data(ttl=3600, show_spinner="Loading volume history…")
+def load_dollar_volume(tickers_tuple: tuple[str, ...], period: str = "2y"):
+    """DAILY dollar volume per ticker. The Book needs the whole series, not a
+    mean: its liquidity gate runs on the 5th percentile of the window, so that
+    eligibility is a quiet-tape claim rather than an average-tape one."""
+    return fetch_dollar_volume(list(tickers_tuple), period=period)
+
+
+@st.cache_data(ttl=3600, show_spinner="Reading the defensive shelf…")
+def load_anchor_shelf(anchors: tuple[str, ...], period: str = "2y"):
+    """Prices and volume for the defensive names The Book may fall back on when
+    the chosen universe contains nothing that thins a tail."""
+    return (fetch_prices(list(anchors), period=period, align=False),
+            fetch_dollar_volume(list(anchors), period=period))
+
+
 @st.cache_data(ttl=3600)
 def load_risk_free_rate():
     """Latest 13-week T-bill yield (^IRX) as an annual decimal, or None."""
@@ -1457,6 +1475,105 @@ def eigen_factor_panel(cov, weights, returns) -> None:
 # Twelve tabs on one strip overflow invisibly (the tab-list scrollbar is
 # hidden by design) - split into two ruled rows: risk analysis first,
 # research & housekeeping second. Nothing removed, everything reachable.
+# ---- The Book: the guided arc, deliberately AHEAD of the tab strip ----
+# The tabs answer sixteen questions and leave the reader to assemble them.
+# This answers them in order, and each answer narrows the next: book size sets
+# what each name can absorb, that sets who is eligible, that sets who can lead,
+# and only then is anything paired. See src/narrative.py.
+st.markdown('<div id="the-book"></div>', unsafe_allow_html=True)
+panel_head("The Book",
+           "Capital first, then the names that lead it, then what sits beside them")
+_bk1, _bk2 = st.columns(2)
+_book_size = _bk1.number_input(
+    "Book size ($)", min_value=10_000, max_value=5_000_000_000,
+    value=1_000_000, step=100_000, key="book_size",
+    help="The parameter the whole section turns on. Raise it and names drop "
+         "out - not because they got worse, but because you can no longer "
+         "leave them.")
+_book_part = _bk2.slider(
+    "Max daily participation (% of volume)", 5, 50, 20, step=5, key="book_part",
+    help="How much of a name's daily dollar volume you would be before your own "
+         "trading moves the price. Risk desks use ~10-20%.") / 100
+_bk3, _bk4 = st.columns(2)
+_bk_floor = _bk3.toggle(
+    "Flyers must be in the grittiest half", value=False, key="book_floor",
+    help="Off: a recovery record only has to EXIST, and momentum does the "
+         "ranking. On: a leader must also rank in the grittiest half. Both "
+         "readings of 'grittiest high-flyer' are defensible - this shows the "
+         "difference rather than deciding it for you.")
+_bk_fb = _bk4.toggle(
+    "Allow a defensive anchor from outside the universe", value=True,
+    key="book_fallback",
+    help="A basket of mega-caps contains nothing that thins a tail. When "
+         "nothing inside your universe cushions, this lets the engine reach "
+         "for TLT/GLD/XLP/XLU/USMV - and say on screen that it did.")
+
+try:
+    _bk_px = prices
+    _bk_dv = load_dollar_volume(tuple(tickers)).reindex(
+        columns=loaded).reindex(prices.index)
+    _bk_anchors = None
+    if _bk_fb:
+        _a_px, _a_dv = load_anchor_shelf(tuple(DEFENSIVE_ANCHOR_TICKERS))
+        _keep = [c for c in _a_px.columns if c not in loaded]
+        if _keep:
+            _bk_px = pd.concat(
+                [prices, _a_px[_keep].reindex(prices.index)], axis=1)
+            _bk_dv = pd.concat(
+                [_bk_dv, _a_dv[_keep].reindex(prices.index)], axis=1)
+            _bk_anchors = set(_keep)
+    _the_book = build_book(
+        _bk_px, _bk_dv.fillna(0.0), book_value=float(_book_size),
+        participation_rate=_book_part, flyer_grit_floor=_bk_floor,
+        fallback_anchors=_bk_anchors)
+
+    st.markdown(
+        f'<div style="background:#F1EDE5;border:1px solid #C4BDAE;'
+        f'border-top:2px solid #9A7B4F;border-radius:12px;padding:18px 22px;'
+        f'margin:6px 0 18px;font-family:Georgia,serif;font-size:17px;'
+        f'color:#3F3B35;line-height:1.5;">{headline(_the_book)}</div>',
+        unsafe_allow_html=True)
+
+    # Border tone carries the role (decorative, so bronze is allowed); the
+    # LABEL is words, so it uses the sanctioned on-beige text tone written as a
+    # LITERAL. test_text_colours_meet_wcag_aa scans main.py for `color:#RRGGBB`
+    # and an f-string placeholder hides the value from it - #8A6A3C sat at
+    # ~3.1:1 here unseen because it arrived through a variable.
+    _CHIP = {Role.FLYER: ("#8A6A3C", "#F6F2EA", "LEADS"),
+             Role.CUSHION: ("#3F3B35", "#EFEAE0", "ANCHOR"),
+             Role.EXCLUDED: ("#6B6459", "#EDE9E3", "LEFT OUT")}
+    for _d in _the_book:
+        _col, _bg, _lbl = _CHIP[_d.role]
+        _flag = (' &middot; <span style="color:#6A5030;">outside the chosen '
+                 'universe</span>' if _d.is_fallback_anchor else "")
+        # Redundant on a card that was already excluded FOR capacity - the
+        # sentence there already names the breakpoint.
+        _bind = (' &middot; <span style="color:#6A5030;">liquidity set this '
+                 'size, not risk</span>'
+                 if _d.liquidity_binding and _d.role is not Role.EXCLUDED else "")
+        st.markdown(
+            f'<div style="display:flex;gap:14px;align-items:flex-start;'
+            f'background:{_bg};border-left:3px solid {_col};border-radius:8px;'
+            f'padding:12px 16px;margin-bottom:8px;">'
+            f'<div style="flex:0 0 86px;font-family:Helvetica Neue,sans-serif;'
+            f'font-size:9.5px;letter-spacing:.16em;color:#6A5030;'
+            f'padding-top:3px;">{_lbl}</div>'
+            f'<div style="flex:1;font-family:Georgia,serif;font-size:14px;'
+            f'color:#3F3B35;line-height:1.55;">{_d.sentence()}{_flag}{_bind}</div>'
+            f'</div>',
+            unsafe_allow_html=True)
+
+    read_me(
+        "<b>Read it top to bottom.</b> Every line is a slot-filled template "
+        "over measured numbers - the renderer is handed the dossier and no "
+        "price data, so it cannot say anything the engine did not compute. "
+        "Change the book size and watch names leave: that is the liquidity "
+        "constraint doing real work, not a caption about it.")
+except Exception as _bk_exc:  # noqa: BLE001 - the page must never die on data
+    st.info(
+        f"The Book needs price and volume history for this universe "
+        f"({type(_bk_exc).__name__}: {_bk_exc}). No placeholder book is shown.")
+
 st.markdown('<div id="analysis"></div>', unsafe_allow_html=True)
 panel_head("Risk & conviction", "The analysis - where the risk lives")
 (tab_3d, tab_breakdown, tab_watch, tab_balance, tab_grit,
