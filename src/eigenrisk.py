@@ -111,8 +111,16 @@ def marcenko_pastur_bounds(n_assets: int, n_obs: int,
 def clip_eigenvalues(cov: pd.DataFrame, n_obs: int) -> tuple[pd.DataFrame, int]:
     """Marcenko-Pastur-style eigenvalue clipping. Returns (cleaned, n_clipped).
 
-    Eigenvalues below λ₊ = σ̄²(1+√(N/T))² - the ceiling a PURE-NOISE
-    correlation matrix would produce - carry no distinguishable signal.
+    Eigenvalues below λ₊ = σ̄²(1+√(N/T))² - the ceiling a PURE-NOISE matrix
+    of this shape would produce - carry no distinguishable signal.
+
+    Honest limit on λ₊ here: Marcenko-Pastur is derived for iid entries of a
+    COMMON variance, which a correlation matrix satisfies and a covariance
+    matrix does not. This operates on covariance, with σ̄² estimated from the
+    bulk (the mean eigenvalue excluding the top one) - the standard practical
+    adaptation, but an adaptation. With heterogeneous asset variances the bulk
+    is not MP-shaped, only MP-scaled, which is why the overlay is labelled a
+    heuristic reference line and never used as a pass/fail test.
     They are replaced by their own average (not zero), which preserves
     the trace: total portfolio variance is untouched, only its split
     across noise directions is flattened. That kills the 1/λ explosion

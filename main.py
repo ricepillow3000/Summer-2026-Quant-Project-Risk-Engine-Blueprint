@@ -1383,9 +1383,14 @@ def eigen_factor_panel(cov, weights, returns) -> None:
 
     e1, e2, e3 = st.columns(3)
     e1.metric("PC1 - variance explained", f"{pc1_pct:.0f}%",
-              help="Share of total universe variance carried by the single "
-                   "dominant statistical factor. High = one wave moves "
-                   "everything.")
+              help="Share of total universe VARIANCE carried by the single "
+                   "dominant statistical factor. Read it as where the risk "
+                   "sits, not as proof that everything moves together: this "
+                   "runs on the covariance matrix, so one unusually volatile "
+                   "name can carry PC1 on its own size alone, with no "
+                   "co-movement behind it. The correlation matrix on the "
+                   "Correlation Watch tab is what answers 'do they move "
+                   "together'.")
     e2.metric("Your book riding PC1", f"{port_pc1:.0%}",
               help="Share of THIS portfolio's variance on that dominant "
                    "factor - the macro vs idiosyncratic split.")
