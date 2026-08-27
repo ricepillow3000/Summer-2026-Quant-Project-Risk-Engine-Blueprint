@@ -2179,6 +2179,34 @@ def test_most_independent_ranks_on_distance_from_zero():
     assert abs(avg - 0.05) < 1e-12          # the SIGNED value is still returned
 
 
+def test_replay_includes_the_windows_opening_day():
+    """pct_change() taken inside the slice has no prior close for the first
+    bar, so every crisis replay silently lost its opening day - often the
+    largest single move in a crash. The lead-in close is re-attached, but only
+    when it is genuinely the previous session."""
+    import src.scenarios as sc
+
+    idx = pd.bdate_range("2020-01-01", periods=40)
+    px = pd.DataFrame({"A": np.linspace(100.0, 140.0, 40)}, index=idx)
+    start, end = idx[10], idx[20]
+    orig = sc.fetch_prices
+    try:
+        sc.fetch_prices = lambda *a, **k: px
+        r = sc.replay_returns(["A"], str(start.date()), str(end.date()))
+        assert r.index[0] == start, r.index[0]        # the opening day survives
+        assert len(r) == 11                            # every bar in the window
+        expected = px.loc[start, "A"] / px.loc[idx[9], "A"] - 1.0
+        assert abs(r["A"].iloc[0] - expected) < 1e-12
+
+        # A stale lead-in must be REFUSED rather than turned into a one-day move.
+        gapped = px.drop(index=idx[4:10])
+        sc.fetch_prices = lambda *a, **k: gapped
+        r2 = sc.replay_returns(["A"], str(start.date()), str(end.date()))
+        assert r2.index[0] > start, "a stale close was used as a daily return"
+    finally:
+        sc.fetch_prices = orig
+
+
 def test_streamlit_telemetry_is_disabled():
     """Streamlit gatherUsageStats defaults to True and phones home on every
     run. PRIVACY.md tells visitors there is no analytics, advertising,

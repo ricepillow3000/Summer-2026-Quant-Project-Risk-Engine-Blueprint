@@ -34,6 +34,10 @@ HISTORICAL_REGIMES = {
     "SVB banking stress (Mar 2023)": ("2023-03-01", "2023-03-31"),
 }
 
+# How stale the pre-window close may be and still count as "the previous
+# session": a long weekend plus a holiday. Beyond this the lead-in is refused.
+MAX_LEAD_GAP_DAYS = 7
+
 
 def replay_returns(tickers: list[str], start: str, end: str) -> pd.DataFrame:
     """
@@ -42,11 +46,31 @@ def replay_returns(tickers: list[str], start: str, end: str) -> pd.DataFrame:
     Pulls full history WITHOUT cross-asset date alignment (so different IPO
     dates don't truncate everyone), slices the window, drops assets with no
     data in it, then aligns the surviving subset within the window.
+
+    The window's OPENING day is included. pct_change() taken inside the slice
+    has no prior close to measure the first bar against, so it used to drop
+    that bar - and in a crash window the opening day is frequently the largest
+    single move in the whole replay (COVID-19 opens 2020-02-19, the exact top).
+    The last complete close BEFORE the window is re-attached, returns are
+    taken, and the lead-in falls away with its own NaN row.
     """
     prices = fetch_prices(tickers, period="max", align=False)
     window = prices.loc[start:end]
     window = window.dropna(axis=1, how="all")  # drop assets absent in this window
     window = window.dropna()                    # align the survivors over the window
+    if window.empty:
+        return window
+
+    first = window.index[0]
+    lead = prices.loc[:first, window.columns]
+    lead = lead[lead.index < first].dropna().tail(1)
+    # Only usable if it really is the PREVIOUS session. A stale close from
+    # weeks earlier - a name that had not traded, or a gap in the feed - would
+    # manufacture a multi-week move and label it one day, which is worse than
+    # losing the bar. Beyond the guard the old behaviour stands and the window
+    # opens on day two, honestly short one observation.
+    if not lead.empty and (first - lead.index[-1]).days <= MAX_LEAD_GAP_DAYS:
+        window = pd.concat([lead, window])
     return window.pct_change().dropna()
 
 
