@@ -16,6 +16,15 @@ headless = true
 enableCORS = true
 enableXsrfProtection = true
 
+[browser]
+# Streamlit's usage telemetry defaults to ON and phones home on every run.
+# PRIVACY.md tells visitors there is "no analytics, advertising, attribution or
+# crash-reporting SDK" - so leaving the default in place would have made the
+# published policy false. It also leaves the host outside src/netguard.py,
+# which only wraps this engine's own market-data calls, so the egress
+# allowlist never saw it. Off, and asserted by a test.
+gatherUsageStats = false
+
 [client]
 # Never render Python tracebacks to visitors: a stack trace leaks file paths,
 # library versions and internal structure. Errors still appear in full in the

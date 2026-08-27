@@ -110,6 +110,20 @@ if "session_ref" not in st.session_state:
     log_session_start(st.session_state.session_ref)
 SESSION_REF = st.session_state.session_ref
 
+
+def safe_err(where: str, exc: BaseException) -> str:
+    """What a visitor may see about a failure: the exception TYPE and their
+    session reference - never str(exc).
+
+    str(exc) routinely carries the absolute server path (FileNotFoundError and
+    PermissionError on a cache file both embed it), which is precisely what
+    `showErrorDetails = false` in .streamlit/config.toml exists to keep off the
+    page. The full text and traceback still reach the operator through
+    log_incident(); the ref is how support ties the two together.
+    """
+    log_incident(SESSION_REF, where, exc)
+    return f"{type(exc).__name__} - quote {SESSION_REF} if you report this"
+
 # One prefilled mailto, reused by the beta banner and the privacy panel: the
 # subject already carries the session reference, so a report arrives with the
 # one thing that makes it diagnosable (see RUNBOOK.md section 3).
@@ -752,7 +766,7 @@ try:
         'From the record to the allocation<span class="cta-arrow" aria-hidden="true"><svg viewBox="0 0 16 30" fill="none" xmlns="http://www.w3.org/2000/svg"><path class="shaft" d="M8 1 V22" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path class="head" d="M2.5 16.5 L8 22.5 L13.5 16.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a></div>',
         unsafe_allow_html=True)
 except Exception as _exc:  # noqa: BLE001 - landing page must never crash on data
-    st.caption(f"Crisis record unavailable right now ({_exc}). "
+    st.caption(f"Crisis record unavailable right now ({safe_err('crisis-record-unavailable-right-now', _exc)}). "
                "The Crisis Conviction tab retries on load.")
 
 # ---- Gungnir - the slice: reading ends, allocation begins ----
@@ -1055,7 +1069,7 @@ try:
     prices = load_universe(tuple(tickers))
 except Exception as exc:  # noqa: BLE001 - surface any fetch failure to the user
     log_incident(SESSION_REF, "load_universe", exc)
-    st.error(f"Couldn't load market data: {exc}")
+    st.error(f"Couldn't load market data: {safe_err('couldn-t-load-market-data', exc)}")
     st.stop()
 
 # ---- Short-history guard --------------------------------------------------
@@ -1233,7 +1247,7 @@ else:
         shocked_returns = replay_returns(loaded, s_date, e_date)
     except Exception as exc:  # noqa: BLE001
         log_incident(SESSION_REF, f"replay_returns/{mode}", exc)
-        st.error(f"Couldn't load history for {mode}: {exc}")
+        st.error(f"Couldn't load history for {mode}: {safe_err('couldn-t-load-history-for-mode', exc)}")
         st.stop()
     sim_assets = list(shocked_returns.columns)
     excluded = [t for t in loaded if t not in sim_assets]
@@ -1823,7 +1837,7 @@ with tab_breakdown:
                 tuple(loaded), tuple(float(x) for x in weights), bool(bearish))
         except Exception as exc:  # noqa: BLE001 - never take the page down
             _tf, _tf_days, _tf_dropped = None, 0, []
-            st.caption(f"Tail model unavailable: {exc}")
+            st.caption(f"Tail model unavailable: {safe_err('tail-model-unavailable', exc)}")
 
         if _tf is not None and _tf["fitted"]:
             _xi, _ci = _tf["xi"], _tf["xi_ci"]
@@ -1933,7 +1947,7 @@ with tab_breakdown:
                 "Size/Value/Momentum are tilts vs. broad market (ETF-proxy factors)."
             )
         except Exception as exc:  # noqa: BLE001
-            st.caption(f"Factor exposures unavailable: {exc}")
+            st.caption(f"Factor exposures unavailable: {safe_err('factor-exposures-unavailable', exc)}")
 
         # --- Statistical risk factors (eigendecomposition / PCA) ---
         panel_head("Statistical risk factors",
@@ -1941,7 +1955,7 @@ with tab_breakdown:
         try:
             eigen_factor_panel(cov, weights, returns)
         except Exception as exc:  # noqa: BLE001 - degrade like the panel above
-            st.caption(f"Statistical risk factors unavailable: {exc}")
+            st.caption(f"Statistical risk factors unavailable: {safe_err('statistical-risk-factors-unavailable', exc)}")
 
 source_txt = f"the {scenario_label} window" if scenario_label else \
     "2 years of daily historical returns"
@@ -2248,7 +2262,7 @@ with tab_balance:
                         "margin and buy-ins not modeled - real short results "
                         "are worse. Short losses can exceed 100%.")
         except Exception as exc:  # noqa: BLE001 - never crash the tab
-            st.caption(f"Balance unavailable for this universe: {exc}")
+            st.caption(f"Balance unavailable for this universe: {safe_err('balance-unavailable-for-this-universe', exc)}")
 
 with tab_grit:
     st.caption(
@@ -2312,7 +2326,7 @@ with tab_grit:
                     f"trading days): {', '.join(grit['excluded'])}.*"
                 )
     except Exception as exc:  # noqa: BLE001
-        st.caption(f"Grit Zone unavailable: {exc}")
+        st.caption(f"Grit Zone unavailable: {safe_err('grit-zone-unavailable', exc)}")
 
 # ---- Crisis Conviction: the emotional problem, priced ----
 with tab_conviction:
@@ -2441,7 +2455,7 @@ with tab_conviction:
             "Educational analysis, not investment advice.*"
         )
     except Exception as exc:  # noqa: BLE001
-        st.caption(f"Crisis Conviction unavailable: {exc}")
+        st.caption(f"Crisis Conviction unavailable: {safe_err('crisis-conviction-unavailable', exc)}")
 
 # ---- Liquidity: how fast could you actually get out? ----
 def _fmt_days(d: float) -> str:
@@ -2533,7 +2547,7 @@ with tab_liquidity:
             )
         st.caption(caption)
     except Exception as exc:  # noqa: BLE001
-        st.caption(f"Liquidity data unavailable: {exc}")
+        st.caption(f"Liquidity data unavailable: {safe_err('liquidity-data-unavailable', exc)}")
 
 with tab_secmaster:
     st.caption(
@@ -2554,7 +2568,7 @@ with tab_secmaster:
                 "vendor (Bloomberg, Refinitiv) - not fabricated here.*"
             )
     except Exception as exc:  # noqa: BLE001
-        st.caption(f"Security master unavailable: {exc}")
+        st.caption(f"Security master unavailable: {safe_err('security-master-unavailable', exc)}")
 
 with tab_dq:
     st.caption(
@@ -2737,7 +2751,7 @@ with tab_signals:
                 "out of sample. Educational analysis, not investment advice.*"
             )
     except Exception as exc:  # noqa: BLE001
-        st.caption(f"Signal Lab unavailable: {exc}")
+        st.caption(f"Signal Lab unavailable: {safe_err('signal-lab-unavailable', exc)}")
 
 # ---- Regime Atlas: Wasserstein k-means on full return distributions ----
 with tab_regimes:
@@ -2830,7 +2844,7 @@ with tab_regimes:
                 f"not investment advice."
             )
     except Exception as exc:  # graceful, like the other tabs
-        st.caption(f"Regime Atlas unavailable for this universe: {exc}")
+        st.caption(f"Regime Atlas unavailable for this universe: {safe_err('regime-atlas-unavailable-for-this-univer', exc)}")
 
 # ---- MCAP-style closing band: where-to-next rail + honest copyright bar ----
 st.markdown("""
