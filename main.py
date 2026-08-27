@@ -1944,7 +1944,9 @@ with tab_breakdown:
                 f"Market beta {fx['betas']['Market']:+.2f} · "
                 f"R-squared {fx['r_squared']:.0%} · "
                 f"annualized alpha {fx['alpha_annual']:+.1%} ({fx['alpha_basis']}). "
-                "Size/Value/Momentum are tilts vs. broad market (ETF-proxy factors)."
+                "Size (IWM-SPY) and Momentum (MTUM-SPY) are tilts vs. the broad market; "
+                "Value is IWD-IWF, value minus growth, not versus the market. "
+                "ETF-proxy factors, not the academic research series."
             )
         except Exception as exc:  # noqa: BLE001
             st.caption(f"Factor exposures unavailable: {safe_err('factor-exposures-unavailable', exc)}")
