@@ -84,10 +84,13 @@ VOL_WINDOW = 60
 # the "best" of a bad set still has a negative trailing return, and calling it a
 # high-flyer would be the ranking dressing up as a fact.
 MIN_FLYER_MOMENTUM = 0.0
-# John's brief is the GRITTIEST cushion, but anchor_rank scores grit as only one
-# of four components. So the cushion pool is cut to the grittiest half of the
-# eligible names FIRST, and anchor_rank then picks within that.
-CUSHION_GRIT_TOP_FRACTION = 0.5
+# The brief is the GRITTIEST cushion, but anchor_rank scores grit as only one of
+# four components. So a pool is cut to the grittiest half FIRST and anchor_rank
+# picks within that. The same fraction optionally gates flyers - see
+# `flyer_grit_floor`, which is a toggle rather than a default because the two
+# readings of "grittiest high-flyer" are both defensible and the difference is
+# worth showing rather than deciding silently.
+GRIT_TOP_FRACTION = 0.5
 
 # Interview-fatal vocabulary. tests/test_narrative.py greps SENTENCES for these.
 FORBIDDEN_WORDS = (
@@ -109,6 +112,7 @@ class ExcludedReason(str, Enum):
     SHORT_HISTORY = "short_history"        # below grit's MIN_HISTORY_DAYS
     CAPACITY_AT_BOOK = "capacity_at_book"  # too big to exit at THIS book size
     MOMENTUM_NEGATIVE = "momentum_negative"  # eligible, but not rising
+    GRIT_BELOW_FLOOR = "grit_below_floor"  # rising, but not in the gritty half
     RANK_BELOW_CUT = "rank_below_cut"      # eligible, simply not selected
 
 
@@ -126,13 +130,16 @@ class ExitBucket(str, Enum):
 class SentenceKey(str, Enum):
     FLYER_PAIRED = "flyer_paired"
     FLYER_PAIRED_DEEPER = "flyer_paired_deeper"
+    FLYER_PAIRED_EXTERNAL = "flyer_paired_external"
     FLYER_UNPAIRED = "flyer_unpaired"
     CUSHION_ANCHOR = "cushion_anchor"
     CUSHION_ANCHOR_DEEPER = "cushion_anchor_deeper"
+    CUSHION_ANCHOR_EXTERNAL = "cushion_anchor_external"
     EXCLUDED_NO_VOLUME = "excluded_no_volume"
     EXCLUDED_SHORT_HISTORY = "excluded_short_history"
     EXCLUDED_CAPACITY = "excluded_capacity"
     EXCLUDED_MOMENTUM = "excluded_momentum"
+    EXCLUDED_GRIT_FLOOR = "excluded_grit_floor"
     EXCLUDED_RANK = "excluded_rank"
 
 
@@ -208,6 +215,31 @@ SENTENCES: dict[SentenceKey, str] = {
         "{momentum_per_vol:+.2f}. It is not rising, so it is not offered as a "
         "high-flyer."
     ),
+    SentenceKey.FLYER_PAIRED_EXTERNAL: (
+        "{ticker} carries {final_weight:.1%} of the book and would clear "
+        "{exit_bucket} at {participation_rate:.0%} of its quiet-tape volume. "
+        "It ranks {momentum_rank} of {n_eligible} eligible names on "
+        "{momentum_lookback}-day return per unit of volatility "
+        "({momentum_per_vol:+.2f}), with grit {grit_score:.0f} of 100 across "
+        "{n_universe} names. Nothing in the chosen universe thinned its tail, "
+        "so the anchor beside it is {partner}, a defensive holding from "
+        "outside that universe, whose own tail is {tail_gap:.1%} shallower at "
+        "ES 97.5."
+    ),
+    SentenceKey.CUSHION_ANCHOR_EXTERNAL: (
+        "{ticker} is a defensive holding from OUTSIDE the chosen universe, "
+        "brought in as the anchor beside {partner} only because no name in "
+        "that universe had a thinner tail. It scores {anchor_score:.0f} of 100 "
+        "on the anchor screen, holds {final_weight:.1%} of the book, clears "
+        "{exit_bucket}, and its tail sits {tail_gap:.1%} shallower at ES 97.5 "
+        "than the name beside it."
+    ),
+    SentenceKey.EXCLUDED_GRIT_FLOOR: (
+        "{ticker} is rising - {momentum_lookback}-day return per unit of "
+        "volatility {momentum_per_vol:+.2f} - and would leave {exit_bucket}, "
+        "but grit {grit_score:.0f} of 100 puts it outside the grittiest half "
+        "of the eligible names, and the grit floor is on."
+    ),
     SentenceKey.EXCLUDED_RANK: (
         "{ticker} clears every gate - it would leave {exit_bucket}, grit "
         "{grit_score:.0f} of 100 - and simply did not rank in the top "
@@ -280,6 +312,7 @@ class TickerDossier:
     tail_gap: float | None          # ES(self) - ES(partner); >0 = partner thinner
     anchor_score: float | None      # anchor_rank composite, 0-100; cushions only
     exit_bucket: ExitBucket
+    is_fallback_anchor: bool        # a defensive name from outside the universe
 
     # narrative
     sentence_key: SentenceKey
@@ -333,7 +366,9 @@ def build_book(prices: pd.DataFrame, dollar_volume: pd.DataFrame,
                participation_rate: float = DEFAULT_PARTICIPATION,
                max_exit_days: float = DEFAULT_MAX_EXIT_DAYS,
                n_flyers: int = DEFAULT_N_FLYERS,
-               min_weight: float = MIN_MEANINGFUL_WEIGHT) -> list[TickerDossier]:
+               min_weight: float = MIN_MEANINGFUL_WEIGHT,
+               flyer_grit_floor: bool = False,
+               fallback_anchors: set[str] | None = None) -> list[TickerDossier]:
     """
     The chain, in the only order it can run.
 
@@ -347,6 +382,15 @@ def build_book(prices: pd.DataFrame, dollar_volume: pd.DataFrame,
             .fetch_dollar_volume). Names with no feed report 0.0.
         book_value: dollars invested. This is the parameter the whole story
             turns on - raise it and names fall out.
+        flyer_grit_floor: when True a flyer must ALSO sit in the grittiest
+            GRIT_TOP_FRACTION of the eligible names, not merely have a
+            measurable recovery record. Off by default: "grittiest high-flyer"
+            reads two ways and the engine shows the difference rather than
+            picking one silently.
+        fallback_anchors: columns of `prices` that are defensive holdings from
+            OUTSIDE the user's chosen universe. They never rank as flyers, and
+            are used as a cushion only when nothing inside the universe
+            produced a thinner tail. Disclosed on screen when used.
 
     Returns one TickerDossier per column of `prices`, flyers first, then
     cushions, then everything excluded.
@@ -411,50 +455,84 @@ def build_book(prices: pd.DataFrame, dollar_volume: pd.DataFrame,
     with np.errstate(divide="ignore", invalid="ignore"):
         mpv = (mom / vol.replace(0.0, np.nan)).reindex(universe)
 
+    fallback = set(fallback_anchors or ())
     elig = [t for t in universe if bool(eligible.get(t, False))]
     ranked = mpv[elig].dropna().sort_values(ascending=False)
     mom_rank = {t: i + 1 for i, t in enumerate(ranked.index)}
+
     # Rank is relative; "high-flyer" is not. A name only leads the book if its
     # trailing return per unit of volatility is actually positive, so a falling
-    # market produces fewer flyers rather than a best-of-a-bad-set.
-    flyers = list(ranked[ranked > MIN_FLYER_MOMENTUM].index[:n_flyers])
+    # market produces fewer flyers rather than a best-of-a-bad-set. Defensive
+    # fallback holdings never lead the book at all.
+    rising = ranked[ranked > MIN_FLYER_MOMENTUM]
+    flyer_pool = [t for t in rising.index if t not in fallback]
+    grit_floored = set()
+    if flyer_grit_floor:
+        fg = gscores["grit_score"].reindex(flyer_pool).dropna().sort_values(
+            ascending=False)
+        if not fg.empty:
+            keep = max(1, int(round(len(fg) * GRIT_TOP_FRACTION)))
+            grit_floored = set(fg.index[keep:])
+            flyer_pool = [t for t in flyer_pool if t not in grit_floored]
+    flyers = flyer_pool[:n_flyers]
 
-    # 6. Cushions: for each flyer, the best anchor among eligible non-flyers.
-    #    anchor_rank is reused unchanged and still ranks, never promises - but
-    #    it scores grit as only one component of four, and the brief is the
-    #    GRITTIEST cushion. So the pool is cut to the grittiest half first and
-    #    anchor_rank then picks inside it. Both steps are disclosed on screen.
-    partner, gap, anchor = {}, {}, {}
-    pool = [t for t in elig if t not in flyers]
-    pool_grit = gscores["grit_score"].reindex(pool).dropna().sort_values(
-        ascending=False)
-    if not pool_grit.empty:
-        keep = max(1, int(round(len(pool_grit) * CUSHION_GRIT_TOP_FRACTION)))
-        pool = list(pool_grit.index[:keep])
-    for f in flyers:
-        cands = [f] + [t for t in pool if t not in partner]
-        if len(cands) < 2:
-            continue
-        sub = returns[cands].dropna()
-        if sub.shape[0] < 2:
-            continue
+    # 6. Cushions. anchor_rank is reused unchanged and still ranks, never
+    #    promises - but it scores grit as one component of four and the brief
+    #    is the GRITTIEST cushion, so each pool is cut to its grittiest half
+    #    before anchor_rank picks inside it. The chosen universe is tried
+    #    FIRST; a defensive holding from outside it is used only when nothing
+    #    inside produced a thinner tail, and is disclosed when it is.
+    partner, gap, anchor, external = {}, {}, {}, set()
+
+    def _grittiest_half(names):
+        g = gscores["grit_score"].reindex(names).dropna().sort_values(
+            ascending=False)
+        if g.empty:
+            return list(names)
+        return list(g.index[:max(1, int(round(len(g) * GRIT_TOP_FRACTION)))])
+
+    def _best_anchor(flyer, names):
+        """(ticker, gap, anchor_score) for the best anchor in `names`, else None.
+        gap is ES(flyer) - ES(anchor): positive means the anchor is thinner."""
+        cands = [n for n in names if n != flyer and n not in partner]
+        if not cands:
+            return None
+        sub = returns[[flyer] + cands].dropna()
+        if sub.shape[0] < 2 or sub.shape[1] < 2:
+            return None
         try:
-            g_in = gscores["grit_score"].reindex(cands).dropna()
-            ar = anchor_rank(sub, f, grit=g_in if not g_in.empty else None)
+            g_in = gscores["grit_score"].reindex([flyer] + cands).dropna()
+            ar = anchor_rank(sub, flyer, grit=g_in if len(g_in) >= 2 else None)
         except (ValueError, KeyError):
-            continue
+            return None
         if ar.empty:
-            continue
+            return None
         best = ar.index[0]
         try:
-            g = tail_gap(sub[[f, best]], f, best)["gap"]
-            g = None if g is None or not np.isfinite(g) else float(g)
+            g = tail_gap(sub[[flyer, best]], flyer, best)["gap"]
         except (ValueError, KeyError):
-            g = None
-        if g is None:
-            continue        # a pairing we cannot measure is not narrated as one
+            return None
+        if g is None or not np.isfinite(g):
+            return None
+        return best, float(g), float(ar.loc[best, "anchor_score"])
+
+    inside = [t for t in elig if t not in flyers and t not in fallback]
+    outside = [t for t in universe
+               if t in fallback and bool(eligible.get(t, False))]
+    for f in flyers:
+        pick = _best_anchor(f, _grittiest_half(inside))
+        # Reach outside the universe ONLY when the universe itself failed to
+        # thin the tail, and only if the outsider actually does better.
+        if outside and (pick is None or pick[1] <= 0):
+            alt = _best_anchor(f, _grittiest_half(outside))
+            if alt is not None and (pick is None or alt[1] > pick[1]):
+                external.add(alt[0])
+                pick = alt
+        if pick is None:
+            continue
+        best, g, score = pick
         partner[f], partner[best] = best, f
-        anchor[best] = float(ar.loc[best, "anchor_score"])
+        anchor[best] = score
         gap[f] = gap[best] = g
 
     cushions = {v for k, v in partner.items() if k in flyers}
@@ -477,27 +555,35 @@ def build_book(prices: pd.DataFrame, dollar_volume: pd.DataFrame,
             role, why = Role.FLYER, ExcludedReason.NONE
             if partner.get(t) is None:
                 key = SentenceKey.FLYER_UNPAIRED
+            elif partner[t] in external:
+                key = SentenceKey.FLYER_PAIRED_EXTERNAL
             else:
                 key = (SentenceKey.FLYER_PAIRED if thinner
                        else SentenceKey.FLYER_PAIRED_DEEPER)
         elif is_cushion:
             role, why = Role.CUSHION, ExcludedReason.NONE
-            key = (SentenceKey.CUSHION_ANCHOR if thinner
-                   else SentenceKey.CUSHION_ANCHOR_DEEPER)
+            if t in external:
+                key = SentenceKey.CUSHION_ANCHOR_EXTERNAL
+            else:
+                key = (SentenceKey.CUSHION_ANCHOR if thinner
+                       else SentenceKey.CUSHION_ANCHOR_DEEPER)
         else:
             role = Role.EXCLUDED
             why = reason[t]
             if why == ExcludedReason.NONE:
                 m = mpv.get(t, np.nan)
-                why = (ExcludedReason.MOMENTUM_NEGATIVE
-                       if m is not None and np.isfinite(m)
-                       and m <= MIN_FLYER_MOMENTUM
-                       else ExcludedReason.RANK_BELOW_CUT)
+                if m is not None and np.isfinite(m) and m <= MIN_FLYER_MOMENTUM:
+                    why = ExcludedReason.MOMENTUM_NEGATIVE
+                elif t in grit_floored:
+                    why = ExcludedReason.GRIT_BELOW_FLOOR
+                else:
+                    why = ExcludedReason.RANK_BELOW_CUT
             key = {
                 ExcludedReason.NO_VOLUME: SentenceKey.EXCLUDED_NO_VOLUME,
                 ExcludedReason.SHORT_HISTORY: SentenceKey.EXCLUDED_SHORT_HISTORY,
                 ExcludedReason.CAPACITY_AT_BOOK: SentenceKey.EXCLUDED_CAPACITY,
                 ExcludedReason.MOMENTUM_NEGATIVE: SentenceKey.EXCLUDED_MOMENTUM,
+                ExcludedReason.GRIT_BELOW_FLOOR: SentenceKey.EXCLUDED_GRIT_FLOOR,
                 ExcludedReason.RANK_BELOW_CUT: SentenceKey.EXCLUDED_RANK,
             }[why]
 
@@ -528,7 +614,7 @@ def build_book(prices: pd.DataFrame, dollar_volume: pd.DataFrame,
             eligible=bool(eligible.get(t, False)), role=role, excluded_reason=why,
             partner=partner.get(t), tail_gap=gap.get(t),
             anchor_score=anchor.get(t), exit_bucket=exit_bucket(days),
-            sentence_key=key,
+            is_fallback_anchor=t in external, sentence_key=key,
         ))
 
     order = {Role.FLYER: 0, Role.CUSHION: 1, Role.EXCLUDED: 2}

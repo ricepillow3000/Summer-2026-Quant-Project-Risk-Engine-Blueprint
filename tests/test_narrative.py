@@ -297,6 +297,116 @@ def test_exit_bucket_boundaries_and_no_collapsed_zero():
         assert "0.00 days" not in d.sentence()
 
 
+# --- the two behaviours John chose after the council ------------------------
+
+def _anchor_fixture(seed: int = 3):
+    """A universe where nothing INSIDE it can cushion.
+
+    FLY rises steadily at moderate volatility. WILD1/WILD2 are far more
+    volatile, so every in-universe anchor has a DEEPER tail than the flyer.
+    DEFN is a calm defensive holding from outside the universe - and is given
+    the strongest momentum per unit of volatility in the whole set, so the test
+    also proves a fallback anchor can never lead the book.
+    """
+    rng = np.random.default_rng(seed)
+    idx = pd.bdate_range("2022-01-03", periods=_N_DAYS)
+    # (long-run drift, long-run vol, recent drift, recent vol). The recent
+    # window is set explicitly because a 60-day return drawn at 3% daily vol is
+    # mostly noise - left to the seed, a WILD name wins the momentum rank by
+    # accident and the fixture stops testing what it claims to.
+    spec = {"FLY":   (0.0015, 0.012,  0.0025, 0.0020),
+            "WILD1": (0.0002, 0.030, -0.0015, 0.0020),
+            "WILD2": (0.0003, 0.030, -0.0015, 0.0020),
+            "DEFN":  (0.0020, 0.004,  0.0030, 0.0010)}
+    px = {}
+    for t, (mu, sd, mu_r, sd_r) in spec.items():
+        r = rng.normal(mu, sd, _N_DAYS)
+        r[120:150] -= 0.008          # drawdown episodes so grit can score
+        r[430:450] -= 0.006
+        # Deep tails come from the long history; the momentum ranking comes
+        # from the last stretch, so the two can be set independently.
+        r[-70:] = rng.normal(mu_r, sd_r, 70)
+        px[t] = 100.0 * np.exp(np.cumsum(r))
+    prices = pd.DataFrame(px, index=idx)
+    dv = pd.DataFrame({t: 8.0e8 for t in spec}, index=idx)
+    return prices, dv
+
+
+def test_flyer_grit_floor_is_off_by_default_and_excludes_when_on():
+    """Both readings of "grittiest high-flyer" must be available. Off: grit
+    only proves a recovery record exists and momentum ranks. On: a flyer must
+    also sit in the grittiest half, and anyone dropped for it says so."""
+    prices, dv = _book_fixture()
+    loose = build_book(prices, dv, book_value=2_000_000, n_flyers=2)
+    strict = build_book(prices, dv, book_value=2_000_000, n_flyers=2,
+                        flyer_grit_floor=True)
+
+    loose_f = {d.ticker for d in loose if d.role is Role.FLYER}
+    strict_f = {d.ticker for d in strict if d.role is Role.FLYER}
+    assert loose_f, "no flyers without the floor"
+    # The floor can only ever remove candidates, never invent new ones.
+    assert strict_f <= loose_f, (loose_f, strict_f)
+
+    grit_of = {d.ticker: d.grit_score for d in loose}
+    ranked = sorted((g for g in grit_of.values() if g is not None), reverse=True)
+    for t in strict_f:
+        assert grit_of[t] is not None
+        assert grit_of[t] >= ranked[len(ranked) // 2] - 1e-9
+
+    for d in strict:
+        if d.excluded_reason is ExcludedReason.GRIT_BELOW_FLOOR:
+            assert d.eligible and d.momentum_per_vol > 0
+            assert "grit floor is on" in d.sentence()
+
+
+def test_fallback_anchor_is_used_only_when_the_universe_cannot_cushion():
+    """Inside first, outside only as a fallback - and disclosed when used."""
+    prices, dv = _anchor_fixture()
+
+    # The user's CHOSEN universe is FLY/WILD1/WILD2; DEFN exists only when it
+    # is offered as a fallback. Without it the book must NOT pretend it found
+    # a cushion.
+    chosen = prices.drop(columns=["DEFN"]), dv.drop(columns=["DEFN"])
+    inside_only = _by_ticker(
+        build_book(*chosen, book_value=2_000_000, n_flyers=1))
+    fly = [d for d in inside_only.values() if d.role is Role.FLYER][0]
+    assert fly.ticker == "FLY", fly.ticker
+    assert fly.partner in ("WILD1", "WILD2"), fly.partner
+    assert fly.tail_gap <= 0, "fixture no longer has a deeper in-universe anchor"
+    assert fly.sentence_key is SentenceKey.FLYER_PAIRED_DEEPER
+    assert "does not thin the tail" in fly.sentence()
+    assert not any(d.is_fallback_anchor for d in inside_only.values())
+
+    # With DEFN offered as a fallback the anchor switches, and says so.
+    withfb = _by_ticker(build_book(prices, dv, book_value=2_000_000, n_flyers=1,
+                                   fallback_anchors={"DEFN"}))
+    fly2 = [d for d in withfb.values() if d.role is Role.FLYER][0]
+    assert fly2.ticker == "FLY"
+    assert fly2.partner == "DEFN", fly2.partner
+    assert fly2.tail_gap > 0, "the fallback must actually thin the tail"
+    assert fly2.sentence_key is SentenceKey.FLYER_PAIRED_EXTERNAL
+    assert "outside that universe" in fly2.sentence()
+
+    defn = withfb["DEFN"]
+    assert defn.role is Role.CUSHION and defn.is_fallback_anchor
+    assert defn.sentence_key is SentenceKey.CUSHION_ANCHOR_EXTERNAL
+    assert "OUTSIDE the chosen universe" in defn.sentence()
+
+
+def test_a_fallback_anchor_never_leads_the_book():
+    """DEFN has the strongest momentum per unit of volatility in the fixture.
+    It must still never be a flyer - a defensive holding brought in to cushion
+    cannot become the thing being cushioned."""
+    prices, dv = _anchor_fixture()
+    book = build_book(prices, dv, book_value=2_000_000, n_flyers=3,
+                      fallback_anchors={"DEFN"})
+
+    mpv = {d.ticker: d.momentum_per_vol for d in book}
+    best = max(v for v in mpv.values() if v is not None)
+    assert mpv["DEFN"] == best, "fixture no longer makes DEFN the momentum leader"
+    assert all(d.ticker != "DEFN" for d in book if d.role is Role.FLYER)
+
+
 def test_pairs_are_reciprocal_and_never_self_referential():
     prices, dv = _book_fixture()
     book = _by_ticker(build_book(prices, dv, book_value=2_000_000, n_flyers=2))
