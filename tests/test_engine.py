@@ -1716,12 +1716,21 @@ def test_dispersion_correction_prices_plug_in_estimation_error():
     assert d["measured"] and d["n_dates"] >= 10
     assert d["coverage_raw"] < 0.60               # plug-in prediction is too tight
     assert 1.0 < d["k"] < 1.7, f"correction ran away on a correct model: {d['k']:.2f}"
-    assert abs(d["coverage_corrected"] - 0.683) < 0.05
 
 
 def test_dispersion_correction_widens_a_too_narrow_terrain():
     """When the realized state lands outside the drawn rings more often than
-    the labels claim, the factor must fire and pull coverage back up."""
+    the labels claim, the factor must fire and widen the terrain.
+
+    The obvious construction does NOT work, and this test used to use it:
+    scaling beta by a constant about its mean changes nothing, because the OU
+    fit is scale-equivariant - the fitted sigma scales with the data and every
+    Mahalanobis distance is left exactly where it was (k and coverage came back
+    byte-identical). A terrain is only genuinely too narrow when the model,
+    fitted on earlier data, under-predicts LATER dispersion. So shift the
+    regime: inflate the second half's innovations and leave the first half as
+    the thing the fit sees.
+    """
     from scipy import stats as _st
 
     from src.state_calibration import dispersion_correction, state_distances
@@ -1733,12 +1742,20 @@ def test_dispersion_correction_widens_a_too_narrow_terrain():
     assert d["k"] == 1.0 or abs(float(np.quantile(raw, 0.683)) / d["k"]
                                 - float(np.sqrt(_st.chi2.ppf(0.683, 2)))) < 1e-9
 
-    narrow = frame.copy()                      # a book whose state moves 1.8x
-    narrow["beta"] = frame["beta"].mean() + (frame["beta"] - frame["beta"].mean()) * 1.8
+    narrow = frame.copy()
+    steps = frame["beta"].diff().fillna(0.0).to_numpy().copy()
+    steps[len(steps) // 2:] *= 3.0             # regime break the fit cannot see
+    narrow["beta"] = float(frame["beta"].iloc[0]) + np.cumsum(steps)
     dn = dispersion_correction(narrow)
+
     assert dn["k"] > 1.0, "a too-narrow terrain was not widened"
-    assert dn["coverage_corrected"] > dn["coverage_raw"]
-    assert abs(dn["coverage_corrected"] - 0.683) < 0.10
+    assert dn["coverage_raw"] < d["coverage_raw"] - 0.05, (
+        "the regime break did not actually make the terrain too narrow "
+        f"({dn['coverage_raw']:.3f} vs {d['coverage_raw']:.3f})")
+    assert dn["k"] > d["k"] + 0.15, (
+        f"a narrower terrain did not demand a larger factor "
+        f"({dn['k']:.3f} vs {d['k']:.3f})")
+    assert dn["k"] <= 3.0, "the correction escaped its clamp"
 
 
 def test_calibration_applies_the_measured_factor_to_both_shocks():
@@ -2141,6 +2158,97 @@ def test_accessibility_statement_matches_what_the_app_does():
     # and the footer must carry the statement and the contact route
     assert "ACCESSIBILITY.md" in app, "footer does not link the statement"
     assert "WCAG 2.2 AA" in app and "barrier" in app.lower()
+
+
+# --- pre-deploy red-team findings, 2026-08-27 --------------------------------
+
+
+def test_streamlit_telemetry_is_disabled():
+    """Streamlit gatherUsageStats defaults to True and phones home on every
+    run. PRIVACY.md tells visitors there is no analytics, advertising,
+    attribution or crash-reporting SDK, so the default made the published
+    policy false - and it leaves the host by a route src/netguard.py never
+    sees, because the allowlist only wraps this engine own data calls."""
+    import tomllib
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    raw = (root / ".streamlit" / "config.toml").read_text(encoding="utf-8")
+    cfg = tomllib.loads(raw)
+    assert cfg["browser"]["gatherUsageStats"] is False, "telemetry is back on"
+
+    # The policy and the config have to keep agreeing, in both directions.
+    privacy = (root / "PRIVACY.md").read_text(encoding="utf-8").lower()
+    assert "no analytics" in privacy
+    assert cfg["client"]["showErrorDetails"] is False
+    assert cfg["server"]["enableXsrfProtection"] is True
+    assert cfg["server"]["enableCORS"] is True
+
+
+def test_no_third_party_assets_are_loaded():
+    """PRIVACY.md promises no CDN scripts, no external stylesheets, no pixel.
+    Anything the browser FETCHES from another host reveals the visitor IP and
+    user agent to that host, which would make the promise false. Plain <a>
+    links are fine - they only leak if the visitor clicks."""
+    import re as _re
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    files = ["main.py", "static/app.css", "prototypes/war_room.html"]
+    fetching = _re.compile(
+        r"(?:src|href)\s*=\s*[\"']https?://|@import\s+[\"']?https?://"
+        r"|url\(\s*[\"']?https?://",
+        _re.I)
+    offenders = []
+    for rel in files:
+        text = (root / rel).read_text(encoding="utf-8")
+        for n, ln in enumerate(text.splitlines(), 1):
+            for m in fetching.finditer(ln):
+                # A stylesheet/script/image fetch is a leak; an anchor is not.
+                if m.group(0).lower().startswith("href") and "<a " in ln.lower():
+                    continue
+                offenders.append(rel + ":" + str(n))
+    assert not offenders, "third-party fetch on page load: " + str(offenders)
+
+
+def test_no_credentials_in_tracked_source():
+    """There is no API key in this app - yfinance is keyless - so any
+    credential-shaped literal in tracked source is either a real leak or dead
+    weight that will be mistaken for one."""
+    import re as _re
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    cred = _re.compile(
+        r"AKIA[0-9A-Z]{16}"
+        r"|sk-[A-Za-z0-9]{20,}"
+        r"|ghp_[A-Za-z0-9]{36}"
+        r"|xox[baprs]-[A-Za-z0-9-]{10,}"
+        r"|-----BEGIN [A-Z ]*PRIVATE KEY-----"
+        r"|(?:api[_-]?key|secret|password|token)\s*[:=]\s*[\"'][^\"']{12,}[\"']",
+        _re.I)
+    offenders = []
+    for path in list(root.glob("*.py")) + list((root / "src").glob("*.py")):
+        for n, ln in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if cred.search(ln):
+                offenders.append(path.name + ":" + str(n))
+    assert not offenders, "credential-shaped literal in source: " + str(offenders)
+
+
+def test_no_exception_text_is_rendered_to_visitors():
+    """str(exc) carries the absolute server path - FileNotFoundError and
+    PermissionError on a cache file both embed it - so rendering it defeats
+    showErrorDetails=false. Visitors get the exception TYPE plus their session
+    ref via safe_err(); the full text goes to the operator log."""
+    root = pathlib.Path(__file__).resolve().parent.parent
+    src = (root / "main.py").read_text(encoding="utf-8")
+    assert "def safe_err(" in src, "the safe renderer was removed"
+
+    sinks = ("st.error(", "st.caption(", "st.info(", "st.warning(")
+    offenders = []
+    for n, ln in enumerate(src.splitlines(), 1):
+        if not any(c in ln for c in sinks):
+            continue
+        if ("{exc" in ln or "{_exc" in ln) and "safe_err(" not in ln:
+            offenders.append("main.py:" + str(n) + ": " + ln.strip()[:90])
+    assert not offenders, "raw exception text reaches the page: " + str(offenders)
 
 
 if __name__ == "__main__":
