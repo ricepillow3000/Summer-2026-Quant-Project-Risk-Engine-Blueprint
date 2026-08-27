@@ -112,7 +112,13 @@ def least_correlated_to_pair(corr: pd.DataFrame,
     if not others:
         raise ValueError("universe has no asset outside the pair")
     avg = corr.loc[others, list(pair)].mean(axis=1)
-    best = avg.idxmin()
+    # Independence is |rho| near ZERO, not rho at its minimum. Ranking the
+    # signed value handed the title to the most strongly INVERSE name: a
+    # candidate at rho = -0.60 to both legs beat one at +0.05, though -0.60 is
+    # a name that moves hard with the pair, just backwards. Rank on distance
+    # from zero; return the SIGNED average so the UI still says which side of
+    # zero the winner sits on.
+    best = avg.abs().idxmin()
     return str(best), float(avg.loc[best])
 
 

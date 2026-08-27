@@ -2163,6 +2163,22 @@ def test_accessibility_statement_matches_what_the_app_does():
 # --- pre-deploy red-team findings, 2026-08-27 --------------------------------
 
 
+def test_most_independent_ranks_on_distance_from_zero():
+    """least_correlated_to_pair calls its winner the most INDEPENDENT name.
+    Ranking the signed average handed that title to the most strongly inverse
+    candidate: -0.60 to both legs beat +0.05, though -0.60 is a name that moves
+    hard with the pair and merely backwards. Independence is distance from
+    zero."""
+    names = ["A", "B", "INVERSE", "FLAT"]
+    c = pd.DataFrame(np.eye(4), index=names, columns=names)
+    for leg in ("A", "B"):
+        c.loc["INVERSE", leg] = c.loc[leg, "INVERSE"] = -0.60
+        c.loc["FLAT", leg] = c.loc[leg, "FLAT"] = 0.05
+    pick, avg = least_correlated_to_pair(c, ("A", "B"))
+    assert pick == "FLAT", pick
+    assert abs(avg - 0.05) < 1e-12          # the SIGNED value is still returned
+
+
 def test_streamlit_telemetry_is_disabled():
     """Streamlit gatherUsageStats defaults to True and phones home on every
     run. PRIVACY.md tells visitors there is no analytics, advertising,

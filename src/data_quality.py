@@ -104,7 +104,17 @@ def validate_prices(prices: pd.DataFrame) -> dict:
 
     # --- Gaps vs. full business-day calendar ---
     if rows >= 2:
+        # bdate_range removes weekends ONLY, so all ~9 US market holidays a
+        # year counted as unexplained holes - the exact distinction the module
+        # docstring claims to draw. USFederalHolidayCalendar ships with pandas,
+        # so this needs no new dependency. It is not the NYSE calendar (no Good
+        # Friday, no historical closures), which is why a residual gap is still
+        # only a WARN and never a FAIL.
+        from pandas.tseries.holiday import USFederalHolidayCalendar
+        _cal = USFederalHolidayCalendar()
         full_span = pd.bdate_range(prices.index[0], prices.index[-1])
+        _hol = _cal.holidays(full_span[0], full_span[-1])
+        full_span = full_span.difference(_hol)
         gap_days = max(0, len(full_span) - rows)
         gap_pct = gap_days / len(full_span)
         checks.append(_check(
