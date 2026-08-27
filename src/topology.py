@@ -30,6 +30,10 @@ from src.pairing import DEFENSIVE_ANCHOR_TICKERS, anchor_rank, pair_weights, bac
 from src.risk import portfolio_daily_returns
 from src.state_calibration import calibrate_state_dynamics
 
+# Mirror state_calibration.rolling_state_series so the map measures every mark
+# the same way. Changing one without the other re-opens the mismatch.
+BETA_WINDOW, VOL_WINDOW = 63, 21
+
 # Hazard perimeter policy - disclosed in the map footnote, deliberately NOT
 # calibrated: it is a risk-limit convention, and the audit checks the drawn
 # perimeter against exactly these constants.
@@ -71,11 +75,22 @@ def build_map_payload(returns: pd.DataFrame, weights: pd.Series,
     except Exception:  # noqa: BLE001 - offline: universe only
         frame = returns
     common = frame.index.intersection(market.index)
-    mvar = float(market.loc[common].var())
+    # SAME windows the portfolio state is measured on (state_calibration uses
+    # beta 63d, vol 21d). These were full-sample statistics, which put the
+    # asset dots and the portfolio dot on one plane while measuring them two
+    # different ways - a dot could sit left of the book purely because it was
+    # averaged over two years while the book was measured over the last month.
+    mkt_w = market.loc[common].tail(BETA_WINDOW)
+    mvar = float(mkt_w.var())
     assets = []
     for t in frame.columns:
-        b = float(frame[t].loc[common].cov(market.loc[common]) / mvar)
-        v = float(frame[t].std() * np.sqrt(TRADING_DAYS))
+        b = float(frame[t].loc[common].tail(BETA_WINDOW).cov(mkt_w) / mvar)
+        v = float(frame[t].tail(VOL_WINDOW).std() * np.sqrt(TRADING_DAYS))
+        if bearish:
+            # The book above is negated when short, so the holdings must be
+            # too: a short of a name carries the opposite beta. Volatility is
+            # sign-invariant and stays as measured.
+            b = -b
         if np.isfinite(b) and np.isfinite(v):
             assets.append({"t": t, "b": round(b, 3), "v": round(v, 4),
                            "f": "Universe" if t in loaded else "Anchor pool"})
@@ -147,8 +162,7 @@ def build_map_payload(returns: pd.DataFrame, weights: pd.Series,
                "measured by walking this book's own history forward: fitted on "
                "prior data only, the nominal 68.3% ring held "
                f"{cal['dispersion']['coverage_raw']:.0%} of realized 30-day "
-               f"states over {cal['dispersion']['n_dates']} dates, "
-               f"{cal['dispersion']['coverage_corrected']:.0%} after widening. "
+               f"states over {cal['dispersion']['n_dates']} dates. "
                "It prices plug-in estimation error and the overlapping-window "
                "smoothing together, and never narrows the terrain. "
                if cal["dispersion"].get("measured") and cal["dispersion"]["k"] > 1.0

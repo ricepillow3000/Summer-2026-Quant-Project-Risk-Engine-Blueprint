@@ -1533,7 +1533,9 @@ with tab_watch:
 
         m1, m2, m3 = st.columns(3)
         m1.metric(f"{pick_a} × {pick_b} now ({win}d)", f"{latest:+.2f}")
-        m2.metric("Full-period average", f"{static_corr:+.2f}")
+        # Not an average of the rolling series - it is the single Pearson
+        # correlation over the whole sample, which is a different number.
+        m2.metric("Full-period correlation", f"{static_corr:+.2f}")
         m3.metric("Range over history",
                   f"{roll.min():+.2f} … {roll.max():+.2f}" if len(roll) else "-")
 
@@ -1583,6 +1585,12 @@ with tab_watch:
                                       dest, cut=0.15)
             pr_before = portfolio_daily_returns(returns, weights)
             pr_after = portfolio_daily_returns(returns, w_shift)
+            if bearish:
+                # Every other tail number on this page is computed on the
+                # negated book (see the port_returns branch above). This panel
+                # was not, so in bearish mode it reported the LONG book's CVaR
+                # under a short book's heading.
+                pr_before, pr_after = -pr_before, -pr_after
             cv_b, cv_a = cvar(pr_before), cvar(pr_after)
             vol_b = float(pr_before.std() * np.sqrt(252))
             vol_a = float(pr_after.std() * np.sqrt(252))

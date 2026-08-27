@@ -517,6 +517,13 @@ function simulate(nPaths, seed, cal, keepPts) {
   for (let i = 0; i < nPaths; i++) {
     let b = DEMO.base.beta, lv = Math.log(DEMO.base.vol), pnl = 0, hit = 0;
     const pts = keepPts ? [{ b: b, v: DEMO.base.vol }] : null;
+    /* The start is a point inside the 30 days too. When the disclosed caps put
+       the perimeter BEHIND the book - a beta cap of 1.9 under a 1.906-beta
+       book - every path is already outside at t=0, and testing only d>=1 read
+       93% where this tile's own definition ('touched at any point') means
+       100%. Understating breach risk on the highest-beta books is the wrong
+       way to be wrong. */
+    if (DEMO.base.vol > DEMO.hazard.volMax || b > DEMO.hazard.betaMax) hit = 1;
     for (let d = 0; d < DAYS; d++) {
       const g1 = gaussPair(rng), g2 = gaussPair(rng);
       const z1 = g1[0];
@@ -1315,7 +1322,10 @@ function renderStandings() {
     '<span class="rk">0' + (rank + 1) + '</span>' +
     '<span class="pair">' + r.pr.fl + ' - ' + r.pr.an + ' <span>flyer / anchor</span></span>' +
     '<span class="cu">' + (r.cu >= 0 ? '+' : '') + (r.cu * 100).toFixed(1) + 'pp</span>' +
-    '<span class="bar"><i style="width:' + Math.max(4, Math.abs(r.cu) / maxCu * 100).toFixed(0) + '%"></i></span>' +
+    '<span class="bar"><i style="width:' + Math.max(4, Math.abs(r.cu) / maxCu * 100).toFixed(0) + '%' +
+      // The bar is a MAGNITUDE, so a pair that made the drawdown worse drew a
+      // bar identical to one that helped. Sign has to survive into the mark.
+      (r.cu < 0 ? ';background:#C25B3A' : '') + '"></i></span>' +
     '</div>').join('');
   el.querySelectorAll('.srow').forEach(row => {
     row.addEventListener('click', () => {
