@@ -800,3 +800,19 @@ div[data-baseweb="select"]>div, .stNumberInput input,
     flex-wrap: wrap; gap: 8px; font-family: 'Helvetica Neue', sans-serif;
     font-size: 10px; letter-spacing: .14em; text-transform: uppercase;
     color: #B4AB9B; }
+
+/* --- Orientation strip: the three sentences a first-time visitor needs before
+   meeting a single dial. Added 2026-08-26 after a non-specialist walkthrough
+   found the controls arrive before any statement of what the page is for. --- */
+.orient { border: 1px solid #C4BDAE; border-left: 3px solid #6A5030;
+    background: #E9E4DB; padding: 20px 24px 18px; margin: 0 0 26px; }
+.orient-t { font-family: 'Helvetica Neue', sans-serif; font-size: 11px;
+    letter-spacing: .2em; text-transform: uppercase; color: #5A5344;
+    margin-bottom: 12px; }
+.orient-l { margin: 0; padding-left: 20px; font-family: Georgia, serif;
+    font-size: 15.5px; line-height: 1.62; color: #4A4640; }
+.orient-l li { margin-bottom: 7px; }
+.orient-l li:last-child { margin-bottom: 0; }
+.orient-l b { color: #3F3B35; }
+.orient-f { margin-top: 13px; padding-top: 11px; border-top: 1px solid #D6CFC0;
+    font-family: Georgia, serif; font-size: 13.5px; color: #5D574D; }

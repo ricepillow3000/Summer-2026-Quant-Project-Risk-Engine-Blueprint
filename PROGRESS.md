@@ -312,6 +312,43 @@ risk-engine/
   tests: one recomputes every contrast ratio from the stylesheet, one checks the
   statement's claims against the code. 115/115.
 
+- ✅ **Employer beta test + block bootstrap** (2026-08-26) - walked the app as
+  a first-time visitor with `tools/demo_check.py`, a new adversarial harness
+  that drives the real Streamlit app headlessly and reports what a stranger
+  hits: crashes, non-finite numbers, contradictory headline figures, jargon
+  with no explanation nearby, and holdings missing from the picker.
+  **Four real defects, all now fixed:**
+  1. **The Monte Carlo resampled days i.i.d.** Returns are near-uncorrelated in
+     sign but cluster hard in magnitude, so shuffling single days scattered
+     crash weeks across simulated years and thinned the one-year tail. Replaced
+     with the **stationary block bootstrap** (Politis & Romano 1994); expected
+     block length measured from the book's own |returns| autocorrelation
+     (`mean_block_length`), clamped [2, 40], disclosed in the UI. On Mag-7 the
+     measured block is 6 days and CVaR moves 25.1% -> 22.7%, so the old number
+     was an artefact of an assumption the data does not support.
+  2. **A basket could be analysed on 20 days of history.** Aligning intersects
+     members onto common trading days, so EA - 17 days old after going private
+     - cut a ten-name basket down with it, and the engine rendered a year of
+     risk plus a `+nan` rolling correlation from it. `data_quality` had already
+     returned `passed=False`; nothing read it. There is now a guard that names
+     the offending ticker, excludes it, and re-runs on the rest, with a hard
+     stop if too little history survives.
+  3. **A visitor's own stock was not in the picker.** 15 of 15 common holdings
+     (NFLX, AMD, BAC, PFE, ORCL...) were absent from every dropdown. Added nine
+     sector baskets (semis, banks, healthcare, consumer, media, software,
+     industrials, energy, high-volatility) and a 324-name `SUGGESTIONS`
+     catalogue - the box always accepted any symbol, but you had to know the
+     ticker by heart to use it.
+  4. **Contrast failures in inline styles.** The stylesheet was clean but
+     `main.py`'s inline `style=` attributes were not - four more colours below
+     AA, including the engine's own "skip to the risk map" link at 2.50:1. The
+     contrast test now scans both surfaces.
+  Also added: a plain-English opener on the VaR backtest panel, and a "New
+  here? Read this first" orientation strip before any control - a walkthrough
+  found the dials arrive before any statement of what the page is for.
+  118/118 tests (3 new proving the block bootstrap preserves clustering,
+  leaves the mean alone, and reports its scheme); live audit 154/154 quick.
+
 - ⬜ **Phase VI** - deploy to Railway/Render for the live recruiter link
   (Procfile + requirements.txt already set up)
 

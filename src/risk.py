@@ -502,19 +502,84 @@ def var_backtest(port_returns: pd.Series, confidence: float = 0.95,
     return result
 
 
+def mean_block_length(port_returns: np.ndarray, cap: int = 40) -> int:
+    """
+    Expected block length for the stationary bootstrap, measured from the data.
+
+    Volatility clustering is dependence in |r|, not in r, so a block has to be
+    long enough to carry a cluster. This uses the integrated autocorrelation
+    time of |r| - 1 + 2 * sum of its positive autocorrelations - the standard
+    "how many observations before this series forgets itself" measure.
+    Summation stops at the first non-positive lag (Geyer's initial-positive-
+    sequence rule) so noise at long lags cannot inflate it.
+
+    Clamped to [2, cap]: 1 would be the i.i.d. bootstrap this exists to replace,
+    and blocks longer than a couple of months on two years of history would
+    resample the same stretch over and over.
+    """
+    x = np.abs(np.asarray(port_returns, dtype=float))
+    x = x[np.isfinite(x)]
+    if x.size < 30 or x.std(ddof=1) == 0:
+        return 2
+    x = x - x.mean()
+    denom = float(x @ x)
+    if denom <= 0:
+        return 2
+    tau = 1.0
+    for lag in range(1, min(100, x.size // 2)):
+        rho = float(x[lag:] @ x[:-lag]) / denom
+        if rho <= 0:
+            break
+        tau += 2.0 * rho
+    return int(np.clip(round(tau), 2, cap))
+
+
+def _stationary_bootstrap(n_obs: int, n_paths: int, horizon: int,
+                          mean_block: int, rng: np.random.Generator) -> np.ndarray:
+    """
+    Politis & Romano (1994) stationary bootstrap indices.
+
+    Start at a random day; with probability p = 1/mean_block jump to another
+    random day, otherwise step to the next day, wrapping at the end of history.
+    Block lengths are geometric with mean `mean_block`, and the resampled series
+    is stationary - unlike a fixed-block bootstrap, whose joins land on the same
+    dates in every path.
+    """
+    p = 1.0 / mean_block
+    idx = np.empty((n_paths, horizon), dtype=np.int64)
+    idx[:, 0] = rng.integers(0, n_obs, size=n_paths)
+    for t in range(1, horizon):
+        jump = rng.random(n_paths) < p
+        idx[:, t] = np.where(jump, rng.integers(0, n_obs, size=n_paths),
+                             (idx[:, t - 1] + 1) % n_obs)
+    return idx
+
+
 def monte_carlo(
     returns: pd.DataFrame,
     weights: np.ndarray,
     n_simulations: int = 10_000,
     horizon_days: int = 252,
     confidence: float = 0.95,
+    block: bool = True,
 ) -> dict:
     """
-    Bootstrap Monte Carlo simulation of portfolio returns.
+    Block-bootstrap Monte Carlo simulation of portfolio returns.
 
-    For each simulation: randomly sample `horizon_days` daily returns
-    (with replacement) from history and compound them into a final value.
-    No normality assumption - we use the real return distribution.
+    Quant Deep Dive - why this is not a plain i.i.d. bootstrap:
+    resampling single days independently assumes returns are i.i.d. They are
+    not. Daily returns are nearly uncorrelated in SIGN, but their magnitudes
+    cluster hard - quiet weeks follow quiet weeks and crashes arrive in bursts
+    (Mandelbrot 1963; the whole ARCH literature exists because of it). Shuffling
+    days individually scatters one crash week across a hundred different
+    simulated years, so the simulated one-year tail comes out too thin. That
+    tail is the number this engine reports as CVaR.
+
+    The stationary bootstrap (Politis & Romano 1994) resamples CONTIGUOUS
+    stretches of history with geometrically distributed lengths, so a path can
+    inherit a whole bad month. The expected block length is measured from the
+    book's own |returns| autocorrelation (`mean_block_length`), never typed in.
+    `block=False` restores i.i.d. sampling for comparison.
 
     Args:
         returns: historical daily returns DataFrame.
@@ -522,6 +587,7 @@ def monte_carlo(
         n_simulations: number of simulated futures to run.
         horizon_days: trading days to simulate (252 = 1 year).
         confidence: CVaR confidence level.
+        block: use the stationary block bootstrap (default) or i.i.d. sampling.
 
     Returns:
         dict with simulation results and risk metrics.
@@ -530,7 +596,14 @@ def monte_carlo(
     rng = np.random.default_rng(seed=42)
 
     # Each row = one simulated year of daily returns
-    sampled = rng.choice(port_returns, size=(n_simulations, horizon_days), replace=True)
+    if block and port_returns.size >= 30:
+        mean_block = mean_block_length(port_returns)
+        sampled = port_returns[_stationary_bootstrap(
+            port_returns.size, n_simulations, horizon_days, mean_block, rng)]
+    else:
+        mean_block = 1
+        sampled = rng.choice(port_returns, size=(n_simulations, horizon_days),
+                             replace=True)
 
     # Compound into cumulative value paths (start = $1); last column = final value
     value_paths = np.cumprod(1 + sampled, axis=1)
@@ -559,7 +632,8 @@ def monte_carlo(
         "n_simulations": n_simulations,
         "horizon_days": horizon_days,
         "confidence": confidence,
-        "engine": "bootstrap",
+        "engine": "stationary block bootstrap" if mean_block > 1 else "bootstrap",
+        "block_days": mean_block,
     }
 
 

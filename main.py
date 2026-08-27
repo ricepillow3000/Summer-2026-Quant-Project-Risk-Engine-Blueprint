@@ -32,7 +32,7 @@ import plotly.graph_objects as go
 from src.ingestion import (
     fetch_prices, get_returns, data_health, provenance, clear_cache,
     average_dollar_volume, fetch_risk_free_rate, PRESETS, valid_ticker,
-    MAX_UNIVERSE,
+    MAX_UNIVERSE, MIN_ROWS, SUGGESTIONS,
 )
 from src.analytics import correlation_matrix, covariance_matrix
 from src.risk import (
@@ -839,7 +839,7 @@ with _gungnir_zone:
         f'<text x="268" y="172" text-anchor="middle" font-family="Helvetica Neue" font-size="8.5" letter-spacing="1.6" fill="#9A7B4F">01</text>'
         f'<text x="268" y="190" text-anchor="middle" font-family="Georgia" font-size="11.5" fill="#6B6459">{_bv_sk_a}</text>'
         f'</svg>'
-        f'<div style="font-family:Georgia;font-size:12.5px;color:#6B6459;max-width:560px;margin:2px auto 0;">'
+        f'<div style="font-family:Georgia;font-size:12.5px;color:#5D574D;max-width:560px;margin:2px auto 0;">'
         f'{"Shorting flips the sketch: block 01 is the position you are against, block 02 a correlated long that cushions the squeeze. Equal areas, equal risk share. Short losses can exceed 100%; borrow costs are not modeled." if bearish else "Block 01 is narrow and tall - little capital, high volatility. Block 02 is wide and short. Equal areas, so each name carries the same share of the risk."}'
         f'</div>'
         f'<a href="#engine" class="cta-btn" style="margin-top:14px;">'
@@ -878,10 +878,31 @@ st.markdown(
     f'{"short book" if bearish else "portfolio"}, live</h2>'
     f'<a href="#analysis" style="display:inline-block;margin-top:10px;'
     f'font-family:\'Helvetica Neue\',sans-serif;font-size:11px;letter-spacing:.14em;'
-    f'text-transform:uppercase;color:#9A7B4F;text-decoration:none;'
+    f'text-transform:uppercase;color:#6A5030;text-decoration:none;'
     f'border-bottom:1px solid rgba(154,123,79,.4);padding-bottom:2px;">'
     f'Skip to the risk map &darr;</a>'
     f'</div>',
+    unsafe_allow_html=True)
+
+# ---- Orientation: what a first-time visitor needs before the dials ----
+# A walkthrough as a non-specialist found the controls arrive before any
+# statement of what the page is FOR. Three sentences, then the engine.
+st.markdown(
+    '<div class="orient reveal">'
+    '<div class="orient-t">New here? Read this first</div>'
+    '<ol class="orient-l">'
+    '<li><b>Pick what you own.</b> Choose a starter basket below, or type any '
+    'ticker - the box takes any symbol Yahoo Finance carries.</li>'
+    '<li><b>Break it on purpose.</b> Replay a real crisis, or move the sliders, '
+    'and watch the headline number move.</li>'
+    '<li><b>Read one number.</b> The verdict answers a single question: in the '
+    'worst 5% of simulated years, how much of this portfolio goes away? '
+    'Everything below it is the working behind that answer.</li>'
+    '</ol>'
+    '<div class="orient-f">Nothing here is advice, and no figure is invented: '
+    'every number is computed from live end-of-day prices, and every tab shows '
+    'its own method.</div>'
+    '</div>',
     unsafe_allow_html=True)
 
 # ---- The cockpit: controls fold into three numbered drawers so the verdict
@@ -893,7 +914,10 @@ with st.expander("01 · Universe - which assets", expanded=False):
     # Keying the multiselect on the preset name makes it re-initialize with the
     # new default whenever the preset changes - while still letting users add or
     # remove individual symbols (accept_new_options allows arbitrary tickers).
-    suggestions = sorted({t for lst in PRESETS.values() for t in lst})
+    # The full suggestion catalogue, not just names that happen to sit in a
+    # preset: a walkthrough found a visitor's own holding (NFLX, AMD, BAC)
+    # was absent from every dropdown even though the box accepts any symbol.
+    suggestions = SUGGESTIONS
     chosen = st.multiselect(
         "Tickers to analyze",
         options=suggestions,
@@ -1032,6 +1056,45 @@ try:
 except Exception as exc:  # noqa: BLE001 - surface any fetch failure to the user
     log_incident(SESSION_REF, "load_universe", exc)
     st.error(f"Couldn't load market data: {exc}")
+    st.stop()
+
+# ---- Short-history guard --------------------------------------------------
+# Aligning a basket intersects every member onto their COMMON trading days, so
+# one young or delisted name silently truncates everything. Found 2026-08-26 in
+# a walkthrough: EA carried 17 days of history after going private, which cut a
+# ten-name basket to 20 aligned rows - and the engine went on to render a year
+# of risk, and a 21-day rolling correlation, from it. The data-quality gate had
+# already returned passed=False; nothing was reading it.
+#
+# Drop the offender rather than the basket, and say which one and why.
+if len(prices) < MIN_ROWS and len(tickers) > 1:
+    try:
+        _unaligned = fetch_prices(tickers, period="2y", align=False)
+        _coverage = _unaligned.notna().sum()
+        _short = [t for t in _unaligned.columns if int(_coverage[t]) < MIN_ROWS]
+        _keep = [t for t in tickers if t not in _short]
+        if _short and len(_keep) >= 2:
+            st.warning(
+                "Excluded "
+                + ", ".join(f"`{html.escape(t)}` ({int(_coverage[t])} trading days)"
+                            for t in _short)
+                + f" - each has less than the {MIN_ROWS} days of history this "
+                "engine needs, and aligning the basket to their history would "
+                "have cut every other name down with them. Analysing the "
+                f"remaining {len(_keep)}."
+            )
+            tickers = _keep
+            prices = load_universe(tuple(tickers))
+    except Exception as _short_exc:  # noqa: BLE001 - keep the original frame
+        log_incident(SESSION_REF, "short_history_guard", _short_exc)
+
+if len(prices) < MIN_ROWS:
+    st.error(
+        f"This basket only has {len(prices)} trading days in common - too few "
+        f"to estimate risk from (this engine needs {MIN_ROWS}). That usually "
+        "means one member is newly listed, delisted, or trades on a different "
+        "calendar. Remove the newest name and try again."
+    )
     st.stop()
 
 returns = get_returns(prices)
@@ -1232,7 +1295,7 @@ else:
         verdict += " *(under the stress scenario applied above)*"
 if bearish:
     verdict += (
-        " <span style='font-size:12px;color:#8A6A3C;'>Synthetic daily-"
+        " <span style='font-size:12px;color:#6A512E;'>Synthetic daily-"
         "rebalanced short: borrow fees, margin interest and buy-ins are not "
         "modeled - real short results are worse. Short losses can exceed "
         "100% of capital.</span>"
@@ -1284,7 +1347,7 @@ with f_col:
 """, unsafe_allow_html=True)
     st.plotly_chart(fan_chart(mc["path_bands"]), width="stretch", config=PLOTLY_CFG)
     _se_txt = (f" CVaR sampling error: ±{mc['cvar_se']:.2%} "
-               f"({mc['n_simulations']:,} paths - a simulated estimate, "
+               f"({mc['n_simulations']:,} paths, resampled in {mc.get('block_days', 1)}-day blocks so crash weeks stay intact - a simulated estimate, "
                "not an exact truth)." if np.isfinite(mc.get("cvar_se", float("nan")))
                else "")
     st.caption(
@@ -1732,6 +1795,12 @@ with tab_breakdown:
             )
         else:
             st.caption(
+                "**What this is:** a report card on the risk model itself. "
+                "It counts how often the real loss was worse than the model's "
+                "own daily prediction, and asks whether that count is close "
+                "enough to what the model promised. Too many misses means the "
+                "model understates risk; far too few means it is needlessly "
+                "gloomy. "
                 f"Daily VaR check {verdict_word} the Kupiec "
                 f"proportion-of-failures test (Kupiec 1995; "
                 f"LR = {bt['kupiec_lr']}, 95% critical = 3.84): "
@@ -1905,7 +1974,7 @@ with tab_balance:
 
             def _hedge_color(v):
                 if v < HEDGE:
-                    return "#3F6B3F"          # green - genuinely moves against
+                    return "#33582F"          # green - genuinely moves against
                 if v > INDEP:
                     return "#8A3B2E"          # red - moves with, no protection
                 return "#9A7B4F"              # bronze - independent, not a hedge
@@ -2030,7 +2099,7 @@ with tab_balance:
             bt = backtest_pair(bv_frame[flyer], bv_frame[bv_anchor], pw["w_a"])
             phase_now = regime_labels(
                 (1 + bv_frame[flyer]).cumprod(), tg["gap"]).iloc[-1]
-            _ph_col = {"Tether": "#3F6B3F", "Descent": "#8A3B2E",
+            _ph_col = {"Tether": "#33582F", "Descent": "#8A3B2E",
                        "Rotation": "#9A7B4F"}[phase_now]
             # Circle-and-line drawn to John's sketch: the high-flyer rides
             # top-RIGHT, the steady anchor sits bottom-LEFT, joined by the
@@ -2074,7 +2143,7 @@ with tab_balance:
                 f'<text x="216" y="244" text-anchor="middle" font-family="Helvetica Neue" font-size="10.5" letter-spacing="1.8" fill="{_ph_col}">{phase_now.upper()}</text>'
                 f'</svg>'
                 f'<div style="font-family:\'Helvetica Neue\',sans-serif;font-size:10px;'
-                f'letter-spacing:.22em;text-transform:uppercase;color:#9A7B4F;'
+                f'letter-spacing:.22em;text-transform:uppercase;color:#6A5030;'
                 f'text-align:center;margin-top:10px;">Defensive pair &middot; '
                 f'{"the short and its squeeze cushion" if bearish else "what goes up must come down"}'
                 f' &middot; sizes are illustrative; the numbers carry the quantities</div>'
@@ -2089,11 +2158,11 @@ with tab_balance:
                 f'(<b>{pw["w_b"]:.0%}</b> anchor / <b>{pw["w_a"]:.0%}</b> flyer, '
                 f'rebalanced monthly) the fall was <b>{bt["max_dd_pair"]:.0%}</b> - '
                 f'a <b>{bt["cushion"]:+.0%}</b> cushion. A cushion, not a cap.</div>'
-                f'<div style="font-family:\'Helvetica Neue\',sans-serif;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#6B6459;margin-top:8px;">'
+                f'<div style="font-family:\'Helvetica Neue\',sans-serif;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#5D574D;margin-top:8px;">'
                 f'Safety line (tail gap): ES 97.5% {tg["es_a"]:.1%} vs {tg["es_b"]:.1%} &middot; '
                 f'{"short " if bearish else ""}{flyer} ES 90% CI {ci_lo:.1%}-{ci_hi:.1%} &middot; current phase '
                 f'<span style="color:{_ph_col};font-weight:600;">{phase_now}</span></div>'
-                f'<div style="font-family:Georgia;font-size:12.5px;color:#6B6459;margin-top:6px;">'
+                f'<div style="font-family:Georgia;font-size:12.5px;color:#5D574D;margin-top:6px;">'
                 f'Why the anchor holds most of the capital: equal-risk split - '
                 f'{flyer} runs {pw["vol_a"]:.0%} annual vol to {bv_anchor}\'s '
                 f'{pw["vol_b"]:.0%}, so each dollar of {flyer} carries '
@@ -2273,8 +2342,9 @@ with tab_conviction:
 
         def _tone(v):
             if pd.isna(v):
-                return "color: #8A8172;"
-            return "color: #3F6B3F;" if v > 0 else "color: #8A3B2E;"
+                # 2.43:1 before - a "not available" cell still has to be readable
+                return "color: #5D574D;"
+            return "color: #33582F;" if v > 0 else "color: #8A3B2E;"
 
         # The 3 metrics above carry the message; the full 10x7 grid folds
         # so a cold viewer isn't hit with 70 raw percentages up front.

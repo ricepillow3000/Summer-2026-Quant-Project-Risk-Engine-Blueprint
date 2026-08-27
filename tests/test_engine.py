@@ -20,6 +20,7 @@ import pandas as pd
 from src.analytics import covariance_matrix, correlation_matrix
 from src.risk import (
     var, cvar, monte_carlo, jump_diffusion_mc, calibrate_jump_diffusion, sharpe_ratio,
+    mean_block_length,
     var_backtest, christoffersen_test, gpd_tail_fit,
     mcneil_frey_tail, ewma_volatility,
 )
@@ -1998,6 +1999,78 @@ def test_restore_drill_reports_cost_per_universe():
     assert broken["ok"] is False and broken["detail"]
 
 
+# --- block bootstrap (2026-08-26): returns are not i.i.d. ------------------
+
+def _clustered_returns(n=1500, seed=3):
+    """A GARCH(1,1)-flavoured series: uncorrelated in sign, clustered in size -
+    the stylised fact an i.i.d. bootstrap throws away."""
+    rng = np.random.default_rng(seed)
+    r = np.empty(n)
+    sigma2 = 1e-4
+    for i in range(n):
+        sigma2 = 2e-6 + 0.10 * (r[i - 1] ** 2 if i else 1e-4) + 0.88 * sigma2
+        r[i] = rng.normal(0.0, np.sqrt(sigma2))
+    return pd.DataFrame({"A": r}, index=pd.bdate_range("2019-01-01", periods=n))
+
+
+def _abs_autocorr(x, lag=1):
+    a = np.abs(np.asarray(x, dtype=float))
+    a = a - a.mean()
+    return float((a[lag:] @ a[:-lag]) / (a @ a))
+
+
+def test_block_length_detects_clustering_and_ignores_noise():
+    """The block length is measured, not typed in: long when volatility
+    clusters, minimal when the series really is i.i.d."""
+    rng = np.random.default_rng(11)
+    iid = rng.normal(0, 0.01, 1500)
+    assert mean_block_length(iid) <= 3, "i.i.d. noise should need no block"
+    clustered = _clustered_returns()["A"].values
+    assert mean_block_length(clustered) > mean_block_length(iid)
+    assert 2 <= mean_block_length(clustered) <= 40      # clamped, never runaway
+
+
+def test_block_bootstrap_preserves_volatility_clustering():
+    """The point of the whole exercise: sampled paths must still show the
+    magnitude-clustering the history has. i.i.d. resampling destroys it."""
+    rets = _clustered_returns()
+    w = np.array([1.0])
+    history_acf = _abs_autocorr(rets["A"].values)
+    assert history_acf > 0.05, "test data is not actually clustered"
+
+    rng = np.random.default_rng(5)
+    from src.risk import _stationary_bootstrap, mean_block_length as mbl
+    port = rets["A"].values
+    block_path = port[_stationary_bootstrap(port.size, 1, 4000, mbl(port), rng)][0]
+    iid_path = rng.choice(port, size=4000, replace=True)
+
+    assert _abs_autocorr(block_path) > 3 * _abs_autocorr(iid_path)
+    assert _abs_autocorr(iid_path) < 0.03          # i.i.d. really is memoryless
+
+    # and the resampling must not move the mean: it reorders history, not shifts it
+    assert abs(block_path.mean() - port.mean()) < 4 * port.std() / np.sqrt(4000)
+
+
+def test_monte_carlo_reports_its_resampling_scheme():
+    """A number whose method is invisible cannot be checked, so the engine and
+    the measured block length ride along with the result."""
+    rets = _clustered_returns(n=800)
+    w = np.array([1.0])
+    blocked = monte_carlo(rets, w, n_simulations=4000)
+    iid = monte_carlo(rets, w, n_simulations=4000, block=False)
+
+    assert blocked["engine"] == "stationary block bootstrap"
+    assert blocked["block_days"] >= 2
+    assert iid["engine"] == "bootstrap" and iid["block_days"] == 1
+    for mc in (blocked, iid):
+        assert mc["cvar"] >= mc["var"] - 1e-9
+        assert np.isfinite(mc["cvar"]) and mc["cvar_se"] > 0
+
+    # too little history to form blocks: fall back rather than pretend
+    short = pd.DataFrame({"A": np.random.default_rng(0).normal(0, 0.01, 20)})
+    assert monte_carlo(short, w, n_simulations=200)["block_days"] == 1
+
+
 # --- accessibility (2026-08-26) ---------------------------------------------
 
 def _contrast(fg: str, bg: str) -> float:
@@ -2016,8 +2089,12 @@ def test_text_colours_meet_wcag_aa():
     may still be used for rules and hovers, never for words."""
     import re as _re
 
-    css = (pathlib.Path(__file__).resolve().parent.parent
-           / "static" / "app.css").read_text(encoding="utf-8")
+    root = pathlib.Path(__file__).resolve().parent.parent
+    # main.py's inline style attributes are the same surface as the stylesheet:
+    # the engine's "skip to the risk map" link sat at 2.50:1 there while
+    # static/app.css was already clean, so both are scanned.
+    css = ((root / "static" / "app.css").read_text(encoding="utf-8")
+           + "\n" + (root / "main.py").read_text(encoding="utf-8"))
 
     # sanity: the formula agrees with the published reference pair
     assert abs(_contrast("#FFFFFF", "#000000") - 21.0) < 0.01

@@ -104,7 +104,67 @@ PRESETS = {
         "CRWS", "WEYS", "BSET", "VRA", "HBB",
         "FLWS", "LAKE", "JOUT", "UNTY", "SMP",
     ],
+    # Sector and theme baskets, added 2026-08-26 after a walkthrough found that
+    # a visitor's own holding - NFLX, AMD, BAC, PFE - was in none of the
+    # starter baskets, so the picker's suggestion list never offered it. The
+    # box has always accepted any Yahoo symbol typed in full; these exist so a
+    # visitor can RECOGNISE their names rather than having to know the ticker.
+    "Semiconductors": [
+        "NVDA", "AMD", "AVGO", "TSM", "MU", "QCOM", "TXN", "INTC", "AMAT", "ASML",
+    ],
+    "Big banks & brokers": [
+        "JPM", "BAC", "WFC", "GS", "MS", "C", "SCHW", "BLK", "AXP", "COF",
+    ],
+    "Healthcare & pharma": [
+        "UNH", "JNJ", "LLY", "PFE", "MRK", "ABBV", "AMGN", "TMO", "ABT", "ISRG",
+    ],
+    "Consumer & retail": [
+        "COST", "WMT", "TGT", "HD", "LOW", "NKE", "SBUX", "MCD", "PEP", "KO",
+    ],
+    "Streaming, media & platforms": [
+        "NFLX", "DIS", "SPOT", "META", "GOOGL", "RBLX", "EA", "TTWO", "WBD", "PARA",
+    ],
+    "Software & cloud": [
+        "MSFT", "ORCL", "CRM", "ADBE", "NOW", "SNOW", "PLTR", "SHOP", "INTU", "PANW",
+    ],
+    "Industrials & transport": [
+        "CAT", "DE", "BA", "GE", "HON", "LMT", "UPS", "FDX", "UNP", "RTX",
+    ],
+    "Energy & oil majors": [
+        "XOM", "CVX", "COP", "SLB", "EOG", "PSX", "MPC", "VLO", "OXY", "KMI",
+    ],
+    "High-volatility movers": [
+        "TSLA", "PLTR", "COIN", "MSTR", "RIVN", "UBER", "ABNB", "DKNG", "SOFI", "AFRM",
+    ],
 }
+
+
+# Names offered as suggestions in the ticker picker. A superset of every preset
+# above: the box accepts any Yahoo symbol, but a visitor should be able to find
+# a familiar company by typing the first letters of its ticker instead of
+# needing to know it by heart.
+SUGGESTIONS = sorted({t for basket in PRESETS.values() for t in basket} | {
+    "T", "VZ", "TMUS", "CMCSA", "CVS", "CI", "ELV", "HUM", "MDT", "BMY",
+    "GILD", "REGN", "VRTX", "ZTS", "SYK", "BSX", "DHR", "MCK",
+    "SPGI", "ICE", "CME", "MCO", "PYPL", "V", "MA", "USB", "PNC", "TFC",
+    "BK", "STT", "AIG", "MET", "PRU", "ALL", "TRV", "PGR", "CB",
+    "F", "GM", "DAL", "UAL", "LUV", "CSX", "NSC", "EMR", "ETN", "PH", "ITW",
+    "MMM", "GD", "NOC", "LHX", "TDG", "PCAR", "CMI",
+    "PG", "CL", "KMB", "GIS", "K", "HSY", "STZ", "MO", "PM", "KDP", "MNST",
+    "YUM", "CMG", "DPZ", "ROST", "TJX", "DG", "DLTR", "BBY", "EBAY", "ETSY",
+    "AMD", "ARM", "LRCX", "KLAC", "ADI", "NXPI", "ON", "MRVL", "SMCI", "DELL",
+    "IBM", "ACN", "CSCO", "ANET", "HPQ", "WDC", "STX", "ZS", "CRWD", "DDOG",
+    "NET", "MDB", "TEAM", "WDAY", "VEEV", "HUBS", "TWLO", "OKTA", "DOCU",
+    "BABA", "NIO", "PDD", "JD", "SE", "MELI", "TCEHY", "SONY", "TM", "SAP",
+    "SHEL", "BP", "TTE", "RIO", "BHP", "VALE", "NEM", "FCX", "AA",
+    "NEE", "DUK", "SO", "D", "AEP", "EXC", "SRE", "PEG",
+    "AMT", "PLD", "SPG", "O", "PSA", "EQIX", "CCI", "WELL",
+    "LIN", "APD", "SHW", "ECL", "DOW", "DD", "NUE", "STLD",
+    "ARKK", "SMH", "SOXX", "XBI", "IBB", "ITB", "XRT", "KRE", "JETS", "TAN",
+    "VUG", "VTV", "IWF", "IWD", "MDY", "IJR", "VEA", "VWO", "IEFA", "AGG", "BND",
+    "GDX", "GDXJ", "PPLT", "PALL", "CPER", "WEAT", "CORN", "SOYB",
+    "BTC-USD", "ETH-USD",
+})
 
 
 # Yahoo Finance symbols are letters, digits and a small punctuation set:
