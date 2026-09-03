@@ -1630,8 +1630,11 @@ with tab_3d:
         _wr_payload = build_map_payload(returns, weights, loaded, bearish)
         st.iframe(war_room_html(_wr_payload), height=820)
         st.caption(
-            "The Monte Carlo as a strategy map: the grid is (beta, realized "
-            "vol), the lit terrain holds 68% of simulated 30-day end-states, "
+            "The Monte Carlo as a strategy map. The grid is (beta, realized "
+            "vol) - beta is how far the book moves when the market moves one "
+            "point, so 1.0 tracks the market, above 1.0 swings harder; "
+            "realized vol is how much it has actually been moving. The lit "
+            "terrain holds 68% of simulated 30-day end-states, "
             "night falls at 99.7%, and the perimeter marks the disclosed "
             "hazard policy. Tracers are simulated state paths from dynamics "
             "calibrated on this book's actual history; linkage statistics "

@@ -1042,7 +1042,7 @@ function startCouriers(linkIdx, dur) {
 /* ---------- explain mode: plain-language reading of every map element ---------- */
 const EXPLAIN = {
   asset: t => [t + ' · one holding',
-    'Sits at its measured risk address: how hard it moves with the market (left-right) and how violently it moves day to day (up-down). Both measured from its actual price history.'],
+    'Sits at its measured risk address: how hard it moves with the market (left-right) and how violently it moves day to day (up-down). Both measured across its FULL loaded history - not the recent rolling window the book's own mark uses, so a holding and the book are two different readings of the same axes: an average against a right-now.'],
   portfolio: () => ['Portfolio · you are here',
     'The whole book today, measured from rolling windows of its real returns. Every simulated future starts from this exact spot.'],
   link: pr => [pr.fl + ' - ' + pr.an + ' · defensive pair',

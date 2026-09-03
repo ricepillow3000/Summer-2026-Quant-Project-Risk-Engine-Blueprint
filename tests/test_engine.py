@@ -2207,6 +2207,41 @@ def test_replay_includes_the_windows_opening_day():
         sc.fetch_prices = orig
 
 
+def test_map_asset_marks_flip_with_a_short_book():
+    """build_map_payload negates the portfolio return series when the book
+    is short, but computed every asset mark from the raw frame - so the
+    portfolio dot was the short book while each holding stayed its long self,
+    on one shared (beta, vol) plane. A short of a name carries the opposite
+    beta; volatility is sign-invariant. batch_audit never passes bearish=True,
+    so this is the only thing checking it."""
+    import src.topology as tp
+
+    rng = np.random.default_rng(4)
+    idx = pd.bdate_range("2023-01-02", periods=400)
+    mkt = rng.normal(0.0004, 0.010, 400)
+    # Held names only, so weights align; with no SPY the builder falls back to
+    # its equal-weight market proxy, which is all this invariant needs.
+    rets = pd.DataFrame({"AAA": 0.8 * mkt + rng.normal(0, 0.006, 400),
+                         "BBB": 1.2 * mkt + rng.normal(0, 0.006, 400)},
+                        index=idx)
+    w = pd.Series([0.5, 0.5], index=["AAA", "BBB"])
+
+    orig = tp.fetch_prices
+    try:
+        tp.fetch_prices = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("offline"))
+        lng = tp.build_map_payload(rets, w, ["AAA", "BBB"], False)
+        sht = tp.build_map_payload(rets, w, ["AAA", "BBB"], True)
+    finally:
+        tp.fetch_prices = orig
+
+    lb = {a["t"]: a for a in lng["assets"]}
+    sb = {a["t"]: a for a in sht["assets"]}
+    assert lb and set(lb) == set(sb)
+    for k in lb:
+        assert abs(sb[k]["b"] + lb[k]["b"]) < 1e-9, k    # beta flips
+        assert sb[k]["v"] == lb[k]["v"], k               # vol does not
+
+
 def test_streamlit_telemetry_is_disabled():
     """Streamlit gatherUsageStats defaults to True and phones home on every
     run. PRIVACY.md tells visitors there is no analytics, advertising,
