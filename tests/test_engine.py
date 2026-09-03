@@ -2242,6 +2242,49 @@ def test_map_asset_marks_flip_with_a_short_book():
         assert sb[k]["v"] == lb[k]["v"], k               # vol does not
 
 
+def test_map_inline_scripts_parse_under_node():
+    """A JavaScript syntax error inside prototypes/war_room.html kills the whole
+    map: it is one inline <script>, so the frame renders and nothing draws -
+    tiles read "--", the canvas stays 300x150, zero painted pixels. Exactly
+    this shipped in d4ea1f4 (an unescaped apostrophe in a tooltip string) and
+    141 tests plus the 692-check audit were green while the flagship visual was
+    blank, because nothing here executed that script: tests/map_probe.mjs
+    slices only the math region, and the boot test never runs iframe JS.
+
+    This parses every inline block with `node --check`. Self-skips without
+    node on PATH, the same way batch_audit's map checks do."""
+    import re as _re
+    import shutil
+    import subprocess
+    import tempfile
+
+    node = shutil.which("node")
+    if not node:
+        print("[skip] node not on PATH - map script parse check not run")
+        return
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    html = (root / "prototypes" / "war_room.html").read_text(encoding="utf-8")
+    blocks = _re.findall(r"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>", html,
+                         flags=_re.S)
+    assert blocks, "no inline <script> in war_room.html - the map has moved"
+
+    for i, body in enumerate(blocks, 1):
+        body = body.replace("__PAYLOAD__", "{}")   # the JSON splice marker
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False,
+                                         encoding="utf-8") as fh:
+            fh.write(body)
+            path = pathlib.Path(fh.name)
+        try:
+            r = subprocess.run([node, "--check", str(path)],
+                               capture_output=True, text=True)
+        finally:
+            path.unlink(missing_ok=True)
+        assert r.returncode == 0, (
+            f"war_room.html inline script {i} does not parse - the map will "
+            f"render a blank frame:\n{r.stderr.strip()[:600]}")
+
+
 def test_streamlit_telemetry_is_disabled():
     """Streamlit gatherUsageStats defaults to True and phones home on every
     run. PRIVACY.md tells visitors there is no analytics, advertising,
