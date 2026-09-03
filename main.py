@@ -1760,7 +1760,11 @@ with tab_3d:
     # pair statistics from the real-history backtest. Nothing typed in.
     try:
         _wr_payload = build_map_payload(returns, weights, loaded, bearish)
-        st.iframe(war_room_html(_wr_payload), height=820)
+        # width is explicit, not left to the default. On streamlit 1.63.0 the
+        # element container for an st.iframe inside a tab collapsed to 16px -
+        # the map rendered fully (tiles, canvas, payload all present in the
+        # srcdoc) into a sliver nobody could see. 1.62.0 stretched by default.
+        st.iframe(war_room_html(_wr_payload), width="stretch", height=820)
         st.caption(
             "The Monte Carlo as a strategy map. The grid is (beta, realized "
             "vol) - beta is how far the book moves when the market moves one "

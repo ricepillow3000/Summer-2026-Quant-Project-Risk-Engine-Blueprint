@@ -7,6 +7,12 @@ curl_cffi>=0.7.0      # yfinance's HTTP transport; src/netguard.py
 scikit-learn>=1.4.0    # yfinance lazy-imports it on some download paths; without
                        # it individual tickers fail silently (observed: IWD, the
                        # Value factor proxy in src/factors.py)
-streamlit>=1.35.0
+streamlit~=1.62.0     # PINNED to the audited line. Unpinned, the host resolved
+                       # 1.63.0 - a version the 692-check audit never saw - and
+                       # the Risk Topology iframe collapsed to 16px on the live
+                       # URL while every local test stayed green. A green audit
+                       # only means something if the host runs what was audited.
+                       # Bump deliberately: change the pin, re-run
+                       # tests.batch_audit and tools.demo_check, then deploy.
 plotly>=5.20.0
 pyarrow>=15.0.0        # parquet cache read/write
