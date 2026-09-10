@@ -658,15 +658,24 @@ def audit_map_state_coverage(name: str, state: pd.DataFrame,
     eff = max(3.0, n * step / horizon)
     band68 = 3 * float(np.sqrt(0.683 * 0.317 / eff))
     band95 = 3 * float(np.sqrt(0.954 * 0.046 / eff))
+    # The +0.12 / +0.08 slack this used to carry on top of an already-3-sigma
+    # band widened the 68.3% gate to [11%, 100%] - it could not fail, which is
+    # the one thing a calibration check has to be able to do. The band is now
+    # the binomial one alone. It is still wide, because ~10 independent 30-day
+    # blocks genuinely cannot resolve better than that, so the row states the
+    # range it can actually detect instead of implying a precision it lacks.
+    lo68, hi68 = max(0.0, 0.683 - band68), min(1.0, 0.683 + band68)
     record("MAP-12", name, "realized state lands where the map predicted",
-           abs(c68 - 0.683) < band68 + 0.12 and abs(c95 - 0.954) < band95 + 0.08,
+           abs(c68 - 0.683) < band68 and abs(c95 - 0.954) < band95,
            f"walk-forward over {n} dates ({horizon}d ahead, refit each time on "
            f"prior data only, shocks widened by the factor measured on dates "
            f"already resolved by then - median k {float(np.median(ks)):.2f}): "
            f"{c68:.1%} inside the 68.3% ring, {c95:.1%} inside the 95.4% ring "
            f"(uncorrected the 68.3% ring held {raw68:.1%}); median Mahalanobis "
            f"distance {float(np.median(idx)):.2f} (chi2(2) median "
-           f"{float(np.sqrt(sstats.chi2.ppf(0.5, 2))):.2f})",
+           f"{float(np.sqrt(sstats.chi2.ppf(0.5, 2))):.2f}); with {eff:.0f} "
+           f"effective blocks this check can only flag 68.3% coverage outside "
+           f"[{lo68:.0%}, {hi68:.0%}]",
            "glasserman", warn=True)
 
 

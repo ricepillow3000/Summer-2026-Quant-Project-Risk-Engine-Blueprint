@@ -607,15 +607,28 @@ def monte_carlo(
 
     # Compound into cumulative value paths (start = $1); last column = final value
     value_paths = np.cumprod(1 + sampled, axis=1)
+    return _simulation_summary(
+        value_paths, horizon_days, n_simulations, confidence,
+        engine="stationary block bootstrap" if mean_block > 1 else "bootstrap",
+        block_days=mean_block)
+
+
+def _simulation_summary(value_paths: np.ndarray, horizon_days: int,
+                        n_simulations: int, confidence: float, **engine) -> dict:
+    """
+    The result both Monte Carlo engines report, derived once.
+
+    `monte_carlo` and `jump_diffusion_mc` build their paths differently - one
+    compounds resampled arithmetic returns, the other exponentiates cumulative
+    log-returns - but from `value_paths` onward every number is the same
+    calculation. It was written out twice, which let the two engines drift
+    apart silently; main.py consumes them interchangeably, so they must not.
+    Engine-specific keys are passed through as `**engine`.
+    """
     final_values = value_paths[:, -1]
     total_returns = final_values - 1
-
-    # Risk metrics on the simulated distribution
-    sim_var = float(-np.percentile(total_returns, (1 - confidence) * 100))
     threshold = np.percentile(total_returns, (1 - confidence) * 100)
     tail = total_returns[total_returns <= threshold]
-    sim_cvar = float(-tail.mean())
-
     return {
         "final_values": final_values,
         "total_returns": total_returns,
@@ -623,8 +636,8 @@ def monte_carlo(
         "path_density": path_density(value_paths),
         "median_return": float(np.median(total_returns)),
         "mean_return": float(np.mean(total_returns)),
-        "var": sim_var,
-        "cvar": sim_cvar,
+        "var": float(-threshold),
+        "cvar": float(-tail.mean()),
         "cvar_se": _mc_standard_error(tail),
         "worst_case": float(total_returns.min()),
         "best_case": float(total_returns.max()),
@@ -632,8 +645,7 @@ def monte_carlo(
         "n_simulations": n_simulations,
         "horizon_days": horizon_days,
         "confidence": confidence,
-        "engine": "stationary block bootstrap" if mean_block > 1 else "bootstrap",
-        "block_days": mean_block,
+        **engine,
     }
 
 
@@ -788,33 +800,9 @@ def jump_diffusion_mc(
 
     cum_log = np.cumsum(diffusion + jump, axis=1)  # compound in log-space, per day
     value_paths = np.exp(cum_log)
-    final_values = value_paths[:, -1]
-    total_returns = final_values - 1
-
-    sim_var = float(-np.percentile(total_returns, (1 - confidence) * 100))
-    threshold = np.percentile(total_returns, (1 - confidence) * 100)
-    tail = total_returns[total_returns <= threshold]
-    sim_cvar = float(-tail.mean())
-
-    return {
-        "final_values": final_values,
-        "total_returns": total_returns,
-        "path_bands": _path_bands(value_paths, horizon_days),
-        "path_density": path_density(value_paths),
-        "median_return": float(np.median(total_returns)),
-        "mean_return": float(np.mean(total_returns)),
-        "var": sim_var,
-        "cvar": sim_cvar,
-        "cvar_se": _mc_standard_error(tail),
-        "worst_case": float(total_returns.min()),
-        "best_case": float(total_returns.max()),
-        "prob_loss": float((total_returns < 0).mean()),
-        "n_simulations": n_simulations,
-        "horizon_days": horizon_days,
-        "confidence": confidence,
-        "engine": "jump-diffusion",
-        "jump_params": params,
-    }
+    return _simulation_summary(
+        value_paths, horizon_days, n_simulations, confidence,
+        engine="jump-diffusion", jump_params=params)
 
 
 if __name__ == "__main__":

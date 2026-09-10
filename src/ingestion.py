@@ -122,7 +122,11 @@ PRESETS = {
         "COST", "WMT", "TGT", "HD", "LOW", "NKE", "SBUX", "MCD", "PEP", "KO",
     ],
     "Streaming, media & platforms": [
-        "NFLX", "DIS", "SPOT", "META", "GOOGL", "RBLX", "EA", "TTWO", "WBD", "PARA",
+        # EA was dropped 2026-08-27: it went private and its last print was
+        # 2026-08-13, leaving 20 usable days. The short-history guard in
+        # main.py catches that and says so, but a one-click preset should not
+        # need rescuing - TTWO and RBLX already carry the gaming exposure.
+        "NFLX", "DIS", "SPOT", "META", "GOOGL", "RBLX", "CMCSA", "TTWO", "WBD", "PARA",
     ],
     "Software & cloud": [
         "MSFT", "ORCL", "CRM", "ADBE", "NOW", "SNOW", "PLTR", "SHOP", "INTU", "PANW",
