@@ -218,21 +218,43 @@ def dispersion_correction(state: pd.DataFrame, horizon: int = COVERAGE_HORIZON,
     ring = float(np.sqrt(sstats.chi2.ppf(COVERAGE_P, 2)))
     if len(d) < MIN_COVERAGE_DATES:
         return {"k": 1.0, "n_dates": int(len(d)), "coverage_raw": None,
-                "coverage_corrected": None, "measured": False}
+                "measured": False}
     raw = float((d <= ring).mean())
     k_raw = float(np.quantile(d, COVERAGE_P) / ring)
     k = float(np.clip(k_raw, *K_CLAMP))
+    # Deliberately NOT reporting a "corrected coverage". k is DEFINED as
+    # quantile(d, COVERAGE_P) / ring, so mean(d / k <= ring) is identically
+    # COVERAGE_P whenever k is inside its clamp - it reads 68.3% on a perfectly
+    # calibrated terrain and on a hopelessly miscalibrated one alike, and so
+    # says nothing. What the correction is worth out-of-sample is measured by
+    # MAP-12 in tests/batch_audit.py, on dates the factor had not yet seen.
     return {"k": k, "k_uncapped": k_raw, "n_dates": int(len(d)),
-            "coverage_raw": raw, "coverage_corrected": float((d / k <= ring).mean()),
-            "measured": True}
+            "coverage_raw": raw, "measured": True}
 
 
-def _clamp(value: float, key: str, flags: list) -> float:
-    lo, hi = CLAMPS[key]
+def _clamp(value: float, key: str, flags: list, band: tuple | None = None) -> float:
+    lo, hi = band if band is not None else CLAMPS[key]
     clipped = float(np.clip(value, lo, hi))
     if clipped != value:
         flags.append(f"{key} clamped {value:.3g} -> {clipped:.3g}")
     return clipped
+
+
+def mu_b_band(beta: pd.Series) -> tuple:
+    """
+    The long-run-beta clamp band, mirrored for a book that is net SHORT.
+
+    `CLAMPS["mu_b"]` is (-0.5, 2.0) - a LONG-book prior: it refuses a fit
+    claiming the book reverts to a strongly negative beta. A short book's beta
+    series is the mirror image of a long one (the caller negates the return
+    series before calibrating), so applying the same band to it pulls, say, a
+    -1.24 short toward -0.5: an invented de-risking drift the data never showed,
+    which makes the short terrain look tamer than the book is. Mirroring keeps
+    exactly the same refusal - "no absurd long-run beta" - pointed the way the
+    book actually leans. Books with a positive mean beta are untouched.
+    """
+    lo, hi = CLAMPS["mu_b"]
+    return (-hi, -lo) if float(beta.mean()) < 0 else (lo, hi)
 
 
 def calibrate_state_dynamics(port_returns: pd.Series,
@@ -267,7 +289,7 @@ def calibrate_state_dynamics(port_returns: pd.Series,
     eta_v = _clamp(_sigma_for(th_v, fv) if th_v != fv["theta"] else fv["sigma"],
                    "eta_v", flags)
     mu_v = _clamp(float(np.exp(fv["mu"])), "mu_v", flags)
-    mu_b = _clamp(fb["mu"], "mu_b", flags)
+    mu_b = _clamp(fb["mu"], "mu_b", flags, band=mu_b_band(state["beta"]))
 
     # shock correlations, measured on the AR(1) residuals
     resid = pd.concat([fb["resid"].rename("b"), fv["resid"].rename("v")],

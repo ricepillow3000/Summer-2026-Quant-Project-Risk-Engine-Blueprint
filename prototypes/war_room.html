@@ -495,6 +495,13 @@ const DAYS = DEMO.days || 30, DT = 1 / 252;
 const MU_V = DEMO.muV || 0.22;   /* long-run vol the state reverts to */
 const MU_B = DEMO.muB !== undefined ? DEMO.muB : 1.0;  /* long-run beta */
 const TRACERS = 100;
+/* Which way is "more market risk"? +1 for a long book, -1 for a short one,
+   whose betas are negated so danger runs toward MORE NEGATIVE beta. Every
+   perimeter test and every piece of perimeter geometry goes through these two,
+   so the breach tile, the hatched ground, the drawn boundary and the hover
+   target can never end up on different sides of the book. */
+const BSGN = DEMO.betaSign || 1;
+const overBeta = b => BSGN * b > BSGN * DEMO.hazard.betaMax;
 
 function simulate(nPaths, seed, cal, keepPts) {
   /* One engine for everything on the page: fog, tracers, HUD, histogram.
@@ -523,7 +530,7 @@ function simulate(nPaths, seed, cal, keepPts) {
        93% where this tile's own definition ('touched at any point') means
        100%. Understating breach risk on the highest-beta books is the wrong
        way to be wrong. */
-    if (DEMO.base.vol > DEMO.hazard.volMax || b > DEMO.hazard.betaMax) hit = 1;
+    if (DEMO.base.vol > DEMO.hazard.volMax || overBeta(b)) hit = 1;
     for (let d = 0; d < DAYS; d++) {
       const g1 = gaussPair(rng), g2 = gaussPair(rng);
       const z1 = g1[0];
@@ -534,7 +541,7 @@ function simulate(nPaths, seed, cal, keepPts) {
       b = MU_B + (b - MU_B) * phiB + sB * z1;
       lv = lnMuV + (lv - lnMuV) * phiV + sV * z2;
       const v = Math.exp(lv);
-      if (v > DEMO.hazard.volMax || b > DEMO.hazard.betaMax) hit = 1;
+      if (v > DEMO.hazard.volMax || overBeta(b)) hit = 1;
       if (pts) pts.push({ b: b, v: v });
     }
     ends[i * 2] = b; ends[i * 2 + 1] = Math.exp(lv);
@@ -630,6 +637,10 @@ const toX = b => PAD.l + (b - DOMN.b0) / (DOMN.b1 - DOMN.b0) * (W - PAD.l - PAD.
 const toY = v => PAD.t + (1 - (v - DOMN.v0) / (DOMN.v1 - DOMN.v0)) * (H - PAD.t - PAD.b);
 const fromX = x => DOMN.b0 + (x - PAD.l) / (W - PAD.l - PAD.r) * (DOMN.b1 - DOMN.b0);
 const fromY = y => DOMN.v0 + (1 - (y - PAD.t) / (H - PAD.t - PAD.b)) * (DOMN.v1 - DOMN.v0);
+/* Outer edge of the SAFE side of the beta perimeter: left of the line for a
+   long book, right of it for a short one. A function, not a const - W is only
+   known after sizeCanvases(). */
+const safeX = () => BSGN > 0 ? PAD.l : W - PAD.r;
 
 function sizeCanvases() {
   const r = shell.getBoundingClientRect();
@@ -708,11 +719,15 @@ function drawTerrain() {
   if (S.marks) {
     const hx = toX(DEMO.hazard.betaMax), hy = toY(DEMO.hazard.volMax);
     g.save();
+    /* Hazard ground = the whole plot MINUS the safe rectangle, punched out
+       with even-odd. Stated this way the safe corner follows BSGN for free
+       (bottom-left for a long book, bottom-right for a short one) instead of
+       needing a second hand-wound polygon that could disagree with the test. */
     g.beginPath();
-    g.moveTo(PAD.l, PAD.t); g.lineTo(W - PAD.r, PAD.t);
-    g.lineTo(W - PAD.r, H - PAD.b); g.lineTo(hx, H - PAD.b);
-    g.lineTo(hx, hy); g.lineTo(PAD.l, hy); g.closePath();
-    g.clip();
+    g.rect(PAD.l, PAD.t, W - PAD.r - PAD.l, H - PAD.b - PAD.t);
+    const sx = safeX();
+    g.rect(Math.min(hx, sx), hy, Math.abs(hx - sx), H - PAD.b - hy);
+    g.clip('evenodd');
     g.fillStyle = 'rgba(166,75,51,0.06)';
     g.fillRect(PAD.l, PAD.t, W - PAD.l - PAD.r, H - PAD.t - PAD.b);
     g.strokeStyle = 'rgba(166,75,51,0.12)'; g.lineWidth = 1;
@@ -831,10 +846,12 @@ function drawIntel() {
     const hx = toX(DEMO.hazard.betaMax), hy = toY(DEMO.hazard.volMax);
     g.strokeStyle = 'rgba(166,75,51,0.6)'; g.lineWidth = 1.25;
     g.beginPath();
-    g.moveTo(PAD.l, hy); g.lineTo(hx, hy); g.lineTo(hx, H - PAD.b);
+    g.moveTo(safeX(), hy); g.lineTo(hx, hy); g.lineTo(hx, H - PAD.b);
     g.stroke();
-    g.fillStyle = 'rgba(166,75,51,0.7)'; g.font = '9px Georgia'; g.textAlign = 'right';
-    spacedText(g, 'Maximum VaR breach perimeter', hx - 10, hy - 7);
+    /* the label hangs over the safe side, so it flips with the perimeter */
+    g.fillStyle = 'rgba(166,75,51,0.7)'; g.font = '9px Georgia';
+    g.textAlign = BSGN > 0 ? 'right' : 'left';
+    spacedText(g, 'Maximum VaR breach perimeter', hx - BSGN * 10, hy - 7);
   }
 
   /* faction names ride above the fog: cluster identity is intel */
@@ -920,7 +937,7 @@ function drawMap() { drawTerrain(); drawIntel(); }
 /* ---------- tracers: each line IS one simulated path ---------- */
 function pathBreachIdx(pts) {
   for (let i = 0; i < pts.length; i++) {
-    if (pts[i].v > DEMO.hazard.volMax || pts[i].b > DEMO.hazard.betaMax) return i;
+    if (pts[i].v > DEMO.hazard.volMax || overBeta(pts[i].b)) return i;
   }
   return -1;
 }
@@ -1050,7 +1067,9 @@ const EXPLAIN = {
   ring: pct => [pct + ' probability ring',
     'After 10,000 simulated 30-day futures, ' + pct + ' of them END inside this ring. Counted from the simulation, not assumed. The farther out, the darker: the fog is where the book almost never lands.'],
   perimeter: () => ['Maximum VaR breach perimeter',
-    'The danger line, set by a disclosed policy (3x today\'s volatility, or beta up 0.8). Any simulated path that crosses it burns ember and counts toward the breach probability in the top bar.'],
+    'The danger line, set by a disclosed policy (3x today\'s volatility, or beta '
+    + (BSGN > 0 ? 'up 0.8' : 'down 0.8 - this book is short, so its betas are negated and the perimeter is mirrored')
+    + '). Any simulated path that crosses it burns ember and counts toward the breach probability in the top bar.'],
   iso: pct => ['Iso-VaR guide · ' + pct + ' daily',
     'A reference altitude: at this volatility, a normal bad day (worst 5%) costs about ' + pct + '. Higher on the map = bigger daily losses at the same odds.'],
   xaxis: () => ['Portfolio beta · the x-axis',
@@ -1083,7 +1102,7 @@ function explainTarget(x, y) {
   }
   if (S.marks) {
     const hx = toX(DEMO.hazard.betaMax), hy = toY(DEMO.hazard.volMax);
-    if ((Math.abs(y - hy) < 6 && x <= hx) || (Math.abs(x - hx) < 6 && y >= hy)) return EXPLAIN.perimeter();
+    if ((Math.abs(y - hy) < 6 && BSGN * x <= BSGN * hx) || (Math.abs(x - hx) < 6 && y >= hy)) return EXPLAIN.perimeter();
     for (const varPct of ISO_LEVELS) {
       const vIso = varPct * Math.sqrt(252) / 1.645;
       if (vIso <= DOMN.v1 && Math.abs(y - toY(vIso)) < 5) return EXPLAIN.iso(Math.round(varPct * 100) + '%');
@@ -1171,7 +1190,8 @@ function updateSummary() {
     (st.es * 100).toFixed(1) + '%, and the 95% value at risk at ' + (st.var95 * 100).toFixed(1) +
     '%. ' + (st.pBreach * 100).toFixed(1) + '% of simulated paths touch the danger perimeter, ' +
     'which this engine sets at ' + Math.round(hz.volMax * 100) + '% volatility or beta ' +
-    hz.betaMax.toFixed(2) + '. The map plots ' + units + ' assets by beta and volatility' +
+    (BSGN > 0 ? 'above ' : 'below ') + hz.betaMax.toFixed(2) +
+    '. The map plots ' + units + ' assets by beta and volatility' +
     (links ? ', with ' + links + ' defensive pairings drawn as links' : '') +
     '. Long-run volatility is ' + Math.round(MU_V * 100) + '%. ' + (DEMO.provenance || '');
 }

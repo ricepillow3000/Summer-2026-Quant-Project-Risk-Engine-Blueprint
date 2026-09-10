@@ -129,13 +129,34 @@ def build_map_payload(returns: pd.DataFrame, weights: pd.Series,
     vol0 = round(float(cal["vol_now"]), 4)
     hvol = round(float(min(HAZARD_VOL_CAP,
                            max(HAZARD_VOL_FLOOR, HAZARD_VOL_MULT * vol0))), 2)
-    hbeta = round(float(min(HAZARD_BETA_CAP, beta0 + HAZARD_BETA_ADD)), 2)
+    # The beta perimeter is the disclosed policy "+0.8, capped at 1.9" applied
+    # in the direction the book actually carries market risk. A SHORT book's
+    # betas are negated, so danger is MORE NEGATIVE beta, and the long formula
+    # put the line on the wrong side of the book entirely: a -1.24 short got a
+    # perimeter at -0.44 (between the book and zero, i.e. marking de-risking as
+    # the hazard) and a -2.86 short got -2.06, which slips the 1.9 magnitude cap
+    # completely because min() picks the more negative number. Mirroring applies
+    # the same policy to |beta| and hands the sign back. `betaSign` travels with
+    # the payload so the map tests and draws the perimeter on the right side.
+    if bearish:
+        hbeta = round(float(-min(HAZARD_BETA_CAP, -beta0 + HAZARD_BETA_ADD)), 2)
+    else:
+        hbeta = round(float(min(HAZARD_BETA_CAP, beta0 + HAZARD_BETA_ADD)), 2)
     bmax = max([a["b"] for a in assets] + [hbeta, beta0])
-    bmin = min([a["b"] for a in assets] + [beta0])
+    # hbeta belongs in BOTH extremes, not just the max: for a short book it is
+    # the most negative thing on the plane, and MAP-04 requires the drawn domain
+    # to contain the perimeter. (It cannot move a long book's b0 - hbeta only
+    # falls below every asset when all of them exceed 1.9, and the -1.0 floor
+    # already wins there.)
+    bmin = min([a["b"] for a in assets] + [beta0, hbeta])
     vmax = max([a["v"] for a in assets] + [hvol, vol0])
+    # Minimum extents mirror too: a short book's content all sits left of zero,
+    # so the long window [-1, +2] would spend two thirds of the plot on empty
+    # positive beta.
+    b_lo, b_hi = (-2.0, 1.0) if bearish else (-1.0, 2.0)
     domain = {
-        "b0": float(min(-1.0, np.floor((bmin - 0.25) * 2) / 2)),
-        "b1": float(max(2.0, np.ceil((bmax + 0.25) * 2) / 2)),
+        "b0": float(min(b_lo, np.floor((bmin - 0.25) * 2) / 2)),
+        "b1": float(max(b_hi, np.ceil((bmax + 0.25) * 2) / 2)),
         "v0": 0.0,
         "v1": float(max(1.0, np.ceil((vmax + 0.1) * 10) / 10)),
     }
@@ -143,6 +164,10 @@ def build_map_payload(returns: pd.DataFrame, weights: pd.Series,
     return {
         "base": {"beta": beta0, "vol": vol0},
         "hazard": {"volMax": hvol, "betaMax": hbeta},
+        # +1 long book, -1 short. The map compares beta against the perimeter
+        # as `betaSign * b > betaSign * betaMax`, so the breach test, the hatch
+        # and the boundary all sit on the side the risk is actually on.
+        "betaSign": -1 if bearish else 1,
         "assets": assets,
         "pairs": pairs,
         "muFlyer": 0.0, "muAnchor": 0.0, "muBook": 0.0,
@@ -171,8 +196,12 @@ def build_map_payload(returns: pd.DataFrame, weights: pd.Series,
             + "Stressed = calibrated shocks x 1.4 "
             "plus +0.10 shock corr, calm = x 0.7 (disclosed policy, not "
             "data). Zero-drift risk view. Hazard: 3x today's vol (floored "
-            "at 35%, capped at 90%) and beta +0.8 (capped at 1.9). Pair "
-            "numbers replay real history: monthly rebalance, no lookahead."
+            "at 35%, capped at 90%) and beta "
+            + ("-0.8 (capped at -1.9) - the short book's betas are negated, so "
+               "the perimeter is mirrored and danger is MORE negative beta"
+               if bearish else "+0.8 (capped at 1.9)")
+            + ". Pair numbers replay real history: monthly rebalance, no "
+            "lookahead."
             + (" <b>Calibration clamps hit:</b> "
                + "; ".join(cal["clamp_flags"]) + "."
                if cal.get("clamp_flags") else "")

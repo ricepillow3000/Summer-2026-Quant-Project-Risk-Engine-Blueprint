@@ -2242,6 +2242,79 @@ def test_map_asset_marks_flip_with_a_short_book():
         assert sb[k]["v"] == lb[k]["v"], k               # vol does not
 
 
+def test_map_short_book_perimeter_domain_and_drift_are_mirrored():
+    """The short book's whole (beta, vol) plane is the long one reflected in
+    beta, so the three things drawn ON that plane must reflect with it.
+
+    All three were wrong before, and all three are invisible to batch_audit,
+    which never passes bearish=True:
+
+      1. HAZARD PERIMETER. `min(1.9, beta0 + 0.8)` on a negated beta put the
+         line between the book and zero - it marked DE-RISKING as the hazard -
+         and min() picks the more negative number, so the 1.9 magnitude cap was
+         bypassed entirely (a -2.86 short got a -2.06 perimeter).
+      2. DRAWN DOMAIN. The [-1, +2] minimum window is a long-book default; a
+         short book's content all sits left of zero, and the perimeter could
+         fall outside the plot altogether.
+      3. LONG-RUN BETA. The mu_b clamp band (-0.5, 2.0) is a long-book prior.
+         Applied to a short fit it dragged the OU mean up to -0.5, inventing a
+         de-risking drift over the 30 days that the data never showed.
+    """
+    import src.topology as tp
+
+    rng = np.random.default_rng(11)
+    idx = pd.bdate_range("2022-01-03", periods=520)
+    mkt = rng.normal(0.0003, 0.010, 520)
+    # Deliberately high-beta, so beta0 + 0.8 clears the 1.9 cap and the cap is
+    # actually exercised on both sides.
+    rets = pd.DataFrame({"AAA": 1.7 * mkt + rng.normal(0, 0.004, 520),
+                         "BBB": 2.1 * mkt + rng.normal(0, 0.004, 520)},
+                        index=idx)
+    w = pd.Series([0.5, 0.5], index=["AAA", "BBB"])
+
+    orig = tp.fetch_prices
+    try:
+        tp.fetch_prices = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("offline"))
+        lng = tp.build_map_payload(rets, w, ["AAA", "BBB"], False)
+        sht = tp.build_map_payload(rets, w, ["AAA", "BBB"], True)
+    finally:
+        tp.fetch_prices = orig
+
+    assert lng["betaSign"] == 1 and sht["betaSign"] == -1
+
+    lb, sb = lng["base"]["beta"], sht["base"]["beta"]
+    lh, sh = lng["hazard"]["betaMax"], sht["hazard"]["betaMax"]
+    assert abs(sb + lb) < 1e-9                                  # book reflects
+    assert sht["base"]["vol"] == lng["base"]["vol"]              # vol does not
+    assert lng["hazard"]["volMax"] == sht["hazard"]["volMax"]    # nor its cap
+
+    # The disclosed policy, applied to |beta| and handed back its sign.
+    assert lh == round(min(tp.HAZARD_BETA_CAP, lb + tp.HAZARD_BETA_ADD), 2)
+    assert sh == round(-min(tp.HAZARD_BETA_CAP, -sb + tp.HAZARD_BETA_ADD), 2)
+    assert abs(sh) <= tp.HAZARD_BETA_CAP + 1e-9                 # cap survives
+    assert abs(lh + sh) < 1e-9                                  # exact mirror
+    # The line sits on the side danger is on: past it, |market exposure| grew.
+    assert abs(lh) >= abs(lb) or lh == tp.HAZARD_BETA_CAP
+    assert abs(sh) >= abs(sb) or sh == -tp.HAZARD_BETA_CAP
+
+    # Everything claimed is inside the plot, in BOTH directions (MAP-04's
+    # invariant, which batch_audit only ever checks on a long book).
+    for p in (lng, sht):
+        d = p["domain"]
+        assert d["b0"] <= p["hazard"]["betaMax"] <= d["b1"]
+        assert d["b0"] <= p["base"]["beta"] <= d["b1"]
+        assert p["hazard"]["volMax"] <= d["v1"]
+        for a in p["assets"]:
+            assert d["b0"] <= a["b"] <= d["b1"] and d["v0"] <= a["v"] <= d["v1"]
+
+    # The OU beta target reflects too: fit_ou on a negated series returns the
+    # negated mean with the same theta/sigma, so a mirrored clamp band leaves
+    # muB an exact reflection. Under the long-only band this read -0.5.
+    assert abs(sht["muB"] + lng["muB"]) < 1e-9
+    assert sht["muV"] == lng["muV"]                 # vol target is unsigned
+    assert sht["muB"] < sb + tp.HAZARD_BETA_ADD     # no invented drift to zero
+
+
 def test_map_inline_scripts_parse_under_node():
     """A JavaScript syntax error inside prototypes/war_room.html kills the whole
     map: it is one inline <script>, so the frame renders and nothing draws -
