@@ -152,16 +152,45 @@ secrets, so the whole deployment is: point a host at the repo, set two
 environment variables, and let it run `Procfile`.
 
 **Pinned for the host, not for this laptop:** `runtime.txt` (`python-3.13.7`)
-and `.python-version` (`3.13`) - Render reads the former, Railway/nixpacks the
-latter. Local development stays on whatever Python is installed; the pin
-exists so a host never silently picks a version without wheels for
+and `.python-version` (`3.13`) - Render reads the former, Railway's builder
+(Railpack) the latter. Local development stays on whatever Python is installed;
+the pin exists so a host never silently picks a version without wheels for
 numpy/scipy/pyarrow/curl_cffi.
 
 ### Railway (the chosen host)
 
-`railway.json` in the repo root already sets the start command, the health
-check (`/_stcore/health`, verified locally to answer `ok`), one replica and a
-restart-on-failure policy, so the dashboard needs almost nothing:
+The service's Railway configuration lives in **`.railway/railway.ts`**
+(Railway Infrastructure as Code). It replaced `railway.json` on 2026-09-14,
+because Config as Code stops being read on 2026-12-01. The file was generated
+from `railway config pull`, i.e. from what production actually runs: GitHub
+source on branch `main`, the Railpack builder, one replica in `sfo`, and the
+public domain on port 8080. The start command comes from `Procfile`.
+
+Two facts worth knowing before trusting old notes:
+
+- `railway.json` never took effect. Its NIXPACKS builder, `/_stcore/health`
+  health check and 3-retry restart policy were absent from every deployment
+  manifest - the live service builds with Railpack, has **no health check**,
+  and restarts on failure up to 10 times. Enabling the health check is a
+  deliberate change to make in `.railway/railway.ts`, not a restoration.
+- `.railway/railway.ts` is **not read on push**. It only acts through
+  `railway config plan` (read-only) and `railway config apply`.
+
+To check the file still matches production (should print "already up to
+date"). Do not `npm install railway` in the repo root: a root `package.json`
+can make Railpack build this as a Node app. Install the SDK somewhere else:
+
+    # once, outside the repo
+    mkdir iac && cd iac && npm init -y && npm pkg set type=module && npm install railway
+    cp <repo>/.railway/railway.ts .
+
+    # from the repo root (linked with `railway link`). Use CLI >= 5.42.1 and make
+    # the real railway.exe resolvable: the SDK checks the version by running
+    # `$_ --version`, and under Git Bash `$_` points at npx, not Railway -
+    # which fails with a misleading "requires Railway CLI 5.42.1" error.
+    _=/path/to/railway.exe railway.exe config plan --file <iac>/railway.ts
+
+For a first deploy from scratch, the dashboard needs almost nothing:
 
 1. railway.app -> New Project -> Deploy from GitHub repo -> pick
    `Summer-2026-Quant-Project-Risk-Engine-Blueprint`.
@@ -177,8 +206,10 @@ restart-on-failure policy, so the dashboard needs almost nothing:
 4. Deploy. Railway injects `$PORT`; the start command binds it on `0.0.0.0`.
    The first build installs from `requirements.txt` on Python 3.13
    (`.python-version`) and takes a few minutes; later deploys are faster.
-5. Watch the deploy log for `You can now view your Streamlit app` and confirm
-   the health check goes green before sharing the URL.
+5. Watch the deploy log for `You can now view your Streamlit app`, then open
+   `<url>/_stcore/health` and confirm it answers `ok` before sharing the URL.
+   Railway runs no health check of its own on this service (see above), so
+   this manual check is the only one.
 
 ### Render
 
