@@ -233,7 +233,17 @@ reference finds it in `logs/meleona.log` (section 3).
 ### Rolling back a bad deploy
 
 Kill switch first (section 1) if visitors are seeing something broken, then
-revert and push (section 2). Both hosts redeploy on push.
+revert and push (section 2). **Railway does NOT redeploy on push for this
+service** - measured 2026-09-14: commit `0622ba5` produced no deployment 10+
+minutes after it was pushed, although the service is connected to the GitHub
+repo. After pushing, deploy the new commit explicitly and confirm it:
+
+    railway redeploy --from-source -y      # builds the latest commit on `main`
+    railway deployment list --json         # meta.commitHash names what is live
+
+Plain `railway redeploy` (without `--from-source`) rebuilds the deployment
+that is already live - it will NOT pick up the revert. Render redeploys on
+push.
 
 ## 7. Email deliverability (only once a custom domain exists)
 
