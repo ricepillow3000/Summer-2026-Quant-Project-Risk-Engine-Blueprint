@@ -233,17 +233,28 @@ reference finds it in `logs/meleona.log` (section 3).
 ### Rolling back a bad deploy
 
 Kill switch first (section 1) if visitors are seeing something broken, then
-revert and push (section 2). **Railway does NOT redeploy on push for this
-service** - measured 2026-09-14: commit `0622ba5` produced no deployment 10+
-minutes after it was pushed, although the service is connected to the GitHub
-repo. After pushing, deploy the new commit explicitly and confirm it:
+revert and push (section 2). Railway redeploys on every push to `main` - but
+only since 2026-09-14, and only while two things stay in place:
 
-    railway redeploy --from-source -y      # builds the latest commit on `main`
+- the **Railway GitHub App** is installed on `ricepillow3000` with access to
+  this repository (github.com/settings/installations -> Railway App ->
+  Configure). Until then the service built from the public repo when told to,
+  yet no push ever deployed: a public repo clones without the App, a push
+  trigger does not.
+- a **deployment trigger** exists for the service (GitHub, branch `main`,
+  check suites off). It had been missing entirely. Check it with:
+
+      railway api 'query($p:String!,$e:String!,$s:String!){ deploymentTriggers(projectId:$p, environmentId:$e, serviceId:$s){ edges{ node{ id branch checkSuites } } } }' \
+        --raw-var p=<projectId> --raw-var e=<environmentId> --raw-var s=<serviceId>
+
+After pushing a revert, confirm it actually went out rather than assuming:
+
     railway deployment list --json         # meta.commitHash names what is live
 
-Plain `railway redeploy` (without `--from-source`) rebuilds the deployment
-that is already live - it will NOT pick up the revert. Render redeploys on
-push.
+If no deployment appears for the pushed commit, ship it by hand:
+`railway redeploy --from-source -y`. Plain `railway redeploy` (without
+`--from-source`) rebuilds the deployment that is already live - it will NOT
+pick up the revert. Render redeploys on push.
 
 ## 7. Email deliverability (only once a custom domain exists)
 
