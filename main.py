@@ -582,63 +582,69 @@ try:
 except OSError:
     pass  # band stays plain charcoal
 
+# The hero's words live here ONCE. The boot skeleton renders this same copy
+# through the same classes as transparent ink, so every shimmer bar is exactly
+# the size and line-break of the text it stands in for, at every viewport and
+# under every short-screen tier. A skeleton drawn with its own boxes drifted
+# out of shape the first time the hero changed; this one cannot.
+HERO_TITLE_LINES = ("Meleona", "Portfolio Risk Engine")
+HERO_SUB = ("A hedge-fund-grade portfolio risk engine - VaR, CVaR, Monte Carlo stress "
+            "testing, and named factor exposures, computed live from real market data. "
+            "But every stock has drawdowns. What sets a name apart is what happens "
+            "after one - that's what we call <strong>grit</strong>.")
+HERO_CTA = "Explore what we do"
+HERO_STATS = (("10,000", "Simulated paths"), ("10", "Crises replayed"),
+              ("2", "Monte Carlo engines"), ("4", "Factor exposures"))
+_CTA_ARROW = ('<span class="cta-arrow" aria-hidden="true"><svg viewBox="0 0 16 30" fill="none" '
+              'xmlns="http://www.w3.org/2000/svg"><path class="shaft" d="M8 1 V22" '
+              'stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path '
+              'class="head" d="M2.5 16.5 L8 22.5 L13.5 16.5" stroke="currentColor" '
+              'stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>')
+
+
+def hero_html(skeleton: bool = False) -> str:
+    """The hero, or its boot skeleton: same classes, same copy, words masked.
+
+    Kept on one line per element - st.markdown truncates raw HTML at a blank
+    line (Lessons #5)."""
+    ink = (lambda t: f'<span class="sk-ink">{t}</span>') if skeleton else (lambda t: t)
+    title = "".join(f'<span class="hline">{ink(line)}</span>' for line in HERO_TITLE_LINES)
+    stats = "".join(f'<div class="hstat"><div class="n">{ink(n)}</div>'
+                    f'<div class="l">{ink(label)}</div></div>' for n, label in HERO_STATS)
+    if skeleton:
+        head, crest = '<div class="hero-section">', ""
+        cta = f'<span class="cta-btn">{HERO_CTA}{_CTA_ARROW}</span>'
+    else:
+        head, crest = '<div class="hero-section reveal" id="hero">', logo_svg
+        cta = f'<a href="#grit-showcase" class="cta-btn">{HERO_CTA}{_CTA_ARROW}</a>'
+    return (f'{head}<div class="hero-left"><div class="hero-crest">{crest}</div>'
+            f'<h1 class="hero-title">{title}</h1>'
+            f'<div class="hero-sub">{ink(HERO_SUB)}</div>{cta}</div>'
+            f'<div class="hero-stats">{stats}</div></div>')
+
+
 # Boot veil renders ONLY on the first script run of a session. Streamlit
 # reruns the whole script on every interaction (and the freshness ticker),
 # which would re-create the veil and restart its fade forever - so after
 # the first run it is simply never rendered again.
 if not st.session_state.get("_booted"):
     st.session_state["_booted"] = True
-    st.markdown("""
-<div id="boot-skel">
-  <div class="sk-head">
-    <div class="sk crest"></div>
-    <div class="sk-titles">
-      <div class="sk title"></div>
-      <div class="sk line"></div>
-      <div class="sk line short"></div>
-    </div>
-  </div>
-  <div class="sk-tiles">
-    <div class="sk tile"></div><div class="sk tile"></div>
-    <div class="sk tile"></div><div class="sk tile"></div>
-  </div>
-  <div class="sk chart"></div>
-  <div class="sk-load">Loading market data</div>
-</div>
-<style>
+    st.markdown(
+        '<div id="boot-skel" aria-hidden="true">' + hero_html(skeleton=True)
+        + '<div class="sk-band"></div><div class="sk-load">Loading market data</div></div>'
+        + """<style>
   /* First-load only: the intro tiles fly in top-to-down (UFO settle). This
      style block renders solely on the un-booted first pass, so Streamlit
-     reruns never replay the arrival. */
-  .hero-stats .hstat { animation: ufo-drop .6s cubic-bezier(.2,.9,.25,1) both; }
-  .hero-stats .hstat:nth-child(1) { animation-delay: .05s; }
-  .hero-stats .hstat:nth-child(2) { animation-delay: .13s; }
-  .hero-stats .hstat:nth-child(3) { animation-delay: .21s; }
-  .hero-stats .hstat:nth-child(4) { animation-delay: .29s; }
-</style>
-""", unsafe_allow_html=True)
+     reruns never replay the arrival. Scoped to #hero so the skeleton's own
+     tiles hold still. */
+  #hero .hero-stats .hstat { animation: ufo-drop .6s cubic-bezier(.2,.9,.25,1) both; }
+  #hero .hero-stats .hstat:nth-child(1) { animation-delay: .05s; }
+  #hero .hero-stats .hstat:nth-child(2) { animation-delay: .13s; }
+  #hero .hero-stats .hstat:nth-child(3) { animation-delay: .21s; }
+  #hero .hero-stats .hstat:nth-child(4) { animation-delay: .29s; }
+</style>""", unsafe_allow_html=True)
 
-st.markdown(f"""
-<div class="hero-section reveal" id="hero">
-  <div class="hero-left">
-    <div class="hero-crest">{logo_svg}</div>
-    <div class="hero-eyebrow">Meleona &middot; Portfolio Risk Engine</div>
-    <h1 class="hero-title"><span class="hline">Grit.</span><span class="hline">Discipline.</span><span class="hline">Evidence.</span></h1>
-    <div class="hero-sub">
-      A hedge-fund-grade portfolio risk engine - VaR, CVaR, Monte Carlo stress
-      testing, and named factor exposures, computed live from real market data.
-      But every stock has drawdowns. What sets a name apart is what happens
-      after one - that's what we call <strong>grit</strong>.
-    </div>
-    <a href="#grit-showcase" class="cta-btn">Explore what we do<span class="cta-arrow" aria-hidden="true"><svg viewBox="0 0 16 30" fill="none" xmlns="http://www.w3.org/2000/svg"><path class="shaft" d="M8 1 V22" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path class="head" d="M2.5 16.5 L8 22.5 L13.5 16.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a>
-  </div>
-  <div class="hero-stats">
-    <div class="hstat"><div class="n">10,000</div><div class="l">Simulated paths</div></div>
-    <div class="hstat"><div class="n">10</div><div class="l">Crises replayed</div></div>
-    <div class="hstat"><div class="n">2</div><div class="l">Monte Carlo engines</div></div>
-    <div class="hstat"><div class="n">4</div><div class="l">Factor exposures</div></div>
-  </div>
-</div>
-""", unsafe_allow_html=True)
+st.markdown(hero_html(), unsafe_allow_html=True)
 
 # ---- Showcase: the Grit Zone innovation, explained before you touch a slider ----
 st.markdown("""

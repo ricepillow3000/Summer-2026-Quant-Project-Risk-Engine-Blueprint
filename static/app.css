@@ -203,7 +203,7 @@ html { scroll-behavior: smooth; }
 /* CTA - sharp charcoal slab, bronze on hover, alive to the touch */
 .cta-btn { display: inline-block; margin-top: 14px; padding: 15px 34px;
     background: #3F3B35; color: #F4F1EA !important; text-decoration: none !important;
-    /* Same voice as the Grit./Discipline./Evidence. headline: Georgia serif,
+    /* Same voice as the hero headline: Georgia serif,
        engraved plaque - not a sans-serif game pill. */
     border-radius: 0; font-family: Georgia, 'Times New Roman', serif; font-size: 14.5px;
     letter-spacing: 0.11em; text-transform: uppercase;
@@ -394,8 +394,10 @@ div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
 
 /* ============================================================
    SKELETON LOADING - the scaffold shows before the stone.
-   1) Boot veil: a full-page skeleton of the hero (crest block,
-      title bars, a chart slab) that shimmers, then lifts.
+   1) Boot veil: the hero itself, rendered by the same hero_html()
+      with its words turned to transparent ink - crest, title lines,
+      paragraph lines, button and the 2x2 tiles land exactly where the
+      real ones will, then the veil lifts onto the real page.
    2) Scroll skeletons: charts entering the viewport wear a
       shimmer plate that dissolves as they arrive.
    ============================================================ */
@@ -404,14 +406,45 @@ div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
 .sk { background: linear-gradient(90deg, #E2DCD0 25%, #EFEAE0 45%, #E2DCD0 65%);
     background-size: 200% 100%; animation: sk-sheen 1.15s linear infinite; }
 #boot-skel { position: fixed; inset: 0; z-index: 999; background: #EDE9E3;
-    display: flex; flex-direction: column; gap: 18px; padding: 14vh 10vw;
+    display: flex; flex-direction: column; overflow: hidden;
     pointer-events: none; animation: boot-off .55s ease 2.1s forwards; }
 @keyframes boot-off { to { opacity: 0; visibility: hidden; } }
-#boot-skel .sk.crest { width: 132px; height: 132px; }
-#boot-skel .sk.title { height: 64px; width: 42%; }
-#boot-skel .sk.line  { height: 15px; width: 58%; }
-#boot-skel .sk.line.short { width: 32%; }
-#boot-skel .sk.chart { height: 200px; width: 100%; margin-top: 24px; }
+/* The clone inherits every .hero-section rule - grid, padding, the short-
+   viewport tiers - which is the point. Only its PLACE differs: the real hero
+   is pulled up to the page top by a full-bleed margin that overshoots the
+   Streamlit blocks above it by one 16px gap (measured at 4 viewports), so the
+   clone sits at that same -16px. tests: scratch pw-skel.js asserts <=2px. */
+#boot-skel .hero-section { flex: none; margin: -16px 0 0 !important;
+    background: #EDE9E3 !important; }
+#boot-skel .hero-section::before, #boot-skel .hero-section::after { display: none; }
+/* Ink: the real words, invisible, with the sheen painted on them. Each
+   wrapped line becomes its own bar (box-decoration-break), cropped to the
+   middle 62% of the glyph box so stacked title lines do not touch. */
+@keyframes sk-ink-sheen { from { background-position: 200% 55%; }
+                          to   { background-position: -200% 55%; } }
+#boot-skel .sk-ink, #boot-skel .sk-ink * { color: transparent !important;
+    -webkit-text-fill-color: transparent; }
+#boot-skel .sk-ink { border-radius: 6px;
+    background: linear-gradient(90deg, #E2DCD0 25%, #EFEAE0 45%, #E2DCD0 65%) repeat-x;
+    background-size: 200% 62%; animation: sk-ink-sheen 1.15s linear infinite;
+    -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+/* Solid shapes: crest and button shimmer whole; tiles are calm cards whose
+   number and label are ink. No hovers, glints or fly-ins on a placeholder. */
+#boot-skel .hero-crest, #boot-skel .cta-btn {
+    background: linear-gradient(90deg, #E2DCD0 25%, #EFEAE0 45%, #E2DCD0 65%) !important;
+    background-size: 200% 100% !important; animation: sk-sheen 1.15s linear infinite;
+    border-color: transparent !important; box-shadow: none !important; color: transparent !important; }
+#boot-skel .cta-btn::before, #boot-skel .hstat::before { display: none !important; }
+#boot-skel .hstat { background: #E9E4DA !important; border-color: #DDD6C9 !important;
+    box-shadow: none !important; animation: none !important; transform: none !important; }
+#boot-skel .hstat .n { -webkit-text-fill-color: transparent; background: none; }
+/* A one-digit stat ("2", "4") would be a sliver that reads as a glitch. */
+#boot-skel .hstat .n .sk-ink { display: inline-block; min-width: 1.6em; }
+/* Below the hero the real page continues into the Gotham band: an 11px
+   light strip, a hairline, then the photo band - colours sampled from the
+   rendered page (avg #99958E top, #8D8983 body), not guessed. */
+#boot-skel .sk-band { flex: 1; margin-top: 12px; border-top: 2px solid #B8A995;
+    background: linear-gradient(180deg, #99958E 0, #8D8983 70px); }
 
 @supports (animation-timeline: view()) {
   [data-testid="stPlotlyChart"] { position: relative; }
@@ -588,18 +621,12 @@ div[data-baseweb="select"]>div, .stNumberInput input,
     60%  { opacity:1; transform: translateY(6px)  scale(1.005); }
     100% { opacity:1; transform: translateY(0)    scale(1); } }
 
-/* Skeleton bones + tiles pick up the softer radii */
-#boot-skel .sk { border-radius: 14px; }
-#boot-skel .sk.crest { border-radius: 26px; }
-#boot-skel .sk-head { display:flex; gap:24px; align-items:flex-start; }
-#boot-skel .sk-titles { display:flex; flex-direction:column; gap:14px;
-    flex:1; padding-top:6px; }
-#boot-skel .sk-tiles { display:grid; grid-template-columns:repeat(4,1fr);
-    gap:16px; margin-top:10px; }
-#boot-skel .sk.tile { height:96px; border-radius:16px; }
-#boot-skel .sk-load { font-family:'Helvetica Neue',sans-serif; font-size:11px;
-    letter-spacing:.24em; text-transform:uppercase; color:#6A5030;
-    margin-top:8px; animation: sk-pulse 1.3s ease-in-out infinite; }
+/* Skeleton status line - sits on the band, in the hero's left gutter */
+#boot-skel .sk-load { position: absolute; bottom: 28px;
+    left: max(7vw, calc(50vw - 744px));
+    font-family:'Helvetica Neue',sans-serif; font-size:11px;
+    letter-spacing:.24em; text-transform:uppercase; color:#F1EDE5;
+    animation: sk-pulse 1.3s ease-in-out infinite; }
 @keyframes sk-pulse { 0%,100%{opacity:.45;} 50%{opacity:1;} }
 
 @media (prefers-reduced-motion: reduce) {
