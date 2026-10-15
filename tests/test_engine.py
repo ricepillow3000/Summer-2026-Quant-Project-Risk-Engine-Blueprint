@@ -2567,6 +2567,60 @@ def test_assets_are_loaded_relative_to_main_not_cwd():
     assert not bad, f"cwd-relative asset path(s): {bad}"
 
 
+def test_flat_price_asset_is_detected_before_the_math():
+    """A constant price (money-market fund at $1.00) made risk parity divide
+    by zero under the Sample/EWMA estimators: headline "nan%", then a crash.
+    main.py drops what flat_columns() names; the rest must solve cleanly."""
+    from src.ingestion import flat_columns
+    from src.covariance import sample_covariance
+
+    rng = np.random.default_rng(11)
+    rets = pd.DataFrame({"A": rng.normal(0, 0.015, 400),
+                         "B": rng.normal(0, 0.011, 400),
+                         "CASH": np.zeros(400)})
+    assert flat_columns(rets) == ["CASH"]
+    assert flat_columns(rets[["A", "B"]]) == []
+    with np.errstate(all="ignore"):
+        w_raw = risk_parity_weights(sample_covariance(rets))
+    assert np.isnan(w_raw).all(), "the failure this guards against"
+    w = risk_parity_weights(sample_covariance(rets.drop(columns=flat_columns(rets))))
+    assert np.isfinite(w).all() and abs(w.sum() - 1) < 1e-9
+
+
+def test_cached_hot_paths_are_deterministic():
+    """main.py caches the signal IC, the ES bootstrap and the map payload per
+    input. That only changes speed, never a number, if each returns exactly the
+    same result twice for the same input."""
+    from src.signals import daily_ic, momentum_signal, forward_returns
+    from src.pairing import es_confidence_interval
+    import json
+
+    from src.topology import build_map_payload
+
+    rng = np.random.default_rng(12)
+    idx = pd.bdate_range("2023-01-02", periods=520)
+    rets = pd.DataFrame(rng.standard_t(4, (520, 4)) * 0.01, index=idx, columns=list("ABCD"))
+    px = 100 * (1 + rets).cumprod()
+    a = daily_ic(momentum_signal(px), forward_returns(px, horizon=5))
+    b = daily_ic(momentum_signal(px), forward_returns(px, horizon=5))
+    pd.testing.assert_series_equal(a, b)
+    assert es_confidence_interval(rets["A"]) == es_confidence_interval(rets["A"])
+    w = np.full(4, 0.25)
+    m1 = build_map_payload(rets, w, list("ABCD"))
+    m2 = build_map_payload(rets, w, list("ABCD"))
+    assert json.dumps(m1, sort_keys=True, default=str) == json.dumps(m2, sort_keys=True, default=str)
+
+
+def test_freshness_ticker_does_not_tick_every_second():
+    """At 1 Hz the freshness fragment held the single process at 93% of a core
+    with 15 idle tabs open (stress test 2026-10-15). Keep it at >= 30s."""
+    import re
+
+    src = (pathlib.Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
+    ticks = re.findall(r'run_every="(\d+)s"', src)
+    assert ticks and all(int(t) >= 30 for t in ticks), ticks
+
+
 def test_streamlit_header_bar_is_hidden():
     """Streamlit's fixed 60px header (theme-coloured, holding only the viewer
     menu) covered the hero crest on the live site. It is hidden in app.css; a

@@ -565,6 +565,16 @@ def data_health(prices: pd.DataFrame) -> dict:
     }
 
 
+def flat_columns(returns: pd.DataFrame) -> list[str]:
+    """Assets whose price never moved in the window (zero return variance).
+
+    A cash or money-market fund holding $1.00 looks like this. It has no
+    correlation to estimate and no risk-parity weight - the ERC solver divides
+    by its variance - so the app excludes it, and says so, before any math.
+    """
+    return [c for c in returns.columns if not float(returns[c].std()) > 1e-12]
+
+
 def get_returns(prices: pd.DataFrame) -> pd.DataFrame:
     """Convert prices to daily returns - standard in quant finance."""
     return prices.pct_change().dropna()

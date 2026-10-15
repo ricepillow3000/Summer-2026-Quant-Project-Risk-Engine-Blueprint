@@ -388,6 +388,14 @@ risk-engine/
   minute (Yahoo is hit every 6h) - relabelled. Cloudflare as reverse proxy:
   **no**, see RUNBOOK.md section 4 for the council's reasons and the revisit
   trigger.
+- ✅ **Top bar removed + stress test (2026-10-15)** - Streamlit's fixed header
+  (the beige bar over the crest) hidden. Stress test in four layers
+  (`audit/stress_2026-10-15T020905Z.md`): planted-truth math 11/11; a
+  constant-price asset (money-market fund) crashed risk parity with "nan%" -
+  now excluded with a reason; three deterministic hot paths cached (warm page
+  view 5.1s -> 1.8s CPU); the 1 Hz freshness tick held the process at 93% of a
+  core with 15 idle tabs - now 60s, 4%. Synthetic-verified only: the live
+  batch audit still needs a machine with Yahoo access.
 
 ## Non-negotiable constraints (the "why")
 

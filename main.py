@@ -32,7 +32,7 @@ import plotly.graph_objects as go
 from src.ingestion import (
     fetch_prices, get_returns, data_health, provenance, CACHE_MAX_AGE_HOURS,
     average_dollar_volume, fetch_dollar_volume, fetch_risk_free_rate,
-    PRESETS, valid_ticker, NoDataError,
+    PRESETS, valid_ticker, NoDataError, flat_columns,
     MAX_UNIVERSE, MIN_ROWS, SUGGESTIONS,
 )
 from src.analytics import correlation_matrix, covariance_matrix
@@ -1089,16 +1089,21 @@ def load_security_master(tickers_tuple: tuple[str, ...]):
     return security_master(list(tickers_tuple))
 
 
-@st.fragment(run_every="1s")
+# Ticks once a MINUTE, not once a second. Stress test 2026-10-15: each tick
+# costs the single server process ~60ms, so 15 idle tabs at 1 Hz held it at
+# 93% of a core doing nothing - and every new visitor queued behind them.
+# The data is end-of-day; a minute counter loses nothing a second one said.
+@st.fragment(run_every="60s")
 def _freshness_ticker(fetched_at_iso: str):
-    """Live-ticking 'as of Xs ago' -- reruns only this fragment, not the app."""
+    """Live-ticking 'as of N min ago' -- reruns only this fragment, not the app."""
     fetched = pd.Timestamp(fetched_at_iso)
     now = pd.Timestamp.now(tz=fetched.tzinfo) if fetched.tzinfo else pd.Timestamp.now()
-    secs = max(0, int((now - fetched).total_seconds()))
+    mins = max(0, int((now - fetched).total_seconds()) // 60)
+    ago = "under a minute ago" if mins == 0 else f"{mins} min ago"
     # Nothing polls: this fragment only re-renders the counter. Yahoo is hit
     # again only once the disk copy is older than CACHE_MAX_AGE_HOURS - the old
     # "quotes cached 60s" wording described the in-memory re-read, not a pull.
-    st.caption(f"⟳ Data pulled {secs}s ago · re-pulled from Yahoo once older "
+    st.caption(f"⟳ Data pulled {ago} · re-pulled from Yahoo once older "
                f"than {CACHE_MAX_AGE_HOURS:g}h, on your next interaction - not on a timer.")
 
 
@@ -1162,10 +1167,25 @@ if len(prices) < MIN_ROWS:
     st.stop()
 
 returns = get_returns(prices)
+# Zero-variance guard. A price that never moves (a money-market fund such as
+# VMFXX holds $1.00) has no correlation and no risk-parity weight: with the
+# Sample or EWMA estimator the ERC solver divided by its zero variance, the
+# headline read "nan%" and the page crashed further down. Drop it and say why,
+# the same way the short-history guard above treats a name it cannot use.
+_flat = flat_columns(returns)
+if _flat:
+    st.warning(
+        "Excluded " + ", ".join(f"`{html.escape(t)}`" for t in _flat)
+        + " - its price did not move once in this window (cash and money-market "
+        "funds look like this), so it carries no measurable risk and has no "
+        "correlation to estimate. The analysis runs on the remaining names."
+    )
+    prices = prices.drop(columns=_flat)
+    returns = returns.drop(columns=_flat)
 loaded = list(prices.columns)
-missing = [t for t in tickers if t not in loaded]
+missing = [t for t in tickers if t not in loaded and t not in _flat]
 if len(loaded) < 2:
-    st.error("Fewer than two symbols returned data"
+    st.error("Fewer than two usable symbols"
              + (f" (nothing for {', '.join(missing)})" if missing else "")
              + ". Check the spelling or try different tickers.")
     st.stop()
@@ -1323,6 +1343,27 @@ def run_monte_carlo(rets: pd.DataFrame, w: np.ndarray, jump: bool) -> dict:
     entry, so the 64-entry cap bounds the cache at roughly 15MB."""
     fn = jump_diffusion_mc if jump else monte_carlo
     return fn(rets, w, n_simulations=10_000, horizon_days=252)
+
+
+# The same rule for the other pure functions of (data, settings) a new visitor
+# paid for on every page view. Profiled on a warm server: a NEW session still
+# spent ~3s of CPU here (signal IC 1.6s, ES bootstrap 0.8s, map payload 0.7s),
+# and the process serves sessions one at a time, so 10 simultaneous visitors
+# queued ~35s for the headline. All three are deterministic (the bootstrap is
+# seeded), so caching changes no number.
+@st.cache_data(ttl=3600, max_entries=32, show_spinner=False)
+def cached_map_payload(rets: pd.DataFrame, w: np.ndarray, names: tuple, short: bool) -> dict:
+    return build_map_payload(rets, w, list(names), short)
+
+
+@st.cache_data(ttl=3600, max_entries=64, show_spinner=False)
+def cached_es_ci(r: pd.Series) -> tuple:
+    return es_confidence_interval(r)
+
+
+@st.cache_data(ttl=3600, max_entries=32, show_spinner=False)
+def cached_signal_ic(px: pd.DataFrame, horizon: int) -> pd.Series:
+    return daily_ic(momentum_signal(px), forward_returns(px, horizon=horizon))
 
 
 if bearish:
@@ -1788,7 +1829,8 @@ with tab_3d:
     # positions from rolling windows, dynamics from the OU calibration,
     # pair statistics from the real-history backtest. Nothing typed in.
     try:
-        _wr_payload = build_map_payload(returns, weights, loaded, bearish)
+        _wr_payload = cached_map_payload(returns, np.asarray(weights, dtype=float),
+                                         tuple(loaded), bearish)
         # width is explicit, not left to the default. On streamlit 1.63.0 the
         # element container for an st.iframe inside a tab collapsed to 16px -
         # the map rendered fully (tiles, canvas, payload all present in the
@@ -2295,7 +2337,7 @@ with tab_balance:
                                     direction="short" if bearish else "long")
             bv_anchor = bv_ranked.index[0]
             tg = tail_gap(bv_frame, flyer, bv_anchor)
-            ci_lo, ci_hi = es_confidence_interval(bv_frame[flyer])
+            ci_lo, ci_hi = cached_es_ci(bv_frame[flyer])
             pw = pair_weights(bv_frame[flyer], bv_frame[bv_anchor])
             bt = backtest_pair(bv_frame[flyer], bv_frame[bv_anchor], pw["w_a"])
             phase_now = regime_labels(
@@ -2853,8 +2895,7 @@ with tab_signals:
         )
     try:
         SIG_HORIZON = 5
-        ic = daily_ic(momentum_signal(prices),
-                      forward_returns(prices, horizon=SIG_HORIZON))
+        ic = cached_signal_ic(prices, SIG_HORIZON)
         summ = ic_summary(ic)
 
         if summ["n_days"] < 30 or not np.isfinite(summ["t_stat"]):

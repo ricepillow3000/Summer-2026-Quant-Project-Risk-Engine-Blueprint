@@ -89,8 +89,17 @@ lands:
   called `st.cache_data.clear()`, which emptied every cache for every
   visitor and deleted the disk cache the spend cap falls back on. Force a
   fresh pull as the operator with `python -m tools.warm_cache --drill`.
+- The signal IC, the ES bootstrap and the Risk Topology payload are cached
+  too (all deterministic): a new visitor's page view went 5.1s -> 1.8s of CPU.
+- The freshness caption ticks once a minute, not once a second: at 1 Hz, 15
+  idle tabs held the process at 93% of a core; now 4%.
 - Railway dashboard: set a usage limit and alert on the project, so a bad day
   costs a capped amount (outside the repo - do it once by hand).
+
+**Capacity (stress test 2026-10-15, sandbox 4 vCPU, synthetic data):** 10
+simultaneous first-time visitors see the headline within ~21s, 25 within ~53s,
+no errors, peak memory ~720 MB. Re-measure on Railway before quoting it as the
+live site's number. Report: `audit/stress_2026-10-15T020905Z.md`.
 
 ### Reverse proxy / CDN (Cloudflare): decided against, 2026-10-15
 
