@@ -450,6 +450,21 @@ risk-engine/
   as "1 -> 0.995"; the pair_weights docstring kept the false "flyer holds most
   of the risk". Swept every 10px, 360-1920: clean. Below 360px the plot is
   narrower than 260px - the screen, not the layout. Desktop dots unchanged.
+- ✅ **Deep scan, every inch (2026-10-15)** - `tools/deep_scan.mjs` (Live audit
+  steps 10-11) walks the page as a visitor meets it, then drives every control,
+  and measures each button's flight frame by frame. What it found on the live
+  site, each fixed and green after:
+
+  | change | kind | guarded by |
+  |---|---|---|
+  | Footer links dead (scroller probe nudged +1px only; at the page bottom that cannot move) | fixed | `deep_scan` glide: lands on its section |
+  | Button arrivals faded the destination to 25% + slid it 26px (+ band "launch", Conviction frame) | removed | `deep_scan` glide: destination never fades |
+  | Glide easing quart (peak 4x average, ~270px/frame on footer flights) -> sine (1.6x) | changed | `deep_scan` glide: even pace |
+  | Loading-veil shimmers ran forever on the hidden veil (12 animations) | fixed | finite iterations in `app.css` |
+  | The Book / Risk Topology printed raw exception text | fixed | `test_no_raw_exception_text_reaches_the_page` |
+  | Balance: "the flyer holds most of the RISK" after an equal-risk split | fixed | wording |
+  | Conviction: hand-typed "the one honest exception is the dot-com peak" | changed | read from the live table |
+  | Hero/footer crisis count, path count typed in | changed | read from `HISTORICAL_REGIMES`, `N_PATHS` |
 
 ## Non-negotiable constraints (the "why")
 
