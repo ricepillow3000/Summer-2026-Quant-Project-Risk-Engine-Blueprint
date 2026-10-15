@@ -20,7 +20,7 @@ permissions:
 jobs:
   live-audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 150
     env:
       SITE_URL: ${{ inputs.site_url || 'https://summer-2026-quant-project-risk-engine-blueprint-production.up.railway.app' }}
     steps:
@@ -50,6 +50,9 @@ jobs:
       - name: 4. Walkthrough on live data - NaN, contradictions, unexplained jargon
         if: always()
         run: python -m tools.demo_check
+      - name: 4b. Crisis record on live data - the table the Conviction sentences are read from
+        if: always()
+        run: python -m src.conviction
       - name: 5. Deployed site in a browser - skeleton, top bar, headline, errors
         if: always()
         run: |
@@ -79,6 +82,25 @@ jobs:
         run: |
           mkdir -p walk/deployed
           node tools/recruiter_walk.mjs "$SITE_URL" walk/deployed
+      # Every inch: boot, every button's flight, every word and chart, the
+      # Gungnir maths, every preset, every crisis under both engines, the book,
+      # every tab and drawer, every flyer, and the Risk Topology map run three
+      # times under each calibration on both sides of the trade.
+      - name: 10. This commit - deep scan, full depth, live data
+        if: always()
+        run: |
+          mkdir -p scan/local
+          export SCAN_PRESETS="$(python -c 'import json; from src.ingestion import PRESETS; print(json.dumps(list(PRESETS)))')"
+          export SCAN_SCENARIOS="$(python -c 'import json; from src.scenarios import HISTORICAL_REGIMES as H; print(json.dumps(list(H)))')"
+          DEPTH=full node tools/deep_scan.mjs http://127.0.0.1:8501 scan/local
+      - name: 11. Deployed site - deep scan (informational until this branch is deployed)
+        if: always()
+        continue-on-error: true
+        run: |
+          mkdir -p scan/deployed
+          export SCAN_PRESETS="$(python -c 'import json; from src.ingestion import PRESETS; print(json.dumps(list(PRESETS)))')"
+          export SCAN_SCENARIOS="$(python -c 'import json; from src.scenarios import HISTORICAL_REGIMES as H; print(json.dumps(list(H)))')"
+          node tools/deep_scan.mjs "$SITE_URL" scan/deployed
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -88,4 +110,5 @@ jobs:
             audit/batch_audit_*
             site-shots/
             walk/
+            scan/
             app.log
