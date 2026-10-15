@@ -2892,6 +2892,36 @@ def test_a_crafted_clear_cache_message_clears_nothing():
         caching.cache_data.clear, caching.cache_resource.clear = real
 
 
+def test_every_visitor_keyed_cache_has_an_entry_cap():
+    """st.cache_data keeps one entry per distinct argument tuple, for the whole
+    process, until its ttl. Arguments come from visitors (typed tickers,
+    sliders, the book size), so without max_entries a script cycling inputs
+    grows the cache without bound inside the ttl - memory the one process
+    every visitor shares. 2026-10-15 security audit: eleven of seventeen
+    cached functions had no cap. A function with no arguments holds one entry and
+    needs none."""
+    import ast
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    tree = ast.parse((root / "main.py").read_text(encoding="utf-8"))
+    offenders = []
+    for fn in ast.walk(tree):
+        if not isinstance(fn, ast.FunctionDef):
+            continue
+        a = fn.args
+        if not (a.posonlyargs or a.args or a.kwonlyargs or a.vararg or a.kwarg):
+            continue
+        for dec in fn.decorator_list:
+            target = dec.func if isinstance(dec, ast.Call) else dec
+            if not (isinstance(target, ast.Attribute)
+                    and target.attr in ("cache_data", "cache_resource")):
+                continue
+            kws = {k.arg for k in dec.keywords} if isinstance(dec, ast.Call) else set()
+            if "max_entries" not in kws:
+                offenders.append(f"main.py:{fn.lineno} {fn.name}")
+    assert not offenders, f"visitor-keyed caches without max_entries: {offenders}"
+
+
 def test_monte_carlo_is_deterministic_so_caching_is_exact():
     """main.py caches both engines with st.cache_data. That is only a pure
     speed-up if a fresh run returns exactly what the cache holds - i.e. both
