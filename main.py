@@ -619,7 +619,11 @@ HERO_SUB = ("A hedge-fund-grade portfolio risk engine - VaR, CVaR, Monte Carlo s
             "But every stock has drawdowns. What sets a name apart is what happens "
             "after one - that's what we call <strong>grit</strong>.")
 HERO_CTA = "Explore what we do"
-HERO_STATS = (("10,000", "Simulated paths"), ("10", "Crises replayed"),
+# The tiles quote the engine, so they read its constants rather than restate
+# them: add a crisis to HISTORICAL_REGIMES and the hero, the footer and the
+# replay list all move together.
+N_PATHS = 10_000
+HERO_STATS = ((f"{N_PATHS:,}", "Simulated paths"), (str(len(HISTORICAL_REGIMES)), "Crises replayed"),
               ("2", "Monte Carlo engines"), ("4", "Factor exposures"))
 _CTA_ARROW = ('<span class="cta-arrow" aria-hidden="true"><svg viewBox="0 0 16 30" fill="none" '
               'xmlns="http://www.w3.org/2000/svg"><path class="shaft" d="M8 1 V22" '
@@ -781,7 +785,7 @@ try:
         st.markdown(f"""<div class="slab"><div class="slab-label">Worst possible timing</div>
         <div class="slab-num">{round(_p3["pct_positive"] * _p3["n"])} of {_p3["n"]}</div>
         <div class="slab-note">crises: even a buyer at the pre-crash <b>peak</b>
-        was whole within three years (median {_p3["median"]:+.0%}).</div></div>""",
+        was ahead three years later (median {_p3["median"]:+.0%}).</div></div>""",
                     unsafe_allow_html=True)
     with _sl4:
         st.markdown(f"""<div class="slab"><div class="slab-label">The AI-capex race</div>
@@ -1369,14 +1373,14 @@ else:
 use_jd = engine.startswith("Jump-diffusion")
 
 
-@st.cache_data(ttl=3600, max_entries=64, show_spinner="Simulating 10,000 paths…")
+@st.cache_data(ttl=3600, max_entries=64, show_spinner=f"Simulating {N_PATHS:,} paths…")
 def run_monte_carlo(rets: pd.DataFrame, w: np.ndarray, jump: bool) -> dict:
     """Both engines are seeded (seed=42), so a cached result is bit-identical
     to a fresh one. Uncached, the 10,000-path run (0.2-0.5s of CPU) repeated on
     EVERY widget click anywhere on the page, for every visitor. ~0.2MB per
     entry, so the 64-entry cap bounds the cache at roughly 15MB."""
     fn = jump_diffusion_mc if jump else monte_carlo
-    return fn(rets, w, n_simulations=10_000, horizon_days=252)
+    return fn(rets, w, n_simulations=N_PATHS, horizon_days=252)
 
 
 # The same rule for the other pure functions of (data, settings) a new visitor
@@ -1408,7 +1412,7 @@ mc = run_monte_carlo(shocked_returns, np.asarray(sim_weights, dtype=float), use_
 _audit("Stress scenario", scenario_label or
       (f"Custom shock (drawdown {drawdown_shock:+d}%, vol {vol_shock:+d}%)"
        if is_shocked else "None (base case)"))
-_audit("Monte Carlo", f"{engine}, 10,000 paths x 252 days -> CVaR {mc['cvar']:.2%}")
+_audit("Monte Carlo", f"{engine}, {mc['n_simulations']:,} paths x 252 days -> CVaR {mc['cvar']:.2%}")
 
 # ---- Liquidity-adjusted tail ----
 # The CVaR above assumes you're out at the horizon. Widen it for the days it
@@ -1715,9 +1719,10 @@ try:
         "Change the book size and watch names leave: that is the liquidity "
         "constraint doing real work, not a caption about it.")
 except Exception as _bk_exc:  # noqa: BLE001 - the page must never die on data
+    # safe_err, not str(exc): the message can carry a server path (see safe_err).
     st.info(
         f"The Book needs price and volume history for this universe "
-        f"({safe_err('the-book-unavailable', _bk_exc)}). No placeholder book is shown.")
+        f"({safe_err('the-book', _bk_exc)}). No placeholder book is shown.")
 
 st.markdown('<div id="analysis"></div>', unsafe_allow_html=True)
 panel_head("Risk & conviction", "The analysis - where the risk lives")
@@ -1891,7 +1896,7 @@ with tab_3d:
     except Exception as _wr_exc:  # noqa: BLE001 - never fake the map
         st.info(
             "Risk Topology needs live market history to calibrate "
-            f"({safe_err('risk_topology', _wr_exc)}). No demo numbers are "
+            f"({safe_err('risk-topology', _wr_exc)}). No demo numbers are "
             "shown in the product - reload when data is available."
         )
 
@@ -2229,7 +2234,7 @@ engine_txt = (
     if use_jd else "bootstrap Monte Carlo, resampled from"
 )
 st.caption(
-    f"Methodology: 10,000-path {engine_txt} {source_txt}, over a 252-day horizon. "
+    f"Methodology: {mc['n_simulations']:,}-path {engine_txt} {source_txt}, over a 252-day horizon. "
     f"{alloc_label.capitalize()} allocation{lev_txt}."
 )
 
@@ -2449,8 +2454,8 @@ with tab_balance:
                 f'Why the anchor holds most of the capital: equal-risk split - '
                 f'{flyer} runs {pw["vol_a"]:.0%} annual vol to {bv_anchor}\'s '
                 f'{pw["vol_b"]:.0%}, so each dollar of {flyer} carries '
-                f'{pw["vol_a"] / pw["vol_b"]:.1f}x the risk. The flyer holds most '
-                f'of the RISK; the anchor holds most of the MONEY.</div>'
+                f'{pw["vol_a"] / pw["vol_b"]:.1f}x the risk. Each leg carries the '
+                f'same share of the RISK; the anchor holds most of the MONEY.</div>'
                 f'</div></div>',
                 unsafe_allow_html=True)
             with st.expander("The real backtest - pair vs solo, and the crisis record"):
@@ -2647,12 +2652,20 @@ with tab_conviction:
                 '“-” means the crisis is too recent for that horizon: excluded, '
                 'not estimated.'
                 '</div>', unsafe_allow_html=True)
+            # The exceptions are READ from the table, never written in: which
+            # crises leave a peak buyer behind depends on the live series, and
+            # a hand-typed "the one exception is ..." goes stale silently.
+            _p3y = pd.to_numeric(show["Peak buy, 3y later"], errors="coerce")
+            _behind = show.loc[_p3y < 0, "Crisis"].tolist()
             st.caption(
                 "Nobody can time the exact trough - that row measures the "
                 "direction of the edge, not an executable strategy. That's why "
-                "the peak row sits beside it: even the worst-timed buyer was "
-                "usually whole within three years. The one honest exception is "
-                "the dot-com peak - three years wasn't enough."
+                "the peak row sits beside it: the worst-timed buyer was ahead "
+                f"three years later in {int((_p3y > 0).sum())} of "
+                f"{int(_p3y.notna().sum())} crises with three years of data"
+                + (f". The honest exception{'s' if len(_behind) > 1 else ''}: "
+                   f"{', '.join(_behind)} - three years wasn't enough."
+                   if _behind else ".")
             )
 
         # --- The AI-capex recovery race ---
@@ -3125,7 +3138,7 @@ st.markdown("""
     <a class="f-box" href="#grit-showcase"><span class="f-num">01</span>The Grit Zone
       <small>Resilience ranked from real drawdowns - recovery, consistency, crisis behavior.</small></a>
     <a class="f-box" href="#conviction"><span class="f-num">02</span>Crisis Conviction
-      <small>The hardest trade, priced from the actual record of ten crises.</small></a>
+      <small>The hardest trade, priced from the actual record of __NCRISES__ named crises.</small></a>
     <a class="f-box" href="#engine"><span class="f-num">03</span>The Engine
       <small>Stress-test any universe live - allocation, scenarios, CVaR verdict.</small></a>
   </div>
@@ -3148,16 +3161,17 @@ st.markdown("""
       with the reference above - barriers are treated as defects, not feature requests.</div>
   </div>
 </div>
-""".replace("__SUPPORT__", SUPPORT_EMAIL).replace("__REF__", SESSION_REF),
+""".replace("__SUPPORT__", SUPPORT_EMAIL).replace("__REF__", SESSION_REF)
+   .replace("__NCRISES__", str(len(HISTORICAL_REGIMES))),
     unsafe_allow_html=True)
 
 # ---- Book-glide: eased anchor scrolling on the REAL scroll container ----
 # Streamlit scrolls its own <section>, so `scroll-behavior` on <html> never
 # fires - anchor clicks teleported. This zero-height component reaches into
-# the parent document, intercepts CTA anchor clicks, and drives a 1.1s
-# eased glide (easeInOutCubic) with a mid-scroll arrival animation on the
-# destination - a page turn, not a teleport. Guarded so Streamlit reruns
-# never stack duplicate listeners.
+# the parent document, intercepts in-page anchor clicks, and drives one eased
+# glide to the destination - a scroll, not a teleport and not a slide change.
+# Guarded so Streamlit reruns never stack duplicate listeners.
+# tools/deep_scan.mjs times every button's flight frame by frame.
 _html("""
 <script>
 (function() {
@@ -3185,10 +3199,11 @@ _html("""
       });
     }
   }, true);
-  /* easeInOutQuart, gentler on the tail than the cubic it replaced: the
-     last third of the flight is almost a drift, which is what makes an
-     arrival feel guided rather than halted. */
-  const ease = t => t < .5 ? 8*t*t*t*t : 1 - Math.pow(-2*t + 2, 4) / 2;
+  /* easeInOutSine: the flattest speed profile of the standard in-out curves.
+     Its fastest frame is ~1.6x the average; the quart it replaced peaked at
+     4x, which on the footer's 6000px flights meant ~270px per frame mid-way -
+     a lurch, not a glide. Both ends still settle softly. */
+  const ease = t => -(Math.cos(Math.PI * t) - 1) / 2;
   /* Streamlit's scroll container has moved between releases - never trust
      a hardcoded selector. Walk UP from the destination to the first
      ancestor that really scrolls (proved by a nudge test). */
@@ -3206,8 +3221,12 @@ _html("""
            Force instant behavior for the probe, restore after. */
         const prevSB = n.style.scrollBehavior;
         n.style.scrollBehavior = 'auto';
+        /* Nudge BOTH ways. At the bottom of the page - exactly where the
+           footer's links live - a +1 nudge cannot move, the real scroller
+           failed the test, and the footer links were dead (deep scan). */
         const was = n.scrollTop;
         n.scrollTop = was + 1;
+        if (n.scrollTop === was) n.scrollTop = was - 1;
         const ok = n.scrollTop !== was;
         n.scrollTop = was;
         n.style.scrollBehavior = prevSB;
@@ -3258,25 +3277,12 @@ _html("""
       a.classList.add('is-launching');
       setTimeout(function () { a.classList.remove('is-launching'); }, 1250);
     }
-    // destination rises into place as the glide lands
-    const dest = el.clientHeight === 0 ? el.nextElementSibling : el;
-    if (dest) {
-      dest.style.animation = 'none'; void dest.offsetWidth;
-      dest.style.animation = 'section-arrive .9s cubic-bezier(.16,1,.3,1) .45s both';
-    }
-    /* Arrival theatrics, one per destination: the EARTHBENDER launch fires
-       only for the first CTA (#grit-showcase); #conviction gets the quiet
-       engraver's ring instead - same band, different gesture. */
-    const href = a.getAttribute('href');
-    const row = el.closest('.showcase-row');
-    if (row && href === '#grit-showcase') {
-      row.classList.remove('band-arrive'); void row.offsetWidth;
-      row.classList.add('band-arrive');
-    }
-    if (href === '#conviction') {
-      el.classList.remove('ring-arrive'); void el.offsetWidth;
-      el.classList.add('ring-arrive');
-    }
+    /* No arrival theatre on the destination. It used to drop to 25% opacity
+       and slide 26px the instant the button was pressed, then rise in as the
+       glide landed (plus a photo "launch" on the band and a frame on
+       Conviction) - a slide change, not a scroll, and the deep scan measured
+       the flash on every button. The section is simply there when you
+       arrive; the glide is the whole transition. */
   }, true);
 })();
 </script>

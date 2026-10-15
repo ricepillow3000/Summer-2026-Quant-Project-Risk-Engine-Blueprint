@@ -3081,6 +3081,32 @@ def test_streamlit_header_bar_is_hidden():
     assert '[data-testid="stHeader"] { display: none !important; }' in css
 
 
+def test_no_raw_exception_text_reaches_the_page():
+    """str(exc) can carry an absolute server path, which is why safe_err()
+    exists and showErrorDetails is off. The Book and Risk Topology still
+    printed `{exc}` into st.info - twice the same slip, so it is a rule now.
+    The one sanctioned exception is NoDataError, whose messages are written
+    for visitors (src/ingestion.py)."""
+    import ast
+    tree = ast.parse((pathlib.Path(__file__).resolve().parent.parent / "main.py")
+                     .read_text(encoding="utf-8"))
+    hits = []
+    for h in ast.walk(tree):
+        if not isinstance(h, ast.ExceptHandler) or not h.name:
+            continue
+        if isinstance(h.type, ast.Name) and h.type.id == "NoDataError":
+            continue
+        for node in ast.walk(h):
+            fv = isinstance(node, ast.FormattedValue) and isinstance(node.value, ast.Name)
+            sv = (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                  and node.func.id in ("str", "repr") and node.args
+                  and isinstance(node.args[0], ast.Name))
+            name = node.value.id if fv else node.args[0].id if sv else None
+            if name == h.name:
+                hits.append(f"line {node.lineno}: {name}")
+    assert not hits, f"exception text interpolated onto the page: {hits}"
+
+
 if __name__ == "__main__":
     import sys
 
