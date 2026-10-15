@@ -49,19 +49,24 @@ async function step(name, fn, expect) {
   await page.screenshot({ path: `${outdir}/walk-${String(steps.length).padStart(2, '0')}.png` });
 }
 const tab = name => page.getByRole('tab', { name, exact: true }).first();
+// Name the element in a timeout, so a failure explains itself.
+const tagged = (what, p) => p.catch(e => { throw new Error(`${what}: ${String(e).split('\n')[0]}`); });
 async function pick(label, option) {
   // Long option lists are virtualised (off-screen options are not rendered),
-  // so type to filter the way a user would, then choose.
+  // so type to filter the way a user would, choose, then Escape so no popover
+  // is left open over the next control.
   const box = page.getByRole('combobox', { name: label }).first();
-  await box.scrollIntoViewIfNeeded(); await box.click();
+  await box.scrollIntoViewIfNeeded();
+  await tagged(`open "${label}"`, box.click());
   await page.keyboard.type(option);
-  await page.getByRole('option', { name: option, exact: true }).first().click();
+  await tagged(`choose "${option}"`, page.getByRole('option', { name: option, exact: true }).first().click());
+  await page.keyboard.press('Escape');
 }
 // Open a drawer only if it is shut - a click on an open one would close it.
 async function openDrawer(label) {
   const s = page.locator('summary', { hasText: label }).first();
   await s.scrollIntoViewIfNeeded();
-  if (!(await s.evaluate(el => el.parentElement.open))) await s.click();
+  if (!(await s.evaluate(el => el.parentElement.open))) await tagged(`open drawer "${label}"`, s.click());
 }
 
 await step('land and read the headline', async () => {
