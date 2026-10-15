@@ -46,10 +46,11 @@ showErrorDetails = false
 # accounts, no roles and no privileged data, so there is no admin to
 # impersonate - only these operator buttons, and now they are gone.
 #
-# Honest limit: this hides the UI affordance. The underlying rerun/clear-cache
-# messages still exist in Streamlit's protocol, so a determined visitor
-# crafting websocket frames could still reach them. That is bounded to a
-# denial-of-service, never a data leak, because the cache holds only public
-# market data any visitor can already re-request - and it is bounded further
-# by MAX_UNIVERSE and the cache budget in src/ingestion.py.
+# Honest limit: this hides the UI affordance, not the protocol. The
+# clear-cache message is now refused in main.py (2026-10-15 security audit:
+# it emptied every visitor's cache); the rerun message still exists, so a
+# determined visitor crafting websocket frames can rerun their OWN session.
+# That is bounded to a denial-of-service, never a data leak, because the cache
+# holds only public market data any visitor can already re-request - and it
+# is bounded further by MAX_UNIVERSE and the cache budget in src/ingestion.py.
 toolbarMode = "viewer"

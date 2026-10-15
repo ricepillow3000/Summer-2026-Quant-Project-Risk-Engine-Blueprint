@@ -2772,6 +2772,65 @@ def test_no_visitor_control_clears_the_shared_cache():
     assert not hits, f"a visitor path clears the shared cache: {hits}"
 
 
+def test_a_crafted_clear_cache_message_clears_nothing():
+    """toolbarMode="viewer" hid the "Clear cache" menu, but the websocket
+    message behind it still works: Streamlit's AppSession answers a
+    `clear_cache` BackMsg from ANY client by emptying st.cache_data and
+    st.cache_resource for every visitor. 2026-10-15 security audit: a scripted
+    client sending it in a loop pins the single process recomputing cold
+    pages. main.py replaces the handler with a no-op once per process; this
+    runs that exact patch (lifted out of main.py) against a stub session."""
+    import ast
+    from streamlit.runtime import caching
+    from streamlit.runtime.app_session import AppSession
+
+    # A Streamlit upgrade that renames the handler would turn the patch into a
+    # silent no-op on a dead attribute (requirements.txt pins ~=1.62.0).
+    assert hasattr(AppSession, "_handle_clear_cache_request"), \
+        "Streamlit renamed the clear_cache handler - re-point the patch in main.py"
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    tree = ast.parse((root / "main.py").read_text(encoding="utf-8"))
+    patch = [n for n in tree.body if isinstance(n, ast.Assign)
+             and any(isinstance(t, ast.Attribute) and t.attr == "_handle_clear_cache_request"
+                     and getattr(t.value, "id", "") == "AppSession" for t in n.targets)]
+    assert len(patch) == 1, "main.py no longer neutralises the clear_cache message"
+    impl = [n for n in tree.body if isinstance(n, ast.FunctionDef)
+            and n.name == getattr(patch[0].value, "id", None)]
+
+    class Session(AppSession):
+        """A subclass, so the real class is never patched by the test."""
+
+        def __del__(self):  # the stub never started, so there is nothing to shut down
+            pass
+
+    calls = []
+
+    class _State:
+        def clear(self):
+            calls.append("session_state")
+
+    def run(cls):
+        calls.clear()
+        stub = object.__new__(cls)
+        stub._session_state = _State()
+        stub._handle_clear_cache_request()
+        return list(calls)
+
+    real = (caching.cache_data.clear, caching.cache_resource.clear)
+    caching.cache_data.clear = lambda *a, **k: calls.append("cache_data")
+    caching.cache_resource.clear = lambda *a, **k: calls.append("cache_resource")
+    try:
+        # Control: unpatched, the stub really reaches the shared caches.
+        assert "cache_data" in run(Session), "the stub no longer reaches the handler"
+        ns = {"AppSession": Session}
+        exec(compile(ast.Module(body=impl + patch, type_ignores=[]),  # nosec B102
+                     "main.py", "exec"), ns)
+        assert run(Session) == [], "a crafted clear_cache message still clears caches"
+    finally:
+        caching.cache_data.clear, caching.cache_resource.clear = real
+
+
 def test_monte_carlo_is_deterministic_so_caching_is_exact():
     """main.py caches both engines with st.cache_data. That is only a pure
     speed-up if a fresh run returns exactly what the cache holds - i.e. both

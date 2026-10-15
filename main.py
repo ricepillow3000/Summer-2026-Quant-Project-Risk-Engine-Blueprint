@@ -20,6 +20,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
+from streamlit.runtime.app_session import AppSession
 
 # ponytail: components.html is deprecated with removal announced for 2026-06-01
 # (still shipping in 1.62). st.iframe is NOT a migration path - it takes a URL,
@@ -79,6 +80,23 @@ from src.conviction import (
 st.set_page_config(page_title="Meleona - Portfolio Risk Engine",
                    page_icon=str(Path(__file__).parent / "public" / "favicon.png"),
                    layout="wide")
+
+
+# toolbarMode="viewer" hides the "Clear cache" menu, but the websocket message
+# behind it is still honoured: Streamlit's AppSession answers a `clear_cache`
+# BackMsg from ANY client by emptying st.cache_data and st.cache_resource for
+# every visitor in this process. 2026-10-15 security audit: a scripted client
+# looping that message pins the single process recomputing cold pages. This
+# app has no visitor action that should clear shared state, so the handler
+# becomes a no-op; operators restart the process or run tools.warm_cache.
+# The name is Streamlit-private and checked against the pinned ~=1.62.0
+# (requirements.txt) by test_a_crafted_clear_cache_message_clears_nothing.
+# Re-assigning on every rerun is idempotent.
+def _ignore_clear_cache_request(self) -> None:
+    return None
+
+
+AppSession._handle_clear_cache_request = _ignore_clear_cache_request
 
 # ---- Operations: kill switch, crash wire, session reference ----------------
 # SUPPORT_EMAIL is the one place the contact address lives; the footer, the
