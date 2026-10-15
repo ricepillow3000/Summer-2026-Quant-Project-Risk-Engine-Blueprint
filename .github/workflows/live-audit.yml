@@ -1,0 +1,63 @@
+# Live audit: the engine against REAL Yahoo Finance data, and the deployed site
+# in a real browser. GitHub's runners have open internet; the cloud sandboxes
+# that build this project do not, so this is where "is it live data?" gets an
+# answer instead of an assumption. Run it from the Actions tab (Run workflow),
+# or push to a claude/** branch.
+name: Live audit
+
+on:
+  workflow_dispatch:
+    inputs:
+      site_url:
+        description: Deployed app to check in a browser
+        default: https://summer-2026-quant-project-risk-engine-blueprint-production.up.railway.app
+  push:
+    branches: ["claude/**"]
+
+permissions:
+  contents: read
+
+jobs:
+  live-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      SITE_URL: ${{ inputs.site_url || 'https://summer-2026-quant-project-risk-engine-blueprint-production.up.railway.app' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install
+        run: |
+          python -m pip install -r requirements.txt
+          npm install --no-save playwright@1.56.1
+          npx playwright install --with-deps chromium
+
+      - name: 1. Provenance - engine prices vs raw Yahoo API, ^IRX vs FRED
+        run: python -m tools.live_provenance
+      - name: 2. Engine tests, live checks included
+        if: always()
+        run: python -m tests.test_engine
+      - name: 3. Batch audit - every preset on live data, each check cites its source
+        if: always()
+        run: python -m tests.batch_audit
+      - name: 4. Walkthrough on live data - NaN, contradictions, unexplained jargon
+        if: always()
+        run: python -m tools.demo_check
+      - name: 5. Deployed site in a browser - skeleton, top bar, headline, errors
+        if: always()
+        run: |
+          mkdir -p site-shots
+          node tools/site_check.mjs "$SITE_URL" site-shots
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: live-audit
+          path: |
+            audit/batch_audit_*
+            site-shots/
