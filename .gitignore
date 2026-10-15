@@ -19,8 +19,9 @@ logs/
 # IS committed - that is the evidence; the JSON is the raw feed for tooling.
 audit/*.json
 
-# Local agent-tool state
-.claude/
+# Local agent-tool state stays out; the reviewed shared skills go in
+.claude/*
+!.claude/skills/
 
 graphify-out/
 
