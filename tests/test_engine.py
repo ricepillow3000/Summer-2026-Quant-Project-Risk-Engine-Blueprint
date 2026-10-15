@@ -1929,6 +1929,67 @@ def test_map_payload_cannot_break_out_of_its_script_block():
     assert _json.loads(blob) == payload            # escaping changed nothing semantically
 
 
+def test_map_renders_ticker_names_as_text_not_markup():
+    """2026-10-15 security audit: the pairing inspector and standings built
+    HTML strings with the flyer and anchor names (pr.fl / pr.an) raw, then
+    handed them to innerHTML - so a name carrying markup would run in the
+    map's frame. The splice escape above only stops a name ending the <script>
+    block; once the page reads it back as a JS string it is live markup again.
+    Every statement that builds markup must pass payload names through esc()."""
+    import re
+    import shutil
+    import subprocess
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    page = (root / "prototypes" / "war_room.html").read_text(encoding="utf-8")
+    script = page[page.index("<script>"):]
+    m = re.search(r"function esc\(s\) \{.*?\n\}", script, re.S)
+    assert m, "the map lost its esc() helper"
+
+    offenders = []
+    for stmt in re.split(r";[ \t]*\n", script):
+        if "innerHTML" not in stmt and "'<" not in stmt:
+            continue                                  # not building markup
+        for name in re.finditer(r"[\w.]*\b(?:pr|[aAB])\.(?:fl|an|t)\b", stmt):
+            if not stmt[:name.start()].endswith("esc("):
+                line = page[:page.index(stmt)].count("\n") + 1
+                offenders.append(f"war_room.html:~{line}: {name.group(0)}")
+    assert not offenders, "payload names reach innerHTML unescaped: " + str(offenders)
+
+    node = shutil.which("node")
+    if node:   # and esc() really neutralises markup, run as the page runs it
+        probe = m.group(0) + "\nprocess.stdout.write(esc(`<img src=x onerror='a(1)'>&\"`));"
+        out = subprocess.run([node, "-e", probe], capture_output=True, text=True,
+                             timeout=30).stdout  # nosec B603 - fixed argv
+        assert out == "&lt;img src=x onerror=&#39;a(1)&#39;&gt;&amp;&quot;", out
+
+
+def test_a_feed_column_that_is_not_ticker_shaped_never_reaches_the_page():
+    """VALID_TICKER guards what a visitor TYPES, but the column names that come
+    back are the feed's: yfinance can label a column after a search result.
+    2026-10-15 security audit: those names flow into the map, captions and
+    tables, so the download keeps only ticker-shaped columns. Offline: the
+    downloader is replaced, nothing leaves the machine."""
+    import src.ingestion as ing
+
+    idx = pd.bdate_range("2025-01-02", periods=30)
+    bad = "<img src=x onerror=alert(1)>"
+    cols = ["AAPL", bad]
+    frame = pd.concat({"Close": pd.DataFrame(100.0, idx, cols),
+                       "Volume": pd.DataFrame(1e6, idx, cols)}, axis=1)
+    real = (ing.yf.download, ing.check_budget, ing.guarded_session)
+    try:
+        ing.yf.download = lambda *a, **k: frame
+        ing.check_budget = lambda *a, **k: None
+        ing.guarded_session = lambda: None
+        prices = ing.fetch_prices(["AAPL", "MSFT"], use_cache=False)
+        dv = ing.fetch_dollar_volume(["AAPL", "MSFT"], use_cache=False)
+    finally:
+        ing.yf.download, ing.check_budget, ing.guarded_session = real
+    assert list(prices.columns) == ["AAPL"], list(prices.columns)
+    assert list(dv.columns) == ["AAPL"], list(dv.columns)
+
+
 def test_universe_size_is_capped_at_the_funnel():
     """The complexity budget: no caller can make the server work on an
     unbounded universe, and junk symbols never reach a fetch."""

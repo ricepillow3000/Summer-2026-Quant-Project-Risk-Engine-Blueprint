@@ -1261,6 +1261,13 @@ function updateHUD() {
 }
 
 /* ---------- bon voyage inspector ---------- */
+/* Payload names are text, never markup. 2026-10-15 security audit: the
+   flyer/anchor names went into innerHTML raw; the splice escape only stops a
+   name closing the <script> block, the string is live markup again here. */
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+}
 function pairMC(pr, seed) {
   /* demo mode only: 10,000 Gaussian daily-loop draws. In live mode the
      displayed numbers come from the engine's real-history backtest. */
@@ -1307,9 +1314,9 @@ function linkDiagramSVG(pr, st) {
     '<circle cx="' + fx + '" cy="' + fy + '" r="' + (fr - 4) + '" fill="none" stroke="rgba(201,162,39,0.4)" stroke-width="1"/>' +
     '<circle cx="' + ax2 + '" cy="' + ay + '" r="' + ar + '" fill="none" stroke="#D9C089" stroke-width="1.4"/>' +
     '<circle cx="' + ax2 + '" cy="' + ay + '" r="' + (ar - 4) + '" fill="none" stroke="rgba(217,192,137,0.4)" stroke-width="1"/>' +
-    '<text x="' + fx + '" y="' + (fy + 4) + '" fill="#EDE9E3" font-size="11" font-family="Georgia" text-anchor="middle">' + pr.fl + '</text>' +
+    '<text x="' + fx + '" y="' + (fy + 4) + '" fill="#EDE9E3" font-size="11" font-family="Georgia" text-anchor="middle">' + esc(pr.fl) + '</text>' +
     '<text x="' + fx + '" y="' + (fy - fr - 7) + '" fill="#9A7B4F" font-size="8" letter-spacing="2" font-family="Georgia" text-anchor="middle">FLYER ' + Math.round(st.w * 100) + '%</text>' +
-    '<text x="' + ax2 + '" y="' + (ay + 4) + '" fill="#EDE9E3" font-size="11" font-family="Georgia" text-anchor="middle">' + pr.an + '</text>' +
+    '<text x="' + ax2 + '" y="' + (ay + 4) + '" fill="#EDE9E3" font-size="11" font-family="Georgia" text-anchor="middle">' + esc(pr.an) + '</text>' +
     '<text x="' + ax2 + '" y="' + (ay + ar + 14) + '" fill="#9A7B4F" font-size="8" letter-spacing="2" font-family="Georgia" text-anchor="middle">ANCHOR ' + Math.round((1 - st.w) * 100) + '%</text>' +
     '</svg>';
 }
@@ -1384,7 +1391,7 @@ function renderStandings() {
   el.innerHTML = rows.map((r, rank) =>
     '<div class="srow' + (r.i === S.selPair ? ' sel' : '') + '" data-i="' + r.i + '">' +
     '<span class="rk">0' + (rank + 1) + '</span>' +
-    '<span class="pair">' + r.pr.fl + ' - ' + r.pr.an + ' <span>flyer / anchor</span></span>' +
+    '<span class="pair">' + esc(r.pr.fl) + ' - ' + esc(r.pr.an) + ' <span>flyer / anchor</span></span>' +
     '<span class="cu">' + (r.cu >= 0 ? '+' : '') + (r.cu * 100).toFixed(1) + 'pp</span>' +
     '<span class="bar"><i style="width:' + Math.max(4, Math.abs(r.cu) / maxCu * 100).toFixed(0) + '%' +
       // The bar is a MAGNITUDE, so a pair that made the drawdown worse drew a
