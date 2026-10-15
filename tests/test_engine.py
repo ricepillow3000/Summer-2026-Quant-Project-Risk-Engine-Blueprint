@@ -2741,6 +2741,24 @@ def test_no_exception_text_is_rendered_to_visitors():
     assert not offenders, "raw exception text reaches the page: " + str(offenders)
 
 
+def test_a_stranger_cannot_park_files_in_server_memory():
+    """2026-10-15 security audit: Streamlit serves PUT /_stcore/upload_file/...
+    to any client whether or not the page has a file_uploader, and holds each
+    upload in process memory up to server.maxUploadSize (200 MB by default)
+    with no total cap. This app takes no files, so the limit drops to the
+    1 MB floor - a scripted client can no longer park gigabytes in the single
+    process every visitor shares."""
+    import tomllib
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    cfg = tomllib.loads((root / ".streamlit" / "config.toml").read_text(encoding="utf-8"))
+    assert cfg.get("server", {}).get("maxUploadSize", 200) <= 1, \
+        "server.maxUploadSize is back to letting strangers upload large files"
+    src = (root / "main.py").read_text(encoding="utf-8")
+    assert "file_uploader" not in src, \
+        "a file_uploader needs an upload budget sized for it, not the 1 MB floor"
+
+
 def test_no_visitor_control_clears_the_shared_cache():
     """st.cache_data.clear() empties every cached result for EVERY visitor in
     this single process. A public "Refresh" button used to call it (and delete

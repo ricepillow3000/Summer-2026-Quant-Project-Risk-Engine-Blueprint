@@ -16,6 +16,14 @@ headless = true
 enableCORS = true
 enableXsrfProtection = true
 
+# The app takes no files, but Streamlit's PUT /_stcore/upload_file/ endpoint
+# answers any client anyway and holds each upload in process memory, up to
+# this size (200 MB default) per file with no total cap. 2026-10-15 security
+# audit: a scripted client could park gigabytes in the one process every
+# visitor shares. 1 MB is the floor. Add a file_uploader and this needs a
+# budget sized for it - the test that pins this also forbids one.
+maxUploadSize = 1
+
 [browser]
 # Streamlit's usage telemetry defaults to ON and phones home on every run.
 # PRIVACY.md tells visitors there is "no analytics, advertising, attribution or
