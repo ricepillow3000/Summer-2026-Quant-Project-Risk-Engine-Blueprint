@@ -29,6 +29,8 @@ helped or hurt.
 
 import numpy as np
 import pandas as pd
+from scipy.cluster.hierarchy import leaves_list, linkage
+from scipy.spatial.distance import squareform
 
 
 def correlation_from_cov(cov: pd.DataFrame) -> pd.DataFrame:
@@ -120,6 +122,40 @@ def least_correlated_to_pair(corr: pd.DataFrame,
     # zero the winner sits on.
     best = avg.abs().idxmin()
     return str(best), float(avg.loc[best])
+
+
+def cluster_order(corr: pd.DataFrame) -> list[str]:
+    """
+    Order names so the ones that move together sit next to each other - the
+    correlation tree (hierarchical clustering) behind the heatmap's axes.
+
+    Quant Deep Dive: correlation is turned into a true distance,
+
+        d(i,j) = sqrt(0.5 * (1 - rho_ij))
+
+    0 for lockstep (+1), 0.71 for independent (0), 1 for seesaw (-1) - and
+    unlike 1 - rho it obeys the triangle inequality (Mantegna 1999; the same
+    distance Lopez de Prado's HRP is built on). Average linkage merges the
+    two closest groups by their mean distance, so one odd pair cannot chain
+    two blocks together the way single linkage can. optimal_ordering flips
+    the tree's branches so neighbours in the final row are as close as
+    possible, not just grouped.
+
+    It is a permutation only: no correlation, weight or risk number changes,
+    the same matrix is just read in a better order. A NaN (a zero-vol name)
+    has no honest distance, and under 3 names there is nothing to group, so
+    both return the input order unchanged rather than a guessed one.
+    """
+    names = list(corr.columns)
+    m = corr.to_numpy(dtype=float)
+    if len(names) < 3 or np.isnan(m).any():
+        return names
+    # Clip guards float drift past +-1 (sqrt of a tiny negative is NaN).
+    dist = np.sqrt(np.clip(0.5 * (1.0 - m), 0.0, 1.0))
+    np.fill_diagonal(dist, 0.0)
+    tree = linkage(squareform(dist, checks=False), method="average",
+                   optimal_ordering=True)
+    return [names[i] for i in leaves_list(tree)]
 
 
 if __name__ == "__main__":
