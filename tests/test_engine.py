@@ -2397,6 +2397,134 @@ def test_map_short_book_perimeter_domain_and_drift_are_mirrored():
     assert sht["muB"] < sb + tp.HAZARD_BETA_ADD     # no invented drift to zero
 
 
+def test_map_short_book_keeps_anchor_funds_long():
+    """On a short book the HOLDINGS flip (a short of a name carries the opposite
+    beta), but the anchor pool (TLT, GLD, XLP, XLU, USMV) is not held: it is the
+    candidate hedge, and anchor_rank(direction="short") documents that hedge as
+    a LONG. build_map_payload negated every dot, so each anchor - and the
+    defensive link drawn to it - sat on the wrong side of zero."""
+    import src.topology as tp
+    from src.pairing import DEFENSIVE_ANCHOR_TICKERS
+
+    rng = np.random.default_rng(21)
+    idx = pd.bdate_range("2023-01-02", periods=420)
+    mkt = rng.normal(0.0004, 0.010, 420)
+    rets = pd.DataFrame({"AAA": 0.9 * mkt + rng.normal(0, 0.006, 420),
+                         "BBB": 1.4 * mkt + rng.normal(0, 0.012, 420)}, index=idx)
+    anchors = pd.DataFrame({t: 100 * np.cumprod(1 + (0.3 + 0.1 * k) * mkt + rng.normal(0, 0.004, 420))
+                            for k, t in enumerate(DEFENSIVE_ANCHOR_TICKERS)}, index=idx)
+    w = pd.Series([0.5, 0.5], index=["AAA", "BBB"])
+
+    def fake_fetch(tickers, *a, **k):
+        if list(tickers) == list(DEFENSIVE_ANCHOR_TICKERS):
+            return anchors
+        raise RuntimeError("offline")       # no SPY: basket proxies the market
+    orig = tp.fetch_prices
+    try:
+        tp.fetch_prices = fake_fetch
+        lng = tp.build_map_payload(rets, w, ["AAA", "BBB"], False)
+        sht = tp.build_map_payload(rets, w, ["AAA", "BBB"], True)
+    finally:
+        tp.fetch_prices = orig
+
+    lb = {a["t"]: a for a in lng["assets"]}
+    sb = {a["t"]: a for a in sht["assets"]}
+    assert set(DEFENSIVE_ANCHOR_TICKERS) <= set(sb)
+    for t in DEFENSIVE_ANCHOR_TICKERS:
+        assert sb[t]["b"] == lb[t]["b"] and sb[t]["f"] == "Anchor pool", t   # held long
+    for t in ("AAA", "BBB"):
+        assert abs(sb[t]["b"] + lb[t]["b"]) < 1e-9, t                         # shorted
+
+
+def test_every_calibration_clamp_is_named_in_the_footnote():
+    """The footnote's "Calibration clamps hit" list is the disclosure for every
+    number the map draws that was NOT estimated. Three ways it was wrong:
+      - fit_ou clipped the AR(1) coefficient to 0.995 silently. It binds on
+        live data (2 of 4 universes in the 2026-09-10 audit read phi 0.99500),
+        and then the drawn mean-reversion speed is the clip, not the data;
+      - the leverage clamp was reported as "rho", the shock correlation's name,
+        and both theta clamps as a bare "theta";
+      - k was capped at 3.0 with no flag while the footnote called it measured.
+    Every band is forced to bind here, so each must announce itself by name."""
+    import src.state_calibration as sc
+
+    rng = np.random.default_rng(31)
+    idx = pd.bdate_range("2022-01-03", periods=520)
+    mkt = pd.Series(rng.normal(0.0003, 0.010, 520), index=idx)
+    port = 1.1 * mkt + pd.Series(rng.normal(0, 0.006, 520), index=idx)
+    saved = dict(sc.CLAMPS), sc.K_CLAMP
+    try:
+        sc.CLAMPS.update(theta=(55.0, 55.0), rho=(0.5, 0.5))   # point bands: always clip
+        sc.K_CLAMP = (1.0, 1.0)
+        cal = sc.calibrate_state_dynamics(port, mkt)
+    finally:
+        sc.CLAMPS.clear(); sc.CLAMPS.update(saved[0]); sc.K_CLAMP = saved[1]
+    names = {f.split(" ")[0] for f in cal["clamp_flags"]}
+    assert {"theta_b", "theta_v", "rho", "lev"} <= names, cal["clamp_flags"]
+    assert "theta" not in names
+    if cal["dispersion"].get("k_uncapped", 1.0) > 1.0:
+        assert "k" in names, cal["clamp_flags"]
+    # the AR(1) clip: a smooth rolling-beta series is persistent enough to hit it
+    state = sc.rolling_state_series(port, mkt)
+    fb = sc.fit_ou(state["beta"])
+    if fb["phi_raw"] != fb["phi"]:
+        assert "phi_b" in names, cal["clamp_flags"]
+
+
+def _map_function(name: str) -> str:
+    """One top-level function's source from the shipped map page."""
+    import re as _re
+    html = (pathlib.Path(__file__).resolve().parent.parent / "prototypes" / "war_room.html").read_text(encoding="utf-8")
+    m = _re.search(r"^function " + name + r"\(.*?^}$", html, flags=_re.S | _re.M)
+    assert m, f"{name} not found in war_room.html"
+    return m.group(0)
+
+
+def test_map_hover_reads_risk_direction_on_a_short_book():
+    """The hover's scenario sentence compared raw beta: on a short book danger
+    is MORE NEGATIVE beta, so a point toward the hazard perimeter was read as
+    "beta sheds ... de-risking" and a point away from it as "drifting toward
+    index risk". Runs the page's own scenarioText under node."""
+    import shutil
+    import subprocess
+
+    node = shutil.which("node")
+    if not node:
+        print("[skip] node not on PATH - map hover check not run")
+        return
+    js = _map_function("scenarioText") + """
+const S = { cloud: { maha: () => 0, r68: 1, r95: 2, r997: 3 } };
+const out = {};
+for (const [sign, b0] of [[1, 1.2], [-1, -1.2]]) {
+  globalThis.BSGN = sign; globalThis.DEMO = { base: { beta: b0, vol: 0.2 } };
+  out[sign] = { toward: scenarioText(b0 + sign * 0.6, 0.2), away: scenarioText(b0 - sign * 0.6, 0.2) };
+}
+console.log(JSON.stringify(out));"""
+    js = js.replace("function scenarioText", "var BSGN, DEMO;\nfunction scenarioText", 1)
+    r = subprocess.run([node, "-e", js], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr[-400:]
+    out = __import__("json").loads(r.stdout)
+    for sign in ("1", "-1"):
+        assert "builds" in out[sign]["toward"] and "sheds" not in out[sign]["toward"], out[sign]
+        assert "sheds" in out[sign]["away"], out[sign]
+    assert out["1"] == out["-1"], "long and short read the same move the same way"
+
+
+def test_map_explanations_match_the_maths():
+    """Text the map shows next to its numbers, checked against the maths:
+      - the pair weights are two-asset risk parity, so each leg carries HALF the
+        risk; "the flyer holds most of the risk" said otherwise;
+      - for a short flyer the loss is a squeeze, not a crash;
+      - the perimeter hover gave the rule without its floor and caps, so it
+        read "beta up 0.8" where the drawn line was capped at 1.9."""
+    html = (pathlib.Path(__file__).resolve().parent.parent / "prototypes" / "war_room.html").read_text(encoding="utf-8")
+    assert "holds most of the risk" not in html
+    assert "equal share of the risk" in html
+    assert "squeeze" in html
+    hover = html[html.index("perimeter: () =>"):html.index("iso: pct =>")]
+    assert "floored at 35%" in hover and "capped at" in hover
+
+
 def test_map_inline_scripts_parse_under_node():
     """A JavaScript syntax error inside prototypes/war_room.html kills the whole
     map: it is one inline <script>, so the frame renders and nothing draws -
@@ -2438,6 +2566,62 @@ def test_map_inline_scripts_parse_under_node():
         assert r.returncode == 0, (
             f"war_room.html inline script {i} does not parse - the map will "
             f"render a blank frame:\n{r.stderr.strip()[:600]}")
+
+
+def test_map_layout_holds_at_every_width():
+    """The map's glass panels float over the terrain, positioned for a wide
+    screen. Measured in Chromium at the iframe's 820px height (2026-10-15):
+      - at EVERY width the bottom identity chips were drawn over the beta tick
+        labels, so the scale under the dots could not be read;
+      - at 1024px the HUD tiles spilled under the pairing inspector;
+      - at 1000px and below the panels covered each other: Run / Explain /
+        Calibration were painted but could not be clicked, the plot shrank to
+        180px at 790px (the width the app embeds it at) and 18px on a phone,
+        and under 640px the canvas was stretched to fit.
+    tests/map_layout.mjs renders the SHIPPED page (war_room_html on a real
+    payload, long and short) and reports each of those; this asserts none
+    remain. Self-skips without node or playwright, like the parse check."""
+    import json as _json
+    import shutil
+    import subprocess
+    import tempfile
+    import src.topology as tp
+
+    node = shutil.which("node")
+    if not node:
+        print("[skip] node not on PATH - map layout check not run")
+        return
+    rng = np.random.default_rng(15)
+    idx = pd.bdate_range("2023-01-02", periods=420)
+    mkt = rng.normal(0.0004, 0.010, 420)
+    names = ["AAA", "BBB", "CCC", "DDD", "EEE", "FFF"]
+    rets = pd.DataFrame({n: (0.5 + 0.25 * k) * mkt + rng.normal(0, 0.006, 420)
+                         for k, n in enumerate(names)}, index=idx)
+    w = pd.Series(1 / len(names), index=names)
+    root = pathlib.Path(__file__).resolve().parent.parent
+    orig = tp.fetch_prices
+    try:
+        tp.fetch_prices = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("offline"))
+        pages = {side: tp.war_room_html(tp.build_map_payload(rets, w, names, side == "short"))
+                 for side in ("long", "short")}
+    finally:
+        tp.fetch_prices = orig
+    for side, html in pages.items():
+        with tempfile.NamedTemporaryFile("w", suffix=".html", delete=False,
+                                         encoding="utf-8") as fh:
+            fh.write(html)
+            path = pathlib.Path(fh.name)
+        try:
+            r = subprocess.run([node, str(root / "tests" / "map_layout.mjs"), str(path)],
+                               capture_output=True, text=True, timeout=600)
+        finally:
+            path.unlink(missing_ok=True)
+        if r.returncode == 3:
+            print("[skip] playwright not installed - map layout check not run")
+            return
+        assert r.returncode == 0, r.stderr[-600:]
+        for row in _json.loads(r.stdout):
+            assert not row["found"] and not row["errors"], (side, row)
 
 
 def test_streamlit_telemetry_is_disabled():

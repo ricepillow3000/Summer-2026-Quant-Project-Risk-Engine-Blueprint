@@ -42,7 +42,11 @@ body {
   font-variant-numeric: tabular-nums;
 }
 .shell { position: relative; height: 100vh; min-height: 560px; }
-.shell > canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+/* The stage is what the canvases (and the hover tip) are sized and positioned
+   against. On a wide screen it fills the shell, so the glass panels float over
+   the terrain; on a narrow one it becomes its own band (see max-width 1000px). */
+.stage { position: absolute; inset: 0; }
+.stage > canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 #cvBase { z-index: 1; } #cvFog { z-index: 2; } #cvIntel { z-index: 3; }
 #cvTrail { z-index: 4; } #cvAnim { z-index: 5; }
 
@@ -178,8 +182,11 @@ select {
 .chip.warn { border-left-color: var(--ember); color: #C99A85; }
 
 /* ---- floating map identity chips (bottom-left) ---- */
-.chipbar { position: absolute; z-index: 10; left: 268px; bottom: 16px;
-  display: flex; gap: 8px; pointer-events: none; }
+.chipbar { position: absolute; z-index: 10; left: 268px; right: 386px; bottom: 16px;
+  display: flex; flex-wrap: wrap; gap: 8px; pointer-events: none; }
+/* right: the inspector's edge. Unbounded, the chips ran on under the inspector
+   on a mid-width screen; bounded, they wrap upward and the plot's bottom margin
+   (PAD.b) grows to keep the beta ticks above them. */
 .mchip {
   font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase;
   color: var(--bronze); background: rgba(21,18,13,0.72); border: 1px solid var(--line);
@@ -265,8 +272,10 @@ select {
   .side { width: 200px; }
   .hud { left: 226px; right: 330px; }
   .inspector { width: 304px; }
-  .chipbar { left: 230px; }
-  .tiles { grid-template-columns: repeat(2, 1fr); }
+  .chipbar { left: 230px; right: 330px; }
+  /* own row: beside the verdict they were squeezed past the HUD's edge and
+     drawn under the inspector (measured at 1024px) */
+  .tiles { flex: 1 1 100%; grid-template-columns: repeat(2, 1fr); }
   .tiles .tile:last-child:nth-child(odd) { grid-column: 1 / -1; }
   .verdict { min-width: 240px; }
   .verdict .n { font-size: 38px; }
@@ -298,20 +307,28 @@ select {
   .chip { white-space: normal; }
 }
 
-/* ---- narrow canvas (the app embeds this map at ~790px) ----------------
-   The HUD is absolutely positioned with fixed side insets tuned for a wide
-   screen: left 264px / right 386px leaves only ~140px of usable width inside
-   a 790px canvas, while its contents need 600px+. That overflow pushed the
-   identity chips 210px past the right edge, where they were clipped.
-   Below 1000px the HUD stops being a fixed-inset strip and becomes a normal
-   wrapping row spanning the canvas, so the verdict, tiles and chips each get
-   a full line instead of fighting over a sliver. */
+/* ---- narrow canvas: stacked, not floating ------------------------------
+   The glass panels float over a full-bleed terrain on a wide screen. Below
+   1000px there is no room to float: they covered each other and the Run /
+   Explain buttons (painted but unclickable), and the plot shrank to 180px at
+   790px and 18px on a phone. Here the page becomes a column - one number
+   first (the HUD), then the map at full width, its identity chips, the
+   controls, and the pairing table - and scrolls inside the frame. Nothing is
+   hidden or reworded; the panels keep their finish. sizeCanvases() measures
+   the stage, so the plot fills its own band instead of the gap between panels. */
 @media (max-width: 1000px) {
-  .hud {
-    left: 12px; right: 12px; top: 10px;
-    min-height: 0; padding: 10px 12px;
-    flex-wrap: wrap; gap: 10px;
+  body { overflow-x: hidden; overflow-y: auto; }
+  .shell { height: auto; min-height: 0; display: flex; flex-direction: column; gap: 10px; padding: 10px; }
+  .side, .hud, .inspector {
+    position: relative; left: auto; right: auto; top: auto; bottom: auto; width: auto;
   }
+  .hud { order: 1; min-height: 0; padding: 10px 12px; flex-wrap: wrap; gap: 10px; }
+  .stage { order: 2; position: relative; inset: auto; height: 520px; }
+  .chipbar { order: 3; position: static; flex-wrap: wrap; }
+  .mchip { white-space: normal; }
+  .side { order: 4; overflow: visible; }
+  .inspector { order: 5; }
+  .detail { overflow: visible; }
   .verdict { min-width: 0; flex: 1 1 100%; }
   .verdict .n { font-size: 34px; }
   .tiles { flex: 1 1 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
@@ -333,11 +350,19 @@ select {
        information as sentences, filled from the live payload by
        updateSummary(). It is positioned off-screen rather than display:none,
        because display:none is skipped by screen readers too. -->
+  <div class="stage" id="stage">
   <canvas id="cvBase" aria-hidden="true"></canvas>
   <canvas id="cvFog" aria-hidden="true"></canvas>
   <canvas id="cvIntel" aria-hidden="true"></canvas>
   <canvas id="cvTrail" aria-hidden="true"></canvas>
   <canvas id="cvAnim" aria-hidden="true"></canvas>
+  <div class="tip" id="tip">
+    <div class="coords" id="tipCo"></div>
+    <div class="m" id="tipM"></div>
+    <div class="sc" id="tipSc"></div>
+    <div class="hint">Stylized scenario reading, not a forecast</div>
+  </div>
+  </div>
   <p id="mapSummary" class="sr-only" role="region" aria-live="polite"
      aria-label="Risk Topology map, described in text">Loading the map description.</p>
 
@@ -415,12 +440,6 @@ select {
     <span class="mchip warn" id="provTag">Demo calibration</span>
   </div>
 
-  <div class="tip" id="tip">
-    <div class="coords" id="tipCo"></div>
-    <div class="m" id="tipM"></div>
-    <div class="sc" id="tipSc"></div>
-    <div class="hint">Stylized scenario reading, not a forecast</div>
-  </div>
 </div>
 
 <script>
@@ -627,6 +646,7 @@ function computeStats(sim) {
 
 /* ---------- canvas plumbing ---------- */
 const shell = document.getElementById('shell');
+const stage = document.getElementById('stage');   /* what the canvases are sized against */
 const cvs = ['cvBase', 'cvFog', 'cvIntel', 'cvTrail', 'cvAnim'].map(id => document.getElementById(id));
 const ctxs = cvs.map(c => c.getContext('2d'));
 const xBase = ctxs[0], xFog = ctxs[1], xIntel = ctxs[2], xTrail = ctxs[3], xAnim = ctxs[4];
@@ -643,21 +663,33 @@ const fromY = y => DOMN.v0 + (1 - (y - PAD.t) / (H - PAD.t - PAD.b)) * (DOMN.v1 
 const safeX = () => BSGN > 0 ? PAD.l : W - PAD.r;
 
 function sizeCanvases() {
-  const r = shell.getBoundingClientRect();
-  W = Math.max(640, r.width); H = Math.max(480, r.height);
+  const r = stage.getBoundingClientRect();
+  /* Exactly the stage's size. A floor here (it was 640 x 480) never applied
+     on a wide screen, and below it the browser stretched the drawing to fit -
+     squeezed axes and text on every narrow screen. */
+  W = Math.max(1, r.width); H = Math.max(1, r.height);
   DPR = Math.min(window.devicePixelRatio || 1, 2.5);
   for (let i = 0; i < cvs.length; i++) {
     cvs[i].width = Math.round(W * DPR); cvs[i].height = Math.round(H * DPR);
     ctxs[i].setTransform(DPR, 0, 0, DPR, 0, 0);
   }
-  /* the plot lives in the clear zone between the glass panels */
-  const side = document.getElementById('sidePanel').getBoundingClientRect();
-  const hud = document.querySelector('.hud').getBoundingClientRect();
-  const insp = document.getElementById('inspPanel').getBoundingClientRect();
-  PAD.l = (side.right - r.left) + 52;
-  PAD.r = (r.right - insp.left) + 26;
-  PAD.t = (hud.bottom - r.top) + 30;
-  PAD.b = 46;
+  /* the plot lives in the clear zone between the glass panels - a panel
+     only pushes it in when it actually lies over the stage (on a narrow
+     screen they sit above and below it instead) */
+  const over = el => {
+    const p = el.getBoundingClientRect();
+    return p.right > r.left && p.left < r.right && p.bottom > r.top && p.top < r.bottom ? p : null;
+  };
+  const side = over(document.getElementById('sidePanel'));
+  const hud = over(document.querySelector('.hud'));
+  const insp = over(document.getElementById('inspPanel'));
+  const chips = over(document.querySelector('.chipbar'));
+  PAD.l = (side ? side.right - r.left : 0) + 52;
+  PAD.r = (insp ? r.right - insp.left : 0) + 26;
+  PAD.t = (hud ? hud.bottom - r.top : 0) + 30;
+  /* the beta tick labels sit 16px under the axis: keep them clear above the
+     identity chips (they were drawn underneath them at every width) */
+  PAD.b = Math.max(46, (chips ? r.bottom - chips.top : 0) + 30);
 }
 
 /* ---------- app state ---------- */
@@ -1063,12 +1095,12 @@ const EXPLAIN = {
   portfolio: () => ['Portfolio · you are here',
     'The whole book today, measured from rolling windows of its real returns. Every simulated future starts from this exact spot.'],
   link: pr => [pr.fl + ' - ' + pr.an + ' · defensive pair',
-    'The flyer (' + pr.fl + ') holds most of the risk, the anchor (' + pr.an + ') holds most of the money. Tether them and a crash in the flyer digs a shallower hole. Click the link to see the replayed history.'],
+    'Two-asset risk parity: the flyer (' + pr.fl + ') and the anchor (' + pr.an + ') each carry an equal share of the risk, and the anchor holds most of the money. Tether them and ' + (BSGN > 0 ? 'a crash in the flyer' : 'a squeeze in the shorted flyer') + ' digs a shallower hole. Click the link to see the replayed history.'],
   ring: pct => [pct + ' probability ring',
     'After 10,000 simulated 30-day futures, ' + pct + ' of them END inside this ring. Counted from the simulation, not assumed. The farther out, the darker: the fog is where the book almost never lands.'],
   perimeter: () => ['Maximum VaR breach perimeter',
-    'The danger line, set by a disclosed policy (3x today\'s volatility, or beta '
-    + (BSGN > 0 ? 'up 0.8' : 'down 0.8 - this book is short, so its betas are negated and the perimeter is mirrored')
+    'The danger line, set by a disclosed policy (3x today\'s volatility, floored at 35% and capped at 90%, or beta '
+    + (BSGN > 0 ? 'up 0.8, capped at 1.9' : 'down 0.8, capped at -1.9 - this book is short, so its betas are negated and the perimeter is mirrored')
     + '). Any simulated path that crosses it burns ember and counts toward the breach probability in the top bar.'],
   iso: pct => ['Iso-VaR guide · ' + pct + ' daily',
     'A reference altitude: at this volatility, a normal bad day (worst 5%) costs about ' + pct + '. Higher on the map = bigger daily losses at the same odds.'],
@@ -1121,7 +1153,9 @@ function explainTarget(x, y) {
 
 /* ---------- scenario reading ---------- */
 function scenarioText(b, v) {
-  const db = b - DEMO.base.beta, dv = v - DEMO.base.vol;
+  /* db > 0 = more market exposure, the side the perimeter is on: on a short
+     book that is MORE NEGATIVE beta, so the raw difference read it backwards */
+  const db = BSGN * (b - DEMO.base.beta), dv = v - DEMO.base.vol;
   const d = S.cloud.maha(b, v);
   let sev;
   if (d < S.cloud.r68) sev = 'Within normal drift.';
@@ -1129,13 +1163,13 @@ function scenarioText(b, v) {
   else if (d < S.cloud.r997) sev = 'Crisis regime.';
   else sev = 'Tail event, beyond the simulated frontier.';
   let dir;
-  if (dv > 0.06 && db > 0.15) dir = 'Vol expands while beta drifts up: crowded momentum unwinds, margin pressure builds, correlations converge toward one.';
-  else if (dv > 0.06 && db < -0.15) dir = 'Vol spikes while beta compresses: hedges are biting during systemic stress, the book behaves defensively at a cost.';
+  if (dv > 0.06 && db > 0.15) dir = 'Vol expands while market exposure builds: crowded momentum unwinds, margin pressure builds, correlations converge toward one.';
+  else if (dv > 0.06 && db < -0.15) dir = 'Vol spikes while market exposure sheds: hedges are biting during systemic stress, the book behaves defensively at a cost.';
   else if (dv > 0.06) dir = 'Vol expands at steady beta: single-name shocks or an event window, index exposure unchanged.';
-  else if (dv < -0.04 && db > 0.15) dir = 'Calm tape with rising beta: carry-friendly regime, complacency risk if leverage keeps building.';
+  else if (dv < -0.04 && db > 0.15) dir = 'Calm tape with market exposure building: carry-friendly regime, complacency risk if leverage keeps building.';
   else if (dv < -0.04) dir = 'Vol compresses: quiet regime, premium selling crowds in, the next shock gets sharper.';
-  else if (db > 0.2) dir = 'Beta builds at steady vol: the book is drifting toward index risk without volatility payback.';
-  else if (db < -0.2) dir = 'Beta sheds at steady vol: de-risking into cash-like or short-correlated sleeves.';
+  else if (db > 0.2) dir = 'Market exposure builds at steady vol: the book is drifting toward index risk without volatility payback.';
+  else if (db < -0.2) dir = 'Market exposure sheds at steady vol: de-risking into cash-like or short-correlated sleeves.';
   else dir = 'Near current coordinates: no material regime change required.';
   return sev + ' ' + dir;
 }
@@ -1311,7 +1345,7 @@ function renderDetail() {
         'of Yahoo Finance adjusted closes. Weights are exact two-asset risk parity. Pair correlation ' + pr.rho.toFixed(2) + ' measured on the same window.</div>'
       : '<div class="honest"><b>Honest limits.</b> Pair statistics come from a Gaussian daily-loop Monte Carlo ' +
         'on demo calibration (flyer drift 10%, anchor 4%, pair correlation ' + pr.rho.toFixed(2) + '). ' +
-        'Weights are exact two-asset risk parity: the flyer holds most of the risk, the anchor holds most of the money. ' +
+        'Weights are exact two-asset risk parity: each leg carries an equal share of the risk, the anchor holds most of the money. ' +
         'Correlations converge toward one in real crashes; the live engine replays actual crisis windows instead.</div>');
 
   /* counter eases to the REAL count behind the numbers; couriers on the map
@@ -1407,7 +1441,7 @@ shell.addEventListener('mousemove', e => {
     tip.style.display = 'none';
     return;
   }
-  const r = shell.getBoundingClientRect();
+  const r = stage.getBoundingClientRect();
   const x = e.clientX - r.left, y = e.clientY - r.top;
   S.mouse = { x: x, y: y };
   let hov = null;
@@ -1462,7 +1496,7 @@ shell.addEventListener('mouseleave', () => {
 });
 shell.addEventListener('click', e => {
   if (e.target.closest('.glass')) return;
-  const r = shell.getBoundingClientRect();
+  const r = stage.getBoundingClientRect();
   const x = e.clientX - r.left, y = e.clientY - r.top;
   let best = -1, bestD = 9;
   DEMO.pairs.forEach((pr, i) => {
@@ -1512,7 +1546,7 @@ new ResizeObserver(() => {
   rszT = setTimeout(() => {
     sizeCanvases(); drawMap(); drawFog(); drawTrails(1); drawOverlay();
   }, 120);
-}).observe(shell);
+}).observe(stage);
 window.addEventListener('load', boot);
 </script>
 </body>

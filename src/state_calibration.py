@@ -97,8 +97,10 @@ def fit_ou(series: pd.Series, dt: float = DT) -> dict:
     vx = np.var(x0)
     if vx <= 0:
         raise ValueError("state series is constant; nothing to fit")
-    phi = float(np.cov(x0, x1, bias=True)[0, 1] / vx)
-    phi = float(np.clip(phi, 0.20, 0.995))     # stationary, mean-reverting
+    phi_raw = float(np.cov(x0, x1, bias=True)[0, 1] / vx)
+    # stationary, mean-reverting. Overlapping rolling windows make the state
+    # series smooth, so the upper bound binds on live data; the caller flags it
+    phi = float(np.clip(phi_raw, 0.20, 0.995))
     c = float(np.mean(x1) - phi * np.mean(x0))
     resid = x1 - (c + phi * x0)
     s = float(np.std(resid, ddof=1))
@@ -107,7 +109,8 @@ def fit_ou(series: pd.Series, dt: float = DT) -> dict:
     sigma = s * np.sqrt(2.0 * theta / (1.0 - phi * phi))
     return {"theta": float(theta), "mu": float(mu), "sigma": float(sigma),
             "s": s, "dt": dt,
-            "phi": phi, "resid": pd.Series(resid, index=series.dropna().index[1:])}
+            "phi": phi, "phi_raw": phi_raw,
+            "resid": pd.Series(resid, index=series.dropna().index[1:])}
 
 
 # --- dispersion correction -------------------------------------------------
@@ -273,8 +276,13 @@ def calibrate_state_dynamics(port_returns: pd.Series,
     fb = fit_ou(state["beta"])
     fv = fit_ou(np.log(state["vol"]))
 
-    th_b = _clamp(fb["theta"], "theta", flags)
-    th_v = _clamp(fv["theta"], "theta", flags)
+    # Every clamp names the parameter it bound - the footnote lists these as
+    # the numbers on the map that are policy, not estimate.
+    for key, fit in (("phi_b", fb), ("phi_v", fv)):
+        if fit["phi"] != fit["phi_raw"]:
+            flags.append(f"{key} clamped {fit['phi_raw']:.4g} -> {fit['phi']:.4g}")
+    th_b = _clamp(fb["theta"], "theta_b", flags, band=CLAMPS["theta"])
+    th_v = _clamp(fv["theta"], "theta_v", flags, band=CLAMPS["theta"])
     # If theta landed on a clamp, the (theta, sigma) pair from fit_ou no
     # longer reproduces the fitted one-step residual variance - the exact
     # transition the simulator uses would then imply a different daily shock
@@ -297,11 +305,13 @@ def calibrate_state_dynamics(port_returns: pd.Series,
     rho = _clamp(float(resid["b"].corr(resid["v"])), "rho", flags)
     # leverage effect: portfolio return vs same-day vol innovation
     port_aligned = port_returns.reindex(resid.index)
-    lev = _clamp(float(port_aligned.corr(resid["v"])), "rho", flags)
+    lev = _clamp(float(port_aligned.corr(resid["v"])), "lev", flags, band=CLAMPS["rho"])
 
     # Widen the shocks by the factor measured against realized history, so the
     # drawn terrain holds the mass its rings are labelled with out of sample.
     disp = dispersion_correction(state)
+    if disp.get("k_uncapped", 1.0) > K_CLAMP[1]:
+        flags.append(f"k clamped {disp['k_uncapped']:.3g} -> {disp['k']:.3g}")
     if disp["k"] > 1.0:
         sig_b = _clamp(sig_b * disp["k"], "sig_b", flags)
         eta_v = _clamp(eta_v * disp["k"], "eta_v", flags)
