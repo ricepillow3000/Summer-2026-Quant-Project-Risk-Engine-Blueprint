@@ -421,6 +421,18 @@ risk-engine/
   Open, by design: a universe name can be both a shorted holding and a pair's
   long anchor, so its dot and its link disagree on a short book. Synthetic-
   verified; `python -m tests.batch_audit` on live data is still owed.
+- ✅ **Map audit follow-up (2026-10-15)** - an adversarial review AFTER the merge
+  found what the first pass missed, each now a failing probe check first:
+  HUD tiles/chips still spilled at 1181-1249 and 1451-1465px (the probe only
+  tried round widths; it now covers the gaps); on the stacked layout the
+  x-axis sat below the iframe's 820px fold (800-862px) and explain mode showed
+  the x-axis tip with the pointer over the panels BELOW the map (the shell
+  listener had no bounds check once the shell outgrew the stage); a book near
+  beta 0 read a move away from zero as "exposure sheds" (now |beta| change);
+  anchor-pool dots were explained as "one holding"; `.4g` printed a phi clamp
+  as "1 -> 0.995"; the pair_weights docstring kept the false "flyer holds most
+  of the risk". Swept every 10px, 360-1920: clean. Below 360px the plot is
+  narrower than 260px - the screen, not the layout. Desktop dots unchanged.
 
 ## Non-negotiable constraints (the "why")
 
