@@ -55,6 +55,9 @@ jobs:
         run: python -m src.conviction
       - name: 5. Deployed site in a browser - skeleton, top bar, headline, errors
         if: always()
+        env:
+          # on main the deployed site must be serving this very commit
+          EXPECT_BUILD: ${{ github.ref == 'refs/heads/main' && github.sha || '' }}
         run: |
           mkdir -p site-shots
           node tools/site_check.mjs "$SITE_URL" site-shots

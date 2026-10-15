@@ -33,6 +33,10 @@ TITLE = "Meleona - Portfolio Risk Engine"
 DESCRIPTION = ("VaR, CVaR, Monte Carlo stress testing and factor exposures, computed "
                "live from Yahoo Finance data - every number traceable to its source.")
 MARK, END = "<!-- meleona-head -->", "<!-- /meleona-head -->"
+# The commit this process was built from. Railway sets RAILWAY_GIT_COMMIT_SHA
+# on a GitHub deploy and posts nothing back to GitHub, so "is the fix live?"
+# was guesswork (2026-09-03, 2026-09-09) until the page said so itself.
+BUILD = os.environ.get("RAILWAY_GIT_COMMIT_SHA") or os.environ.get("GITHUB_SHA") or ""
 PUBLIC = pathlib.Path(__file__).resolve().parent.parent / "public"
 
 
@@ -51,10 +55,12 @@ PRE_BOOT = (
 )
 
 
-def head_tags(site_url: str) -> str:
+def head_tags(site_url: str, build: str = "") -> str:
     t, d, u = html.escape(TITLE), html.escape(DESCRIPTION), html.escape(site_url)
+    b = html.escape(build[:12] or "unknown")
     return (
         f'{MARK}\n<title>{t}</title>\n'
+        f'<meta name="meleona-build" content="{b}">\n'
         f'<meta name="description" content="{d}">\n'
         f'<link rel="canonical" href="{u}/">\n'
         f'<link rel="icon" type="image/png" href="/favicon.png">\n'
@@ -79,7 +85,8 @@ def head_tags(site_url: str) -> str:
     )
 
 
-def install(static_dir: pathlib.Path, site_url: str = SITE_URL) -> list[str]:
+def install(static_dir: pathlib.Path, site_url: str = SITE_URL,
+            build: str | None = None) -> list[str]:
     """Copy public files and patch index.html in `static_dir`. Returns what changed."""
     done = []
     for f in sorted(PUBLIC.glob("*")):
@@ -97,7 +104,7 @@ def install(static_dir: pathlib.Path, site_url: str = SITE_URL) -> list[str]:
 
     index = static_dir / "index.html"
     page = index.read_text(encoding="utf-8")
-    block = head_tags(site_url)
+    block = head_tags(site_url, BUILD if build is None else build)
     if MARK in page:                       # replace our block in place
         i, j = page.index(MARK), page.index(END) + len(END) + 1
         new = page[:i] + block + page[j:]

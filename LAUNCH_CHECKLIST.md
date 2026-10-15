@@ -63,8 +63,9 @@ notices fastest.
 - [x] Test mail sent to the project address and confirmed arriving in both
       mailboxes (2026-08-26).
 - [ ] Set `MELEONA_CHANNEL=beta` on the beta deploy, and unset it for public.
-- [ ] Run `python -m tools.warm_cache` after the deploy so the first visitor
-      lands on a warm cache.
+- [x] Warm cache: automatic. The Procfile runs `python -m tools.warm_cache --every 5`
+      beside the app, so no preset expires before a visitor picks it (RUNBOOK.md,
+      *After every deploy*).
 - [ ] Read `ACCESSIBILITY.md` once before sharing the link - it is the page a
       complainant's lawyer reads first, and it must stay true of the app.
 - [ ] Deploy to Railway (`RUNBOOK.md` §6c) with `MELEONA_CHANNEL=beta`

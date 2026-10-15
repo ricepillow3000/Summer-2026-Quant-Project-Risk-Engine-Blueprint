@@ -114,10 +114,19 @@ for (const [label, w, h] of [['desktop', 1440, 900], ['phone', 390, 844]]) {
   ok(!errors.length, `${label}: no script errors${errors.length ? ` (${errors.slice(0, 2)})` : ''}`);
   await page.close();
 }
+// Which commit is this host serving? tools/public_files.py stamps it into the
+// raw HTML; the Live audit sets EXPECT_BUILD on main, where the deployed site
+// must be serving the commit under test (a host that quietly kept an old build
+// cost two sessions in September).
+const get = async p => { const r = await fetch(url.replace(/\/$/, '') + p); return [r.status, r.headers.get('content-type') || '', await r.text()]; };
+const [hs, , head] = await get('/');
+const build = (head.match(/<meta name="meleona-build" content="([^"]*)"/) || [])[1] || '(no build tag)';
+console.log(`INFO  build: ${build}`);
+if (process.env.EXPECT_BUILD)
+  ok(process.env.EXPECT_BUILD.startsWith(build) && build.length >= 7,
+     `deployed build is the commit under test (${build} vs ${process.env.EXPECT_BUILD.slice(0, 12)})`);
 if (process.env.SEO) {
   // Launch basics a crawler or link preview reads - raw HTML, no JavaScript.
-  const get = async p => { const r = await fetch(url.replace(/\/$/, '') + p); return [r.status, r.headers.get('content-type') || '', await r.text()]; };
-  const [hs, , head] = await get('/');
   for (const tag of ['<title>Meleona', 'name="description"', 'property="og:image"', 'property="og:title"', 'rel="canonical"', 'twitter:card'])
     ok(hs === 200 && head.includes(tag), `seo: raw HTML carries ${tag}`);
   const [rs, , robots] = await get('/robots.txt');
