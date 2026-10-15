@@ -15,7 +15,8 @@
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 
-const [pagePath, widthArg = '1920,1440,1280,1180,1024,1000,790,600,390'] = process.argv.slice(2);
+// 1456 and 1220 sit inside bands where the HUD tiles once spilled under the inspector while every round width passed
+const [pagePath, widthArg = '1920,1456,1440,1280,1220,1180,1024,1000,790,600,390'] = process.argv.slice(2);
 let pw;
 try {
   pw = await import('playwright');
@@ -76,6 +77,16 @@ for (const width of widthArg.split(',').map(Number)) {
     const pw_ = (W - PAD.l - PAD.r) * sx, ph = (H - PAD.t - PAD.b) * sy;
     if (pw_ < 260 || ph < 260) found.push(`plot too small to read: ${Math.round(pw_)} x ${Math.round(ph)} px`);
     if (Math.abs(cv.width - W) > 1 || Math.abs(cv.height - H) > 1) found.push(`canvas drawn at ${W}x${H} but shown at ${Math.round(cv.width)}x${Math.round(cv.height)} (stretched)`);
+    // stacked (narrow) layout: the x-axis must be on the frame's first screen, not below the fold of the iframe
+    if (getComputedStyle(document.querySelector('.stage')).position !== 'absolute' && plot.b + 20 > innerHeight)
+      found.push(`x-axis below the fold (${Math.round(plot.b)}px of ${innerHeight})`);
+    // explain mode reads the MAP: a pointer outside it (below the plot, over the stacked panels) shows nothing
+    const wasExplain = S.explain;
+    S.explain = true;
+    document.getElementById('stage').dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: cv.left + cv.width / 2, clientY: cv.bottom + 40 }));
+    if (document.getElementById('tip').style.display === 'block') found.push('explain tooltip shows outside the map');
+    document.getElementById('tip').style.display = 'none';
+    S.explain = wasExplain;
     const sideways = document.documentElement.scrollWidth - document.documentElement.clientWidth;
     if (sideways > 0) found.push(`scrolls sideways by ${sideways} px`);
     return { plot: [Math.round(pw_), Math.round(ph)], found };

@@ -93,7 +93,9 @@ def build_map_payload(returns: pd.DataFrame, weights: pd.Series,
             # sign-invariant and stays as measured. The anchor pool is NOT
             # held - it is the candidate hedge, bought LONG against the short
             # (pairing.anchor_rank, direction="short") - so it stays at its own
-            # measured beta, and the defensive link is drawn to where it is.
+            # measured beta. An anchor picked from the universe itself is
+            # still drawn here, at its shorted beta, while the pair numbers
+            # hold it long: the link joins the dots, not the hedge's address.
             b = -b
         if np.isfinite(b) and np.isfinite(v):
             assets.append({"t": t, "b": round(b, 3), "v": round(v, 4),
@@ -200,8 +202,10 @@ def build_map_payload(returns: pd.DataFrame, weights: pd.Series,
             "plus +0.10 shock corr, calm = x 0.7 (disclosed policy, not "
             "data). Zero-drift risk view. Hazard: 3x today's vol (floored "
             "at 35%, capped at 90%) and beta "
-            + ("-0.8 (capped at -1.9) - the short book's betas are negated, so "
-               "the perimeter is mirrored and danger is MORE negative beta"
+            + ("-0.8 (capped at -1.9) - the short book's holdings have their "
+               "betas negated (anchor-pool names are not held and keep their "
+               "own), so the perimeter is mirrored and danger is MORE negative "
+               "beta"
                if bearish else "+0.8 (capped at 1.9)")
             + ". Pair numbers replay real history: monthly rebalance, no "
             "lookahead."

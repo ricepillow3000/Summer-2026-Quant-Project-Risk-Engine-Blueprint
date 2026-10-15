@@ -280,7 +280,7 @@ def calibrate_state_dynamics(port_returns: pd.Series,
     # the numbers on the map that are policy, not estimate.
     for key, fit in (("phi_b", fb), ("phi_v", fv)):
         if fit["phi"] != fit["phi_raw"]:
-            flags.append(f"{key} clamped {fit['phi_raw']:.4g} -> {fit['phi']:.4g}")
+            flags.append(f"{key} clamped {fit['phi_raw']:.6g} -> {fit['phi']:.6g}")
     th_b = _clamp(fb["theta"], "theta_b", flags, band=CLAMPS["theta"])
     th_v = _clamp(fv["theta"], "theta_v", flags, band=CLAMPS["theta"])
     # If theta landed on a clamp, the (theta, sigma) pair from fit_ou no

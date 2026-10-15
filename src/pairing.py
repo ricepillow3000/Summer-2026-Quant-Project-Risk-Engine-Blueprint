@@ -156,8 +156,8 @@ def pair_weights(returns_a: pd.Series, returns_b: pd.Series) -> dict:
     not equal dollars. For two assets this is exact inverse-volatility:
         w_a * sigma_a = w_b * sigma_b  =>  w_a = sigma_b / (sigma_a + sigma_b)
     A high-flyer at ~3x the anchor's vol naturally lands near 25/75 - the
-    anchor holds most of the CAPITAL precisely because the flyer holds most
-    of the RISK. Long-only by construction.
+    anchor holds most of the CAPITAL because it needs ~3x the dollars to
+    carry the same RISK as the flyer. Long-only by construction.
     """
     sa = float(pd.Series(returns_a).dropna().std())
     sb = float(pd.Series(returns_b).dropna().std())

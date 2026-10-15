@@ -294,7 +294,7 @@ select {
    Below 1450px the chips stop competing for the row and take their own
    full-width line inside the HUD. Nothing is hidden or truncated - the panel
    simply grows a little taller, which it can afford as a floating overlay. */
-@media (max-width: 1450px) {
+@media (max-width: 1470px) {
   .hud { flex-wrap: wrap; }
   .verdict, .tiles { min-width: 0; }
   .chips {
@@ -305,6 +305,11 @@ select {
   /* nowrap is what made a chip unshrinkable; let a long one break rather
      than force the row wider than the panel. */
   .chip { white-space: normal; }
+}
+/* tiles beside the verdict still spilled past the HUD from 1181 to 1249px;
+   their own row from 1260px down, as under 1180px */
+@media (max-width: 1260px) {
+  .tiles { flex: 1 1 100%; }
 }
 
 /* ---- narrow canvas: stacked, not floating ------------------------------
@@ -323,7 +328,8 @@ select {
     position: relative; left: auto; right: auto; top: auto; bottom: auto; width: auto;
   }
   .hud { order: 1; min-height: 0; padding: 10px 12px; flex-wrap: wrap; gap: 10px; }
-  .stage { order: 2; position: relative; inset: auto; height: 520px; }
+  /* the iframe is 820px high: the x-axis must land on its first screen */
+  .stage { order: 2; position: relative; inset: auto; height: clamp(360px, calc(100vh - 380px), 520px); }
   .chipbar { order: 3; position: static; flex-wrap: wrap; }
   .mchip { white-space: normal; }
   .side { order: 4; overflow: visible; }
@@ -1090,7 +1096,10 @@ function startCouriers(linkIdx, dur) {
 
 /* ---------- explain mode: plain-language reading of every map element ---------- */
 const EXPLAIN = {
-  asset: t => [t + ' · one holding',
+  asset: (t, f) => f === 'Anchor pool'
+    ? [t + ' · candidate hedge, not held',
+       'A defensive name the pairing tournament may buy against the flyer. It is not in the book, so it sits at its own measured beta and volatility, across its full loaded history.']
+    : [t + ' · one holding',
     'Sits at its measured risk address: how hard it moves with the market (left-right) and how violently it moves day to day (up-down). Both measured across its FULL loaded history - not the recent rolling window used by the mark for the book itself, so a holding and the book are two different readings of the same axes: an average against a right-now.'],
   portfolio: () => ['Portfolio · you are here',
     'The whole book today, measured from rolling windows of its real returns. Every simulated future starts from this exact spot.'],
@@ -1100,7 +1109,7 @@ const EXPLAIN = {
     'After 10,000 simulated 30-day futures, ' + pct + ' of them END inside this ring. Counted from the simulation, not assumed. The farther out, the darker: the fog is where the book almost never lands.'],
   perimeter: () => ['Maximum VaR breach perimeter',
     'The danger line, set by a disclosed policy (3x today\'s volatility, floored at 35% and capped at 90%, or beta '
-    + (BSGN > 0 ? 'up 0.8, capped at 1.9' : 'down 0.8, capped at -1.9 - this book is short, so its betas are negated and the perimeter is mirrored')
+    + (BSGN > 0 ? 'up 0.8, capped at 1.9' : 'down 0.8, capped at -1.9 - this book is short, so the betas of its holdings are negated and the perimeter is mirrored')
     + '). Any simulated path that crosses it burns ember and counts toward the breach probability in the top bar.'],
   iso: pct => ['Iso-VaR guide · ' + pct + ' daily',
     'A reference altitude: at this volatility, a normal bad day (worst 5%) costs about ' + pct + '. Higher on the map = bigger daily losses at the same odds.'],
@@ -1117,7 +1126,7 @@ const EXPLAIN = {
 function explainTarget(x, y) {
   /* priority: units > portfolio > links > perimeter > rings > iso > axes > tail > terrain */
   for (const a of DEMO.assets) {
-    if (Math.hypot(toX(a.b) - x, toY(a.v) - y) < 10) return EXPLAIN.asset(a.t);
+    if (Math.hypot(toX(a.b) - x, toY(a.v) - y) < 10) return EXPLAIN.asset(a.t, a.f);
   }
   if (Math.hypot(toX(DEMO.base.beta) - x, toY(DEMO.base.vol) - y) < 20) return EXPLAIN.portfolio();
   if (S.links) {
@@ -1153,9 +1162,10 @@ function explainTarget(x, y) {
 
 /* ---------- scenario reading ---------- */
 function scenarioText(b, v) {
-  /* db > 0 = more market exposure, the side the perimeter is on: on a short
-     book that is MORE NEGATIVE beta, so the raw difference read it backwards */
-  const db = BSGN * (b - DEMO.base.beta), dv = v - DEMO.base.vol;
+  /* db > 0 = more market exposure, either sign of beta: a short book builds it
+     toward MORE NEGATIVE beta, and a book near beta 0 builds it whichever way
+     it drifts, so it is the change in |beta|, not in beta */
+  const db = Math.abs(b) - Math.abs(DEMO.base.beta), dv = v - DEMO.base.vol;
   const d = S.cloud.maha(b, v);
   let sev;
   if (d < S.cloud.r68) sev = 'Within normal drift.';
@@ -1443,6 +1453,12 @@ shell.addEventListener('mousemove', e => {
   }
   const r = stage.getBoundingClientRect();
   const x = e.clientX - r.left, y = e.clientY - r.top;
+  /* stacked layout: the shell runs on below the map, and that is not the map */
+  if (x < 0 || y < 0 || x > W || y > H) {
+    if (S.mouse) { S.mouse = null; drawOverlay(); }
+    tip.style.display = 'none';
+    return;
+  }
   S.mouse = { x: x, y: y };
   let hov = null;
   for (const a of DEMO.assets) {
