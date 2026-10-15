@@ -20,6 +20,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
+from streamlit.runtime.app_session import AppSession
 
 # ponytail: components.html is deprecated with removal announced for 2026-06-01
 # (still shipping in 1.62). st.iframe is NOT a migration path - it takes a URL,
@@ -79,6 +80,23 @@ from src.conviction import (
 st.set_page_config(page_title="Meleona - Portfolio Risk Engine",
                    page_icon=str(Path(__file__).parent / "public" / "favicon.png"),
                    layout="wide")
+
+
+# toolbarMode="viewer" hides the "Clear cache" menu, but the websocket message
+# behind it is still honoured: Streamlit's AppSession answers a `clear_cache`
+# BackMsg from ANY client by emptying st.cache_data and st.cache_resource for
+# every visitor in this process. 2026-10-15 security audit: a scripted client
+# looping that message pins the single process recomputing cold pages. This
+# app has no visitor action that should clear shared state, so the handler
+# becomes a no-op; operators restart the process or run tools.warm_cache.
+# The name is Streamlit-private and checked against the pinned ~=1.62.0
+# (requirements.txt) by test_a_crafted_clear_cache_message_clears_nothing.
+# Re-assigning on every rerun is idempotent.
+def _ignore_clear_cache_request(self) -> None:
+    return None
+
+
+AppSession._handle_clear_cache_request = _ignore_clear_cache_request
 
 # ---- Operations: kill switch, crash wire, session reference ----------------
 # SUPPORT_EMAIL is the one place the contact address lives; the footer, the
@@ -1006,12 +1024,18 @@ if len(tickers) < 2:
 # Short TTL so the session re-checks the (already freshness-aware, 6h) disk
 # cache often and the UI feels snappy -- this does NOT hit Yahoo more often;
 # it just re-reads the local parquet faster. See PROGRESS.md "fast polling."
-@st.cache_data(ttl=60, show_spinner="Fetching market data…")
+#
+# max_entries on every cache keyed by visitor input: st.cache_data keeps one
+# entry per argument tuple until its ttl, so without a cap a script cycling
+# tickers or slider values grows process memory without bound. 2026-10-15
+# security audit. 64 for small results, 32 for frames and bootstraps - well
+# above what honest traffic reuses within a ttl.
+@st.cache_data(ttl=60, max_entries=64, show_spinner="Fetching market data…")
 def load_universe(tickers_tuple: tuple[str, ...], period: str = "2y"):
     return fetch_prices(list(tickers_tuple), period=period)
 
 
-@st.cache_data(ttl=3600, show_spinner="Fitting tail model…")
+@st.cache_data(ttl=3600, max_entries=32, show_spinner="Fitting tail model…")
 def load_tail_fit(tickers_tuple: tuple[str, ...], weights_tuple: tuple[float, ...],
                   bearish_flag: bool):
     """
@@ -1046,13 +1070,13 @@ def load_tail_fit(tickers_tuple: tuple[str, ...], weights_tuple: tuple[float, ..
     return mcneil_frey_tail(pr), int(len(pr)), dropped
 
 
-@st.cache_data(ttl=3600, show_spinner="Loading volume data…")
+@st.cache_data(ttl=3600, max_entries=64, show_spinner="Loading volume data…")
 def load_adv(tickers_tuple: tuple[str, ...]):
     """Average daily dollar volume per ticker (recent 3-month lookback)."""
     return average_dollar_volume(list(tickers_tuple))
 
 
-@st.cache_data(ttl=3600, show_spinner="Loading volume history…")
+@st.cache_data(ttl=3600, max_entries=64, show_spinner="Loading volume history…")
 def load_dollar_volume(tickers_tuple: tuple[str, ...], period: str = "2y"):
     """DAILY dollar volume per ticker. The Book needs the whole series, not a
     mean: its liquidity gate runs on the 5th percentile of the window, so that
@@ -1060,7 +1084,7 @@ def load_dollar_volume(tickers_tuple: tuple[str, ...], period: str = "2y"):
     return fetch_dollar_volume(list(tickers_tuple), period=period)
 
 
-@st.cache_data(ttl=3600, show_spinner="Assembling the book…")
+@st.cache_data(ttl=3600, max_entries=32, show_spinner="Assembling the book…")
 def load_book(px, dv, book_value: float, participation_rate: float,
               grit_floor: bool, anchors: tuple[str, ...]):
     """Cached because Streamlit re-executes this whole script on EVERY widget
@@ -1076,7 +1100,7 @@ def load_book(px, dv, book_value: float, participation_rate: float,
                       fallback_anchors=set(anchors) or None)
 
 
-@st.cache_data(ttl=3600, show_spinner="Reading the defensive shelf…")
+@st.cache_data(ttl=3600, max_entries=32, show_spinner="Reading the defensive shelf…")
 def load_anchor_shelf(anchors: tuple[str, ...], period: str = "2y"):
     """Prices and volume for the defensive names The Book may fall back on when
     the chosen universe contains nothing that thins a tail."""
@@ -1090,14 +1114,14 @@ def load_risk_free_rate():
     return fetch_risk_free_rate()
 
 
-@st.cache_data(ttl=3600, show_spinner="Scoring the Grit Zone…")
+@st.cache_data(ttl=3600, max_entries=32, show_spinner="Scoring the Grit Zone…")
 def load_grit(tickers_tuple: tuple[str, ...]):
     """Grit scores need each asset's FULL price history, not just the 2y window
     used for VaR - grit_scores() pulls it separately (see src.grit)."""
     return grit_scores(list(tickers_tuple))
 
 
-@st.cache_data(ttl=3600, show_spinner="Building the security master…")
+@st.cache_data(ttl=3600, max_entries=32, show_spinner="Building the security master…")
 def load_security_master(tickers_tuple: tuple[str, ...]):
     """Corporate actions change rarely (not intraday) - a longer TTL is fine."""
     return security_master(list(tickers_tuple))
@@ -2312,7 +2336,7 @@ with tab_balance:
             # "What goes up must come down. We can't cap the fall; we
             # measure the cushion." Council pass 6: cushion never cap,
             # ES@97.5 never CVaR@99, ranks never promises.
-            @st.cache_data(ttl=6 * 3600, show_spinner=False)
+            @st.cache_data(ttl=6 * 3600, max_entries=32, show_spinner=False)
             def _bv_anchor_returns(universe_key: str):
                 """Universe returns joined with defensive ETF candidates
                 (Treasuries/gold/staples/utilities/min-vol) - an equity
@@ -2322,11 +2346,11 @@ with tab_balance:
                 joined_bv = returns.join(etf_rets, how="inner")
                 return joined_bv.dropna(axis=1)
 
-            @st.cache_data(ttl=6 * 3600, show_spinner=False)
+            @st.cache_data(ttl=6 * 3600, max_entries=64, show_spinner=False)
             def _bv_crisis(a: str, b: str, w: float, short_a: bool = False):
                 return crisis_cushion(a, b, w, short_a=short_a)
 
-            @st.cache_data(ttl=6 * 3600, show_spinner=False)
+            @st.cache_data(ttl=6 * 3600, max_entries=32, show_spinner=False)
             def _bv_grit(tickers: tuple):
                 """Grit scores for anchor candidates - the engine's founding
                 question ("who gets back up?") IS the Circle 2 screen."""

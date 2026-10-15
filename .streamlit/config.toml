@@ -16,6 +16,14 @@ headless = true
 enableCORS = true
 enableXsrfProtection = true
 
+# The app takes no files, but Streamlit's PUT /_stcore/upload_file/ endpoint
+# answers any client anyway and holds each upload in process memory, up to
+# this size (200 MB default) per file with no total cap. 2026-10-15 security
+# audit: a scripted client could park gigabytes in the one process every
+# visitor shares. 1 MB is the floor. Add a file_uploader and this needs a
+# budget sized for it - the test that pins this also forbids one.
+maxUploadSize = 1
+
 [browser]
 # Streamlit's usage telemetry defaults to ON and phones home on every run.
 # PRIVACY.md tells visitors there is "no analytics, advertising, attribution or
@@ -38,10 +46,11 @@ showErrorDetails = false
 # accounts, no roles and no privileged data, so there is no admin to
 # impersonate - only these operator buttons, and now they are gone.
 #
-# Honest limit: this hides the UI affordance. The underlying rerun/clear-cache
-# messages still exist in Streamlit's protocol, so a determined visitor
-# crafting websocket frames could still reach them. That is bounded to a
-# denial-of-service, never a data leak, because the cache holds only public
-# market data any visitor can already re-request - and it is bounded further
-# by MAX_UNIVERSE and the cache budget in src/ingestion.py.
+# Honest limit: this hides the UI affordance, not the protocol. The
+# clear-cache message is now refused in main.py (2026-10-15 security audit:
+# it emptied every visitor's cache); the rerun message still exists, so a
+# determined visitor crafting websocket frames can rerun their OWN session.
+# That is bounded to a denial-of-service, never a data leak, because the cache
+# holds only public market data any visitor can already re-request - and it
+# is bounded further by MAX_UNIVERSE and the cache budget in src/ingestion.py.
 toolbarMode = "viewer"

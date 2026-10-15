@@ -1929,6 +1929,67 @@ def test_map_payload_cannot_break_out_of_its_script_block():
     assert _json.loads(blob) == payload            # escaping changed nothing semantically
 
 
+def test_map_renders_ticker_names_as_text_not_markup():
+    """2026-10-15 security audit: the pairing inspector and standings built
+    HTML strings with the flyer and anchor names (pr.fl / pr.an) raw, then
+    handed them to innerHTML - so a name carrying markup would run in the
+    map's frame. The splice escape above only stops a name ending the <script>
+    block; once the page reads it back as a JS string it is live markup again.
+    Every statement that builds markup must pass payload names through esc()."""
+    import re
+    import shutil
+    import subprocess
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    page = (root / "prototypes" / "war_room.html").read_text(encoding="utf-8")
+    script = page[page.index("<script>"):]
+    m = re.search(r"function esc\(s\) \{.*?\n\}", script, re.S)
+    assert m, "the map lost its esc() helper"
+
+    offenders = []
+    for stmt in re.split(r";[ \t]*\n", script):
+        if "innerHTML" not in stmt and "'<" not in stmt:
+            continue                                  # not building markup
+        for name in re.finditer(r"[\w.]*\b(?:pr|[aAB])\.(?:fl|an|t)\b", stmt):
+            if not stmt[:name.start()].endswith("esc("):
+                line = page[:page.index(stmt)].count("\n") + 1
+                offenders.append(f"war_room.html:~{line}: {name.group(0)}")
+    assert not offenders, "payload names reach innerHTML unescaped: " + str(offenders)
+
+    node = shutil.which("node")
+    if node:   # and esc() really neutralises markup, run as the page runs it
+        probe = m.group(0) + "\nprocess.stdout.write(esc(`<img src=x onerror='a(1)'>&\"`));"
+        out = subprocess.run([node, "-e", probe], capture_output=True, text=True,
+                             timeout=30).stdout  # nosec B603 - fixed argv
+        assert out == "&lt;img src=x onerror=&#39;a(1)&#39;&gt;&amp;&quot;", out
+
+
+def test_a_feed_column_that_is_not_ticker_shaped_never_reaches_the_page():
+    """VALID_TICKER guards what a visitor TYPES, but the column names that come
+    back are the feed's: yfinance can label a column after a search result.
+    2026-10-15 security audit: those names flow into the map, captions and
+    tables, so the download keeps only ticker-shaped columns. Offline: the
+    downloader is replaced, nothing leaves the machine."""
+    import src.ingestion as ing
+
+    idx = pd.bdate_range("2025-01-02", periods=30)
+    bad = "<img src=x onerror=alert(1)>"
+    cols = ["AAPL", bad]
+    frame = pd.concat({"Close": pd.DataFrame(100.0, idx, cols),
+                       "Volume": pd.DataFrame(1e6, idx, cols)}, axis=1)
+    real = (ing.yf.download, ing.check_budget, ing.guarded_session)
+    try:
+        ing.yf.download = lambda *a, **k: frame
+        ing.check_budget = lambda *a, **k: None
+        ing.guarded_session = lambda: None
+        prices = ing.fetch_prices(["AAPL", "MSFT"], use_cache=False)
+        dv = ing.fetch_dollar_volume(["AAPL", "MSFT"], use_cache=False)
+    finally:
+        ing.yf.download, ing.check_budget, ing.guarded_session = real
+    assert list(prices.columns) == ["AAPL"], list(prices.columns)
+    assert list(dv.columns) == ["AAPL"], list(dv.columns)
+
+
 def test_universe_size_is_capped_at_the_funnel():
     """The complexity budget: no caller can make the server work on an
     unbounded universe, and junk symbols never reach a fetch."""
@@ -2707,19 +2768,56 @@ def test_no_exception_text_is_rendered_to_visitors():
     """str(exc) carries the absolute server path - FileNotFoundError and
     PermissionError on a cache file both embed it - so rendering it defeats
     showErrorDetails=false. Visitors get the exception TYPE plus their session
-    ref via safe_err(); the full text goes to the operator log."""
+    ref via safe_err(); the full text goes to the operator log.
+
+    The 2026-10-15 security audit found two st.info calls that rendered
+    {_bk_exc} and {_wr_exc}: the old scan read only the line holding `st.info(`
+    and only matched `{exc`/`{_exc`, so a message wrapped over several lines,
+    or an exception named anything else, walked past it. This reads every whole
+    st.* call and every name an `except ... as` binds."""
+    import ast
+
     root = pathlib.Path(__file__).resolve().parent.parent
     src = (root / "main.py").read_text(encoding="utf-8")
     assert "def safe_err(" in src, "the safe renderer was removed"
 
-    sinks = ("st.error(", "st.caption(", "st.info(", "st.warning(")
+    tree = ast.parse(src)
+    caught = {h.name for h in ast.walk(tree)
+              if isinstance(h, ast.ExceptHandler) and h.name}
     offenders = []
-    for n, ln in enumerate(src.splitlines(), 1):
-        if not any(c in ln for c in sinks):
+    for call in ast.walk(tree):
+        f = getattr(call, "func", None)
+        if not (isinstance(call, ast.Call) and isinstance(f, ast.Attribute)
+                and isinstance(f.value, ast.Name) and f.value.id == "st"):
             continue
-        if ("{exc" in ln or "{_exc" in ln) and "safe_err(" not in ln:
-            offenders.append("main.py:" + str(n) + ": " + ln.strip()[:90])
+        for field in ast.walk(call):
+            if not isinstance(field, ast.FormattedValue):
+                continue
+            v = field.value
+            if isinstance(v, ast.Call) and getattr(v.func, "id", "") == "safe_err":
+                continue
+            names = {n.id for n in ast.walk(v) if isinstance(n, ast.Name)}
+            if names & caught or any("exc" in n for n in names):
+                offenders.append(f"main.py:{field.lineno}: {{{ast.unparse(v)}}}")
     assert not offenders, "raw exception text reaches the page: " + str(offenders)
+
+
+def test_a_stranger_cannot_park_files_in_server_memory():
+    """2026-10-15 security audit: Streamlit serves PUT /_stcore/upload_file/...
+    to any client whether or not the page has a file_uploader, and holds each
+    upload in process memory up to server.maxUploadSize (200 MB by default)
+    with no total cap. This app takes no files, so the limit drops to the
+    1 MB floor - a scripted client can no longer park gigabytes in the single
+    process every visitor shares."""
+    import tomllib
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    cfg = tomllib.loads((root / ".streamlit" / "config.toml").read_text(encoding="utf-8"))
+    assert cfg.get("server", {}).get("maxUploadSize", 200) <= 1, \
+        "server.maxUploadSize is back to letting strangers upload large files"
+    src = (root / "main.py").read_text(encoding="utf-8")
+    assert "file_uploader" not in src, \
+        "a file_uploader needs an upload budget sized for it, not the 1 MB floor"
 
 
 def test_no_visitor_control_clears_the_shared_cache():
@@ -2733,6 +2831,95 @@ def test_no_visitor_control_clears_the_shared_cache():
     hits = [ln.strip() for ln in code
             if "cache_data.clear(" in ln or "clear_cache(" in ln]
     assert not hits, f"a visitor path clears the shared cache: {hits}"
+
+
+def test_a_crafted_clear_cache_message_clears_nothing():
+    """toolbarMode="viewer" hid the "Clear cache" menu, but the websocket
+    message behind it still works: Streamlit's AppSession answers a
+    `clear_cache` BackMsg from ANY client by emptying st.cache_data and
+    st.cache_resource for every visitor. 2026-10-15 security audit: a scripted
+    client sending it in a loop pins the single process recomputing cold
+    pages. main.py replaces the handler with a no-op once per process; this
+    runs that exact patch (lifted out of main.py) against a stub session."""
+    import ast
+    from streamlit.runtime import caching
+    from streamlit.runtime.app_session import AppSession
+
+    # A Streamlit upgrade that renames the handler would turn the patch into a
+    # silent no-op on a dead attribute (requirements.txt pins ~=1.62.0).
+    assert hasattr(AppSession, "_handle_clear_cache_request"), \
+        "Streamlit renamed the clear_cache handler - re-point the patch in main.py"
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    tree = ast.parse((root / "main.py").read_text(encoding="utf-8"))
+    patch = [n for n in tree.body if isinstance(n, ast.Assign)
+             and any(isinstance(t, ast.Attribute) and t.attr == "_handle_clear_cache_request"
+                     and getattr(t.value, "id", "") == "AppSession" for t in n.targets)]
+    assert len(patch) == 1, "main.py no longer neutralises the clear_cache message"
+    impl = [n for n in tree.body if isinstance(n, ast.FunctionDef)
+            and n.name == getattr(patch[0].value, "id", None)]
+
+    class Session(AppSession):
+        """A subclass, so the real class is never patched by the test."""
+
+        def __del__(self):  # the stub never started, so there is nothing to shut down
+            pass
+
+    calls = []
+
+    class _State:
+        def clear(self):
+            calls.append("session_state")
+
+    def run(cls):
+        calls.clear()
+        stub = object.__new__(cls)
+        stub._session_state = _State()
+        stub._handle_clear_cache_request()
+        return list(calls)
+
+    real = (caching.cache_data.clear, caching.cache_resource.clear)
+    caching.cache_data.clear = lambda *a, **k: calls.append("cache_data")
+    caching.cache_resource.clear = lambda *a, **k: calls.append("cache_resource")
+    try:
+        # Control: unpatched, the stub really reaches the shared caches.
+        assert "cache_data" in run(Session), "the stub no longer reaches the handler"
+        ns = {"AppSession": Session}
+        exec(compile(ast.Module(body=impl + patch, type_ignores=[]),  # nosec B102
+                     "main.py", "exec"), ns)
+        assert run(Session) == [], "a crafted clear_cache message still clears caches"
+    finally:
+        caching.cache_data.clear, caching.cache_resource.clear = real
+
+
+def test_every_visitor_keyed_cache_has_an_entry_cap():
+    """st.cache_data keeps one entry per distinct argument tuple, for the whole
+    process, until its ttl. Arguments come from visitors (typed tickers,
+    sliders, the book size), so without max_entries a script cycling inputs
+    grows the cache without bound inside the ttl - memory the one process
+    every visitor shares. 2026-10-15 security audit: eleven of seventeen
+    cached functions had no cap. A function with no arguments holds one entry and
+    needs none."""
+    import ast
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    tree = ast.parse((root / "main.py").read_text(encoding="utf-8"))
+    offenders = []
+    for fn in ast.walk(tree):
+        if not isinstance(fn, ast.FunctionDef):
+            continue
+        a = fn.args
+        if not (a.posonlyargs or a.args or a.kwonlyargs or a.vararg or a.kwarg):
+            continue
+        for dec in fn.decorator_list:
+            target = dec.func if isinstance(dec, ast.Call) else dec
+            if not (isinstance(target, ast.Attribute)
+                    and target.attr in ("cache_data", "cache_resource")):
+                continue
+            kws = {k.arg for k in dec.keywords} if isinstance(dec, ast.Call) else set()
+            if "max_entries" not in kws:
+                offenders.append(f"main.py:{fn.lineno} {fn.name}")
+    assert not offenders, f"visitor-keyed caches without max_entries: {offenders}"
 
 
 def test_monte_carlo_is_deterministic_so_caching_is_exact():

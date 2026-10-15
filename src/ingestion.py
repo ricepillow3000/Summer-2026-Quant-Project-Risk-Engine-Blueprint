@@ -315,7 +315,12 @@ def _download_close_volume(tickers: list[str], period: str) -> tuple[pd.DataFram
     else:
         close = raw[["Close"]].copy(); close.columns = tickers[:1]
         volume = raw[["Volume"]].copy(); volume.columns = tickers[:1]
-    return close, volume
+    # VALID_TICKER guards what a visitor types; these names are the FEED's, and
+    # yfinance can label a column after a search result. 2026-10-15 security
+    # audit: they flow into the map, captions and tables, so only ticker-shaped
+    # columns leave this chokepoint (it feeds prices and dollar volume alike).
+    keep = [c for c in close.columns if valid_ticker(c)]
+    return close[keep], volume.reindex(columns=keep)
 
 
 def _clean_price_frame(prices: pd.DataFrame, align: bool) -> pd.DataFrame:
