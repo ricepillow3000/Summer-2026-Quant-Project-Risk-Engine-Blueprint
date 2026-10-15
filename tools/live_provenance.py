@@ -104,12 +104,12 @@ def main() -> int:
     # (the original publisher FRED copies; FRED times out from some runners).
     ref = None
     try:
-        fred = pd.read_csv(urllib.request.urlopen(req, timeout=20))
+        fred = pd.read_csv(urllib.request.urlopen(req, timeout=20))  # nosec B310 - fixed https URL
         fred = fred[pd.to_numeric(fred.iloc[:, 1], errors="coerce").notna()]
         ref = (float(fred.iloc[-1, 1]) / 100, f"FRED DTB3 {fred.iloc[-1, 0]}")
     except OSError:
         year = datetime.now(timezone.utc).year
-        tsy = pd.read_csv(urllib.request.urlopen(urllib.request.Request(
+        tsy = pd.read_csv(urllib.request.urlopen(urllib.request.Request(  # nosec B310 - fixed https URL
             "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/"
             f"daily-treasury-rates.csv/{year}/all?type=daily_treasury_bill_rates"
             f"&field_tdr_date_value={year}&page&_format=csv",

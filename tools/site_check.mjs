@@ -22,10 +22,18 @@ for (const [label, w, h] of [['desktop', 1440, 900], ['phone', 390, 844]]) {
   page.setDefaultTimeout(180000);
   const errors = [];
   page.on('pageerror', e => errors.push(String(e)));
+  const t0 = Date.now();
   await page.goto(url);
   await page.waitForSelector('#boot-skel .hero-title', { state: 'attached' });
   await page.screenshot({ path: `${outdir}/${label}-skeleton.png` });
   await page.waitForSelector('#hero .hero-title');
+  const heroMs = Date.now() - t0;
+  console.log(`INFO  ${label}: hero painted ${heroMs}ms after navigation`);
+  // First Contentful Paint: the static pre-boot screen in index.html is the
+  // first thing drawn, before Streamlit's JavaScript; the hero follows.
+  const fcp = await page.evaluate(() => performance.getEntriesByName('first-contentful-paint')[0]?.startTime ?? -1);
+  console.log(`INFO  ${label}: first contentful paint ${fcp.toFixed(0)}ms`);
+  if (process.env.SEO) ok(fcp >= 0 && fcp < 2000, `${label}: first branded paint under 2s (FCP ${fcp.toFixed(0)}ms)`);
   await page.waitForTimeout(3000);              // tile fly-in settles
   const gaps = await page.evaluate(sels => sels.map(s => {
     const a = document.querySelector(`#boot-skel ${s}`)?.getBoundingClientRect();
@@ -45,6 +53,10 @@ for (const [label, w, h] of [['desktop', 1440, 900], ['phone', 390, 844]]) {
   ok(header === 'none' || header === 'absent', `${label}: Streamlit top bar hidden (${header})`);
   const crestTop = await page.evaluate(() => document.querySelector('#hero .hero-crest').getBoundingClientRect().top);
   ok(crestTop >= 0, `${label}: crest fully on screen (top ${crestTop.toFixed(0)}px)`);
+  const cta = await page.evaluate(() => document.querySelector('#hero .cta-btn').getBoundingClientRect().bottom);
+  ok(cta <= h, `${label}: main CTA above the fold (bottom ${cta.toFixed(0)}px of ${h})`);
+  const noAlt = await page.evaluate(() => [...document.querySelectorAll('img')].filter(i => !i.hasAttribute('alt')).length);
+  ok(noAlt === 0, `${label}: every <img> has alt text (${noAlt} missing)`);
   await page.screenshot({ path: `${outdir}/${label}-hero.png` });
 
   await page.waitForSelector('.verdict-number');
@@ -56,6 +68,11 @@ for (const [label, w, h] of [['desktop', 1440, 900], ['phone', 390, 844]]) {
   const text = await page.evaluate(() => document.body.innerText);
   const bad = text.match(/\b(nan|[-+]?inf)\b/gi);
   ok(!bad, `${label}: no NaN/inf in visible text${bad ? ` (${bad.slice(0, 3)})` : ''}`);
+  // The footer renders at the end of the script run, after the headline.
+  const contact = await page.waitForFunction(
+    () => /meleona\.support@gmail\.com/.test(document.body.textContent), null, { timeout: 120000 })
+    .then(() => true, () => false);
+  ok(contact, `${label}: real support contact shown on the page`);
   const sideways = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   ok(sideways <= 1, `${label}: no sideways scroll (${sideways}px)`);
   if (label === 'desktop') {
@@ -96,6 +113,25 @@ for (const [label, w, h] of [['desktop', 1440, 900], ['phone', 390, 844]]) {
   await page.screenshot({ path: `${outdir}/${label}-verdict.png` });
   ok(!errors.length, `${label}: no script errors${errors.length ? ` (${errors.slice(0, 2)})` : ''}`);
   await page.close();
+}
+if (process.env.SEO) {
+  // Launch basics a crawler or link preview reads - raw HTML, no JavaScript.
+  const get = async p => { const r = await fetch(url.replace(/\/$/, '') + p); return [r.status, r.headers.get('content-type') || '', await r.text()]; };
+  const [hs, , head] = await get('/');
+  for (const tag of ['<title>Meleona', 'name="description"', 'property="og:image"', 'property="og:title"', 'rel="canonical"', 'twitter:card'])
+    ok(hs === 200 && head.includes(tag), `seo: raw HTML carries ${tag}`);
+  const [rs, , robots] = await get('/robots.txt');
+  ok(rs === 200 && /Sitemap: https?:\/\//.test(robots), 'seo: /robots.txt names the sitemap');
+  const [ss, , site] = await get('/sitemap.xml');
+  ok(ss === 200 && site.includes('<urlset'), 'seo: /sitemap.xml served');
+  const [os_, ot] = await get('/og-image.png');
+  ok(os_ === 200 && ot.startsWith('image/png'), `seo: Open Graph image served (${os_} ${ot})`);
+  const [fs, ft] = await get('/favicon.png');
+  ok(fs === 200 && ft.startsWith('image/png'), 'seo: favicon served');
+  const p404 = await browser.newPage();
+  await p404.goto(url.replace(/\/$/, '') + '/no/such/page'); await p404.waitForTimeout(2500);
+  ok(/404 - page not found/i.test(await p404.evaluate(() => document.body.innerText)), 'seo: a bad link shows the branded 404, not a blank page');
+  await p404.screenshot({ path: `${outdir}/404.png` });
 }
 await browser.close();
 console.log(`\n${fails.length ? fails.length + ' FAILED' : 'all site checks pass'}`);

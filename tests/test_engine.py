@@ -2133,7 +2133,6 @@ def test_block_bootstrap_preserves_volatility_clustering():
     """The point of the whole exercise: sampled paths must still show the
     magnitude-clustering the history has. i.i.d. resampling destroys it."""
     rets = _clustered_returns()
-    w = np.array([1.0])
     history_acf = _abs_autocorr(rets["A"].values)
     assert history_acf > 0.05, "test data is not actually clustered"
 
@@ -2638,6 +2637,57 @@ def test_gungnir_plaque_matches_its_sketch_and_its_math():
     src = (pathlib.Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
     assert 'class="c">block 01<' in src and 'class="c">block 02<' in src
     assert 'class="c">circle' not in src and "Circle A" not in src
+
+
+def test_public_files_give_crawlers_and_link_previews_a_real_head(tmp_path=None):
+    """LinkedIn/Slack previews and search crawlers do not run JavaScript, so
+    tools/public_files.py writes the head they read into Streamlit's static
+    root at start: title, description, canonical, Open Graph image, robots,
+    sitemap, favicon, and a branded 404 for paths a single-page app would
+    otherwise serve as a blank page. Idempotent, and it must never drop
+    Streamlit's own markup."""
+    import tempfile
+
+    import tools.public_files as pf
+
+    d = pathlib.Path(tmp_path or tempfile.mkdtemp())
+    (d / "index.html").write_text(
+        "<!doctype html><html><head><title>Streamlit</title><script src='./static/js/a.js'>"
+        "</script></head><body><noscript>You need JS.</noscript><div id='root'></div>"
+        "</body></html>", encoding="utf-8")
+    pf.install(d, "https://example.test")
+    first = (d / "index.html").read_text(encoding="utf-8")
+    pf.install(d, "https://example.test")
+    assert (d / "index.html").read_text(encoding="utf-8") == first, "not idempotent"
+    assert first.count(pf.MARK) == 1 and first.count("<title>") == 1
+    for tag in ('name="description"', 'property="og:image" content="https://example.test/og-image.png"',
+                'rel="canonical" href="https://example.test/"', "summary_large_image",
+                "location.replace('/404.html')", "./static/js/a.js", "<div id='root'>",
+                'id="pre-boot"'):
+        assert tag in first, tag
+    assert "Sitemap: https://example.test/sitemap.xml" in (d / "robots.txt").read_text()
+    assert "<loc>https://example.test/</loc>" in (d / "sitemap.xml").read_text()
+    for f in ("og-image.png", "favicon.png", "apple-touch-icon.png", "404.html"):
+        assert (d / f).stat().st_size > 0, f
+    assert 'name="robots" content="noindex"' in (d / "404.html").read_text()
+
+
+def test_src_is_pure_computation_and_never_imports_the_ui():
+    """The layering CLAUDE.md promises: src/ is a numpy/pandas library the UI
+    composes, so it is testable without a browser and auditable on its own.
+    One `import streamlit` (or a reach back into main/tools/tests) inside src/
+    would quietly couple the math to the page - this fails the build instead."""
+    import ast
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    banned = {"streamlit", "main", "tools", "tests"}
+    offenders = []
+    for f in sorted((root / "src").glob("*.py")):
+        for node in ast.walk(ast.parse(f.read_text(encoding="utf-8"))):
+            mods = ([a.name for a in node.names] if isinstance(node, ast.Import)
+                    else [node.module or ""] if isinstance(node, ast.ImportFrom) else [])
+            offenders += [f"{f.name}: {m}" for m in mods if m.split(".")[0] in banned]
+    assert not offenders, f"src/ must not import the UI layer: {offenders}"
 
 
 def test_streamlit_header_bar_is_hidden():

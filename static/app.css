@@ -405,6 +405,9 @@ div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
                       to   { background-position: -200% 0; } }
 .sk { background: linear-gradient(90deg, #E2DCD0 25%, #EFEAE0 45%, #E2DCD0 65%);
     background-size: 200% 100%; animation: sk-sheen 1.15s linear infinite; }
+/* The static pre-boot screen in index.html (tools/public_files.py) has done
+   its job once this stylesheet is on the page. */
+#pre-boot { display: none !important; }
 #boot-skel { position: fixed; inset: 0; z-index: 999; background: #EDE9E3;
     display: flex; flex-direction: column; overflow: hidden;
     pointer-events: none; animation: boot-off .55s ease 2.1s forwards; }

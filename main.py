@@ -74,7 +74,11 @@ from src.conviction import (
     load_conviction, AI_CAPEX_BASKET, RECOVERY_HORIZON_DAYS, race_days,
 )
 
-st.set_page_config(page_title="Meleona", layout="wide")
+# Title and icon match the <head> tools/public_files.py serves to crawlers and
+# link previews, so a shared link and the browser tab say the same thing.
+st.set_page_config(page_title="Meleona - Portfolio Risk Engine",
+                   page_icon=str(Path(__file__).parent / "public" / "favicon.png"),
+                   layout="wide")
 
 # ---- Operations: kill switch, crash wire, session reference ----------------
 # SUPPORT_EMAIL is the one place the contact address lives; the footer, the
@@ -647,6 +651,12 @@ if not st.session_state.get("_booted"):
   #hero .hero-stats .hstat:nth-child(3) { animation-delay: .21s; }
   #hero .hero-stats .hstat:nth-child(4) { animation-delay: .29s; }
 </style>""", unsafe_allow_html=True)
+else:
+    # Hold the veil's slot. Streamlit keys every element by its position, so
+    # dropping one element on the second run shifted everything below it and
+    # every drawer (st.expander) re-mounted closed - the first control a
+    # visitor changed snapped shut under their cursor (recruiter walkthrough).
+    st.markdown("", unsafe_allow_html=True)
 
 st.markdown(hero_html(), unsafe_allow_html=True)
 
@@ -1390,11 +1400,18 @@ except Exception:  # noqa: BLE001 - headline must still render if volume feed is
     lvar = None
 
 # ---- Headline verdict ----
+# CVaR is a LOSS: positive means the worst 5% of years lose money. It goes
+# negative when even those years end up ahead - a crisis replay over a window
+# this book rallied through, or a short book replaying a crash - and "loses an
+# average of -57.6%" (found by the recruiter walkthrough) contradicts itself.
+_tail = (f"loses an average of <b>{mc['cvar']:.1%}</b>" if mc["cvar"] > 0 else
+         f"still ends up an average of <b>{-mc['cvar']:+.1%}</b> - this window gives "
+         f"the book no tail loss to measure")
 if scenario_label:
     verdict = (
         f"Replaying the actual returns of {scenario_label} "
         f"({len(shocked_returns)} trading days), {alloc_art} {alloc_label} portfolio{lev_txt} "
-        f"loses an average of <b>{mc['cvar']:.1%}</b> in the worst 5% of simulated years."
+        f"{_tail} in the worst 5% of simulated years."
     )
     if excluded:
         # Ticker names are user-supplied and this string is rendered with
@@ -1407,7 +1424,7 @@ if scenario_label:
 else:
     verdict = (
         f"In the worst 5% of simulated years, {alloc_art} {alloc_label} portfolio of these "
-        f"{len(loaded)} assets{lev_txt} loses an average of <b>{mc['cvar']:.1%}</b>."
+        f"{len(loaded)} assets{lev_txt} {_tail}."
     )
     if is_shocked:
         verdict += " *(under the stress scenario applied above)*"
@@ -2990,7 +3007,8 @@ with tab_regimes:
     with st.expander("Method & source - Wasserstein regime clustering"):
         st.caption(
             "Reproduces Horvath, Issa & Muguruza (2021), *Clustering Market "
-            "Regimes using the Wasserstein Distance*: every 20-day window of this "
+            "Regimes using the Wasserstein Distance* (arXiv 2110.11848; Journal of "
+            "Computational Finance 28(1), 2024): every 20-day window of this "
             "portfolio's daily returns becomes an empirical distribution, and "
             "k-means clusters those whole distributions (via the 1-D optimal-"
             "transport closed form) rather than summary features - so regimes "
