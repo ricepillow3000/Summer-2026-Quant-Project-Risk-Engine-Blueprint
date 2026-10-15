@@ -43,7 +43,7 @@ from src.risk import (
 )
 from src.comovement import (
     correlation_from_cov, rolling_correlation, most_correlated_pair,
-    defensive_shift, least_correlated_to_pair,
+    defensive_shift, least_correlated_to_pair, cluster_order,
 )
 from src.factors import factor_exposures
 from src.narrative import build_book, headline, Role
@@ -1966,10 +1966,17 @@ with tab_breakdown:
         "A book full of deep bronze has little real diversification - everything "
         "falls at once; charcoal cells are the offsets. The empty upper half is "
         "the same data mirrored, masked so the eye reads each pair once. "
+        "Names are ordered by a correlation tree, so the ones that move "
+        "together sit next to each other and each group reads as one block. "
         "Sample: the returns AFTER the stress-test choice above - under a "
         "crisis replay this matrix is that crisis window, not the full "
         "two-year history the Correlation Watch tab averages.")
     corr = correlation_matrix(shocked_returns)
+    # Reorder BEFORE the mask and the bold text are built, so both follow the
+    # new order. In input order a block of names that move together is
+    # scattered across the grid; a permutation changes no number.
+    order = cluster_order(corr)
+    corr = corr.loc[order, order]
 
     # Lower triangle only - the upper half is a mirror image, masked out.
     cmat = corr.to_numpy(dtype=float, copy=True)

@@ -31,7 +31,7 @@ from src.liquidity import (days_to_liquidate, liquidity_profile,
                            liquidity_adjusted_cvar)
 from src.comovement import (correlation_from_cov, rolling_correlation,
                             most_correlated_pair, defensive_shift,
-                            least_correlated_to_pair)
+                            least_correlated_to_pair, cluster_order)
 from src.grit import (
     drawdown_episodes, recovery_stats, rolling_consistency,
     regime_drawdown_and_recovery, grit_scores, _score01,
@@ -241,6 +241,41 @@ def test_comovement_pair_shift_and_destination_hand_worked():
     assert (shifted >= 0).all()                        # no silent short
     assert abs(shifted[1]) < 1e-12                     # B cut to zero, not -5%
     assert abs(shifted[2] - 0.75) < 1e-12              # C got 0.15 + 0.10
+
+
+def test_correlation_tree_order_puts_each_planted_block_together():
+    # Two planted factors, columns deliberately interleaved A1, B1, A2, B2...
+    # In input order the heatmap scatters each group across the grid; the
+    # correlation tree must pull each group into one unbroken run.
+    rng = np.random.default_rng(23)
+    n = 600
+    fa, fb = rng.normal(0, 0.01, n), rng.normal(0, 0.01, n)
+    cols = {}
+    for i in (1, 2, 3):
+        cols[f"A{i}"] = fa + rng.normal(0, 0.004, n)
+        cols[f"B{i}"] = fb + rng.normal(0, 0.004, n)
+    df = pd.DataFrame(cols)
+    assert list(df.columns) == ["A1", "B1", "A2", "B2", "A3", "B3"]
+    corr = df.corr()
+
+    order = cluster_order(corr)
+    assert sorted(order) == sorted(corr.columns)       # same names, once each
+    groups = "".join(name[0] for name in order)
+    assert groups in ("AAABBB", "BBBAAA"), order       # each block contiguous
+
+    # A permutation only: every pair keeps exactly its own number.
+    re = corr.loc[order, order]
+    for a in corr.columns:
+        for b in corr.columns:
+            assert re.loc[a, b] == corr.loc[a, b]
+    assert sorted(re.to_numpy().ravel()) == sorted(corr.to_numpy().ravel())
+
+    # A NaN (a zero-vol name) gives no honest distance: keep the input order.
+    bad = corr.copy()
+    bad.loc["A1", "B2"] = bad.loc["B2", "A1"] = np.nan
+    assert cluster_order(bad) == list(corr.columns)
+    # Fewer than 3 names: nothing to group, input order back.
+    assert cluster_order(corr.iloc[:2, :2]) == ["A1", "B1"]
 
 
 def test_liquidity_adjusted_cvar_widens_tail_monotonically():
