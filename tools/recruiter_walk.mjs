@@ -54,13 +54,25 @@ const tagged = (what, p) => p.catch(e => { throw new Error(`${what}: ${String(e)
 async function pick(label, option) {
   // Long option lists are virtualised (off-screen options are not rendered),
   // so type to filter the way a user would, choose, then Escape so no popover
-  // is left open over the next control.
+  // is left open over the next control. A script types faster than the list
+  // opens - keystrokes landed before it did and the option never came (live
+  // audit run 13) - so fill the filter in one go and retry a missed open.
   const box = page.getByRole('combobox', { name: label }).first();
-  await box.scrollIntoViewIfNeeded();
-  await tagged(`open "${label}"`, box.click());
-  await page.keyboard.type(option);
-  await tagged(`choose "${option}"`, page.getByRole('option', { name: option, exact: true }).first().click());
-  await page.keyboard.press('Escape');
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await box.scrollIntoViewIfNeeded();
+      await tagged(`open "${label}"`, box.click());
+      await box.fill(option);
+      const opt = page.getByRole('option', { name: option, exact: true }).first();
+      await tagged(`choose "${option}"`, opt.waitFor({ state: 'visible', timeout: 10000 }));
+      await opt.click({ timeout: 10000 }).catch(() => page.keyboard.press('Enter'));
+      await page.keyboard.press('Escape');
+      return;
+    } catch (e) {
+      await page.keyboard.press('Escape');
+      if (attempt === 3) throw e;
+    }
+  }
 }
 // Open a drawer only if it is shut - a click on an open one would close it.
 async function openDrawer(label) {

@@ -442,7 +442,9 @@ await step('every preset', async () => {
     const warns = await page.locator('[data-testid="stAlertContentWarning"]').allTextContents();
     ok(!errs && /^-?\d+(\.\d+)?%$/.test(v), `preset "${p}" loads`, `CVaR ${v}, ${data.trim()}`);
     ok(age <= 6, `preset "${p}" data is current`, `through ${through}`);
-    if (warns.length) say('WARN', `preset "${p}" shows a warning`, warns.map(w => w.slice(0, 140)).join(' | '));
+    // Warnings here are the product talking (a concentration reading, a
+    // disclosed exclusion) - reported, not judged; errors are counted above.
+    if (warns.length) say('INFO', `preset "${p}" notices`, warns.map(w => w.slice(0, 140)).join(' | '));
     if (FULL) await mapQuick(p);
   }
 });
