@@ -64,9 +64,11 @@ def main() -> int:
         if both.empty:
             check(f"{sym} engine price == raw Yahoo chart", False, "no common dates")
             continue
-        worst = float((both.iloc[:, 0] / both.iloc[:, 1] - 1).abs().max())
+        gap = (both.iloc[:, 0] / both.iloc[:, 1] - 1).abs()
+        worst, day = float(gap.max()), gap.idxmax()
         check(f"{sym} engine price == raw Yahoo chart", len(both) >= 40 and worst < 1e-6,
-              f"{len(both)} common days, worst relative gap {worst:.2e}, "
+              f"{len(both)} common days, worst relative gap {worst:.2e} on {day.date()} "
+              f"(engine {both.loc[day].iloc[0]:.6f} vs raw {both.loc[day].iloc[1]:.6f}), "
               f"{both.index[-1].date()} close {both.iloc[-1, 0]:.4f}")
 
     last = eng.dropna(how="all").index[-1]
@@ -81,12 +83,21 @@ def main() -> int:
     irx = fetch_risk_free_rate(use_cache=False)
     req = urllib.request.Request("https://fred.stlouisfed.org/graph/fredgraph.csv?id=DTB3",
                                  headers={"User-Agent": "meleona-audit"})
-    fred = pd.read_csv(urllib.request.urlopen(req, timeout=30))
-    fred = fred[pd.to_numeric(fred.iloc[:, 1], errors="coerce").notna()]
-    dtb3 = float(fred.iloc[-1, 1]) / 100
-    check("^IRX (Yahoo) vs DTB3 (FRED)", irx is not None and abs(irx - dtb3) <= 0.0025,
-          f"Yahoo {irx if irx is None else f'{irx:.4%}'} vs FRED {dtb3:.4%} "
-          f"({fred.iloc[-1, 0]})")
+    fred = None
+    for _ in range(3):                      # FRED is slow at times; an
+        try:                                # unreachable source fails the
+            fred = pd.read_csv(urllib.request.urlopen(req, timeout=60))  # check
+            break
+        except OSError as exc:
+            err = exc
+    if fred is None:
+        check("^IRX (Yahoo) vs DTB3 (FRED)", False, f"FRED unreachable, not verified ({err!r})")
+    else:
+        fred = fred[pd.to_numeric(fred.iloc[:, 1], errors="coerce").notna()]
+        dtb3 = float(fred.iloc[-1, 1]) / 100
+        check("^IRX (Yahoo) vs DTB3 (FRED)", irx is not None and abs(irx - dtb3) <= 0.0025,
+              f"Yahoo {irx if irx is None else f'{irx:.4%}'} vs FRED {dtb3:.4%} "
+              f"({fred.iloc[-1, 0]})")
 
     # 4. Every preset ticker still trades on Yahoo with a full 2-year history.
     # A delisted, merged or renamed symbol silently shrinks a one-click basket
