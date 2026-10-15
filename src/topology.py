@@ -87,10 +87,13 @@ def build_map_payload(returns: pd.DataFrame, weights: pd.Series,
     for t in frame.columns:
         b = float(frame[t].loc[common].cov(market.loc[common]) / mvar)
         v = float(frame[t].std() * np.sqrt(TRADING_DAYS))
-        if bearish:
+        if bearish and t in loaded:
             # The book above is negated when short, so the holdings must be
             # too: a short of a name carries the opposite beta. Volatility is
-            # sign-invariant and stays as measured.
+            # sign-invariant and stays as measured. The anchor pool is NOT
+            # held - it is the candidate hedge, bought LONG against the short
+            # (pairing.anchor_rank, direction="short") - so it stays at its own
+            # measured beta, and the defensive link is drawn to where it is.
             b = -b
         if np.isfinite(b) and np.isfinite(v):
             assets.append({"t": t, "b": round(b, 3), "v": round(v, 4),

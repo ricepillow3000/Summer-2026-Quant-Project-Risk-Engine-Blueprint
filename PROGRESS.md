@@ -396,6 +396,31 @@ risk-engine/
   view 5.1s -> 1.8s CPU); the 1 Hz freshness tick held the process at 93% of a
   core with 15 idle tabs - now 60s, 4%. Synthetic-verified only: the live
   batch audit still needs a machine with Yahoo access.
+- ✅ **Risk Topology map audit (2026-10-15)** - the batch audit's map section
+  (MAP-00..12, control, source checks) run on a realistic synthetic market:
+  732/732 before and after. The maths held; the defects were in what is drawn
+  and said around it, each fixed test-first:
+  - **Layout** (`tests/map_layout.mjs` renders the shipped page in Chromium at
+    the iframe's 820px height, 390-1920px wide): the bottom chips covered the
+    beta tick labels at EVERY width; at 1024px the HUD tiles slid under the
+    inspector; at 1000px and below the panels covered each other (Run /
+    Explain / Calibration painted but unclickable), the plot shrank to 180px at
+    790px and 18px on a phone, and under 640px the canvas was stretched. Now
+    the plot is measured from its own stage, the chips stay clear of the ticks,
+    and below 1000px the panels stack (HUD, map, chips, controls, pairing).
+    Wide screens draw as before apart from the tick margin.
+  - **Short book:** the hover read risk backwards (moving toward the perimeter
+    said "de-risking"); the anchor pool (TLT, GLD...) was drawn as if shorted,
+    though the pair holds it long.
+  - **Disclosure:** fit_ou clipped phi to 0.995 silently (it binds on live data:
+    2 of 4 universes in the 2026-09-10 audit); the leverage clamp was reported
+    as "rho"; k capped at 3 was called measured. Every clamp now names itself.
+  - **Words:** "the flyer holds most of the risk" (two-asset risk parity = equal
+    risk); "a crash in the flyer" on a short book (its loss is a squeeze); the
+    perimeter hover now states the floor and caps.
+  Open, by design: a universe name can be both a shorted holding and a pair's
+  long anchor, so its dot and its link disagree on a short book. Synthetic-
+  verified; `python -m tests.batch_audit` on live data is still owed.
 
 ## Non-negotiable constraints (the "why")
 
