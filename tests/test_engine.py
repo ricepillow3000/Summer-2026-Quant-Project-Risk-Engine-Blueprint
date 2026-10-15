@@ -2433,6 +2433,8 @@ def test_map_short_book_keeps_anchor_funds_long():
         assert sb[t]["b"] == lb[t]["b"] and sb[t]["f"] == "Anchor pool", t   # held long
     for t in ("AAA", "BBB"):
         assert abs(sb[t]["b"] + lb[t]["b"]) < 1e-9, t                         # shorted
+    # and the footnote says so, instead of "the short book's betas are negated"
+    assert "keep their own" in sht["footnote"], sht["footnote"]
 
 
 def test_every_calibration_clamp_is_named_in_the_footnote():
@@ -2498,6 +2500,11 @@ for (const [sign, b0] of [[1, 1.2], [-1, -1.2]]) {
   globalThis.BSGN = sign; globalThis.DEMO = { base: { beta: b0, vol: 0.2 } };
   out[sign] = { toward: scenarioText(b0 + sign * 0.6, 0.2), away: scenarioText(b0 - sign * 0.6, 0.2) };
 }
+/* a book at beta ~0 (FX majors): any move away from zero ADDS market exposure, either sign */
+for (const [sign, b0] of [[1, -0.002], [-1, 0.1]]) {
+  globalThis.BSGN = sign; globalThis.DEMO = { base: { beta: b0, vol: 0.2 } };
+  out['zero' + sign] = { toward: scenarioText(-0.8, 0.2), away: scenarioText(0.9, 0.2) };
+}
 console.log(JSON.stringify(out));"""
     js = js.replace("function scenarioText", "var BSGN, DEMO;\nfunction scenarioText", 1)
     r = subprocess.run([node, "-e", js], capture_output=True, text=True)
@@ -2507,6 +2514,8 @@ console.log(JSON.stringify(out));"""
         assert "builds" in out[sign]["toward"] and "sheds" not in out[sign]["toward"], out[sign]
         assert "sheds" in out[sign]["away"], out[sign]
     assert out["1"] == out["-1"], "long and short read the same move the same way"
+    for k in ("zero1", "zero-1"):   # |beta| grows from ~0 either way: never "sheds"
+        assert "builds" in out[k]["toward"] and "builds" in out[k]["away"], out[k]
 
 
 def test_map_explanations_match_the_maths():
@@ -2522,6 +2531,8 @@ def test_map_explanations_match_the_maths():
     assert "squeeze" in html
     hover = html[html.index("perimeter: () =>"):html.index("iso: pct =>")]
     assert "floored at 35%" in hover and "capped at" in hover
+    # an anchor-pool dot is a candidate hedge, not something the book holds
+    assert "candidate hedge" in html
 
 
 def test_map_inline_scripts_parse_under_node():
