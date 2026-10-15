@@ -1693,7 +1693,7 @@ try:
 except Exception as _bk_exc:  # noqa: BLE001 - the page must never die on data
     st.info(
         f"The Book needs price and volume history for this universe "
-        f"({type(_bk_exc).__name__}: {_bk_exc}). No placeholder book is shown.")
+        f"({safe_err('the-book-unavailable', _bk_exc)}). No placeholder book is shown.")
 
 st.markdown('<div id="analysis"></div>', unsafe_allow_html=True)
 panel_head("Risk & conviction", "The analysis - where the risk lives")
@@ -1865,10 +1865,9 @@ with tab_3d:
             "replay real history. Simulated estimates, not forecasts."
         )
     except Exception as _wr_exc:  # noqa: BLE001 - never fake the map
-        log_incident(SESSION_REF, "risk_topology", _wr_exc)
         st.info(
             "Risk Topology needs live market history to calibrate "
-            f"({type(_wr_exc).__name__}: {_wr_exc}). No demo numbers are "
+            f"({safe_err('risk_topology', _wr_exc)}). No demo numbers are "
             "shown in the product - reload when data is available."
         )
 

@@ -2707,18 +2707,37 @@ def test_no_exception_text_is_rendered_to_visitors():
     """str(exc) carries the absolute server path - FileNotFoundError and
     PermissionError on a cache file both embed it - so rendering it defeats
     showErrorDetails=false. Visitors get the exception TYPE plus their session
-    ref via safe_err(); the full text goes to the operator log."""
+    ref via safe_err(); the full text goes to the operator log.
+
+    The 2026-10-15 security audit found two st.info calls that rendered
+    {_bk_exc} and {_wr_exc}: the old scan read only the line holding `st.info(`
+    and only matched `{exc`/`{_exc`, so a message wrapped over several lines,
+    or an exception named anything else, walked past it. This reads every whole
+    st.* call and every name an `except ... as` binds."""
+    import ast
+
     root = pathlib.Path(__file__).resolve().parent.parent
     src = (root / "main.py").read_text(encoding="utf-8")
     assert "def safe_err(" in src, "the safe renderer was removed"
 
-    sinks = ("st.error(", "st.caption(", "st.info(", "st.warning(")
+    tree = ast.parse(src)
+    caught = {h.name for h in ast.walk(tree)
+              if isinstance(h, ast.ExceptHandler) and h.name}
     offenders = []
-    for n, ln in enumerate(src.splitlines(), 1):
-        if not any(c in ln for c in sinks):
+    for call in ast.walk(tree):
+        f = getattr(call, "func", None)
+        if not (isinstance(call, ast.Call) and isinstance(f, ast.Attribute)
+                and isinstance(f.value, ast.Name) and f.value.id == "st"):
             continue
-        if ("{exc" in ln or "{_exc" in ln) and "safe_err(" not in ln:
-            offenders.append("main.py:" + str(n) + ": " + ln.strip()[:90])
+        for field in ast.walk(call):
+            if not isinstance(field, ast.FormattedValue):
+                continue
+            v = field.value
+            if isinstance(v, ast.Call) and getattr(v.func, "id", "") == "safe_err":
+                continue
+            names = {n.id for n in ast.walk(v) if isinstance(n, ast.Name)}
+            if names & caught or any("exc" in n for n in names):
+                offenders.append(f"main.py:{field.lineno}: {{{ast.unparse(v)}}}")
     assert not offenders, "raw exception text reaches the page: " + str(offenders)
 
 
