@@ -83,13 +83,26 @@ async function newVerdict(prev) {
   await settle();
   return verdict();
 }
+// Long option lists are virtualised, so type to filter as a visitor would.
+// A script types faster than the list opens and keystrokes can land before
+// it does; fill() sets the whole filter at once, and a missed open retries.
 async function pick(label, option) {
   const box = page.getByRole('combobox', { name: label }).first();
-  await box.scrollIntoViewIfNeeded();
-  await box.click();
-  await page.keyboard.type(option);
-  await page.getByRole('option', { name: option, exact: true }).first().click();
-  await page.keyboard.press('Escape');
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await box.scrollIntoViewIfNeeded();
+      await box.click();
+      await box.fill(option);
+      const opt = page.getByRole('option', { name: option, exact: true }).first();
+      await opt.waitFor({ state: 'visible', timeout: 10000 });
+      await opt.click({ timeout: 10000 }).catch(() => page.keyboard.press('Enter'));
+      await page.keyboard.press('Escape');
+      return;
+    } catch (e) {
+      await page.keyboard.press('Escape');
+      if (attempt === 3) throw e;
+    }
+  }
 }
 // Radios, checkboxes and toggles by their own label - a bare getByText can
 // land on a hidden copy of the same words and wait forever.
@@ -201,6 +214,7 @@ async function glideCheck(linkSel, label) {
   const maxRate = Math.max(...steps.map(x => Math.abs(x.d) / Math.max(x.span, 1)));
   const moving = steps.filter(x => Math.abs(x.d) > 0.5);
   const dropped = moving.filter(x => x.dt > 50).length;
+  const longest = Math.max(0, ...moving.map(x => x.dt));
   const dir = Math.sign(last(s).top - s[0].top);
   const reversals = moving.filter(x => Math.sign(x.d) === -dir && Math.abs(x.d) > 2).length;
   const minOp = Math.min(...s.map(p => p.op));
@@ -213,7 +227,10 @@ async function glideCheck(linkSel, label) {
   ok(landed, `button "${label}" lands on ${href}`, `section top ${last(s).dy.toFixed(0)}px from the top of the view`);
   ok(dist < 80 || maxStep / dist <= 0.25, `button "${label}" glides (no teleport frame)`,
      `largest single frame ${maxStep.toFixed(0)}px of ${dist.toFixed(0)}px, flight ${flight}ms`);
-  ok(dropped <= 2, `button "${label}" holds its frame rate`, `${dropped} frames over 50ms while moving`);
+  // A frame over 200ms is a visible stutter; a few over 50ms is headless
+  // Chromium's software renderer, not the page (no long tasks were found).
+  ok(longest <= 200 && dropped <= Math.max(2, moving.length * 0.1), `button "${label}" holds its frame rate`,
+     `${dropped} of ${moving.length} frames over 50ms, longest ${longest.toFixed(0)}ms`);
   if (dist >= 80) say(surge <= 2.5 ? 'PASS' : 'WARN', `button "${label}" keeps an even pace`,
                       `peak speed ${surge.toFixed(1)}x the average (${(maxRate * 16.7).toFixed(0)}px per 60Hz frame)`);
   ok(reversals === 0, `button "${label}" never scrolls backwards mid-flight`, `${reversals} reversals`);
@@ -523,9 +540,7 @@ await step('balance, every flyer', async () => {
   const flyers = (await page.getByRole('option').allTextContents()).map(s => s.trim());
   await page.keyboard.press('Escape');
   for (const f of (FULL ? flyers : flyers.slice(0, 3))) {
-    await box.click(); await page.keyboard.type(f);
-    await page.getByRole('option', { name: f, exact: true }).first().click();
-    await page.keyboard.press('Escape'); await settle();
+    await pick('High-flyer (Circle 1 - the volatile conviction position)', f); await settle();
     const t = await page.evaluate(() => [...document.querySelectorAll('svg text')].map(e => e.textContent).find(s => /^GAP /.test(s)) || '');
     const line = await page.evaluate(() => [...document.querySelectorAll('div')].map(d => d.textContent)
       .find(s => /^In the loaded 2-year history/.test(s)) || '');
@@ -545,10 +560,12 @@ async function mapRun(f) {
   return f.evaluate(() => ({ es: document.getElementById('hudES').textContent, var95: document.getElementById('hudVaR').textContent,
                              breach: document.getElementById('hudTail').textContent }));
 }
-const inkOf = f => f.evaluate(() => [...document.querySelectorAll('canvas')].map(c => {
-  try { const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let s = 0;
-        for (let i = 3; i < d.length; i += 97) s += d[i]; return s; } catch (e) { return -1; }
-}));
+function inkOf(f) {
+  return f.evaluate(() => [...document.querySelectorAll('canvas')].map(c => {
+    try { const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let s = 0;
+          for (let i = 3; i < d.length; i += 97) s += d[i]; return s; } catch (e) { return -1; }
+  }));
+}
 // Every universe gets its own map: open it, let it boot, and read what it says.
 async function mapQuick(preset) {
   await openTab('Risk Topology');
