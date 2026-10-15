@@ -30,9 +30,9 @@ _html = getattr(components, "html", lambda *a, **k: None)
 import plotly.graph_objects as go
 
 from src.ingestion import (
-    fetch_prices, get_returns, data_health, provenance, clear_cache,
+    fetch_prices, get_returns, data_health, provenance, CACHE_MAX_AGE_HOURS,
     average_dollar_volume, fetch_dollar_volume, fetch_risk_free_rate,
-    PRESETS, valid_ticker,
+    PRESETS, valid_ticker, NoDataError,
     MAX_UNIVERSE, MIN_ROWS, SUGGESTIONS,
 )
 from src.analytics import correlation_matrix, covariance_matrix
@@ -366,15 +366,19 @@ def grit_breakdown_fig(scores: pd.DataFrame):
     return fig
 
 
+# Anchored on this file, not the working directory: `streamlit run` from any
+# other folder used to crash here on the very first line of the hero.
+ASSETS = Path(__file__).parent / "assets"
+
 # ---- Hero: the pitch, not the dashboard ----
-with open("assets/logo.svg", "r", encoding="utf-8") as f:
+with open(ASSETS / "logo.svg", "r", encoding="utf-8") as f:
     logo_svg = f.read()
 
 # Architectural plate behind the hero stat deck (replaces the watermark crest).
 # assets/facade.jpg - Unsplash (free commercial license, no attribution
 # required). Duotoned toward the palette in CSS, so the photo can never clash.
 try:
-    with open("assets/facade.jpg", "rb") as f:
+    with open(ASSETS / "facade.jpg", "rb") as f:
         _facade_b64 = base64.b64encode(f.read()).decode()
     st.markdown(
         # The architecture washes across the WHOLE hero, melting into beige
@@ -572,7 +576,7 @@ st.markdown("""<style>
 # towers, duotoned near-charcoal in CSS with a scrim baked in so the beige
 # text stays the loudest thing on the band. Same graceful fallback.
 try:
-    with open("assets/band.jpg", "rb") as f:
+    with open(ASSETS / "band.jpg", "rb") as f:
         _band_b64 = base64.b64encode(f.read()).decode()
     st.markdown(
         f"<style>.showcase-row::before {{ background-image: "
@@ -782,7 +786,7 @@ except Exception as _exc:  # noqa: BLE001 - landing page must never crash on dat
 # from a single scalar field + the bound-rune engraving) - born at 3200px,
 # no upscaling involved, so it can never look like a stretched photo.
 try:
-    with open("assets/gungnir.png", "rb") as _gf:
+    with open(ASSETS / "gungnir.png", "rb") as _gf:
         _gungnir_b64 = base64.b64encode(_gf.read()).decode()
     _gungnir_bg = (
         "background-image:linear-gradient(90deg, rgba(244,241,234,0) 0%, "
@@ -975,7 +979,7 @@ if len(tickers) > MAX_UNIVERSE:
     st.warning(
         f"This engine analyzes up to **{MAX_UNIVERSE}** symbols at once - a "
         "deliberate compute budget on a public, single-process deployment. "
-        f"Using the first {MAX_UNIVERSE}; dropped "
+        f"Using the first {MAX_UNIVERSE} alphabetically; dropped "
         + ", ".join(f"`{html.escape(t)}`" for t in tickers[MAX_UNIVERSE:])
         + "."
     )
@@ -1091,10 +1095,11 @@ def _freshness_ticker(fetched_at_iso: str):
     fetched = pd.Timestamp(fetched_at_iso)
     now = pd.Timestamp.now(tz=fetched.tzinfo) if fetched.tzinfo else pd.Timestamp.now()
     secs = max(0, int((now - fetched).total_seconds()))
-    # Nothing polls: this fragment only re-renders the counter. Quotes are
-    # cached for 60s and refetched on the next rerun after that TTL expires.
-    st.caption(f"⟳ Quotes cached 60s - refreshed on your next interaction, "
-               f"not on a timer · data pulled {secs}s ago.")
+    # Nothing polls: this fragment only re-renders the counter. Yahoo is hit
+    # again only once the disk copy is older than CACHE_MAX_AGE_HOURS - the old
+    # "quotes cached 60s" wording described the in-memory re-read, not a pull.
+    st.caption(f"⟳ Data pulled {secs}s ago · re-pulled from Yahoo once older "
+               f"than {CACHE_MAX_AGE_HOURS:g}h, on your next interaction - not on a timer.")
 
 
 # ---- Audit trail: what this run actually did, in order (see Lineage tab) ----
@@ -1107,8 +1112,13 @@ def _audit(step: str, detail: str) -> None:
 
 try:
     prices = load_universe(tuple(tickers))
-except Exception as exc:  # noqa: BLE001 - surface any fetch failure to the user
+except NoDataError as exc:
+    # A visitor's typo is not a crash: say what to do, not "quote a reference".
+    # NoDataError messages are written for visitors (src/ingestion.py).
     log_incident(SESSION_REF, "load_universe", exc)
+    st.error(str(exc))
+    st.stop()
+except Exception as exc:  # noqa: BLE001 - surface any fetch failure to the user
     st.error(f"Couldn't load market data: {safe_err('couldn-t-load-market-data', exc)}")
     st.stop()
 
@@ -1155,7 +1165,9 @@ returns = get_returns(prices)
 loaded = list(prices.columns)
 missing = [t for t in tickers if t not in loaded]
 if len(loaded) < 2:
-    st.error("Fewer than two symbols returned data. Try different tickers.")
+    st.error("Fewer than two symbols returned data"
+             + (f" (nothing for {', '.join(missing)})" if missing else "")
+             + ". Check the spelling or try different tickers.")
     st.stop()
 if missing:
     st.caption(f"Couldn't load: {', '.join(missing)} - skipped.")
@@ -1164,17 +1176,17 @@ _audit("Data fetch", f"{len(loaded)} tickers loaded from {preset!r}: {', '.join(
 
 # ---- Data-freshness indicator (honest, not a fake real-time feed) ----
 health = data_health(prices)
-fresh_col, refresh_col = st.columns([5, 1])
-with fresh_col:
-    fresh = "live" if health["staleness_days"] <= 1 else f"{health['staleness_days']}d old"
-    st.caption(f"Data: {health['rows']} trading days · through {health['end']} · {fresh}")
-    prov_now = provenance(tickers)
-    if prov_now:
-        _freshness_ticker(prov_now["fetched_at_utc"])
-if refresh_col.button("Refresh", help="Clear cache and re-pull the latest prices."):
-    clear_cache(tickers)       # drop disk cache so Yahoo is hit fresh
-    st.cache_data.clear()      # drop Streamlit's in-memory cache
-    st.rerun()
+# No visitor "Refresh" button. It used to call st.cache_data.clear(), which
+# empties every cached result for EVERY visitor in this single process and
+# deletes the disk cache the spend cap falls back on - an operator action
+# handed to anonymous viewers. Data is end-of-day and the disk cache already
+# re-pulls past CACHE_MAX_AGE_HOURS; an operator forces a pull with
+# `python -m tools.warm_cache --drill` (RUNBOOK.md).
+fresh = "live" if health["staleness_days"] <= 1 else f"{health['staleness_days']}d old"
+st.caption(f"Data: {health['rows']} trading days · through {health['end']} · {fresh}")
+prov_now = provenance(tickers)
+if prov_now:
+    _freshness_ticker(prov_now["fetched_at_utc"])
 
 # ---- Allocation + stress test: one control deck, side by side ----
 deck_alloc, deck_stress = st.columns(2, gap="medium")
@@ -1301,12 +1313,23 @@ else:
     scenario_label = mode
 
 use_jd = engine.startswith("Jump-diffusion")
-mc_fn = jump_diffusion_mc if use_jd else monte_carlo
+
+
+@st.cache_data(ttl=3600, max_entries=64, show_spinner="Simulating 10,000 paths…")
+def run_monte_carlo(rets: pd.DataFrame, w: np.ndarray, jump: bool) -> dict:
+    """Both engines are seeded (seed=42), so a cached result is bit-identical
+    to a fresh one. Uncached, the 10,000-path run (0.2-0.5s of CPU) repeated on
+    EVERY widget click anywhere on the page, for every visitor. ~0.2MB per
+    entry, so the 64-entry cap bounds the cache at roughly 15MB."""
+    fn = jump_diffusion_mc if jump else monte_carlo
+    return fn(rets, w, n_simulations=10_000, horizon_days=252)
+
+
 if bearish:
     # Negate BEFORE calibration/resampling so jump-diffusion calibrates its
     # jumps on the short's own tail (an asset's melt-UP is the short's crash).
     shocked_returns = -shocked_returns
-mc = mc_fn(shocked_returns, sim_weights, n_simulations=10_000, horizon_days=252)
+mc = run_monte_carlo(shocked_returns, np.asarray(sim_weights, dtype=float), use_jd)
 _audit("Stress scenario", scenario_label or
       (f"Custom shock (drawdown {drawdown_shock:+d}%, vol {vol_shock:+d}%)"
        if is_shocked else "None (base case)"))
@@ -2727,6 +2750,12 @@ with tab_secmaster:
                 "SEDOL/CUSIP and full merger history need a paid reference-data "
                 "vendor (Bloomberg, Refinitiv) - not fabricated here.*"
             )
+        no_ca = sm[sm["dividends_paid"].isna()].index.tolist()
+        if no_ca:
+            st.caption(
+                f"*Corporate actions could not be fetched for: {', '.join(no_ca)} "
+                "(blank = unknown, not zero). Retried within the hour.*"
+            )
     except Exception as exc:  # noqa: BLE001
         st.caption(f"Security master unavailable: {safe_err('security-master-unavailable', exc)}")
 
@@ -2760,7 +2789,8 @@ with tab_lineage:
             "Prices are live end-of-day adjusted closes, pulled on demand from "
             "Yahoo Finance. Every figure above is computed from this source by "
             "the engine's own code - no value originates from a language model. "
-            "Use Refresh to re-pull and update this timestamp."
+            f"A copy older than {CACHE_MAX_AGE_HOURS:g} hours is re-pulled "
+            "automatically on the next interaction."
         )
     else:
         st.caption("Provenance record appears after the first live fetch.")

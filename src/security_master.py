@@ -40,12 +40,21 @@ def corporate_actions(ticker: str, lookback_years: int = 5) -> dict:
     tk = yf.Ticker(ticker, session=guarded_session())
     cutoff = pd.Timestamp.now(tz="UTC") - pd.DateOffset(years=lookback_years)
 
-    divs = tk.dividends
+    divs, splits = tk.dividends, tk.splits
+    if divs is None or splits is None:
+        # yfinance 1.7 returns None (not an empty Series) when the history
+        # fetch behind these fails - a rate limit, a timeout, a symbol with no
+        # history. That used to raise on len(None) and take the WHOLE table
+        # down for every ticker. Report "unknown" (None), never "zero events":
+        # a failed fetch is not evidence that nothing happened.
+        empty = pd.DataFrame(columns=["date", "amount"])
+        return {"dividends": empty, "splits": empty.rename(columns={"amount": "ratio"}),
+                "n_dividends": None, "n_splits": None, "last_split": None}
+
     divs = divs[divs.index >= cutoff] if len(divs) else divs
     div_df = divs.sort_index(ascending=False).rename("amount").reset_index()
     div_df.columns = ["date", "amount"]
 
-    splits = tk.splits
     splits = splits[splits.index >= cutoff] if len(splits) else splits
     split_df = splits.sort_index(ascending=False).rename("ratio").reset_index()
     split_df.columns = ["date", "ratio"]
@@ -93,7 +102,9 @@ def security_master(tickers: list[str], lookback_years: int = 5) -> pd.DataFrame
         rows[t] = {
             "isin": ident["isin"] or "unavailable",
             "dividends_paid": ca["n_dividends"],
-            "total_dividends": float(ca["dividends"]["amount"].sum()) if ca["n_dividends"] else 0.0,
+            "total_dividends": (None if ca["n_dividends"] is None
+                                else float(ca["dividends"]["amount"].sum()) if ca["n_dividends"]
+                                else 0.0),
             "splits": ca["n_splits"],
             "last_split_date": ca["last_split"]["date"].date().isoformat() if ca["last_split"] else None,
             "last_split_ratio": ca["last_split"]["ratio"] if ca["last_split"] else None,

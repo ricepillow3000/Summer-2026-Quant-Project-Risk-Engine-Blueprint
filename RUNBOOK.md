@@ -79,6 +79,42 @@ free-tier egress address, so the budget is denominated in requests:
 Other bounds: `ingestion.MAX_UNIVERSE` (25 symbols), `CACHE_MAX_FILES` /
 `CACHE_MAX_MB` (disk budget, oldest evicted first).
 
+Inbound compute is bounded inside the app, where Streamlit's cost actually
+lands:
+
+- The 10,000-path Monte Carlo is cached (`run_monte_carlo` in `main.py`,
+  64 entries). Both engines are seeded, so a cached result is identical to a
+  fresh one; uncached it re-ran (0.2-0.5s CPU) on every click, for everyone.
+- Visitors cannot clear shared state. There is no public Refresh button: it
+  called `st.cache_data.clear()`, which emptied every cache for every
+  visitor and deleted the disk cache the spend cap falls back on. Force a
+  fresh pull as the operator with `python -m tools.warm_cache --drill`.
+- Railway dashboard: set a usage limit and alert on the project, so a bad day
+  costs a capped amount (outside the repo - do it once by hand).
+
+### Reverse proxy / CDN (Cloudflare): decided against, 2026-10-15
+
+A five-adviser council (4-1, chair agreed) rejected putting Cloudflare in
+front of the app. On record so the question is not re-litigated from scratch:
+
+- **It cannot see the load this app is exposed to.** Every rerun is a
+  message inside one already-open WebSocket (`/_stcore/stream`); Cloudflare
+  rate-limits HTTP requests, so it counts one request per visitor however hard
+  they click. The in-app bounds above are the controls with a matching surface.
+- **It can be walked around.** Cloudflare cannot proxy
+  `*.up.railway.app`, and that URL stays public (every link already shared
+  points at it), so the origin remains directly reachable.
+- **It costs promises.** A new processor of visitor IPs for `PRIVACY.md`, and
+  Bot Fight Mode / challenges / Web Analytics / Rocket Loader inject
+  third-party JavaScript the privacy page says this app never loads.
+
+**Dissent kept on record:** a custom domain (~$10/yr) is worth having for its
+own sake - a resume link that survives a host move. If one is bought, point it
+at Railway with Cloudflare **DNS only (grey cloud)**: a cleaner link, no new
+processor, no `PRIVACY.md` change. **Revisit the proxy only if** the logs show
+many concurrent sessions stalling the process; even then the next control is a
+process-wide concurrency cap in the app, not a proxy.
+
 ## 5. Phased release
 
 1. **Local** - `python -m streamlit run main.py`, then `python -m tests.test_engine`

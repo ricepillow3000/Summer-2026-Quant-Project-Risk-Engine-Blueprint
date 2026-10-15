@@ -467,8 +467,81 @@ def test_data_quality_catches_too_few_rows():
     assert statuses["coverage.min_rows"] == "FAIL"
 
 
+def _yahoo_unreachable() -> str | None:
+    """None if Yahoo answers, else the reason - lets live tests skip offline
+    without swallowing real failures once the feed is up."""
+    try:
+        from src.ingestion import fetch_prices
+        fetch_prices(["SPY", "QQQ"], period="5d", use_cache=False)
+        return None
+    except Exception as exc:                        # noqa: BLE001
+        return type(exc).__name__
+
+
+def test_security_master_survives_a_failed_fetch():
+    """yfinance 1.7 returns None for .dividends/.splits when the history
+    fetch fails. One such name used to raise len(None) and blank the whole
+    Security Master tab; now that row reads unknown (None), never zero."""
+    import src.security_master as sm_mod
+
+    class _Failed:
+        isin = "-"
+        dividends = None
+        splits = None
+
+    class _Ok:
+        isin = "US0000000001"
+        dividends = pd.Series([0.5, 0.5], index=pd.to_datetime(
+            ["2025-01-02", "2025-07-01"]).tz_localize("UTC"))
+        splits = pd.Series(dtype=float)
+
+    real = sm_mod.yf.Ticker
+    sm_mod.yf.Ticker = lambda t, session=None: _Failed() if t == "BAD" else _Ok()
+    try:
+        sm = sm_mod.security_master(["GOOD", "BAD"])
+    finally:
+        sm_mod.yf.Ticker = real
+    assert sm.loc["GOOD", "dividends_paid"] == 2
+    assert sm.loc["GOOD", "total_dividends"] == 1.0
+    assert pd.isna(sm.loc["BAD", "dividends_paid"]), "failed fetch reported as a count"
+    assert pd.isna(sm.loc["BAD", "total_dividends"]), "failed fetch reported as 0.0"
+    assert pd.isna(sm.loc["BAD", "splits"]), "failed fetch reported as 0 splits"
+    assert sm.loc["BAD", "isin"] == "unavailable"
+
+
+def test_unknown_symbols_get_a_readable_error():
+    """A visitor who mistypes every symbol used to see "Couldn't load market
+    data: RuntimeError - quote <ref>", i.e. a crash report for their own typo.
+    Yahoo answers an unknown symbol with NaNs (or an empty frame), so both
+    shapes must raise NoDataError, whose message the UI shows verbatim."""
+    import src.ingestion as ing
+
+    idx = pd.bdate_range("2025-01-02", periods=30)
+    nan_frame = pd.concat({"Close": pd.DataFrame(np.nan, idx, ["XQZQ", "QZXQ"]),
+                           "Volume": pd.DataFrame(np.nan, idx, ["XQZQ", "QZXQ"])},
+                          axis=1)
+    real = ing.yf.download
+    try:
+        for fake in (nan_frame, pd.DataFrame()):
+            ing.yf.download = lambda *a, _f=fake, **k: _f
+            try:
+                ing.fetch_prices(["XQZQ", "QZXQ"], use_cache=False)
+            except ing.NoDataError as exc:
+                msg = str(exc)
+            else:
+                raise AssertionError("no error for symbols with no data")
+            assert msg == ing.NO_DATA_MSG
+            assert "/" not in msg and "\\" not in msg, "a path reached the page"
+    finally:
+        ing.yf.download = real
+
+
 def test_security_master_live():
     """Integration: real yfinance identifiers + corporate actions. Self-skips offline."""
+    why = _yahoo_unreachable()
+    if why:
+        print(f"[skip] security_master live check: Yahoo unreachable ({why})")
+        return
     try:
         from src.security_master import security_master
         sm = security_master(["AAPL", "MSFT"])
@@ -488,6 +561,15 @@ def test_full_app_boots():
         from streamlit.testing.v1 import AppTest
     except Exception as exc:                       # streamlit test harness unavailable
         print(f"[skip] AppTest unavailable: {exc}")
+        return
+    # "Offline" means Yahoo is unreachable - probe it directly. The app catches
+    # a failed load and renders st.error instead of raising, so without this
+    # probe an offline run FAILED with "Couldn't load market data" instead of
+    # skipping, as the docstring promises. Probing first (rather than ignoring
+    # that error) keeps a real data-path bug a failure when the feed is up.
+    why = _yahoo_unreachable()
+    if why:
+        print(f"[skip] app integration: Yahoo unreachable ({why})")
         return
     try:
         # AppTest resolves relative paths against the CALLING file, i.e.
@@ -2444,6 +2526,45 @@ def test_no_exception_text_is_rendered_to_visitors():
         if ("{exc" in ln or "{_exc" in ln) and "safe_err(" not in ln:
             offenders.append("main.py:" + str(n) + ": " + ln.strip()[:90])
     assert not offenders, "raw exception text reaches the page: " + str(offenders)
+
+
+def test_no_visitor_control_clears_the_shared_cache():
+    """st.cache_data.clear() empties every cached result for EVERY visitor in
+    this single process. A public "Refresh" button used to call it (and delete
+    the disk cache the spend cap falls back on), so any anonymous viewer could
+    force a cold recompute and a fresh Yahoo pull for everyone, in a loop."""
+    root = pathlib.Path(__file__).resolve().parent.parent
+    src = (root / "main.py").read_text(encoding="utf-8")
+    code = [ln for ln in src.splitlines() if not ln.lstrip().startswith("#")]
+    hits = [ln.strip() for ln in code
+            if "cache_data.clear(" in ln or "clear_cache(" in ln]
+    assert not hits, f"a visitor path clears the shared cache: {hits}"
+
+
+def test_monte_carlo_is_deterministic_so_caching_is_exact():
+    """main.py caches both engines with st.cache_data. That is only a pure
+    speed-up if a fresh run returns exactly what the cache holds - i.e. both
+    engines are seeded. An unseeded engine would make the cached headline
+    differ from a recomputed one."""
+    rng = np.random.default_rng(3)
+    rets = pd.DataFrame(rng.standard_t(4, (400, 4)) * 0.01, columns=list("ABCD"))
+    w = np.full(4, 0.25)
+    for fn in (monte_carlo, jump_diffusion_mc):
+        a = fn(rets, w, n_simulations=2_000, horizon_days=60)
+        b = fn(rets, w, n_simulations=2_000, horizon_days=60)
+        assert np.array_equal(a["final_values"], b["final_values"]), fn.__name__
+        assert a["cvar"] == b["cvar"], fn.__name__
+
+
+def test_assets_are_loaded_relative_to_main_not_cwd():
+    """open("assets/...") resolves against the working directory, so
+    `streamlit run` from any other folder crashed on the hero's first line."""
+    import re
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    src = (root / "main.py").read_text(encoding="utf-8")
+    bad = re.findall(r"open\(\s*[\"'](?:assets|static|prototypes)/", src)
+    assert not bad, f"cwd-relative asset path(s): {bad}"
 
 
 if __name__ == "__main__":

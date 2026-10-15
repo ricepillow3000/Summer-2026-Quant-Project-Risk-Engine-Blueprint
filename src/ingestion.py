@@ -12,8 +12,9 @@ Caching strategy for a live web app:
 - Per-universe disk cache keyed by ticker-set, so different baskets don't
   collide and repeat views are instant (no Yahoo rate-limiting on refresh).
 - The cache is FRESHNESS-AWARE: it re-pulls once it ages past `max_age_hours`,
-  so a deployed app never serves indefinitely-stale data. Manual refresh clears
-  it on demand.
+  so a deployed app never serves indefinitely-stale data. `clear_cache` (or
+  `python -m tools.warm_cache --drill`) forces a re-pull - an operator action,
+  not a visitor one.
 
 Universe is fully configurable - equities, ETFs, FX (EURUSD=X), or futures
 (GC=F) - so the engine speaks to any audience, not just one watchlist.
@@ -186,6 +187,19 @@ SUGGESTIONS = sorted({t for basket in PRESETS.values() for t in basket} | {
 VALID_TICKER = re.compile(r"^\^?[A-Z0-9][A-Z0-9.\-=]{0,14}$")
 
 
+class NoDataError(RuntimeError):
+    """Yahoo returned nothing usable for the request. Its message is written
+    for a visitor - no paths, no internals - so the UI may show it verbatim,
+    unlike every other exception (see safe_err in main.py)."""
+
+
+NO_DATA_MSG = ("Yahoo Finance returned no price history for these symbols. "
+               "Check the spelling (e.g. BRK-B, EURUSD=X, GC=F) - or the feed "
+               "may be briefly unreachable, so try again in a minute.")
+NO_OVERLAP_MSG = ("These symbols share no common trading days. Remove the "
+                  "newest or a delisted name and try again.")
+
+
 def valid_ticker(symbol: str) -> bool:
     """True if `symbol` is shaped like a Yahoo Finance ticker."""
     return bool(VALID_TICKER.match(str(symbol).strip().upper()))
@@ -288,6 +302,8 @@ def _download_close_volume(tickers: list[str], period: str) -> tuple[pd.DataFram
     check_budget()
     raw = yf.download(tickers, period=period, auto_adjust=True, progress=False,
                       repair=True, timeout=30, session=guarded_session())
+    if raw is None or raw.empty:
+        raise NoDataError(NO_DATA_MSG)
     if isinstance(raw.columns, pd.MultiIndex):
         close, volume = raw["Close"], raw["Volume"]
     else:
@@ -383,7 +399,10 @@ def fetch_prices(tickers: list[str] | None = None, period: str = "2y",
         raise
     prices = _clean_price_frame(close, align)
     if prices.empty:
-        raise RuntimeError("No overlapping price history for that universe.")
+        # A typo'd symbol and a Yahoo outage look identical from here (yfinance
+        # swallows the error and hands back NaNs), so the message names both.
+        raise NoDataError(NO_DATA_MSG if close.dropna(how="all").empty
+                          else NO_OVERLAP_MSG)
 
     if use_cache:
         prices.to_parquet(cache_path)

@@ -373,8 +373,21 @@ risk-engine/
   page was already parked at the destination (target top = 26px, exactly the
   glide's own offset). 118/118, walkthrough clean.
 
-- ⬜ **Phase VI** - deploy to Railway/Render for the live recruiter link
-  (Procfile + requirements.txt already set up)
+- ✅ **Phase VI** - live on Railway since 2026-09-03
+  (https://summer-2026-quant-project-risk-engine-blueprint-production.up.railway.app)
+- ✅ **Bug sweep + Cloudflare decision (2026-10-15)** - whole app driven
+  headless through every preset, edge-case input and control. Fixed: the app
+  crashed when started from any folder but the repo root (asset paths were
+  cwd-relative); a public Refresh button let any visitor wipe every cache for
+  everyone (`st.cache_data.clear()`) - removed; the 10,000-path Monte Carlo
+  re-ran on every click - now cached (seeded, so identical); mistyped symbols
+  showed a crash reference instead of "check the spelling" (`NoDataError`);
+  one failed corporate-action fetch (yfinance returns None) blanked the whole
+  Security Master tab - now that row reads unknown, never zero; the boot test
+  failed offline instead of skipping; "quotes cached 60s" implied a pull every
+  minute (Yahoo is hit every 6h) - relabelled. Cloudflare as reverse proxy:
+  **no**, see RUNBOOK.md section 4 for the council's reasons and the revisit
+  trigger.
 
 ## Non-negotiable constraints (the "why")
 
