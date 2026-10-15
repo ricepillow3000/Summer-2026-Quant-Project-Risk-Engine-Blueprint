@@ -268,6 +268,14 @@ For a first deploy from scratch, the dashboard needs almost nothing:
 
 ### After every deploy
 
+**Live audit (real data, no laptop needed):** GitHub -> Actions -> *Live audit*
+-> Run workflow. On a GitHub runner, against the real Yahoo feed, it proves
+every engine price equals Yahoo's raw API, cross-checks the T-bill rate with
+the US Treasury, confirms every preset ticker still trades, runs the test
+suite, the batch audit and the visitor walkthrough, then loads the deployed
+site in a browser. Any push to a `claude/**` branch runs it too. Last green
+run: `audit/live_audit_2026-10-15T025826Z.md`.
+
     python -m tools.warm_cache        # against the deployed host's shell, or locally to prime a shared cache
 
 Then walk the page once: hero -> The Engine -> a crisis scenario -> Risk
