@@ -2567,6 +2567,15 @@ def test_assets_are_loaded_relative_to_main_not_cwd():
     assert not bad, f"cwd-relative asset path(s): {bad}"
 
 
+def test_streamlit_header_bar_is_hidden():
+    """Streamlit's fixed 60px header (theme-coloured, holding only the viewer
+    menu) covered the hero crest on the live site. It is hidden in app.css; a
+    Streamlit upgrade that renames the testid would bring the bar back."""
+    css = (pathlib.Path(__file__).resolve().parent.parent / "static" / "app.css"
+           ).read_text(encoding="utf-8")
+    assert '[data-testid="stHeader"] { display: none !important; }' in css
+
+
 if __name__ == "__main__":
     import sys
 
