@@ -337,13 +337,22 @@ def _clean_price_frame(prices: pd.DataFrame, align: bool) -> pd.DataFrame:
     return prices
 
 
+def _write_parquet(frame: pd.DataFrame, path: str) -> None:
+    """Write to a temporary name, then rename into place: the web process
+    re-warms these files while visitors read them (Procfile), and a rename is
+    atomic, so a reader gets the old file or the new one, never a torn one."""
+    tmp = f"{path}.{os.getpid()}.tmp"
+    frame.to_parquet(tmp)
+    os.replace(tmp, path)
+
+
 def _write_dollar_volume_cache(tickers: list[str], period: str, dv: pd.DataFrame) -> None:
     """Persist a daily dollar-volume frame + its provenance record."""
     dv = dv.dropna(axis=1, how="all")
     if dv.empty:
         return
     cache_path = _dv_cache_path(tickers, period)
-    dv.to_parquet(cache_path)
+    _write_parquet(dv, cache_path)
     _prune_cache()          # keep the cache inside its disk budget
     meta = {
         "source": "Yahoo Finance (via yfinance)",
@@ -416,7 +425,7 @@ def fetch_prices(tickers: list[str] | None = None, period: str = "2y",
                           else NO_OVERLAP_MSG)
 
     if use_cache:
-        prices.to_parquet(cache_path)
+        _write_parquet(prices, cache_path)
         _prune_cache()      # keep the cache inside its disk budget
         # Provenance: stamp exactly where this data came from and when, so every
         # downstream number is traceable to a real source - not the model.

@@ -3089,6 +3089,67 @@ def test_public_files_give_crawlers_and_link_previews_a_real_head(tmp_path=None)
     assert 'name="robots" content="noindex"' in (d / "404.html").read_text()
 
 
+def test_the_deployed_page_names_the_commit_it_was_built_from(tmp_path=None):
+    """"Did Railway deploy it?" was answered by guesswork twice (2026-09-03,
+    2026-09-09): the host posts nothing back to GitHub. Railway sets
+    RAILWAY_GIT_COMMIT_SHA on a GitHub deploy; public_files stamps it into the
+    raw HTML so the Live audit can compare it with the commit it expects."""
+    import tempfile
+
+    import tools.public_files as pf
+
+    d = pathlib.Path(tmp_path or tempfile.mkdtemp())
+    (d / "index.html").write_text("<html><head><title>Streamlit</title></head>"
+                                  "<body><noscript></noscript></body></html>", encoding="utf-8")
+    pf.install(d, "https://example.test", build="0123456789abcdef0123")
+    assert '<meta name="meleona-build" content="0123456789ab">' in (d / "index.html").read_text()
+    pf.install(d, "https://example.test", build="")
+    page = (d / "index.html").read_text()
+    assert '<meta name="meleona-build" content="unknown">' in page and page.count("meleona-build") == 1
+    # site_check reads the tag, and on main it must match the commit under test
+    check = (pathlib.Path(__file__).resolve().parent.parent / "tools" / "site_check.mjs").read_text()
+    assert "meleona-build" in check and "EXPECT_BUILD" in check
+
+
+def test_the_web_process_keeps_every_preset_warm_before_it_expires():
+    """Live audit run 24: ten hours after a deploy the 6-hour cache had
+    expired and the first visitor to pick Semiconductors waited 101.6s on
+    Railway (12.1s on a GitHub runner). The cache is the web container's own
+    disk, so a separate cron service would warm a disk nobody reads: the web
+    process itself re-warms every preset, each pass refetching anything older
+    than (max age - interval), so nothing a visitor picks has expired."""
+    from src.ingestion import CACHE_MAX_AGE_HOURS
+    from tools.warm_cache import pass_max_age
+
+    assert pass_max_age(5) == CACHE_MAX_AGE_HOURS - 5 and pass_max_age(5) + 5 <= CACHE_MAX_AGE_HOURS
+    assert pass_max_age(CACHE_MAX_AGE_HOURS + 1) == 0      # never negative
+    root = pathlib.Path(__file__).resolve().parent.parent
+    web = (root / "Procfile").read_text().strip()
+    loop, serve = web.find("tools.warm_cache --every"), web.find("streamlit run")
+    assert 0 < loop < serve, web                              # started before the app...
+    assert "&)" in web[loop:serve], web                       # ...in the background
+    every = float(web[loop:].split("--every", 1)[1].split()[0].rstrip(")&"))
+    assert 0 < every < CACHE_MAX_AGE_HOURS, every
+
+
+def test_a_cache_file_is_never_seen_half_written():
+    """The warmer rewrites cache files while visitors read them: a write goes
+    to a temporary name and is renamed into place, so a reader sees the old
+    file or the new one, never a torn parquet."""
+    import inspect
+    import tempfile
+
+    from src import ingestion
+
+    df = pd.DataFrame({"A": [1.0, 2.0]}, index=pd.date_range("2026-01-01", periods=2))
+    d = pathlib.Path(tempfile.mkdtemp())
+    ingestion._write_parquet(df, str(d / "x.parquet"))
+    assert [p.name for p in d.iterdir()] == ["x.parquet"]
+    pd.testing.assert_frame_equal(pd.read_parquet(d / "x.parquet"), df, check_freq=False)
+    src = inspect.getsource(ingestion)
+    assert ".to_parquet(cache_path)" not in src, "a cache write bypasses _write_parquet"
+
+
 def test_src_is_pure_computation_and_never_imports_the_ui():
     """The layering CLAUDE.md promises: src/ is a numpy/pandas library the UI
     composes, so it is testable without a browser and auditable on its own.

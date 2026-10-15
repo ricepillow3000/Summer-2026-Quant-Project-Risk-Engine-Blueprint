@@ -276,7 +276,28 @@ suite, the batch audit and the visitor walkthrough, then loads the deployed
 site in a browser. Any push to a `claude/**` branch runs it too. Last green
 run: `audit/live_audit_2026-10-15T025826Z.md`.
 
-    python -m tools.warm_cache        # against the deployed host's shell, or locally to prime a shared cache
+**On `main`, the Live audit also proves the host is serving that commit.**
+`tools/public_files.py` stamps the build (Railway's `RAILWAY_GIT_COMMIT_SHA`)
+into the page as `<meta name="meleona-build">`, and step 5 fails when it is
+not the commit under test. Railway posts nothing back to GitHub, so this is
+the only proof a deploy happened. If the step reads `unknown`, the service is
+not deploying from GitHub: see *Rolling back a bad deploy* below for the App
+and the Source setting it needs.
+
+**Keeping the cache warm (scheduled, nothing to set up).** The Procfile starts
+`python -m tools.warm_cache --every 5` in the background beside Streamlit.
+Every 5 hours it refetches every preset before the 6-hour cache expires, so no
+visitor pays for a cold Yahoo fetch on Railway (live audit run 24: 101.6s for
+the first Semiconductors pick after the cache expired, against 12.1s on a
+GitHub runner). It has to run inside the web service. A Railway cron service
+is a separate container with its own disk, so it would warm a cache the web
+app never reads. Its passes print to the deploy log, one line per preset, and
+each pass costs about one request per preset from the 5000-a-day budget.
+
+To warm by hand (after a restore, or to time a cold refill):
+
+    python -m tools.warm_cache          # from the service's shell
+    python -m tools.warm_cache --drill  # force real fetches, print the recovery time
 
 Then walk the page once: hero -> The Engine -> a crisis scenario -> Risk
 Topology -> Lineage & Audit, and confirm the footer shows the support address
