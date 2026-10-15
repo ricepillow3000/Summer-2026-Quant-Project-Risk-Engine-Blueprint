@@ -335,7 +335,7 @@ class TickerDossier:
 def _universe_hash(tickers) -> str:
     """Short stable digest of the universe every percentile rank is relative to.
     Without it, "ranks 1 of 12" is a claim with no stated denominator."""
-    return hashlib.sha1("|".join(sorted(tickers)).encode()).hexdigest()[:8]
+    return hashlib.sha1("|".join(sorted(tickers)).encode(), usedforsecurity=False).hexdigest()[:8]
 
 
 def capacity_weight_per_day(adv_stressed, book_value: float,

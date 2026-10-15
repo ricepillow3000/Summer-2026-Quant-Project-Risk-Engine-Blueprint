@@ -1,0 +1,91 @@
+# Live audit: the engine against REAL Yahoo Finance data, and the deployed site
+# in a real browser. GitHub's runners have open internet; the cloud sandboxes
+# that build this project do not, so this is where "is it live data?" gets an
+# answer instead of an assumption. Run it from the Actions tab (Run workflow),
+# or push to a claude/** branch.
+name: Live audit
+
+on:
+  workflow_dispatch:
+    inputs:
+      site_url:
+        description: Deployed app to check in a browser
+        default: https://summer-2026-quant-project-risk-engine-blueprint-production.up.railway.app
+  push:
+    branches: ["claude/**"]
+
+permissions:
+  contents: read
+
+jobs:
+  live-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      SITE_URL: ${{ inputs.site_url || 'https://summer-2026-quant-project-risk-engine-blueprint-production.up.railway.app' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install
+        run: |
+          python -m pip install -r requirements.txt ruff bandit pip-audit
+          npm install --no-save playwright@1.56.1
+          npx playwright install --with-deps chromium
+
+      - name: 0. Self-check (lint, bandit, engine tests with live checks, narrative) + dependency CVEs
+        run: |
+          python -m tools.check
+          python -m pip_audit -r requirements.txt
+      - name: 1. Provenance - engine prices vs raw Yahoo API, ^IRX vs the Treasury
+        if: always()
+        run: python -m tools.live_provenance
+      - name: 3. Batch audit - every preset on live data, each check cites its source
+        if: always()
+        run: python -m tests.batch_audit
+      - name: 4. Walkthrough on live data - NaN, contradictions, unexplained jargon
+        if: always()
+        run: python -m tools.demo_check
+      - name: 5. Deployed site in a browser - skeleton, top bar, headline, errors
+        if: always()
+        run: |
+          mkdir -p site-shots
+          node tools/site_check.mjs "$SITE_URL" site-shots
+      - name: 6. Deployed site - outside-in security probe
+        if: always()
+        run: python -m tools.security_probe "$SITE_URL"
+
+      # This commit's own app, started here on live data - what merging will ship.
+      - name: 7. Start this commit's app (launch files installed as in Procfile)
+        if: always()
+        run: |
+          python -m tools.public_files
+          nohup streamlit run main.py --server.port 8501 --server.headless true > app.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:8501/_stcore/health && break; sleep 2; done
+      - name: 8. This commit - launch basics (SEO, OG, 404, first paint), security, recruiter walk
+        if: always()
+        run: |
+          mkdir -p site-shots/local walk/local
+          SEO=1 node tools/site_check.mjs http://127.0.0.1:8501 site-shots/local
+          python -m tools.security_probe http://127.0.0.1:8501
+          node tools/recruiter_walk.mjs http://127.0.0.1:8501 walk/local
+      - name: 9. Deployed site - recruiter walk (informational until this branch is deployed)
+        if: always()
+        continue-on-error: true
+        run: |
+          mkdir -p walk/deployed
+          node tools/recruiter_walk.mjs "$SITE_URL" walk/deployed
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: live-audit
+          path: |
+            audit/batch_audit_*
+            site-shots/
+            walk/
+            app.log

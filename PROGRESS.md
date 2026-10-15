@@ -388,6 +388,23 @@ risk-engine/
   minute (Yahoo is hit every 6h) - relabelled. Cloudflare as reverse proxy:
   **no**, see RUNBOOK.md section 4 for the council's reasons and the revisit
   trigger.
+- ✅ **Feature map, 2026-10-15** - every change of the day, and what now guards it:
+
+  | change | kind | guarded by |
+  |---|---|---|
+  | Public "Refresh" button (wiped every visitor's cache) | removed | `test_no_visitor_control_clears_the_shared_cache` |
+  | Streamlit's top header bar | removed | `test_streamlit_header_bar_is_hidden`, `site_check` |
+  | WBD in the Streaming preset (dead on Yahoo) | removed | `live_provenance` preset check |
+  | Cached Monte Carlo, signal IC, ES bootstrap, map payload | added | determinism tests |
+  | Constant-price (cash fund) exclusion | added | `test_flat_price_asset_is_detected_before_the_math` |
+  | Readable error for mistyped symbols (`NoDataError`) | added | `test_unknown_symbols_get_a_readable_error` |
+  | Freshness tick 1s -> 60s | changed | `test_freshness_ticker_does_not_tick_every_second` |
+  | Gungnir plaque labels circle -> block | changed | `test_gungnir_plaque_matches_its_sketch_and_its_math` |
+  | Negative CVaR reads "still ends up +X%", not "loses -X%" | changed | `recruiter_walk.mjs` contradiction check |
+  | Drawers no longer snap shut on the first change | fixed | `recruiter_walk.mjs` drawer check |
+  | SEO head, OG image, favicon, robots, sitemap, 404, pre-boot paint | added | `test_public_files_...`, `site_check` (SEO=1) |
+  | Live audit workflow, provenance, security probe, recruiter walk, `tools/check` | added | runs on every `claude/**` push |
+  | Layering rule: `src/` never imports the UI | added | `test_src_is_pure_computation_and_never_imports_the_ui` |
 - ✅ **Top bar removed + stress test (2026-10-15)** - Streamlit's fixed header
   (the beige bar over the crest) hidden. Stress test in four layers
   (`audit/stress_2026-10-15T020905Z.md`): planted-truth math 11/11; a

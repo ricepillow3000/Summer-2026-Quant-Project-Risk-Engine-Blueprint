@@ -2133,7 +2133,6 @@ def test_block_bootstrap_preserves_volatility_clustering():
     """The point of the whole exercise: sampled paths must still show the
     magnitude-clustering the history has. i.i.d. resampling destroys it."""
     rets = _clustered_returns()
-    w = np.array([1.0])
     history_acf = _abs_autocorr(rets["A"].values)
     assert history_acf > 0.05, "test data is not actually clustered"
 
@@ -2782,7 +2781,9 @@ def test_cached_hot_paths_are_deterministic():
     from src.topology import build_map_payload
 
     rng = np.random.default_rng(12)
-    idx = pd.bdate_range("2023-01-02", periods=520)
+    # Ends today: online, the map pulls live SPY for its market line and needs
+    # these dates to overlap the last two years (fixed 2023 dates gave 51 days).
+    idx = pd.bdate_range(end=pd.Timestamp.today().normalize(), periods=520)
     rets = pd.DataFrame(rng.standard_t(4, (520, 4)) * 0.01, index=idx, columns=list("ABCD"))
     px = 100 * (1 + rets).cumprod()
     a = daily_ic(momentum_signal(px), forward_returns(px, horizon=5))
@@ -2803,6 +2804,74 @@ def test_freshness_ticker_does_not_tick_every_second():
     src = (pathlib.Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
     ticks = re.findall(r'run_every="(\d+)s"', src)
     assert ticks and all(int(t) >= 30 for t in ticks), ticks
+
+
+def test_gungnir_plaque_matches_its_sketch_and_its_math():
+    """The plaque states two-asset equal risk contribution as w1*s1 = w2*s2
+    and says correlation cancels: a name 3x as volatile gets 1/3 the capital.
+    Check that claim against the solver at several correlations, and that the
+    plaque names the sketch's blocks (it said "circle" after the circles were
+    redrawn as equal-area blocks)."""
+    s1, s2 = 0.30, 0.10
+    for rho in (-0.6, 0.0, 0.3, 0.9):
+        cov = pd.DataFrame([[s1 * s1, rho * s1 * s2], [rho * s1 * s2, s2 * s2]])
+        w = risk_parity_weights(cov)
+        assert abs(w[0] * s1 - w[1] * s2) < 1e-9, (rho, w)
+        assert abs(w[0] - 0.25) < 1e-9 and abs(w[1] - 0.75) < 1e-9, (rho, w)
+    src = (pathlib.Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
+    assert 'class="c">block 01<' in src and 'class="c">block 02<' in src
+    assert 'class="c">circle' not in src and "Circle A" not in src
+
+
+def test_public_files_give_crawlers_and_link_previews_a_real_head(tmp_path=None):
+    """LinkedIn/Slack previews and search crawlers do not run JavaScript, so
+    tools/public_files.py writes the head they read into Streamlit's static
+    root at start: title, description, canonical, Open Graph image, robots,
+    sitemap, favicon, and a branded 404 for paths a single-page app would
+    otherwise serve as a blank page. Idempotent, and it must never drop
+    Streamlit's own markup."""
+    import tempfile
+
+    import tools.public_files as pf
+
+    d = pathlib.Path(tmp_path or tempfile.mkdtemp())
+    (d / "index.html").write_text(
+        "<!doctype html><html><head><title>Streamlit</title><script src='./static/js/a.js'>"
+        "</script></head><body><noscript>You need JS.</noscript><div id='root'></div>"
+        "</body></html>", encoding="utf-8")
+    pf.install(d, "https://example.test")
+    first = (d / "index.html").read_text(encoding="utf-8")
+    pf.install(d, "https://example.test")
+    assert (d / "index.html").read_text(encoding="utf-8") == first, "not idempotent"
+    assert first.count(pf.MARK) == 1 and first.count("<title>") == 1
+    for tag in ('name="description"', 'property="og:image" content="https://example.test/og-image.png"',
+                'rel="canonical" href="https://example.test/"', "summary_large_image",
+                "location.replace('/404.html')", "./static/js/a.js", "<div id='root'>",
+                'id="pre-boot"'):
+        assert tag in first, tag
+    assert "Sitemap: https://example.test/sitemap.xml" in (d / "robots.txt").read_text()
+    assert "<loc>https://example.test/</loc>" in (d / "sitemap.xml").read_text()
+    for f in ("og-image.png", "favicon.png", "apple-touch-icon.png", "404.html"):
+        assert (d / f).stat().st_size > 0, f
+    assert 'name="robots" content="noindex"' in (d / "404.html").read_text()
+
+
+def test_src_is_pure_computation_and_never_imports_the_ui():
+    """The layering CLAUDE.md promises: src/ is a numpy/pandas library the UI
+    composes, so it is testable without a browser and auditable on its own.
+    One `import streamlit` (or a reach back into main/tools/tests) inside src/
+    would quietly couple the math to the page - this fails the build instead."""
+    import ast
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    banned = {"streamlit", "main", "tools", "tests"}
+    offenders = []
+    for f in sorted((root / "src").glob("*.py")):
+        for node in ast.walk(ast.parse(f.read_text(encoding="utf-8"))):
+            mods = ([a.name for a in node.names] if isinstance(node, ast.Import)
+                    else [node.module or ""] if isinstance(node, ast.ImportFrom) else [])
+            offenders += [f"{f.name}: {m}" for m in mods if m.split(".")[0] in banned]
+    assert not offenders, f"src/ must not import the UI layer: {offenders}"
 
 
 def test_streamlit_header_bar_is_hidden():

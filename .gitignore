@@ -36,3 +36,6 @@ secrets.toml
 *.key
 *.pfx
 credentials.json
+
+# Playwright for tools/site_check.mjs (installed by the live-audit workflow)
+node_modules/

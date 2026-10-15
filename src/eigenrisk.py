@@ -142,7 +142,6 @@ def clip_eigenvalues(cov: pd.DataFrame, n_obs: int) -> tuple[pd.DataFrame, int]:
         raise ValueError("n_obs must be positive")
     values, vectors = np.linalg.eigh(cov.values)   # ascending
     n = len(values)
-    q = n / n_obs
     # iterate once: assume top eigenvalue is signal, estimate noise var
     # from the rest, then form the MP ceiling.
     sigma2 = values[:-1].mean() if n > 1 else values.mean()

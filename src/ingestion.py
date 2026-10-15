@@ -127,7 +127,10 @@ PRESETS = {
         # 2026-08-13, leaving 20 usable days. The short-history guard in
         # main.py catches that and says so, but a one-click preset should not
         # need rescuing - TTWO and RBLX already carry the gaming exposure.
-        "NFLX", "DIS", "SPOT", "META", "GOOGL", "RBLX", "CMCSA", "TTWO", "WBD", "PARA",
+        # WBD was dropped 2026-10-15: the live audit found Yahoo returns only
+        # 4 days for it (2026-10-05 -> 2026-10-08), which cut this whole
+        # preset to 4 common days. Re-add only once its history is back.
+        "NFLX", "DIS", "SPOT", "META", "GOOGL", "RBLX", "CMCSA", "TTWO", "PARA",
     ],
     "Software & cloud": [
         "MSFT", "ORCL", "CRM", "ADBE", "NOW", "SNOW", "PLTR", "SHOP", "INTU", "PANW",
@@ -216,7 +219,9 @@ def _clean(tickers: list[str] | None) -> list[str]:
 def _cache_path(tickers: list[str], period: str, align: bool = True) -> str:
     """Stable per-universe cache filename so different baskets don't collide."""
     flag = "a" if align else "r"
-    key = hashlib.md5((",".join(tickers) + "|" + period + "|" + flag).encode()).hexdigest()[:12]
+    # A filename, not a security control: usedforsecurity=False says so.
+    key = hashlib.md5((",".join(tickers) + "|" + period + "|" + flag).encode(),
+                      usedforsecurity=False).hexdigest()[:12]
     return os.path.join(DATA_DIR, f"prices_{key}.parquet")
 
 
@@ -239,7 +244,8 @@ def _cache_is_fresh(meta_path: str, max_age_hours: float) -> bool:
 
 def _dv_cache_path(tickers: list[str], period: str) -> str:
     """Cache filename for a universe's daily dollar-volume history."""
-    key = hashlib.md5((",".join(tickers) + "|" + period + "|dv").encode()).hexdigest()[:12]
+    key = hashlib.md5((",".join(tickers) + "|" + period + "|dv").encode(),
+                      usedforsecurity=False).hexdigest()[:12]
     return os.path.join(DATA_DIR, f"dollarvol_{key}.parquet")
 
 

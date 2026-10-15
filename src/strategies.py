@@ -51,7 +51,7 @@ def risk_parity_weights(cov: pd.DataFrame, iters: int = 10000,
     descent on the strictly convex problem
         min 0.5 w'Sigma w - lam * sum_i b_i ln(w_i),
     whose first-order condition w_i (Sigma w)_i = lam b_i IS the ERC
-    condition after normalization (Spinu 2012; Griveau-Billion, Richard &
+    condition after normalization (Spinu 2013; Griveau-Billion, Richard &
     Roncalli 2013). Converges for any positive-definite covariance matrix,
     including baskets with bond, gold, FX or futures legs where the naive
     fixed point w <- b/(Sigma w) is a period-2 oscillator and silently
