@@ -101,6 +101,12 @@ await step('switch basket to Semiconductors', async () => {
   await pick('Preset basket', 'Semiconductors');
   await page.waitForFunction(b => document.querySelector('.verdict-number')?.textContent.trim() !== b, before);
   return `CVaR ${before} -> ${await verdict()}`;
+}, async () => {
+  // The visitor's FIRST change used to re-mount every drawer closed - the
+  // one they were using snapped shut under the cursor.
+  const open = await page.locator('summary', { hasText: '01 · Universe' }).first()
+    .evaluate(el => el.parentElement.open);
+  return open || 'the Universe drawer closed itself after the first change';
 });
 
 await step('replay the COVID-19 crash', async () => {
