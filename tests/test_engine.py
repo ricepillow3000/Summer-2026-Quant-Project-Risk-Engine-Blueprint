@@ -2598,7 +2598,9 @@ def test_cached_hot_paths_are_deterministic():
     from src.topology import build_map_payload
 
     rng = np.random.default_rng(12)
-    idx = pd.bdate_range("2023-01-02", periods=520)
+    # Ends today: online, the map pulls live SPY for its market line and needs
+    # these dates to overlap the last two years (fixed 2023 dates gave 51 days).
+    idx = pd.bdate_range(end=pd.Timestamp.today().normalize(), periods=520)
     rets = pd.DataFrame(rng.standard_t(4, (520, 4)) * 0.01, index=idx, columns=list("ABCD"))
     px = 100 * (1 + rets).cumprod()
     a = daily_ic(momentum_signal(px), forward_returns(px, horizon=5))
@@ -2619,6 +2621,23 @@ def test_freshness_ticker_does_not_tick_every_second():
     src = (pathlib.Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
     ticks = re.findall(r'run_every="(\d+)s"', src)
     assert ticks and all(int(t) >= 30 for t in ticks), ticks
+
+
+def test_gungnir_plaque_matches_its_sketch_and_its_math():
+    """The plaque states two-asset equal risk contribution as w1*s1 = w2*s2
+    and says correlation cancels: a name 3x as volatile gets 1/3 the capital.
+    Check that claim against the solver at several correlations, and that the
+    plaque names the sketch's blocks (it said "circle" after the circles were
+    redrawn as equal-area blocks)."""
+    s1, s2 = 0.30, 0.10
+    for rho in (-0.6, 0.0, 0.3, 0.9):
+        cov = pd.DataFrame([[s1 * s1, rho * s1 * s2], [rho * s1 * s2, s2 * s2]])
+        w = risk_parity_weights(cov)
+        assert abs(w[0] * s1 - w[1] * s2) < 1e-9, (rho, w)
+        assert abs(w[0] - 0.25) < 1e-9 and abs(w[1] - 0.75) < 1e-9, (rho, w)
+    src = (pathlib.Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
+    assert 'class="c">block 01<' in src and 'class="c">block 02<' in src
+    assert 'class="c">circle' not in src and "Circle A" not in src
 
 
 def test_streamlit_header_bar_is_hidden():

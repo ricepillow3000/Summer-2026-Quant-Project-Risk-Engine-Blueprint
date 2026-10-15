@@ -878,10 +878,10 @@ with _gungnir_zone:
         f'<div class="gplaque-eyebrow">The math behind the sketch</div>'
         f'<div class="gplaque-eq">'
         f'<span class="gplaque-term"><span class="t">w<sub>1</sub>&sigma;<sub>1</sub></span>'
-        f'<span class="c">circle 1</span></span>'
+        f'<span class="c">block 01</span></span>'
         f'<span class="gplaque-eqs">=</span>'
         f'<span class="gplaque-term"><span class="t">w<sub>2</sub>&sigma;<sub>2</sub></span>'
-        f'<span class="c">circle 2</span></span>'
+        f'<span class="c">block 02</span></span>'
         f'</div>'
         f'<div class="gplaque-read">The steadier name carries more of the money, '
         f'so both names carry the same share of the risk.</div>'
@@ -2320,7 +2320,7 @@ with tab_balance:
                 bv_rets = returns
             vols = returns.std() * np.sqrt(252)
             flyer = st.selectbox(
-                "High-flyer (Circle A - the volatile conviction position)",
+                "High-flyer (Circle 1 - the volatile conviction position)",
                 loaded, index=loaded.index(vols.idxmax()),
                 help="Defaults to the most volatile name in your universe.")
             try:                                   # grit feeds the anchor rank

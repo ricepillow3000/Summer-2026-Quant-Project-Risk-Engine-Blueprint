@@ -23,7 +23,7 @@ from datetime import datetime, timezone
 import numpy as np
 import pandas as pd
 
-from src.ingestion import fetch_prices, fetch_risk_free_rate
+from src.ingestion import MAX_UNIVERSE, PRESETS, fetch_prices, fetch_risk_free_rate
 from src.netguard import guarded_session
 
 SYMBOLS = ["AAPL", "MSFT", "SPY", "IVV", "QQQ", "GLD", "GC=F", "EURUSD=X", "^GSPC"]
@@ -44,12 +44,15 @@ def raw_chart(symbol: str) -> pd.Series:
     days = pd.to_datetime(np.array(res["timestamp"]) + off, unit="s").normalize()
     adj = res["indicators"].get("adjclose", [{}])[0].get("adjclose") \
         or res["indicators"]["quote"][0]["close"]
-    return pd.Series(adj, index=days, dtype=float).dropna()
+    raw = pd.Series(adj, index=days, dtype=float).dropna()
+    # Futures and FX can carry two bars on one calendar date (session roll).
+    return raw[~raw.index.duplicated(keep="last")]
 
 
 def main() -> int:
     eng = fetch_prices(SYMBOLS, period="3mo", use_cache=False, align=False)
     eng.index = pd.to_datetime(eng.index).tz_localize(None).normalize()
+    eng = eng[~eng.index.duplicated(keep="last")]
     for sym in SYMBOLS:
         if sym not in eng.columns:
             check(f"{sym} loaded", False, "engine returned no column")
@@ -84,6 +87,24 @@ def main() -> int:
     check("^IRX (Yahoo) vs DTB3 (FRED)", irx is not None and abs(irx - dtb3) <= 0.0025,
           f"Yahoo {irx if irx is None else f'{irx:.4%}'} vs FRED {dtb3:.4%} "
           f"({fred.iloc[-1, 0]})")
+
+    # 4. Every preset ticker still trades on Yahoo with a full 2-year history.
+    # A delisted, merged or renamed symbol silently shrinks a one-click basket
+    # to the days all members share - this names the culprit.
+    every = sorted({t for basket in PRESETS.values() for t in basket})
+    # fetch_prices caps a request at MAX_UNIVERSE symbols, so go in batches.
+    cover = pd.concat([fetch_prices(every[i:i + MAX_UNIVERSE], period="2y",
+                                    use_cache=False, align=False)
+                       for i in range(0, len(every), MAX_UNIVERSE)], axis=1)
+    today = datetime.now(timezone.utc).date()
+    for t in every:
+        col = cover[t].dropna() if t in cover.columns else pd.Series(dtype=float)
+        if col.empty:
+            check(f"preset ticker {t} on Yahoo", False, "no data returned")
+            continue
+        stale = np.busday_count(col.index[-1].date(), today)
+        check(f"preset ticker {t} on Yahoo", len(col) >= 400 and stale <= 4,
+              f"{len(col)} days, {col.index[0].date()} -> {col.index[-1].date()}")
 
     bad = [n for n, ok, _ in results if not ok]
     print(f"\n{len(results) - len(bad)}/{len(results)} provenance checks pass")

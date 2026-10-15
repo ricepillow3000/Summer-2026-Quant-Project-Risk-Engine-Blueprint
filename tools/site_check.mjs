@@ -58,6 +58,40 @@ for (const [label, w, h] of [['desktop', 1440, 900], ['phone', 390, 844]]) {
   ok(!bad, `${label}: no NaN/inf in visible text${bad ? ` (${bad.slice(0, 3)})` : ''}`);
   const sideways = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   ok(sideways <= 1, `${label}: no sideways scroll (${sideways}px)`);
+  if (label === 'desktop') {
+    // Risk Topology (first tab): its agents - one unit per asset, simulated
+    // tracer paths, end-state dots - must be drawn from a finite payload.
+    // The "Universe (N): A, B, ..." caption sits in a closed tab, so read the element itself.
+    const cap = await page.evaluate(() => [...document.querySelectorAll('[data-testid="stCaptionContainer"]')]
+      .map(e => e.textContent.trim()).find(t => /^Universe \(\d+\): /.test(t)) || '');
+    const universe = cap.replace(/^Universe \(\d+\): /, '').split(', ').map(x => x.trim()).filter(Boolean).sort();
+    let map = null;
+    for (let i = 0; i < 60 && !map; i++) {
+      for (const f of page.frames()) {
+        if (await f.$('#cvTrail').catch(() => null)) { map = f; break; }
+      }
+      if (!map) await page.waitForTimeout(1000);
+    }
+    ok(!!map, 'desktop: Risk Topology map frame rendered');
+    if (map) {
+      await page.waitForTimeout(6000);          // one tracer pass
+      const m = await map.evaluate(() => {
+        let bad = 0;
+        const walk = v => { if (typeof v === 'number') { if (!isFinite(v)) bad++; }
+                            else if (v && typeof v === 'object') Object.values(v).forEach(walk); };
+        walk(DEMO);
+        const ink = id => { const c = document.getElementById(id);
+          const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+          let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i]) n++; return n / (d.length / 4); };
+        return { units: DEMO.assets.filter(a => a.f === 'Universe').map(a => a.t).sort(), bad,
+                 base: ink('cvBase'), trail: ink('cvTrail') };
+      });
+      ok(universe.length > 1 && m.units.join() === universe.join(),
+         `desktop: map units are the visitor's own tickers, no demo data (${m.units.join(' ')} vs ${universe.join(' ')})`);
+      ok(m.bad === 0, `desktop: every number in the map payload is finite (${m.bad} non-finite)`);
+      ok(m.base > 0.5 && m.trail > 0, `desktop: terrain and tracer paths drawn (terrain ${(m.base * 100).toFixed(0)}%, tracers ${(m.trail * 100).toFixed(1)}% of canvas)`);
+    }
+  }
   await page.locator('.verdict-number').scrollIntoViewIfNeeded();
   await page.screenshot({ path: `${outdir}/${label}-verdict.png` });
   ok(!errors.length, `${label}: no script errors${errors.length ? ` (${errors.slice(0, 2)})` : ''}`);
