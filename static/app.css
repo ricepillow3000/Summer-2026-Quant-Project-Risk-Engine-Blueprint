@@ -885,3 +885,10 @@ div[data-baseweb="select"]>div, .stNumberInput input,
         stroke-dashoffset: 0; transition: none; }
     .cta-btn.is-launching .cta-arrow { animation: none; }
 }
+
+/* Streamlit's own fixed header: a 60px bar in the theme colour holding only the
+   toolbar menu (Print / Record screen / "Made with Streamlit"), which viewers
+   do not need (toolbarMode = "viewer"). It sat over the full-bleed hero and cut
+   the crest off. Removed, not restyled - it is position:fixed, so nothing in
+   the layout moves. */
+[data-testid="stHeader"] { display: none !important; }
