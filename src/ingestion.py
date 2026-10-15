@@ -127,7 +127,10 @@ PRESETS = {
         # 2026-08-13, leaving 20 usable days. The short-history guard in
         # main.py catches that and says so, but a one-click preset should not
         # need rescuing - TTWO and RBLX already carry the gaming exposure.
-        "NFLX", "DIS", "SPOT", "META", "GOOGL", "RBLX", "CMCSA", "TTWO", "WBD", "PARA",
+        # WBD was dropped 2026-10-15: the live audit found Yahoo returns only
+        # 4 days for it (2026-10-05 -> 2026-10-08), which cut this whole
+        # preset to 4 common days. Re-add only once its history is back.
+        "NFLX", "DIS", "SPOT", "META", "GOOGL", "RBLX", "CMCSA", "TTWO", "PARA",
     ],
     "Software & cloud": [
         "MSFT", "ORCL", "CRM", "ADBE", "NOW", "SNOW", "PLTR", "SHOP", "INTU", "PANW",

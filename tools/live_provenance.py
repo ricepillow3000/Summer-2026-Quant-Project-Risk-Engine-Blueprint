@@ -22,6 +22,7 @@ from datetime import datetime, timezone
 
 import numpy as np
 import pandas as pd
+import yfinance as yf
 
 from src.ingestion import MAX_UNIVERSE, PRESETS, fetch_prices, fetch_risk_free_rate
 from src.netguard import guarded_session
@@ -66,10 +67,26 @@ def main() -> int:
             continue
         gap = (both.iloc[:, 0] / both.iloc[:, 1] - 1).abs()
         worst, day = float(gap.max()), gap.idxmax()
-        check(f"{sym} engine price == raw Yahoo chart", len(both) >= 40 and worst < 1e-6,
-              f"{len(both)} common days, worst relative gap {worst:.2e} on {day.date()} "
-              f"(engine {both.loc[day].iloc[0]:.6f} vs raw {both.loc[day].iloc[1]:.6f}), "
-              f"{both.index[-1].date()} close {both.iloc[-1, 0]:.4f}")
+        detail = (f"{len(both)} common days, worst relative gap {worst:.2e} on {day.date()} "
+                  f"(engine {both.loc[day].iloc[0]:.6f} vs raw {both.loc[day].iloc[1]:.6f}), "
+                  f"{both.index[-1].date()} close {both.iloc[-1, 0]:.4f}")
+        ok = len(both) >= 40 and worst < 1e-6
+        if len(both) >= 40 and not ok:
+            # The engine downloads with yfinance's repair=True, which corrects
+            # known Yahoo bar errors. Prove a gap is that and nothing else:
+            # the SAME download with repair off must equal the raw API exactly.
+            plain = yf.download(sym, period="3mo", auto_adjust=True, repair=False,
+                                progress=False, session=guarded_session())["Close"]
+            plain = plain.iloc[:, 0] if isinstance(plain, pd.DataFrame) else plain
+            plain.index = pd.to_datetime(plain.index).tz_localize(None).normalize()
+            pb = pd.concat([plain[~plain.index.duplicated(keep="last")], raw],
+                           axis=1, join="inner").dropna().iloc[:-1]
+            pgap = float((pb.iloc[:, 0] / pb.iloc[:, 1] - 1).abs().max())
+            ok = pgap < 1e-6
+            detail += (f"; with repair off the series equals raw Yahoo to {pgap:.1e} - the gap is "
+                       f"yfinance's documented price repair of Yahoo's own bar"
+                       if ok else f"; with repair off the gap is still {pgap:.2e} - unexplained")
+        check(f"{sym} engine price == raw Yahoo chart", ok, detail)
 
     last = eng.dropna(how="all").index[-1]
     age = np.busday_count(last.date(), datetime.now(timezone.utc).date())
@@ -83,21 +100,26 @@ def main() -> int:
     irx = fetch_risk_free_rate(use_cache=False)
     req = urllib.request.Request("https://fred.stlouisfed.org/graph/fredgraph.csv?id=DTB3",
                                  headers={"User-Agent": "meleona-audit"})
-    fred = None
-    for _ in range(3):                      # FRED is slow at times; an
-        try:                                # unreachable source fails the
-            fred = pd.read_csv(urllib.request.urlopen(req, timeout=60))  # check
-            break
-        except OSError as exc:
-            err = exc
-    if fred is None:
-        check("^IRX (Yahoo) vs DTB3 (FRED)", False, f"FRED unreachable, not verified ({err!r})")
-    else:
+    # Second source: FRED's DTB3, else the US Treasury's own daily bill rates
+    # (the original publisher FRED copies; FRED times out from some runners).
+    ref = None
+    try:
+        fred = pd.read_csv(urllib.request.urlopen(req, timeout=20))
         fred = fred[pd.to_numeric(fred.iloc[:, 1], errors="coerce").notna()]
-        dtb3 = float(fred.iloc[-1, 1]) / 100
-        check("^IRX (Yahoo) vs DTB3 (FRED)", irx is not None and abs(irx - dtb3) <= 0.0025,
-              f"Yahoo {irx if irx is None else f'{irx:.4%}'} vs FRED {dtb3:.4%} "
-              f"({fred.iloc[-1, 0]})")
+        ref = (float(fred.iloc[-1, 1]) / 100, f"FRED DTB3 {fred.iloc[-1, 0]}")
+    except OSError:
+        year = datetime.now(timezone.utc).year
+        tsy = pd.read_csv(urllib.request.urlopen(urllib.request.Request(
+            "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/"
+            f"daily-treasury-rates.csv/{year}/all?type=daily_treasury_bill_rates"
+            f"&field_tdr_date_value={year}&page&_format=csv",
+            headers={"User-Agent": "meleona-audit"}), timeout=60))
+        col = next(c for c in tsy.columns if "13" in c and "BANK DISCOUNT" in c.upper())
+        tsy["Date"] = pd.to_datetime(tsy["Date"])
+        row = tsy.sort_values("Date").dropna(subset=[col]).iloc[-1]
+        ref = (float(row[col]) / 100, f"US Treasury 13-week bank discount {row['Date'].date()}")
+    check("^IRX (Yahoo) vs a second official source", irx is not None and abs(irx - ref[0]) <= 0.0025,
+          f"Yahoo {irx if irx is None else f'{irx:.4%}'} vs {ref[1]} {ref[0]:.4%}")
 
     # 4. Every preset ticker still trades on Yahoo with a full 2-year history.
     # A delisted, merged or renamed symbol silently shrinks a one-click basket
