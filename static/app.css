@@ -40,6 +40,14 @@ h1, h2, h3 { color: #3F3B35; font-weight: 400; letter-spacing: -0.01em; }
     letter-spacing: 0.14em !important; text-transform: uppercase !important; }
 [data-testid="stMetricValue"] { font-family: Georgia, serif !important;
     color: #3F3B35 !important; letter-spacing: -0.01em; }
+/* Streamlit keeps a metric's label and value to one line and cuts the rest
+   with an ellipsis; in a phone's or portrait iPad's narrow metric columns that
+   hid "IR at effective breadth (159 bets/yr)" and "10 / 13 exp."
+   (device_check, 2026-10-17). Wrap instead. */
+[data-testid="stMetricLabel"], [data-testid="stMetricLabel"] *,
+[data-testid="stMetricValue"], [data-testid="stMetricValue"] * {
+    white-space: normal !important; overflow: visible !important;
+    text-overflow: clip !important; overflow-wrap: anywhere; }
 
 /* Header crest + wordmark */
 .brand-row { display: flex; align-items: center; gap: 16px; margin-bottom: 2px; }

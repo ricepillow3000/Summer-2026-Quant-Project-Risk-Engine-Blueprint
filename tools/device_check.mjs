@@ -157,8 +157,15 @@ async function covered(page) {
 }
 
 const quiet = () => !document.querySelector('[data-testid="stStatusWidget"] *') && !document.querySelector('[data-stale="true"]');
-async function settle(page) {
-  for (let i = 0; i < 2; i++) { await page.waitForFunction(quiet, null, { timeout: 180000 }); await page.waitForTimeout(600); }
+// A page that never settles is itself a finding: record it and measure what is
+// there, rather than losing every device after it.
+let unsettled = [];
+async function settle(page, where = '') {
+  for (let i = 0; i < 2; i++) {
+    const ok = await page.waitForFunction(quiet, null, { timeout: 180000 }).then(() => true, () => false);
+    if (!ok) { unsettled.push(where || 'page'); return; }
+    await page.waitForTimeout(600);
+  }
 }
 
 const browser = await chromium.launch();
@@ -199,8 +206,8 @@ for (const dev of names) {
     if (ti !== null) {
       const t = (await page.$$('[role=tab]'))[ti];
       if (!t) continue;
-      await t.click({ timeout: 10000 }).catch(() => {}); await settle(page);
-      await openDrawers(); await settle(page);
+      await t.click({ timeout: 10000 }).catch(() => {}); await settle(page, `tab ${ti + 1}`);
+      await openDrawers(); await settle(page, `tab ${ti + 1} drawers`);
       const label = (await t.innerText().catch(() => '')).trim();
       if (ti === 0 || ti % 4 === 0) await page.screenshot({ path: `${outdir}/${dev}-tab-${ti + 1}.png`, fullPage: false }).catch(() => {});
       void label;
@@ -217,6 +224,8 @@ for (const dev of names) {
   await page.screenshot({ path: `${outdir}/${dev}.png`, fullPage: true }).catch(() => {});
   const list = s => [...s].slice(0, 6).join('; ');
   const tag = `${dev} ${d.width}x${d.height}`;
+  ok(!unsettled.length, `${tag}: the page settles after every click${unsettled.length ? ` (still busy after 3 min: ${unsettled.join(', ')})` : ''}`);
+  unsettled = [];
   ok(sideways <= 1, `${tag}: nothing scrolls sideways (${sideways}px)`);
   ok(!found.words.size, `${tag}: no words on top of other words${found.words.size ? ` (${found.words.size}: ${list(found.words)})` : ''}`);
   ok(!found.overText.size, `${tag}: no control on top of words${found.overText.size ? ` (${found.overText.size}: ${list(found.overText)})` : ''}`);

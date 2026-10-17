@@ -207,14 +207,19 @@ def audit_universe(name: str, tickers: list[str], quick: bool) -> dict | None:
     # -- INV-09 conditional EVT ----------------------------------------------
     # The app fits EVT on a 10y window (main.py's load_tail_fit), not the 2y
     # risk window: a GPD needs ~50 exceedances above the 95% threshold, and
-    # 2y of data supplies ~22. Auditing it on 2y would test a refusal.
+    # 2y of data supplies ~22. Auditing it on 2y would test a refusal. Same
+    # window rule as the app since 2026-10-17: a name listed more than a week
+    # after the earliest is dropped, not allowed to shorten everyone's history.
     try:
-        evt_rets = fetch_prices(tickers, period="10y").pct_change().dropna()
+        evt_px = fetch_prices(tickers, period="10y", align=False)
+        first = evt_px.notna().idxmax()
+        evt_px = evt_px.loc[:, first <= first.min() + pd.Timedelta(days=7)].dropna()
+        evt_rets = evt_px.pct_change().dropna()
         evt_cols = list(evt_rets.columns)
         evt_port = portfolio_daily_returns(
             evt_rets, pd.Series(1.0 / len(evt_cols), index=evt_cols))
     except Exception:  # noqa: BLE001 - fall back to the window we already have
-        evt_port = port
+        evt_port, evt_cols = port, cols
     mf = mcneil_frey_tail(evt_port)
     if mf.get("fitted"):
         cond = mf["conditional"]
@@ -222,7 +227,8 @@ def audit_universe(name: str, tickers: list[str], quick: bool) -> dict | None:
               and float(mf["sigma_next"]) > 0)
         q = sorted(cond)[0]
         record("INV-09", name, "conditional EVT: ES >= VaR at every quantile", ok,
-               f"10y window, {len(evt_port)} days; sigma_next "
+               f"10y window, {len(evt_port)} days on {len(evt_cols)} of "
+               f"{len(tickers)} names; sigma_next "
                f"{float(mf['sigma_next']):.4%}, filtered xi {mf.get('xi')}, "
                f"unconditional xi {mf.get('unconditional_xi')}; "
                f"q={q}: VaR {cond[q]['var']:.2%}, ES {cond[q]['es']:.2%}", "mcneil")

@@ -139,6 +139,7 @@ def audit_pair(pair: tuple) -> list:
         rec("PAIR-01", False, f"fetch_prices raised {type(exc).__name__}: {exc}")
         return out
     raw = _MASTER[[a, b]].dropna(how="all")
+    raw = raw[raw.index.dayofweek < 5]      # a 252-day year: crypto weekends fold into Monday
     both = raw.dropna()
     kept = px.index
     missing = both.index.difference(kept)

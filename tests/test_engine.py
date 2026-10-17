@@ -3771,6 +3771,22 @@ def test_changing_weighting_keeps_the_visitors_balance_anchor():
         restore()
 
 
+def test_metric_labels_and_values_wrap_instead_of_ending_in_an_ellipsis():
+    """Streamlit cuts a metric's label and value to one line with an ellipsis.
+    In the narrow metric columns of a phone or a portrait iPad that left
+    "IR at effective breadth (159 bets/yr)", "Historical VaR (95%)" and
+    "10 / 13 exp." unreadable (tools/device_check.mjs, 2026-10-17: every phone
+    and portrait iPad). They must wrap instead."""
+    import re
+    css = (pathlib.Path(__file__).resolve().parent.parent / "static" / "app.css"
+           ).read_text(encoding="utf-8")
+    rules = re.findall(r"([^{}]+)\{([^}]*)\}", css)
+    for part in ("stMetricLabel", "stMetricValue"):
+        body = " ".join(b for sel, b in rules if part in sel)
+        assert re.search(r"white-space:\s*normal", body), f"{part} still kept to one line"
+        assert re.search(r"text-overflow:\s*clip", body), f"{part} still ends in an ellipsis"
+
+
 if __name__ == "__main__":
     import sys
 
