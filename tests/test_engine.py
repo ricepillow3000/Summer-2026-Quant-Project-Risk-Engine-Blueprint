@@ -3270,6 +3270,84 @@ def test_no_raw_exception_text_reaches_the_page():
     assert not hits, f"exception text interpolated onto the page: {hits}"
 
 
+# --- council fixes 2026-10-17: feed-liquidity ---
+def test_weekend_crypto_rows_do_not_pad_stock_columns_with_stale_prices():
+    """BTC-USD trades on weekends; the forward-fill ran before the align, so
+    every Saturday and Sunday survived with the stock's Friday price repeated:
+    208 zero-return SPY rows in two years, SPY vol 0.154 against a true 0.182,
+    and 252 rows spanning 0.69 calendar years under the '1-Year' labels."""
+    from src.ingestion import _clean_price_frame
+
+    days = pd.date_range("2024-01-01", "2025-12-31", freq="D")
+    rng = np.random.default_rng(3)
+    btc = pd.Series(100 * np.exp(np.cumsum(rng.normal(0, 0.03, len(days)))), days)
+    biz = days[days.dayofweek < 5]
+    spy = pd.Series(100 * np.exp(np.cumsum(rng.normal(0, 0.011, len(biz)))), biz)
+    raw = pd.concat({"BTC-USD": btc, "SPY": spy}, axis=1)   # yf.download's outer join
+    for align in (True, False):
+        px = _clean_price_frame(raw, align)
+        weekend = int((px.index.dayofweek >= 5).sum())
+        assert weekend == 0, f"align={align}: {weekend} weekend rows kept"
+        rets = px.pct_change().dropna()
+        assert int((rets["SPY"] == 0).sum()) == 0, f"align={align}: stale SPY rows"
+        # Friday close -> Monday close: nothing is lost from crypto's path.
+        assert abs(px["BTC-USD"].iloc[-1] / px["BTC-USD"].iloc[0]
+                   - btc[px.index[-1]] / btc[px.index[0]]) < 1e-12
+
+
+def test_futures_contract_volume_is_not_reported_as_dollar_volume():
+    """Yahoo's =F Volume counts contracts and Close is per unit, so close x
+    volume is not dollars (no contract multiplier): SI=F read 2,240 days to
+    exit a $5B book that clears in half a day. The page already says futures
+    are 'excluded, not estimated'; the feed now makes that true, the same
+    way an FX pair with no volume is. Offline: the downloader is replaced."""
+    import src.ingestion as ing
+
+    idx = pd.bdate_range("2025-01-02", periods=30)
+    cols = ["SI=F", "SPY"]
+    frame = pd.concat({"Close": pd.DataFrame(30.0, idx, cols),
+                       "Volume": pd.DataFrame(6e4, idx, cols)}, axis=1)
+    real = (ing.yf.download, ing.check_budget, ing.guarded_session)
+    try:
+        ing.yf.download = lambda *a, **k: frame
+        ing.check_budget = lambda *a, **k: None
+        ing.guarded_session = lambda: None
+        adv = ing.average_dollar_volume(cols, use_cache=False).reindex(cols).fillna(0.0)
+    finally:
+        ing.yf.download, ing.check_budget, ing.guarded_session = real
+    assert adv["SPY"] == 30.0 * 6e4, adv.to_dict()
+    assert adv["SI=F"] == 0.0, f"contracts x price shown as dollars: {adv['SI=F']}"
+    prof = liquidity_profile(days_to_liquidate([0.5, 0.5], adv, book_value=5e9))
+    assert prof["no_volume"] == ["SI=F"], prof
+
+
+def test_liquidity_adjustment_never_turns_a_tail_gain_into_a_bigger_gain():
+    """CVaR <= 0 means the worst 5% of years still gain: there is no tail loss
+    for an unwind to widen. Scaling it anyway reported -5.3% against a -5.0%
+    headline - being stuck holding read as a better outcome - and the verdict
+    said the tail 'widens to' that gain."""
+    import ast
+
+    for days in (1.0, 60.0, 500.0, np.inf):
+        lv = liquidity_adjusted_cvar(-0.20, days)
+        assert lv["lvar"] == -0.20, f"{days} exit days: lvar {lv['lvar']}"
+    assert liquidity_adjusted_cvar(0.20, 60.0)["lvar"] > 0.20   # losses still widen
+
+    src = (pathlib.Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
+    guarded = {"that tail widens to ": False, " for the unwind": False}
+    for node in ast.walk(ast.parse(src)):
+        if not isinstance(node, ast.If):
+            continue
+        test = ast.unparse(node.test).replace(" ", "")
+        body = "".join(ast.unparse(b) for b in node.body)
+        orelse = "".join(ast.unparse(b) for b in node.orelse)
+        for phrase in guarded:
+            if ((phrase in body and "cvar']>0" in test)
+                    or (phrase in orelse and "cvar']<=0" in test)):
+                guarded[phrase] = True
+    assert all(guarded.values()), f"widening shown for a negative CVaR: {guarded}"
+
+
 if __name__ == "__main__":
     import sys
 

@@ -1465,8 +1465,10 @@ if bearish:
     )
 
 # Only surface the liquidity add-on when it materially fattens the tail
-# (multiplier > 1.005 ≈ more than ~2.5 trading days to fully exit).
-if lvar and np.isfinite(lvar["lvar"]) and lvar["multiplier"] > 1.005:
+# (multiplier > 1.005 ≈ more than ~2.5 trading days to fully exit). A CVaR
+# <= 0 has no tail loss to widen; the line read "widens to" a gain.
+if (mc["cvar"] > 0 and lvar and np.isfinite(lvar["lvar"])
+        and lvar["multiplier"] > 1.005):
     verdict += (
         f" Adjusted for the ~<b>{lvar['full_exit_days']:.0f} trading days</b> "
         f"it takes to fully unwind at 20% of daily volume, that tail widens to "
@@ -2777,7 +2779,14 @@ with tab_liquidity:
         # Liquidity-adjusted tail - how the headline CVaR fattens once the days
         # it takes to unwind THIS book at THESE sliders are priced in.
         lv = liquidity_adjusted_cvar(mc["cvar"], prof["full_exit_days"])
-        if np.isfinite(lv["lvar"]):
+        if mc["cvar"] <= 0:
+            # Was a "+X% for the unwind" delta on a figure that was a gain.
+            read_me(
+                "<b>No tail loss to widen.</b> The worst 5% of simulated years "
+                f"still end up ahead on average (headline CVaR {mc['cvar']:.1%}), "
+                "so there is no tail loss for the unwind to widen and no "
+                "liquidity adjustment is applied.")
+        elif np.isfinite(lv["lvar"]):
             d1, d2 = st.columns(2)
             d1.metric("Headline CVaR (95%)", f"{lv['cvar']:.1%}")
             d2.metric("Liquidity-adjusted CVaR", f"{lv['lvar']:.1%}",
@@ -2813,7 +2822,8 @@ with tab_liquidity:
                 f"**{prof['least_liquid']}** is the bottleneck at "
                 f"{_fmt_days(prof['full_exit_days'])} to fully exit. "
             )
-        if np.isfinite(lv["multiplier"]) and lv["multiplier"] - 1 < 0.005:
+        if (mc["cvar"] > 0 and np.isfinite(lv["multiplier"])
+                and lv["multiplier"] - 1 < 0.005):
             # Every mega-cap/ETF preset exits in well under a day, so the tail
             # adjustment rounds to +0%. Say why, or a reader assumes the model
             # is dead rather than the book being genuinely liquid.
