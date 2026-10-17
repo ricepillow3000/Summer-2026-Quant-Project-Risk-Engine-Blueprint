@@ -150,15 +150,18 @@ PRESETS = {
 # Names offered as suggestions in the ticker picker. A superset of every preset
 # above: the box accepts any Yahoo symbol, but a visitor should be able to find
 # a familiar company by typing the first letters of its ticker instead of
-# needing to know it by heart.
+# needing to know it by heart. Every name here is checked live, alone and in
+# every pair, by tests/pair_audit.py: on 2026-10-17 Yahoo answered "Quote not
+# found" for BK and K (Kellanova, taken private), so a visitor picking either
+# got no data - both left this list, and the audit fails on the next one.
 SUGGESTIONS = sorted({t for basket in PRESETS.values() for t in basket} | {
     "T", "VZ", "TMUS", "CMCSA", "CVS", "CI", "ELV", "HUM", "MDT", "BMY",
     "GILD", "REGN", "VRTX", "ZTS", "SYK", "BSX", "DHR", "MCK",
     "SPGI", "ICE", "CME", "MCO", "PYPL", "V", "MA", "USB", "PNC", "TFC",
-    "BK", "STT", "AIG", "MET", "PRU", "ALL", "TRV", "PGR", "CB",
+    "STT", "AIG", "MET", "PRU", "ALL", "TRV", "PGR", "CB",
     "F", "GM", "DAL", "UAL", "LUV", "CSX", "NSC", "EMR", "ETN", "PH", "ITW",
     "MMM", "GD", "NOC", "LHX", "TDG", "PCAR", "CMI",
-    "PG", "CL", "KMB", "GIS", "K", "HSY", "STZ", "MO", "PM", "KDP", "MNST",
+    "PG", "CL", "KMB", "GIS", "HSY", "STZ", "MO", "PM", "KDP", "MNST",
     "YUM", "CMG", "DPZ", "ROST", "TJX", "DG", "DLTR", "BBY", "EBAY", "ETSY",
     "AMD", "ARM", "LRCX", "KLAC", "ADI", "NXPI", "ON", "MRVL", "SMCI", "DELL",
     "IBM", "ACN", "CSCO", "ANET", "HPQ", "WDC", "STX", "ZS", "CRWD", "DDOG",

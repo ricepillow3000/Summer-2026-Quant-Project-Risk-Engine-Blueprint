@@ -125,6 +125,13 @@ def audit_pair(pair: tuple) -> list:
     def rec(cid, ok, detail="", status=None):
         out.append((cid, scope, status or ("PASS" if ok else "FAIL"), "" if ok else detail))
 
+    # A symbol Yahoo has no data for fails TICK-01 once; its 300-odd pairs are
+    # counted here as SKIP rather than repeating that failure (a crash on the
+    # first live run, 2026-10-17: BK and K had been delisted).
+    if any(t not in _MASTER.columns or _MASTER[t].dropna().empty for t in (a, b)):
+        rec("PAIR-01", True, status="SKIP")
+        return out
+
     # -- PAIR-01 the app's own fetch returns the raw closes -------------------
     try:
         px = ing.fetch_prices([a, b], period="2y")
