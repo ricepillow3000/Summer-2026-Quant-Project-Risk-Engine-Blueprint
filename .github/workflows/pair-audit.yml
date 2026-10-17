@@ -1,0 +1,74 @@
+# Pair audit: every symbol the universe box suggests, and every pair of them,
+# through the app's real data path on LIVE Yahoo data, long and short - each
+# number re-derived independently (tests/pair_audit.py). Yahoo is asked once:
+# the download job fetches every symbol, the shards read that one file.
+name: Pair audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["claude/**"]
+
+permissions:
+  contents: read
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pip install -r requirements.txt
+      - name: Every suggested symbol from Yahoo, once
+        run: python -m tests.pair_audit download audit/pair_prices.parquet
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pair-prices
+          path: audit/pair_prices.parquet
+
+  pairs:
+    needs: download
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pip install -r requirements.txt
+      - uses: actions/download-artifact@v4
+        with:
+          name: pair-prices
+          path: audit
+      - name: Shard ${{ matrix.shard }} of 16 (shard 0 also audits each symbol alone)
+        run: python -m tests.pair_audit run audit/pair_prices.parquet --shard ${{ matrix.shard }}/16
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pair-audit-${{ matrix.shard }}
+          path: audit/pair_audit_${{ matrix.shard }}.json
+
+  summary:
+    needs: pairs
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pip install -r requirements.txt
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: pair-audit-*
+          merge-multiple: true
+          path: audit
+      - name: Every pair accounted for, and every check's tally
+        run: python -m tests.pair_audit summary audit

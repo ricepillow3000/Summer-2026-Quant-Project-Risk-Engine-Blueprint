@@ -150,15 +150,18 @@ PRESETS = {
 # Names offered as suggestions in the ticker picker. A superset of every preset
 # above: the box accepts any Yahoo symbol, but a visitor should be able to find
 # a familiar company by typing the first letters of its ticker instead of
-# needing to know it by heart.
+# needing to know it by heart. Every name here is checked live, alone and in
+# every pair, by tests/pair_audit.py: on 2026-10-17 Yahoo answered "Quote not
+# found" for BK and K (Kellanova, taken private), so a visitor picking either
+# got no data - both left this list, and the audit fails on the next one.
 SUGGESTIONS = sorted({t for basket in PRESETS.values() for t in basket} | {
     "T", "VZ", "TMUS", "CMCSA", "CVS", "CI", "ELV", "HUM", "MDT", "BMY",
     "GILD", "REGN", "VRTX", "ZTS", "SYK", "BSX", "DHR", "MCK",
     "SPGI", "ICE", "CME", "MCO", "PYPL", "V", "MA", "USB", "PNC", "TFC",
-    "BK", "STT", "AIG", "MET", "PRU", "ALL", "TRV", "PGR", "CB",
+    "STT", "AIG", "MET", "PRU", "ALL", "TRV", "PGR", "CB",
     "F", "GM", "DAL", "UAL", "LUV", "CSX", "NSC", "EMR", "ETN", "PH", "ITW",
     "MMM", "GD", "NOC", "LHX", "TDG", "PCAR", "CMI",
-    "PG", "CL", "KMB", "GIS", "K", "HSY", "STZ", "MO", "PM", "KDP", "MNST",
+    "PG", "CL", "KMB", "GIS", "HSY", "STZ", "MO", "PM", "KDP", "MNST",
     "YUM", "CMG", "DPZ", "ROST", "TJX", "DG", "DLTR", "BBY", "EBAY", "ETSY",
     "AMD", "ARM", "LRCX", "KLAC", "ADI", "NXPI", "ON", "MRVL", "SMCI", "DELL",
     "IBM", "ACN", "CSCO", "ANET", "HPQ", "WDC", "STX", "ZS", "CRWD", "DDOG",
@@ -331,10 +334,27 @@ def _clean_price_frame(prices: pd.DataFrame, align: bool) -> pd.DataFrame:
     then (when aligning) keep the common trading days so every asset is measured
     over the same dates.
     """
-    prices = prices.dropna(axis=1, how="all").ffill(limit=3)
+    prices = prices.dropna(axis=1, how="all")
+    # Crypto trades on weekends. Filled before the align, every Saturday and
+    # Sunday survived with stale stock prices: SPY vol read 16% low and the
+    # 252-row "year" spanned 0.69 calendar years. The engine's year is 252
+    # trading days, so weekends go; crypto's Friday->Monday move stays whole.
+    prices = prices[prices.index.dayofweek < 5].ffill(limit=3)
     if align:
         prices = prices.dropna()
     return prices
+
+
+def _dollar_volume(close: pd.DataFrame, volume: pd.DataFrame) -> pd.DataFrame:
+    """Close x volume, except futures. Yahoo's =F Volume counts contracts and
+    Close is per unit (oz, bbl, index point); with no contract multiplier the
+    product is not dollars - SI=F read 2,240 days to exit a $5B book that
+    clears in half a day. Zero is what an FX pair reports, so futures take the
+    same no-volume path the page discloses as excluded, not estimated."""
+    dv = close * volume
+    fut = [c for c in dv.columns if str(c).endswith("=F")]
+    dv[fut] = dv[fut] * 0.0
+    return dv
 
 
 def _write_parquet(frame: pd.DataFrame, path: str) -> None:
@@ -447,7 +467,7 @@ def fetch_prices(tickers: list[str] | None = None, period: str = "2y",
         # of re-downloading. Never let a volume hiccup break the price fetch.
         if align:
             try:
-                dv = (close * volume).reindex(index=prices.index)[prices.columns]
+                dv = _dollar_volume(close, volume).reindex(index=prices.index)[prices.columns]
                 _write_dollar_volume_cache(tickers, period, dv)
             except Exception:  # noqa: BLE001
                 pass
@@ -490,7 +510,7 @@ def fetch_dollar_volume(tickers: list[str] | None = None, period: str = "2y",
         return pd.read_parquet(cache_path)
 
     close, volume = _download_close_volume(tickers, period)
-    dollar_vol = (close * volume).dropna(axis=1, how="all")
+    dollar_vol = _dollar_volume(close, volume).dropna(axis=1, how="all")
     if dollar_vol.empty:
         raise RuntimeError("No volume history for that universe.")
     if use_cache:

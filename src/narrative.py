@@ -368,7 +368,8 @@ def build_book(prices: pd.DataFrame, dollar_volume: pd.DataFrame,
                n_flyers: int = DEFAULT_N_FLYERS,
                min_weight: float = MIN_MEANINGFUL_WEIGHT,
                flyer_grit_floor: bool = False,
-               fallback_anchors: set[str] | None = None) -> list[TickerDossier]:
+               fallback_anchors: set[str] | None = None,
+               grit: dict | None = None) -> list[TickerDossier]:
     """
     The chain, in the only order it can run.
 
@@ -391,6 +392,10 @@ def build_book(prices: pd.DataFrame, dollar_volume: pd.DataFrame,
             OUTSIDE the user's chosen universe. They never rank as flyers, and
             are used as a cushion only when nothing inside the universe
             produced a thinner tail. Disclosed on screen when used.
+        grit: a grit_scores() result on FULL history for these same columns.
+            Omitted, grit is scored on `prices` - right only when `prices` is
+            itself long-horizon: on a 2-year window no named crisis falls, so
+            the resilience third of every score was 0 (council 2026-10-17).
 
     Returns one TickerDossier per column of `prices`, flyers first, then
     cushions, then everything excluded.
@@ -408,7 +413,7 @@ def build_book(prices: pd.DataFrame, dollar_volume: pd.DataFrame,
     # 1. Grit on the FULL universe, BEFORE any liquidity gate, so that no
     #    score is a function of book size. A name's recovery record does not
     #    change because you brought more money.
-    gr = grit_scores(universe, prices=prices)
+    gr = grit if grit is not None else grit_scores(universe, prices=prices)
     gscores = gr["scores"]
     short_history = set(gr["excluded"])
 

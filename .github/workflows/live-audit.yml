@@ -79,6 +79,11 @@ jobs:
           SEO=1 node tools/site_check.mjs http://127.0.0.1:8501 site-shots/local
           python -m tools.security_probe http://127.0.0.1:8501
           node tools/recruiter_walk.mjs http://127.0.0.1:8501 walk/local
+      - name: 8b. This commit - every phone, tablet and desktop (overlap, sideways, cut-off text, clickable)
+        if: always()
+        run: |
+          mkdir -p site-shots/devices
+          node tools/device_check.mjs http://127.0.0.1:8501 site-shots/devices
       - name: 9. Deployed site - recruiter walk (informational until this branch is deployed)
         if: always()
         continue-on-error: true

@@ -2533,6 +2533,50 @@ def test_map_short_book_keeps_anchor_funds_long():
     assert "keep their own" in sht["footnote"], sht["footnote"]
 
 
+def test_a_universe_holding_an_anchor_keeps_the_rest_of_the_anchor_pool():
+    """The anchor pool was joined to the universe with DataFrame.join, which
+    raises on a shared column; the except fell back to the universe alone. So
+    any universe holding TLT, GLD, XLP, XLU or USMV - four of the twenty
+    presets (sector ETFs, rates & credit, commodities, global macro) and any
+    visitor pair with one of them - drew no anchor pool at all, and the
+    linkage tournament never saw the anchors it did not hold. Found by the
+    every-pair audit, 2026-10-17. A held anchor is drawn once, as a holding."""
+    import src.topology as tp
+    from src.pairing import DEFENSIVE_ANCHOR_TICKERS
+
+    rng = np.random.default_rng(5)
+    idx = pd.bdate_range("2023-01-02", periods=420)
+    mkt = rng.normal(0.0004, 0.010, 420)
+    px = pd.DataFrame({t: 100 * np.cumprod(1 + (0.3 + 0.1 * k) * mkt + rng.normal(0, 0.004, 420))
+                       for k, t in enumerate(DEFENSIVE_ANCHOR_TICKERS)}, index=idx)
+    rets = pd.DataFrame({"AAA": 1.3 * mkt + rng.normal(0, 0.012, 420)}, index=idx)
+    rets["TLT"] = px["TLT"].pct_change().fillna(0)
+    rets = rets.iloc[1:]
+    w = pd.Series([0.5, 0.5], index=["AAA", "TLT"])
+
+    def fake_fetch(tickers, *a, **k):
+        if set(tickers) <= set(DEFENSIVE_ANCHOR_TICKERS):
+            return px[list(tickers)]
+        raise RuntimeError("offline")
+    orig = tp.fetch_prices
+    try:
+        tp.fetch_prices = fake_fetch
+        pl = tp.build_map_payload(rets, w, ["AAA", "TLT"], False)
+    finally:
+        tp.fetch_prices = orig
+
+    units = [a["t"] for a in pl["assets"]]
+    assert sorted(units) == sorted(["AAA", *DEFENSIVE_ANCHOR_TICKERS]), units   # TLT once
+    assert {a["t"]: a["f"] for a in pl["assets"]}["TLT"] == "Universe"
+    assert {a["t"] for a in pl["assets"] if a["f"] == "Anchor pool"} == {"GLD", "XLP", "XLU", "USMV"}
+    assert pl["pairs"] and {p["an"] for p in pl["pairs"]} - {"AAA", "TLT"}, pl["pairs"]
+    # the Balance tab reads the same pool, not a second hand-written join
+    source = (pathlib.Path(__file__).resolve().parent.parent
+              / "main.py").read_text(encoding="utf-8")
+    assert "anchor_frame(returns)" in source
+    assert "fetch_prices(DEFENSIVE_ANCHOR_TICKERS" not in source
+
+
 def test_every_calibration_clamp_is_named_in_the_footnote():
     """The footnote's "Calibration clamps hit" list is the disclosure for every
     number the map draws that was NOT estimated. Three ways it was wrong:
@@ -3224,6 +3268,560 @@ def test_no_raw_exception_text_reaches_the_page():
             if name == h.name:
                 hits.append(f"line {node.lineno}: {name}")
     assert not hits, f"exception text interpolated onto the page: {hits}"
+
+
+# --- council fixes 2026-10-17: replay ---
+def test_replay_excludes_an_asset_priced_at_or_below_zero_in_the_window():
+    """WTI (CL=F) settled -37.63 on 2020-04-20. pct_change() divides by that
+    negative base, so the +47.64 $/bbl rebound to 10.01 replayed as -126.6%
+    and the Futures x COVID verdict read CVaR 99.99%. Simple returns are
+    undefined across a sign change: the name is excluded (and so disclosed),
+    the rest keep the window."""
+    import src.scenarios as sc
+
+    idx = pd.bdate_range("2020-03-02", periods=30)
+    px = pd.DataFrame({"CL": np.linspace(30.0, 20.0, 30),
+                       "ES": np.linspace(3000.0, 2800.0, 30)}, index=idx)
+    px.loc[idx[15], "CL"], px.loc[idx[16], "CL"] = -37.63, 10.01
+    start, end = idx[5], idx[25]
+    orig = sc.fetch_prices
+    try:
+        sc.fetch_prices = lambda *a, **k: px
+        r = sc.replay_returns(["CL", "ES"], str(start.date()), str(end.date()))
+        assert list(r.columns) == ["ES"], (
+            f"a negative price was replayed as returns: {list(r.columns)}, "
+            f"CL on {idx[16].date()} = {r['CL'].get(idx[16]) if 'CL' in r else None}")
+        assert r.index[0] == start and r.index[-1] == end, (r.index[0], r.index[-1])
+
+        # A non-positive close just BEFORE the window is the lead-in base for
+        # the opening bar: it must not be used either.
+        lead_neg = px.copy()
+        lead_neg.loc[idx[4], "ES"] = -1.0
+        lead_neg["CL"] = np.linspace(30.0, 20.0, 30)
+        sc.fetch_prices = lambda *a, **k: lead_neg
+        r2 = sc.replay_returns(["CL", "ES"], str(start.date()), str(end.date()))
+        assert (r2.loc[start:] > -1.0).all().all() and start not in r2.index, (
+            "a non-positive lead-in close was used as the opening bar's base")
+    finally:
+        sc.fetch_prices = orig
+
+
+def test_replay_excludes_a_name_that_lists_partway_through_the_window():
+    """IVV listed 2000-05-15 and IWM 2000-05-22, inside the Dot-com window
+    (2000-03-01..2001-04-30). The row-wise dropna cut EVERY name to the late
+    listing, so 'Index core' lost the Mar-May 2000 leg while the caption
+    claimed the full window and named nothing as excluded. A late lister is
+    now excluded like an absent one, and the survivors keep the window."""
+    import src.scenarios as sc
+
+    idx = pd.bdate_range("2000-02-01", periods=80)
+    px = pd.DataFrame({"SPY": np.linspace(140.0, 120.0, 80),
+                       "QQQ": np.linspace(200.0, 150.0, 80),
+                       "IWM": np.linspace(50.0, 45.0, 80)}, index=idx)
+    start, end = idx[20], idx[70]
+    px.loc[:idx[45], "IWM"] = np.nan           # lists 25 sessions into the window
+    px.loc[:idx[21], "QQQ"] = np.nan           # first print 2 sessions late: a holiday, kept
+    orig = sc.fetch_prices
+    try:
+        sc.fetch_prices = lambda *a, **k: px
+        r = sc.replay_returns(["SPY", "QQQ", "IWM"], str(start.date()), str(end.date()))
+        assert "IWM" not in r.columns and set(r.columns) == {"SPY", "QQQ"}, (
+            f"late lister kept and the window cut to {r.index[0].date()}: {list(r.columns)}")
+        assert r.index[0] <= idx[23] and r.index[-1] == end, (r.index[0], r.index[-1])
+    finally:
+        sc.fetch_prices = orig
+
+
+def test_replay_caption_states_the_dates_actually_replayed():
+    """The caption printed the nominal window from HISTORICAL_REGIMES, so a
+    replay cut short still claimed the whole crisis. It must be built from the
+    replayed returns' own first and last dates."""
+    src = (pathlib.Path(__file__).resolve().parent.parent / "main.py"
+           ).read_text(encoding="utf-8")
+    lines = [ln for ln in src.splitlines() if "Replaying actual market returns from" in ln]
+    assert len(lines) == 1, lines
+    assert "shocked_returns.index[0]" in lines[0] and "shocked_returns.index[-1]" in lines[0], (
+        f"caption does not print the replayed dates: {lines[0].strip()}")
+
+
+# --- council fixes 2026-10-17: feed-liquidity ---
+def test_weekend_crypto_rows_do_not_pad_stock_columns_with_stale_prices():
+    """BTC-USD trades on weekends; the forward-fill ran before the align, so
+    every Saturday and Sunday survived with the stock's Friday price repeated:
+    208 zero-return SPY rows in two years, SPY vol 0.154 against a true 0.182,
+    and 252 rows spanning 0.69 calendar years under the '1-Year' labels."""
+    from src.ingestion import _clean_price_frame
+
+    days = pd.date_range("2024-01-01", "2025-12-31", freq="D")
+    rng = np.random.default_rng(3)
+    btc = pd.Series(100 * np.exp(np.cumsum(rng.normal(0, 0.03, len(days)))), days)
+    biz = days[days.dayofweek < 5]
+    spy = pd.Series(100 * np.exp(np.cumsum(rng.normal(0, 0.011, len(biz)))), biz)
+    raw = pd.concat({"BTC-USD": btc, "SPY": spy}, axis=1)   # yf.download's outer join
+    for align in (True, False):
+        px = _clean_price_frame(raw, align)
+        weekend = int((px.index.dayofweek >= 5).sum())
+        assert weekend == 0, f"align={align}: {weekend} weekend rows kept"
+        rets = px.pct_change().dropna()
+        assert int((rets["SPY"] == 0).sum()) == 0, f"align={align}: stale SPY rows"
+        # Friday close -> Monday close: nothing is lost from crypto's path.
+        assert abs(px["BTC-USD"].iloc[-1] / px["BTC-USD"].iloc[0]
+                   - btc[px.index[-1]] / btc[px.index[0]]) < 1e-12
+
+
+def test_futures_contract_volume_is_not_reported_as_dollar_volume():
+    """Yahoo's =F Volume counts contracts and Close is per unit, so close x
+    volume is not dollars (no contract multiplier): SI=F read 2,240 days to
+    exit a $5B book that clears in half a day. The page already says futures
+    are 'excluded, not estimated'; the feed now makes that true, the same
+    way an FX pair with no volume is. Offline: the downloader is replaced."""
+    import src.ingestion as ing
+
+    idx = pd.bdate_range("2025-01-02", periods=30)
+    cols = ["SI=F", "SPY"]
+    frame = pd.concat({"Close": pd.DataFrame(30.0, idx, cols),
+                       "Volume": pd.DataFrame(6e4, idx, cols)}, axis=1)
+    real = (ing.yf.download, ing.check_budget, ing.guarded_session)
+    try:
+        ing.yf.download = lambda *a, **k: frame
+        ing.check_budget = lambda *a, **k: None
+        ing.guarded_session = lambda: None
+        adv = ing.average_dollar_volume(cols, use_cache=False).reindex(cols).fillna(0.0)
+    finally:
+        ing.yf.download, ing.check_budget, ing.guarded_session = real
+    assert adv["SPY"] == 30.0 * 6e4, adv.to_dict()
+    assert adv["SI=F"] == 0.0, f"contracts x price shown as dollars: {adv['SI=F']}"
+    prof = liquidity_profile(days_to_liquidate([0.5, 0.5], adv, book_value=5e9))
+    assert prof["no_volume"] == ["SI=F"], prof
+
+
+def test_liquidity_adjustment_never_turns_a_tail_gain_into_a_bigger_gain():
+    """CVaR <= 0 means the worst 5% of years still gain: there is no tail loss
+    for an unwind to widen. Scaling it anyway reported -5.3% against a -5.0%
+    headline - being stuck holding read as a better outcome - and the verdict
+    said the tail 'widens to' that gain."""
+    import ast
+
+    for days in (1.0, 60.0, 500.0, np.inf):
+        lv = liquidity_adjusted_cvar(-0.20, days)
+        assert lv["lvar"] == -0.20, f"{days} exit days: lvar {lv['lvar']}"
+    assert liquidity_adjusted_cvar(0.20, 60.0)["lvar"] > 0.20   # losses still widen
+
+    src = (pathlib.Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
+    guarded = {"that tail widens to ": False, " for the unwind": False}
+    for node in ast.walk(ast.parse(src)):
+        if not isinstance(node, ast.If):
+            continue
+        test = ast.unparse(node.test).replace(" ", "")
+        body = "".join(ast.unparse(b) for b in node.body)
+        orelse = "".join(ast.unparse(b) for b in node.orelse)
+        for phrase in guarded:
+            if ((phrase in body and "cvar']>0" in test)
+                    or (phrase in orelse and "cvar']<=0" in test)):
+                guarded[phrase] = True
+    assert all(guarded.values()), f"widening shown for a negative CVaR: {guarded}"
+
+
+# --- council fixes 2026-10-17: captions ---
+
+def _main_source_and_tree():
+    import ast
+    src = (pathlib.Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
+    return src, ast.parse(src)
+
+
+def _lift_assign(tree, name):
+    """The one module- or function-level assignment to `name` in main.py, ready
+    to exec: main.py is a Streamlit script, so its wording is tested by lifting
+    the statement that builds it rather than importing the page."""
+    import ast
+    hits = [n for n in ast.walk(tree) if isinstance(n, ast.Assign)
+            and any(isinstance(t, ast.Name) and t.id == name for t in n.targets)]
+    return hits[0] if len(hits) == 1 else None
+
+
+def _exec_nodes(nodes, ns):
+    import ast
+    exec(compile(ast.Module(body=list(nodes), type_ignores=[]),  # nosec B102
+                 "main.py", "exec"), ns)
+    return ns
+
+
+def test_tail_fit_drops_a_young_listing_by_name_instead_of_shortening_the_whole_fit():
+    """The 10y tail fit used an aligned pull, so one 2021 listing (RIVN in
+    High-volatility movers) cut the whole fit to 5.1 years while the caption
+    said "~10 years" and the "lack the full history" note could never fire."""
+    import ast
+    from src.ingestion import _clean_price_frame
+
+    src, tree = _main_source_and_tree()
+    fn = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "load_tail_fit"]
+    assert len(fn) == 1, "load_tail_fit is gone from main.py"
+    fn[0].decorator_list = []
+
+    idx = pd.bdate_range("2016-10-14", "2026-10-14")
+    rng = np.random.default_rng(5)
+    px = pd.DataFrame(100 * np.exp(np.cumsum(rng.normal(0, 0.01, (len(idx), 3)), axis=0)),
+                      index=idx, columns=["OLD", "MID", "IPO"])
+    px.loc[px.index < "2021-11-10", "IPO"] = np.nan
+
+    def fetch_prices(tickers, period="2y", align=True, **_):
+        return _clean_price_frame(px[list(tickers)], align)
+
+    ns = {"pd": pd, "np": np, "fetch_prices": fetch_prices,
+          "load_universe": lambda t, period="2y": fetch_prices(list(t), period),
+          "mcneil_frey_tail": lambda pr: {"fitted": True, "n": len(pr)}}
+    _exec_nodes(fn, ns)
+    out = ns["load_tail_fit"](("OLD", "MID", "IPO"), (0.4, 0.3, 0.3), False)
+    _, days, dropped = out[:3]
+    assert dropped == ["IPO"], (f"a 2021 listing shrank the fit to {days} days "
+                                f"({days / 252:.1f}y) and was not named: dropped={dropped}")
+    assert days > 2500, days
+    assert len(out) == 4 and abs(out[3] - 10.0) < 0.05, f"span not reported from the index: {out[1:]}"
+    assert "~10 years" not in src, "the tail-fit caption still hard-codes ~10 years"
+    assert "{_tf_years:.1f} years" in src, "the tail-fit caption does not print the measured span"
+
+
+def test_fan_chart_caption_claims_block_resampling_only_when_it_happened():
+    """The cone caption said "resampled in N-day blocks so crash weeks stay
+    intact" for jump-diffusion (parametric, nothing resampled) and for replay
+    windows under 30 days (i.i.d. fallback, block_days=1)."""
+    _, tree = _main_source_and_tree()
+    node = _lift_assign(tree, "_se_txt")
+    assert node is not None, "the fan-chart sampling-error caption moved"
+    rng = np.random.default_rng(0)
+    w = np.array([0.5, 0.5])
+    long_hist = pd.DataFrame(rng.standard_t(4, (500, 2)) * 0.01, columns=["A", "B"])
+    short_hist = long_hist.iloc[:22]
+
+    def caption(mc):
+        return _exec_nodes([node], {"mc": mc, "np": np})["_se_txt"]
+
+    jd = caption(jump_diffusion_mc(long_hist, w, n_simulations=400))
+    assert "resampled" not in jd and "crash weeks" not in jd, f"jump-diffusion: {jd}"
+    assert "parametric Merton paths" in jd, jd
+    iid = caption(monte_carlo(short_hist, w, n_simulations=400))
+    assert "crash weeks stay intact" not in iid, f"22-day replay (i.i.d.): {iid}"
+    assert "resampled day by day (window too short for blocks)" in iid, iid
+    blk = monte_carlo(_clustered_returns(n=800), np.array([1.0]), n_simulations=400)
+    assert blk["block_days"] > 1
+    assert f"resampled in {blk['block_days']}-day blocks so crash weeks stay intact" in caption(blk)
+
+
+def test_market_drawdown_shock_compounds_to_the_labelled_drawdown():
+    """A -50 'Market drawdown shock' added -0.5/252 to every day, which
+    compounds to -39% over the simulated year, not the -50% the label and the
+    audit line state."""
+    import ast
+    _, tree = _main_source_and_tree()
+    ifs = [n for n in ast.walk(tree) if isinstance(n, ast.If)
+           and ast.unparse(n.test) == "drawdown_shock != 0"]
+    assert len(ifs) == 1, "the drawdown-shock step moved"
+    for shock in (-50, -30, -5):
+        ns = _exec_nodes(ifs[0].body, {"np": np, "drawdown_shock": shock,
+                                       "shocked_returns": pd.DataFrame(np.zeros((252, 2)))})
+        grown = (1 + ns["shocked_returns"]).prod()
+        assert np.allclose(grown, 1 + shock / 100), \
+            f"shock {shock}% compounds to {float(grown.iloc[0]) - 1:+.1%} over 252 days"
+
+
+def test_defensive_pair_says_who_really_holds_the_money():
+    """Inverse-vol weights give the anchor under half when the flyer is the
+    steadier leg (Index core SPY/GLD: anchor 47%), yet the text said the anchor
+    holds most of the MONEY next to an SVG reading 47% CAPITAL."""
+    src, tree = _main_source_and_tree()
+    node = _lift_assign(tree, "_bv_money")
+    assert node is not None, ("the pair text states 'the anchor holds most of the "
+                              "MONEY' as a fixed string, whatever the weights")
+
+    def say(w_b, vol_a, vol_b):
+        pw = {"w_a": 1 - w_b, "w_b": w_b, "vol_a": vol_a, "vol_b": vol_b}
+        return _exec_nodes([node], {"pw": pw, "flyer": "SPY", "bv_anchor": "GLD"})["_bv_money"]
+
+    under = say(0.473, 0.132, 0.146)
+    assert "anchor holds most" not in under, f"anchor at 47%: {under}"
+    assert "SPY holds more of the" in under and "steadier leg" in under, under
+    over = say(0.75, 0.30, 0.10)
+    assert "the anchor holds most of the MONEY" in over, over
+    assert "steady anchor holds most of the capital" not in src, \
+        "the read-me still says the anchor always holds most of the capital"
+
+
+def test_noise_ceiling_uses_the_ewma_effective_sample_size():
+    """Under EWMA (lambda 0.94) the matrix carries ~32 effective days, but the
+    Marcenko-Pastur line used T = len(returns) = 503: the ceiling sat ~1.95x
+    too low and painted noise factors as signal."""
+    import ast
+    from src.covariance import RISKMETRICS_LAMBDA
+
+    _, tree = _main_source_and_tree()
+    fn = [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)
+          and n.name == "eigen_factor_panel"][0]
+    call = [n for n in ast.walk(fn) if isinstance(n, ast.Call)
+            and getattr(n.func, "id", "") == "marcenko_pastur_bounds"][0]
+    t_arg = call.args[1]
+    pre = []
+    if isinstance(t_arg, ast.Name):
+        pre = [n for n in ast.walk(fn) if isinstance(n, ast.Assign)
+               and any(getattr(t, "id", "") == t_arg.id for t in n.targets)]
+    returns = pd.DataFrame(np.zeros((503, 3)))
+    expect = {"EWMA": (1 + RISKMETRICS_LAMBDA) / (1 - RISKMETRICS_LAMBDA),
+              "Sample": 503, "Ledoit-Wolf": 503}
+    for method, want in expect.items():
+        ns = _exec_nodes(pre, {"cov_method": method, "returns": returns,
+                               "RISKMETRICS_LAMBDA": RISKMETRICS_LAMBDA})
+        got = eval(compile(ast.Expression(t_arg), "main.py", "eval"), ns)  # nosec B307
+        assert abs(got - want) < 1e-9, f"{method}: noise ceiling drawn at T={got}, expected {want:.1f}"
+    printed = [n for n in ast.walk(fn) if isinstance(n, ast.JoinedStr)
+               and "pure noise" in ast.unparse(n)]
+    assert printed and any(isinstance(v, ast.FormattedValue)
+                           and ast.dump(v.value) == ast.dump(t_arg)
+                           for v in printed[0].values), "the caption prints a different T"
+
+
+def test_correlation_watch_says_not_enough_history_instead_of_stable_at_nan():
+    """With 59 return rows and a 63-day window the rolling correlation is
+    empty, latest is NaN, and the page said 'Stable: A x B at +nan'."""
+    import ast
+    src, tree = _main_source_and_tree()
+
+    def seg(n):
+        return ast.get_source_segment(src, n) or ""
+
+    cands = [n for n in ast.walk(tree) if isinstance(n, ast.If)
+             and "Stable:" in seg(n) and "Concentration reading" in seg(n)
+             and "pick_a == pick_b" not in ast.unparse(n.test)]
+    elifs = {id(c.orelse[0]) for c in cands
+             if len(c.orelse) == 1 and isinstance(c.orelse[0], ast.If)}
+    head = [c for c in cands if id(c) not in elifs]
+    assert len(head) == 1, "the Correlation Watch verdict moved"
+
+    said = []
+
+    class _St:
+        def __getattr__(self, kind):
+            return lambda msg, *a, **k: said.append((kind, msg))
+
+    _exec_nodes(head, {"st": _St(), "np": np, "roll": pd.Series(dtype=float),
+                       "latest": float("nan"), "win": 63, "thresh": 0.75,
+                       "pick_a": "A", "pick_b": "B"})
+    assert not any("Stable" in m or "Concentration" in m for _, m in said), said
+    assert any(k == "info" and "not enough history for a 63-day window" in m.lower()
+               for k, m in said), said
+    said.clear()
+    _exec_nodes(head, {"st": _St(), "np": np, "roll": pd.Series([0.9]),
+                       "latest": 0.9, "win": 21, "thresh": 0.75,
+                       "pick_a": "A", "pick_b": "B"})
+    assert said and said[0][0] == "warning" and "Concentration reading" in said[0][1], said
+
+
+# --- council fixes 2026-10-17: book-sharpe-anchor ---
+
+def _offline_market_prices(tickers=None, period="2y", **_kw):
+    """Ten years of a deterministic market for booting main.py without Yahoo:
+    one common factor with rare crash days (so named crises leave a drawdown
+    for grit to replay) and a per-ticker beta and idio vol seeded by name."""
+    import hashlib
+    from src.ingestion import DEFAULT_UNIVERSE
+    idx = pd.bdate_range(end="2026-10-14", periods=252 * 10)
+    rng = np.random.default_rng(7)
+    mkt = rng.normal(0.0004, 0.011, len(idx))
+    mkt[rng.random(len(idx)) < 0.004] -= 0.05
+    cols = {}
+    for t in list(tickers or DEFAULT_UNIVERSE):
+        r = np.random.default_rng(int(hashlib.md5(t.encode()).hexdigest()[:8], 16))
+        beta, idio = r.uniform(0.3, 1.6), r.uniform(0.10, 0.40)
+        ret = beta * mkt + r.normal(0.0002, idio / np.sqrt(252), len(idx))
+        cols[t] = 100 * np.exp(np.cumsum(np.log1p(np.clip(ret, -0.6, 0.6))))
+    years = {"1y": 1, "2y": 2, "5y": 5, "10y": 10}.get(period, 10)
+    return pd.DataFrame(cols, index=idx).iloc[-252 * years:]
+
+
+def _offline_app(setup=None):
+    """Run the real main.py under AppTest on _offline_market_prices; returns
+    (AppTest, restore). Every src module is imported BEFORE patching, so a
+    module-level `from src.ingestion import fetch_prices` is patched and then
+    restored too, and the Streamlit cache is cleared so no synthetic frame
+    outlives the test."""
+    import importlib
+    import pkgutil
+    import sys
+    import src
+    from streamlit.testing.v1 import AppTest
+    import streamlit as st
+    for m in pkgutil.iter_modules(src.__path__):
+        importlib.import_module(f"src.{m.name}")
+    fakes = {
+        "fetch_prices": _offline_market_prices,
+        "fetch_dollar_volume": lambda tickers=None, period="2y", **k: pd.DataFrame(
+            5e9, index=_offline_market_prices(tickers, period).index,
+            columns=list(tickers)),
+        "average_dollar_volume": lambda tickers=None, *a, **k: pd.Series(
+            5e9, index=list(tickers or [])),
+        "fetch_risk_free_rate": lambda *a, **k: 0.045,
+        "provenance": lambda *a, **k: None,
+    }
+    saved = []
+    for name, mod in list(sys.modules.items()):
+        if name.startswith("src."):
+            for attr, fake in fakes.items():
+                if hasattr(mod, attr):
+                    saved.append((mod, attr, getattr(mod, attr)))
+                    setattr(mod, attr, fake)
+
+    def restore():
+        for mod, attr, orig in saved:
+            setattr(mod, attr, orig)
+        st.cache_data.clear()
+
+    try:
+        app = pathlib.Path(__file__).resolve().parent.parent / "main.py"
+        at = AppTest.from_file(str(app), default_timeout=300)
+        at.run()
+        assert not at.exception, f"app raised: {[e.value for e in at.exception]}"
+    except BaseException:
+        restore()
+        raise
+    return at, restore
+
+
+def _book_grit(at) -> dict:
+    """{ticker: grit} as The Book's sentences print it ("grit 73 of 100")."""
+    import re
+    out = {}
+    for m in at.markdown:
+        hit = re.search(r'line-height:1\.55;">([A-Z0-9.^=-]+) .*?grit (\d+) of 100',
+                        m.value)
+        if hit:
+            out[hit.group(1)] = int(hit.group(2))
+    return out
+
+
+def test_the_books_grit_is_the_grit_zones_full_history_grit():
+    """Council 2026-10-17: The Book scored grit on the 2-year window, where no
+    named crisis falls, so the resilience third was 0 for every name and the
+    same page printed NVDA 6.9 in the Book against 73.2 in the Grit Zone tab.
+    Grit is LONG-horizon (src/narrative.py ruling): the Book must print the
+    tab's numbers for the same universe."""
+    at, restore = _offline_app()
+    try:
+        loaded = list([w for w in at.selectbox if w.label.startswith("Anchor")][0].options)
+        # Defensive anchors widen the Book's peer group (stated on screen as
+        # "across N names"); with them off the two universes are identical.
+        at.toggle(key="book_fallback").set_value(False).run()
+        tab = grit_scores(loaded)["scores"]["grit_score"]
+        book = _book_grit(at)
+        assert set(book) and set(book) <= set(loaded), f"no Book grit parsed: {book}"
+        wrong = {t: (g, round(float(tab[t]))) for t, g in book.items()
+                 if g != round(float(tab[t]))}
+        assert not wrong, f"Book grit vs Grit Zone grit (book, tab): {wrong}"
+        # With the defensive shelf on, still full history - over the Book's
+        # own universe, the peer group its sentences name.
+        at.toggle(key="book_fallback").set_value(True).run()
+        book = _book_grit(at)
+        from src.pairing import DEFENSIVE_ANCHOR_TICKERS
+        full = grit_scores(loaded + [t for t in DEFENSIVE_ANCHOR_TICKERS
+                                     if t not in loaded])["scores"]["grit_score"]
+        wrong = {t: (g, round(float(full[t]))) for t, g in book.items()
+                 if g != round(float(full[t]))}
+        assert not wrong, f"Book grit vs full-history grit (book, full): {wrong}"
+    finally:
+        restore()
+
+
+def test_sharpe_does_not_move_with_the_vol_target_slider():
+    """Council 2026-10-17: Sharpe was taken on returns @ vol-targeted weights,
+    i.e. (L*mu - rf)/(L*sigma) - idle cash earning 0 and borrowing free - so
+    the same strategy read 1.615 unlevered and 0.975 at L=0.28. With cash and
+    financing at rf, Sharpe is leverage-invariant (Sharpe 1994)."""
+    at, restore = _offline_app()
+    try:
+        def sharpe():
+            return [m.value for m in at.metric if m.label == "Sharpe ratio"][0]
+        plain = sharpe()
+        [c for c in at.checkbox if c.label == "Target volatility"][0].check().run()
+        for tv in (5, 10, 30):
+            [s for s in at.slider if s.label == "Target annual vol (%)"][0].set_value(tv).run()
+            assert sharpe() == plain, (
+                f"Sharpe {sharpe()} at a {tv}% vol target vs {plain} unlevered")
+        cap = " ".join(c.value for c in at.caption if c.value.startswith("Sharpe ="))
+        assert "unlevered" in cap, f"Sharpe caption does not say what it is on: {cap}"
+    finally:
+        restore()
+
+
+def test_changing_weighting_keeps_the_visitors_balance_anchor():
+    """Council 2026-10-17: the Balance-tab anchor had no key and its index
+    followed argmax(weights), so switching Weighting re-created the widget and
+    silently swapped the visitor's anchor (GOOGL -> NVDA) and every number
+    under it. Weighting does not enter the Balance maths at all."""
+    at, restore = _offline_app()
+    try:
+        def anchor():
+            return [w for w in at.selectbox if w.label.startswith("Anchor")][0]
+        default = anchor().value
+        pick = [o for o in anchor().options if o != default][-1]
+        anchor().set_value(pick).run()
+        assert anchor().value == pick
+        [r for r in at.radio if r.label == "Weighting"][0].set_value("Risk parity").run()
+        assert anchor().value == pick, (
+            f"anchor became {anchor().value} after a Weighting change; visitor chose {pick}")
+        assert not at.exception, [e.value for e in at.exception]
+    finally:
+        restore()
+
+
+def test_metric_labels_and_values_wrap_instead_of_ending_in_an_ellipsis():
+    """Streamlit cuts a metric's label and value to one line with an ellipsis.
+    In the narrow metric columns of a phone or a portrait iPad that left
+    "IR at effective breadth (159 bets/yr)", "Historical VaR (95%)" and
+    "10 / 13 exp." unreadable (tools/device_check.mjs, 2026-10-17: every phone
+    and portrait iPad). They must wrap instead."""
+    import re
+    css = (pathlib.Path(__file__).resolve().parent.parent / "static" / "app.css"
+           ).read_text(encoding="utf-8")
+    rules = re.findall(r"([^{}]+)\{([^}]*)\}", css)
+    for part in ("stMetricLabel", "stMetricValue"):
+        body = " ".join(b for sel, b in rules if part in sel)
+        assert re.search(r"white-space:\s*normal", body), f"{part} still kept to one line"
+        assert re.search(r"text-overflow:\s*clip", body), f"{part} still ends in an ellipsis"
+
+
+def test_section_titles_wrap_instead_of_running_out_of_their_box():
+    """Live audit run 30 on 77dcccd (device_check, iPhone SE): "VALUE AT RISK -
+    METHODS & BACKTEST" needed 304px of a 301px box and was cut off. The
+    .panel-head title was nowrap; measured at 375px, 5 of 25 titles were wider
+    than their box ("Distribution of simulated 1-year outcomes": 374px of 263).
+    The lintel is flex-wrap, so a title that fits renders the same either way;
+    one that does not must wrap, never run out of its box."""
+    import re
+    css = (pathlib.Path(__file__).resolve().parent.parent / "static" / "app.css"
+           ).read_text(encoding="utf-8")
+    rules = re.findall(r"([^{}]+)\{([^}]*)\}", css)
+    body = " ".join(b for sel, b in rules if re.search(r"\.panel-head\s+\.t\b", sel))
+    assert body, "the .panel-head title rule moved"
+    assert not re.search(r"white-space:\s*nowrap", body), "section titles still kept to one line"
+
+
+def test_every_browser_pick_checks_the_option_took():
+    """Live audit run 30, both attempts: recruiter_walk's pick() clicked an
+    option, pressed Escape and returned, but the choice had not landed - the
+    box snapped back to the old value on Escape, the page never reran, and
+    the step waited 90s for a change that could not come (the COVID pick on
+    attempt 1; the Semiconductors pick on attempt 2, on the PR's app and on
+    the deployed main alike). A pick must read the box back and retry."""
+    import re
+    root = pathlib.Path(__file__).resolve().parent.parent / "tools"
+    picks = 0
+    for js in sorted(root.glob("*.mjs")):
+        src = js.read_text(encoding="utf-8")
+        m = re.search(r"async function pick\(label, option\) \{\n(.*?)\n\}\n", src, re.S)
+        if not m:
+            continue
+        picks += 1
+        assert re.search(r"inputValue\(\)[^\n]*!==\s*option", m.group(1)), (
+            f"{js.name}: pick() returns without checking the box shows the option")
+    assert picks >= 2, f"expected the walk's and the deep scan's pick(), found {picks}"
 
 
 if __name__ == "__main__":

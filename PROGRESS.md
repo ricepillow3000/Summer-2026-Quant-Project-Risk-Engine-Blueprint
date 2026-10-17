@@ -450,6 +450,41 @@ risk-engine/
   as "1 -> 0.995"; the pair_weights docstring kept the false "flyer holds most
   of the risk". Swept every 10px, 360-1920: clean. Below 360px the plot is
   narrower than 260px - the screen, not the layout. Desktop dots unchanged.
+- ✅ **Council review + every device (2026-10-17)** - four independent
+  reviewers (map maths vs its papers, the data chain, every chart, every
+  control), each claim then reproduced or refuted by a skeptic. The map's maths
+  came out clean (57 checks, incl. OU moments, ring masses, breach semantics,
+  every linkage, long and short). 14 defects elsewhere were confirmed and fixed,
+  each with a test that failed first: a crisis replay over WTI's -37.63 settle
+  turned a +$47.64 rebound into a -126.6% "loss" (non-positive prices now
+  excluded and disclosed); a late listing silently cut every name's replay
+  window (now excluded, caption prints the replayed dates); the Book's grit came
+  from 2y (no crisis inside) and contradicted the Grit Zone tab (now full
+  history); the tail fit claimed "~10 years" on 5.1 (unaligned pull, young names
+  named, real span printed); Sharpe moved with the vol-target slider (now on the
+  unlevered book); futures contracts x price was shown as dollars (now the FX
+  no-volume path); a negative CVaR "widened" into a bigger gain; the -50% shock
+  compounded to -39% (now multiplicative); crypto weekend rows understated stock
+  vol 16% and made "1 year" 0.69 years (weekends dropped); plus the cone,
+  pair-money, noise-line, NaN-correlation and sticky-anchor captions. Then
+  `tools/device_check.mjs` (Live audit 8b): the whole page, every drawer and
+  tab, on 13 phones/tablets/desktops. Found one defect class - Streamlit cut
+  metric labels and values to "..." on every phone and portrait iPad - fixed by
+  letting them wrap (`static/app.css`, rule test).
+- ✅ **Every ticker, every pair (2026-10-17)** - `tests/pair_audit.py` + the
+  Pair audit workflow: each of the 322 suggested symbols on its own, and all
+  51,681 pairs long and short through the real fetch -> estimators/weights ->
+  map payload path on live data, every number re-derived with independent
+  numpy (two-asset ERC = inverse vol, MRT 2010). Yahoo asked once, 16 shards.
+  Mutation-tested: a wrong beta window, a wrong perimeter cap and the bug below
+  each turn it red. Its first run found that bug: the anchor pool was joined
+  with DataFrame.join, which raises on a shared column, and the fallback
+  dropped ALL anchors - so 4 of 20 presets (sector ETFs, rates & credit,
+  commodities, global macro) and any pair holding TLT/GLD/XLP/XLU/USMV drew no
+  anchor pool, and the Balance tab offered no defensive candidates. The batch
+  audit used the same join and agreed with it. Fixed once in
+  `topology.anchor_frame` (map and Balance both read it); batch audit MAP-02
+  now checks the drawn pool equals the unheld anchors.
 - ✅ **The map on an iPhone (2026-10-17)** - John saw the map cut off on his
   iPhone. The 10-15 note above ("below 360px ... the screen, not the layout")
   was WRONG: the probe sized the map's page, never the page AROUND it. The

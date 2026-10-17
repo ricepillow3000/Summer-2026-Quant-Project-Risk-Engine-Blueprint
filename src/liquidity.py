@@ -123,7 +123,11 @@ def liquidity_adjusted_cvar(cvar: float, full_exit_days: float,
     while I'm stuck holding?", not "what spread do I pay to get out?".
     """
     finite = np.isfinite(full_exit_days)
-    if not finite or full_exit_days <= 0:
+    if cvar <= 0:
+        # The worst 5% of years still gain: no tail loss to widen. Scaling it
+        # reported -5.3% against a -5.0% headline, a stuck book reading better.
+        mult = 1.0
+    elif not finite or full_exit_days <= 0:
         # No-volume book (can't exit at all) -> unbounded; already-liquid -> none.
         mult = float("inf") if not finite else 1.0
     else:

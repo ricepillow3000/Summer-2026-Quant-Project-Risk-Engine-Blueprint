@@ -52,8 +52,8 @@ from src.hedge import min_variance_pair, rank_hedges
 from src.pairing import (anchor_rank, backtest_pair, crisis_cushion,
                          es_confidence_interval, pair_weights, regime_labels,
                          tail_gap, DEFENSIVE_ANCHOR_TICKERS)
-from src.covariance import estimate_covariance
-from src.topology import build_map_payload, war_room_html
+from src.covariance import estimate_covariance, RISKMETRICS_LAMBDA
+from src.topology import anchor_frame, build_map_payload, war_room_html
 from src.observability import (log_incident, log_session_start,
                                new_session_ref, setup_logging)
 from src.eigenrisk import eigen_factors, marcenko_pastur_bounds, pc1_exposure
@@ -1049,15 +1049,20 @@ def load_tail_fit(tickers_tuple: tuple[str, ...], weights_tuple: tuple[float, ..
     rescaled to preserve the book's original gross notional - so the fit
     describes the same leverage, on the names that actually have the history.
     """
-    px = load_universe(tickers_tuple, period="10y")
+    # Unaligned on purpose: an aligned pull cut every name to the youngest
+    # listing, so one 2021 IPO turned "10 years" into 5.1 and nothing was ever
+    # named as dropped (2026-10-17 council). A week of slack absorbs holidays.
+    px = fetch_prices(list(tickers_tuple), period="10y", align=False)
+    first = px.notna().idxmax()
+    px = px.loc[:, first <= first.min() + pd.Timedelta(days=7)].dropna()
     rets = px.pct_change().dropna()
     keep = [t for t in tickers_tuple if t in rets.columns]
     if len(keep) < 2:
-        return None, 0, []
+        return None, 0, [], 0.0
     w = pd.Series(weights_tuple, index=list(tickers_tuple))[keep]
     gross = float(np.abs(weights_tuple).sum())
     if float(w.abs().sum()) == 0:
-        return None, 0, []
+        return None, 0, [], 0.0
     w = w * (gross / float(w.abs().sum()))
     pr = rets[keep] @ w
     if bearish_flag:
@@ -1067,7 +1072,8 @@ def load_tail_fit(tickers_tuple: tuple[str, ...], weights_tuple: tuple[float, ..
     # raw returns, because peaks-over-threshold assumes i.i.d. exceedances and
     # the Christoffersen test above exists to show they are not. Returns the
     # unconditional xi alongside, so the clustering bias is visible.
-    return mcneil_frey_tail(pr), int(len(pr)), dropped
+    years = (pr.index[-1] - pr.index[0]).days / 365.25 if len(pr) else 0.0
+    return mcneil_frey_tail(pr), int(len(pr)), dropped, years
 
 
 @st.cache_data(ttl=3600, max_entries=64, show_spinner="Loading volume data…")
@@ -1086,18 +1092,18 @@ def load_dollar_volume(tickers_tuple: tuple[str, ...], period: str = "2y"):
 
 @st.cache_data(ttl=3600, max_entries=32, show_spinner="Assembling the book…")
 def load_book(px, dv, book_value: float, participation_rate: float,
-              grit_floor: bool, anchors: tuple[str, ...]):
+              grit_floor: bool, anchors: tuple[str, ...], grit: dict):
     """Cached because Streamlit re-executes this whole script on EVERY widget
     interaction, and build_book is not cheap: risk_parity_weights runs 10,000
     coordinate-descent iterations and grit_scores replays every named crisis
     window per ticker. Uncached, dragging the participation slider recomputed
     the entire book on each frame - one visitor holding a slider could pin the
-    single process this app deploys as. The cache key is exactly the six inputs
-    that change the answer."""
+    single process this app deploys as. The cache key is exactly the seven
+    inputs that change the answer."""
     return build_book(px, dv, book_value=book_value,
                       participation_rate=participation_rate,
                       flyer_grit_floor=grit_floor,
-                      fallback_anchors=set(anchors) or None)
+                      fallback_anchors=set(anchors) or None, grit=grit)
 
 
 @st.cache_data(ttl=3600, max_entries=32, show_spinner="Reading the defensive shelf…")
@@ -1336,14 +1342,17 @@ with deck_stress, st.expander("03 · Stress test - shock or replay a crisis",
             "Volatility shock", 0, 300, 0, step=10,
             help="Scales the spread of daily returns to simulate a higher-vol regime.")
     else:
-        s_date, e_date = HISTORICAL_REGIMES[mode]
-        st.caption(f"Replaying actual market returns from {s_date} to {e_date}.")
+        # Filled once the replay is built: the nominal window claimed the whole
+        # crisis even when a late lister had cut the replay short.
+        replay_caption = st.empty()
 
 # Build the return distribution + weights the simulation will sample from.
 if mode == "Custom shock (sliders)":
     shocked_returns = returns.copy()
     if drawdown_shock != 0:
-        shocked_returns = shocked_returns + (drawdown_shock / 100) / 252
+        # Multiplicative so the year compounds to the labelled drawdown: the
+        # additive -0.5/252 compounded to -39%, not the -50% on the slider.
+        shocked_returns = (1 + shocked_returns) * (1 + drawdown_shock / 100) ** (1 / 252) - 1
     if vol_shock != 0:
         m = shocked_returns.mean()
         shocked_returns = m + (shocked_returns - m) * (1 + vol_shock / 100)
@@ -1364,6 +1373,7 @@ else:
     if len(sim_assets) < 2:
         st.warning(f"Too few of your assets traded during {mode}. Try another scenario.")
         st.stop()
+    replay_caption.caption(f"Replaying actual market returns from {shocked_returns.index[0].date()} to {shocked_returns.index[-1].date()}.")
     idx = [loaded.index(a) for a in sim_assets]
     sim_weights = weights[idx]
     sim_weights = sim_weights / sim_weights.sum() * weights.sum()  # preserve exposure
@@ -1448,7 +1458,7 @@ if scenario_label:
         # widening the regex later.
         verdict += (" *(Excludes "
                     + ", ".join(html.escape(t) for t in excluded)
-                    + " - not trading in that period.)*")
+                    + " - not trading for the whole period, or priced at or below zero in it.)*")
 else:
     verdict = (
         f"In the worst 5% of simulated years, {alloc_art} {alloc_label} portfolio of these "
@@ -1465,8 +1475,10 @@ if bearish:
     )
 
 # Only surface the liquidity add-on when it materially fattens the tail
-# (multiplier > 1.005 ≈ more than ~2.5 trading days to fully exit).
-if lvar and np.isfinite(lvar["lvar"]) and lvar["multiplier"] > 1.005:
+# (multiplier > 1.005 ≈ more than ~2.5 trading days to fully exit). A CVaR
+# <= 0 has no tail loss to widen; the line read "widens to" a gain.
+if (mc["cvar"] > 0 and lvar and np.isfinite(lvar["lvar"])
+        and lvar["multiplier"] > 1.005):
     verdict += (
         f" Adjusted for the ~<b>{lvar['full_exit_days']:.0f} trading days</b> "
         f"it takes to fully unwind at 20% of daily volume, that tail widens to "
@@ -1509,10 +1521,16 @@ with f_col:
 </svg></div>
 """, unsafe_allow_html=True)
     st.plotly_chart(fan_chart(mc["path_bands"]), width="stretch", config=PLOTLY_CFG)
+    # Jump-diffusion resamples nothing, and a replay under 30 days falls back to
+    # i.i.d. (block_days=1): both used to claim "crash weeks stay intact".
     _se_txt = (f" CVaR sampling error: ±{mc['cvar_se']:.2%} "
-               f"({mc['n_simulations']:,} paths, resampled in {mc.get('block_days', 1)}-day blocks so crash weeks stay intact - a simulated estimate, "
-               "not an exact truth)." if np.isfinite(mc.get("cvar_se", float("nan")))
-               else "")
+               f"({mc['n_simulations']:,} paths, "
+               + ("parametric Merton paths" if mc.get("engine") == "jump-diffusion"
+                  else f"resampled in {mc['block_days']}-day blocks so crash weeks stay intact"
+                  if mc.get("block_days", 1) > 1
+                  else "resampled day by day (window too short for blocks)")
+               + " - a simulated estimate, not an exact truth)."
+               if np.isfinite(mc.get("cvar_se", float("nan"))) else "")
     st.caption(
         "Each simulated path compounds a year of daily returns. Hypothetical "
         "distribution, not a forecast - the curves interpolate between real "
@@ -1572,7 +1590,11 @@ def eigen_factor_panel(cov, weights, returns) -> None:
     # sigma2 excludes the top (signal) eigenvalue -- the SAME estimator
     # clip_eigenvalues uses, so this ceiling matches the module logic.
     sigma2 = float(lam[1:].mean()) if len(lam) > 1 else float(lam.mean())
-    _, mp_hi = marcenko_pastur_bounds(len(lam), len(returns), sigma2)
+    # EWMA weights carry (1+lam)/(1-lam) ~ 32 effective days, not 503: at
+    # T=503 the ceiling sat 1.95x too low and painted noise as signal.
+    mp_t = ((1 + RISKMETRICS_LAMBDA) / (1 - RISKMETRICS_LAMBDA)
+            if cov_method == "EWMA" else len(returns))
+    _, mp_hi = marcenko_pastur_bounds(len(lam), mp_t, sigma2)
     scree = go.Figure()
     scree.add_trace(go.Bar(
         x=[f"PC{i+1}" for i in range(len(lam))],
@@ -1589,7 +1611,8 @@ def eigen_factor_panel(cov, weights, returns) -> None:
     st.plotly_chart(scree, width="stretch", config=PLOTLY_CFG)
     st.caption(
         f"Factors above the dotted line carry more variance than pure noise "
-        f"would produce at this sample size (N={len(lam)}, T={len(returns)}). "
+        f"would produce at this sample size (N={len(lam)}, T={mp_t:.0f}"
+        f"{' effective days under EWMA' if cov_method == 'EWMA' else ''}). "
         "Heuristic reference at this universe size, not a hard test - the "
         "Ledoit-Wolf estimator is the production defense against inversion "
         "noise. Flip the covariance estimator to EWMA in Engine controls to "
@@ -1672,9 +1695,13 @@ try:
             _bk_dv = pd.concat(
                 [_bk_dv, _a_dv[_keep].reindex(prices.index)], axis=1)
             _bk_anchors = set(_keep)
+    # Grit from FULL history, as the Grit Zone tab scores it - not from the
+    # 2y `prices`, where no named crisis falls and every name's resilience
+    # third read 0 (NVDA 6.9 here vs 73.2 in the tab, council 2026-10-17).
     _the_book = load_book(
         _bk_px, _bk_dv.fillna(0.0), float(_book_size), _book_part,
-        _bk_floor, tuple(sorted(_bk_anchors or ())))
+        _bk_floor, tuple(sorted(_bk_anchors or ())),
+        load_grit(tuple(_bk_px.columns)))
 
     st.markdown(
         f'<div style="background:#F1EDE5;border:1px solid #C4BDAE;'
@@ -1780,14 +1807,20 @@ with tab_watch:
         latest = float(roll.iloc[-1]) if len(roll) else float("nan")
 
         m1, m2, m3 = st.columns(3)
-        m1.metric(f"{pick_a} × {pick_b} now ({win}d)", f"{latest:+.2f}")
+        m1.metric(f"{pick_a} × {pick_b} now ({win}d)",
+                  f"{latest:+.2f}" if len(roll) else "-")
         # Not an average of the rolling series - it is the single Pearson
         # correlation over the whole sample, which is a different number.
         m2.metric("Full-period correlation", f"{static_corr:+.2f}")
         m3.metric("Range over history",
                   f"{roll.min():+.2f} … {roll.max():+.2f}" if len(roll) else "-")
 
-        if latest > thresh:
+        # 60 prices leave 59 returns while the slider reaches 63: an empty
+        # rolling series used to read as "Stable ... at +nan".
+        if not len(roll) or not np.isfinite(latest):
+            st.info(f"Not enough history for a {win}-day window - shorten the "
+                    "rolling window to get a reading.")
+        elif latest > thresh:
             st.warning(f"**Concentration reading:** {pick_a} and {pick_b} are "
                      f"moving at {latest:+.2f} over the last {win} trading "
                      f"days - above your {thresh:.2f} threshold. Right now "
@@ -1944,7 +1977,12 @@ with tab_breakdown:
     rf = load_risk_free_rate()
     ann_ret = float(port_returns.mean()) * 252
     ann_vol = float(port_returns.std()) * np.sqrt(252)
-    sharpe = sharpe_ratio(port_returns, rf if rf is not None else 0.0)
+    # Unlevered book (base_weights): on the vol-targeted weights Sharpe was
+    # (L*mu - rf)/(L*sigma) - idle cash at 0, borrowing free - so the slider
+    # moved it 1.615 -> 0.975 for the same strategy. With cash and financing at
+    # rf, Sharpe is leverage-invariant (Sharpe 1994). Council 2026-10-17.
+    sharpe = sharpe_ratio((-1 if bearish else 1) * (returns @ base_weights),
+                          rf if rf is not None else 0.0)
     s1, s2, s3 = st.columns(3)
     s1.metric("Sharpe ratio", f"{sharpe:.2f}")
     s2.metric("Annualized return", f"{ann_ret:+.1%}")
@@ -1956,6 +1994,10 @@ with tab_breakdown:
         f"the real (unshocked) "
         f"{'synthetic short book (daily-rebalanced; borrow costs not modeled)' if bearish else 'portfolio'}. "
         f"Risk-free rate: {rf_txt}."
+        + (" Sharpe is taken on the unlevered book: the vol-target overlay only "
+           "rescales it, and with idle cash and borrowing at the risk-free rate "
+           "rescaling leaves Sharpe unchanged. Return and volatility beside it "
+           "are the levered book's." if use_vt else "")
     )
 
 
@@ -2108,10 +2150,10 @@ with tab_breakdown:
         panel_head("Tail shape - how bad can it get",
                    "What the average of the tail still doesn't tell you")
         try:
-            _tf, _tf_days, _tf_dropped = load_tail_fit(
+            _tf, _tf_days, _tf_dropped, _tf_years = load_tail_fit(
                 tuple(loaded), tuple(float(x) for x in weights), bool(bearish))
         except Exception as exc:  # noqa: BLE001 - never take the page down
-            _tf, _tf_days, _tf_dropped = None, 0, []
+            _tf, _tf_days, _tf_dropped, _tf_years = None, 0, [], 0.0
             st.caption(f"Tail model unavailable: {safe_err('tail-model-unavailable', exc)}")
 
         if _tf is not None and _tf["fitted"]:
@@ -2158,7 +2200,7 @@ with tab_breakdown:
                 f"({_tf['threshold_return']:.2%} of the book at today's volatility; "
                 f"{_tf['threshold_z']:.2f} in standardised units), drawn from "
                 f"{_tf_days} trading days "
-                f"(~10 years - the 2-year window used elsewhere leaves too few "
+                f"(~{_tf_years:.1f} years - the 2-year window used elsewhere leaves too few "
                 f"exceedances to fit honestly). **ξ = {_xi:+.2f}**{_ci_txt}: {_shape}"
                 + (f" At this ξ the {', '.join(_broken)} of the loss "
                    f"distribution {'is' if len(_broken) == 1 else 'are'} "
@@ -2257,10 +2299,15 @@ with tab_balance:
     else:
         try:
             corr_b = correlation_matrix(returns)
-            default_anchor = loaded[int(np.argmax(weights))]  # your biggest position
+            # Keyed, with the default seeded only when no valid choice is
+            # stored: an index= that followed argmax(weights) re-created the
+            # widget on every Weighting change and silently replaced the
+            # visitor's anchor (council 2026-10-17).
+            if st.session_state.get("balance_anchor") not in loaded:
+                st.session_state["balance_anchor"] = loaded[int(np.argmax(weights))]  # your biggest position
             anchor = st.selectbox(
                 "Anchor (the position you want to balance)", loaded,
-                index=loaded.index(default_anchor))
+                key="balance_anchor")
             ranked = rank_hedges(corr_b, anchor)
 
             # Classify by correlation STRENGTH, not just sign: a name at −0.01
@@ -2348,10 +2395,7 @@ with tab_balance:
                 """Universe returns joined with defensive ETF candidates
                 (Treasuries/gold/staples/utilities/min-vol) - an equity
                 basket usually cannot anchor itself."""
-                etf = fetch_prices(DEFENSIVE_ANCHOR_TICKERS, period="2y")
-                etf_rets = etf.pct_change().dropna()
-                joined_bv = returns.join(etf_rets, how="inner")
-                return joined_bv.dropna(axis=1)
+                return anchor_frame(returns)
 
             @st.cache_data(ttl=6 * 3600, max_entries=64, show_spinner=False)
             def _bv_crisis(a: str, b: str, w: float, short_a: bool = False):
@@ -2402,6 +2446,22 @@ with tab_balance:
             # contiguous - st.markdown truncates at blank lines.
             _bv_role_a = ("THE SHORT" if bearish else "THE HIGH-FLYER")
             _bv_role_b = ("SQUEEZE CUSHION" if bearish else "THE STEADY ANCHOR")
+            # Inverse-vol weights give the anchor under half when the flyer is
+            # the steadier leg (Index core SPY/GLD: 47%), so who holds the
+            # money is read off the weights, not assumed (2026-10-17 council).
+            _bv_money = (
+                f'Why the anchor holds most of the capital: equal-risk split - '
+                f'{flyer} runs {pw["vol_a"]:.0%} annual vol to {bv_anchor}\'s '
+                f'{pw["vol_b"]:.0%}, so each dollar of {flyer} carries '
+                f'{pw["vol_a"] / pw["vol_b"]:.1f}x the risk. Each leg carries the '
+                f'same share of the RISK; the anchor holds most of the MONEY.'
+                if pw["w_b"] >= 0.5 else
+                f'Why {flyer} holds more of the capital: equal-risk split - '
+                f'{flyer} runs {pw["vol_a"]:.0%} annual vol to {bv_anchor}\'s '
+                f'{pw["vol_b"]:.0%}, so here {flyer} is the steadier leg and each '
+                f'dollar of it carries {pw["vol_a"] / pw["vol_b"]:.1f}x the risk. '
+                f'Each leg carries the same share of the RISK; {flyer} holds more '
+                f'of the MONEY.')
             st.markdown(
                 f'<div style="display:flex;align-items:center;gap:44px;padding:26px 10px 12px;flex-wrap:wrap;">'
                 f'<div style="flex:1 1 100%;max-width:980px;margin:0 auto;background:#F1EDE5;'
@@ -2458,11 +2518,7 @@ with tab_balance:
                 f'{"short " if bearish else ""}{flyer} ES 90% CI {ci_lo:.1%}-{ci_hi:.1%} &middot; current phase '
                 f'<span style="color:{_ph_col};font-weight:600;">{phase_now}</span></div>'
                 f'<div style="font-family:Georgia;font-size:12.5px;color:#5D574D;margin-top:6px;">'
-                f'Why the anchor holds most of the capital: equal-risk split - '
-                f'{flyer} runs {pw["vol_a"]:.0%} annual vol to {bv_anchor}\'s '
-                f'{pw["vol_b"]:.0%}, so each dollar of {flyer} carries '
-                f'{pw["vol_a"] / pw["vol_b"]:.1f}x the risk. Each leg carries the '
-                f'same share of the RISK; the anchor holds most of the MONEY.</div>'
+                f'{_bv_money}</div>'
                 f'</div></div>',
                 unsafe_allow_html=True)
             with st.expander("The real backtest - pair vs solo, and the crisis record"):
@@ -2519,8 +2575,8 @@ with tab_balance:
                     '"who gets back up?", IS the Circle 2 screen - from your '
                     'universe plus Treasury/gold/staples/utilities/min-vol ETFs) '
                     '- ranked, never promised. Weights are risk parity: each leg '
-                    'contributes equal risk, which is why the steady anchor '
-                    'holds most of the capital. Losses '
+                    'contributes equal risk, which is why the steadier leg '
+                    'holds more of the capital. Losses '
                     'are <b>cushioned, not capped</b>: a long-only pair has no '
                     'floor above zero, and crisis correlations converge toward '
                     '+1 exactly when protection matters most. The Tether / '
@@ -2780,7 +2836,14 @@ with tab_liquidity:
         # Liquidity-adjusted tail - how the headline CVaR fattens once the days
         # it takes to unwind THIS book at THESE sliders are priced in.
         lv = liquidity_adjusted_cvar(mc["cvar"], prof["full_exit_days"])
-        if np.isfinite(lv["lvar"]):
+        if mc["cvar"] <= 0:
+            # Was a "+X% for the unwind" delta on a figure that was a gain.
+            read_me(
+                "<b>No tail loss to widen.</b> The worst 5% of simulated years "
+                f"still end up ahead on average (headline CVaR {mc['cvar']:.1%}), "
+                "so there is no tail loss for the unwind to widen and no "
+                "liquidity adjustment is applied.")
+        elif np.isfinite(lv["lvar"]):
             d1, d2 = st.columns(2)
             d1.metric("Headline CVaR (95%)", f"{lv['cvar']:.1%}")
             d2.metric("Liquidity-adjusted CVaR", f"{lv['lvar']:.1%}",
@@ -2816,7 +2879,8 @@ with tab_liquidity:
                 f"**{prof['least_liquid']}** is the bottleneck at "
                 f"{_fmt_days(prof['full_exit_days'])} to fully exit. "
             )
-        if np.isfinite(lv["multiplier"]) and lv["multiplier"] - 1 < 0.005:
+        if (mc["cvar"] > 0 and np.isfinite(lv["multiplier"])
+                and lv["multiplier"] - 1 < 0.005):
             # Every mega-cap/ETF preset exits in well under a day, so the tail
             # adjustment rounds to +0%. Say why, or a reader assumes the model
             # is dead rather than the book being genuinely liquid.
