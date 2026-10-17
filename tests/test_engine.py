@@ -3787,6 +3787,27 @@ def test_metric_labels_and_values_wrap_instead_of_ending_in_an_ellipsis():
         assert re.search(r"text-overflow:\s*clip", body), f"{part} still ends in an ellipsis"
 
 
+def test_every_browser_pick_checks_the_option_took():
+    """Live audit run 30, both attempts: recruiter_walk's pick() clicked an
+    option, pressed Escape and returned, but the choice had not landed - the
+    box snapped back to the old value on Escape, the page never reran, and
+    the step waited 90s for a change that could not come (the COVID pick on
+    attempt 1; the Semiconductors pick on attempt 2, on the PR's app and on
+    the deployed main alike). A pick must read the box back and retry."""
+    import re
+    root = pathlib.Path(__file__).resolve().parent.parent / "tools"
+    picks = 0
+    for js in sorted(root.glob("*.mjs")):
+        src = js.read_text(encoding="utf-8")
+        m = re.search(r"async function pick\(label, option\) \{\n(.*?)\n\}\n", src, re.S)
+        if not m:
+            continue
+        picks += 1
+        assert re.search(r"inputValue\(\)[^\n]*!==\s*option", m.group(1)), (
+            f"{js.name}: pick() returns without checking the box shows the option")
+    assert picks >= 2, f"expected the walk's and the deep scan's pick(), found {picks}"
+
+
 if __name__ == "__main__":
     import sys
 

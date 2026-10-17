@@ -97,6 +97,9 @@ async function pick(label, option) {
       await opt.waitFor({ state: 'visible', timeout: 10000 });
       await opt.click({ timeout: 10000 }).catch(() => page.keyboard.press('Enter'));
       await page.keyboard.press('Escape');
+      // A click that did not land leaves the old value: Escape snaps the box
+      // back and nothing reruns (live audit run 30 waited 90s on that, twice).
+      if (await box.inputValue() !== option) throw new Error(`"${option}" did not take in "${label}"`);
       return;
     } catch (e) {
       await page.keyboard.press('Escape');
