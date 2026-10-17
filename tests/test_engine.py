@@ -3422,6 +3422,199 @@ def test_liquidity_adjustment_never_turns_a_tail_gain_into_a_bigger_gain():
     assert all(guarded.values()), f"widening shown for a negative CVaR: {guarded}"
 
 
+# --- council fixes 2026-10-17: captions ---
+
+def _main_source_and_tree():
+    import ast
+    src = (pathlib.Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
+    return src, ast.parse(src)
+
+
+def _lift_assign(tree, name):
+    """The one module- or function-level assignment to `name` in main.py, ready
+    to exec: main.py is a Streamlit script, so its wording is tested by lifting
+    the statement that builds it rather than importing the page."""
+    import ast
+    hits = [n for n in ast.walk(tree) if isinstance(n, ast.Assign)
+            and any(isinstance(t, ast.Name) and t.id == name for t in n.targets)]
+    return hits[0] if len(hits) == 1 else None
+
+
+def _exec_nodes(nodes, ns):
+    import ast
+    exec(compile(ast.Module(body=list(nodes), type_ignores=[]),  # nosec B102
+                 "main.py", "exec"), ns)
+    return ns
+
+
+def test_tail_fit_drops_a_young_listing_by_name_instead_of_shortening_the_whole_fit():
+    """The 10y tail fit used an aligned pull, so one 2021 listing (RIVN in
+    High-volatility movers) cut the whole fit to 5.1 years while the caption
+    said "~10 years" and the "lack the full history" note could never fire."""
+    import ast
+    from src.ingestion import _clean_price_frame
+
+    src, tree = _main_source_and_tree()
+    fn = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "load_tail_fit"]
+    assert len(fn) == 1, "load_tail_fit is gone from main.py"
+    fn[0].decorator_list = []
+
+    idx = pd.bdate_range("2016-10-14", "2026-10-14")
+    rng = np.random.default_rng(5)
+    px = pd.DataFrame(100 * np.exp(np.cumsum(rng.normal(0, 0.01, (len(idx), 3)), axis=0)),
+                      index=idx, columns=["OLD", "MID", "IPO"])
+    px.loc[px.index < "2021-11-10", "IPO"] = np.nan
+
+    def fetch_prices(tickers, period="2y", align=True, **_):
+        return _clean_price_frame(px[list(tickers)], align)
+
+    ns = {"pd": pd, "np": np, "fetch_prices": fetch_prices,
+          "load_universe": lambda t, period="2y": fetch_prices(list(t), period),
+          "mcneil_frey_tail": lambda pr: {"fitted": True, "n": len(pr)}}
+    _exec_nodes(fn, ns)
+    out = ns["load_tail_fit"](("OLD", "MID", "IPO"), (0.4, 0.3, 0.3), False)
+    _, days, dropped = out[:3]
+    assert dropped == ["IPO"], (f"a 2021 listing shrank the fit to {days} days "
+                                f"({days / 252:.1f}y) and was not named: dropped={dropped}")
+    assert days > 2500, days
+    assert len(out) == 4 and abs(out[3] - 10.0) < 0.05, f"span not reported from the index: {out[1:]}"
+    assert "~10 years" not in src, "the tail-fit caption still hard-codes ~10 years"
+    assert "{_tf_years:.1f} years" in src, "the tail-fit caption does not print the measured span"
+
+
+def test_fan_chart_caption_claims_block_resampling_only_when_it_happened():
+    """The cone caption said "resampled in N-day blocks so crash weeks stay
+    intact" for jump-diffusion (parametric, nothing resampled) and for replay
+    windows under 30 days (i.i.d. fallback, block_days=1)."""
+    _, tree = _main_source_and_tree()
+    node = _lift_assign(tree, "_se_txt")
+    assert node is not None, "the fan-chart sampling-error caption moved"
+    rng = np.random.default_rng(0)
+    w = np.array([0.5, 0.5])
+    long_hist = pd.DataFrame(rng.standard_t(4, (500, 2)) * 0.01, columns=["A", "B"])
+    short_hist = long_hist.iloc[:22]
+
+    def caption(mc):
+        return _exec_nodes([node], {"mc": mc, "np": np})["_se_txt"]
+
+    jd = caption(jump_diffusion_mc(long_hist, w, n_simulations=400))
+    assert "resampled" not in jd and "crash weeks" not in jd, f"jump-diffusion: {jd}"
+    assert "parametric Merton paths" in jd, jd
+    iid = caption(monte_carlo(short_hist, w, n_simulations=400))
+    assert "crash weeks stay intact" not in iid, f"22-day replay (i.i.d.): {iid}"
+    assert "resampled day by day (window too short for blocks)" in iid, iid
+    blk = monte_carlo(_clustered_returns(n=800), np.array([1.0]), n_simulations=400)
+    assert blk["block_days"] > 1
+    assert f"resampled in {blk['block_days']}-day blocks so crash weeks stay intact" in caption(blk)
+
+
+def test_market_drawdown_shock_compounds_to_the_labelled_drawdown():
+    """A -50 'Market drawdown shock' added -0.5/252 to every day, which
+    compounds to -39% over the simulated year, not the -50% the label and the
+    audit line state."""
+    import ast
+    _, tree = _main_source_and_tree()
+    ifs = [n for n in ast.walk(tree) if isinstance(n, ast.If)
+           and ast.unparse(n.test) == "drawdown_shock != 0"]
+    assert len(ifs) == 1, "the drawdown-shock step moved"
+    for shock in (-50, -30, -5):
+        ns = _exec_nodes(ifs[0].body, {"np": np, "drawdown_shock": shock,
+                                       "shocked_returns": pd.DataFrame(np.zeros((252, 2)))})
+        grown = (1 + ns["shocked_returns"]).prod()
+        assert np.allclose(grown, 1 + shock / 100), \
+            f"shock {shock}% compounds to {float(grown.iloc[0]) - 1:+.1%} over 252 days"
+
+
+def test_defensive_pair_says_who_really_holds_the_money():
+    """Inverse-vol weights give the anchor under half when the flyer is the
+    steadier leg (Index core SPY/GLD: anchor 47%), yet the text said the anchor
+    holds most of the MONEY next to an SVG reading 47% CAPITAL."""
+    src, tree = _main_source_and_tree()
+    node = _lift_assign(tree, "_bv_money")
+    assert node is not None, ("the pair text states 'the anchor holds most of the "
+                              "MONEY' as a fixed string, whatever the weights")
+
+    def say(w_b, vol_a, vol_b):
+        pw = {"w_a": 1 - w_b, "w_b": w_b, "vol_a": vol_a, "vol_b": vol_b}
+        return _exec_nodes([node], {"pw": pw, "flyer": "SPY", "bv_anchor": "GLD"})["_bv_money"]
+
+    under = say(0.473, 0.132, 0.146)
+    assert "anchor holds most" not in under, f"anchor at 47%: {under}"
+    assert "SPY holds more of the" in under and "steadier leg" in under, under
+    over = say(0.75, 0.30, 0.10)
+    assert "the anchor holds most of the MONEY" in over, over
+    assert "steady anchor holds most of the capital" not in src, \
+        "the read-me still says the anchor always holds most of the capital"
+
+
+def test_noise_ceiling_uses_the_ewma_effective_sample_size():
+    """Under EWMA (lambda 0.94) the matrix carries ~32 effective days, but the
+    Marcenko-Pastur line used T = len(returns) = 503: the ceiling sat ~1.95x
+    too low and painted noise factors as signal."""
+    import ast
+    from src.covariance import RISKMETRICS_LAMBDA
+
+    _, tree = _main_source_and_tree()
+    fn = [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)
+          and n.name == "eigen_factor_panel"][0]
+    call = [n for n in ast.walk(fn) if isinstance(n, ast.Call)
+            and getattr(n.func, "id", "") == "marcenko_pastur_bounds"][0]
+    t_arg = call.args[1]
+    pre = []
+    if isinstance(t_arg, ast.Name):
+        pre = [n for n in ast.walk(fn) if isinstance(n, ast.Assign)
+               and any(getattr(t, "id", "") == t_arg.id for t in n.targets)]
+    returns = pd.DataFrame(np.zeros((503, 3)))
+    expect = {"EWMA": (1 + RISKMETRICS_LAMBDA) / (1 - RISKMETRICS_LAMBDA),
+              "Sample": 503, "Ledoit-Wolf": 503}
+    for method, want in expect.items():
+        ns = _exec_nodes(pre, {"cov_method": method, "returns": returns,
+                               "RISKMETRICS_LAMBDA": RISKMETRICS_LAMBDA})
+        got = eval(compile(ast.Expression(t_arg), "main.py", "eval"), ns)  # nosec B307
+        assert abs(got - want) < 1e-9, f"{method}: noise ceiling drawn at T={got}, expected {want:.1f}"
+    printed = [n for n in ast.walk(fn) if isinstance(n, ast.JoinedStr)
+               and "pure noise" in ast.unparse(n)]
+    assert printed and any(isinstance(v, ast.FormattedValue)
+                           and ast.dump(v.value) == ast.dump(t_arg)
+                           for v in printed[0].values), "the caption prints a different T"
+
+
+def test_correlation_watch_says_not_enough_history_instead_of_stable_at_nan():
+    """With 59 return rows and a 63-day window the rolling correlation is
+    empty, latest is NaN, and the page said 'Stable: A x B at +nan'."""
+    import ast
+    src, tree = _main_source_and_tree()
+
+    def seg(n):
+        return ast.get_source_segment(src, n) or ""
+
+    cands = [n for n in ast.walk(tree) if isinstance(n, ast.If)
+             and "Stable:" in seg(n) and "Concentration reading" in seg(n)
+             and "pick_a == pick_b" not in ast.unparse(n.test)]
+    elifs = {id(c.orelse[0]) for c in cands
+             if len(c.orelse) == 1 and isinstance(c.orelse[0], ast.If)}
+    head = [c for c in cands if id(c) not in elifs]
+    assert len(head) == 1, "the Correlation Watch verdict moved"
+
+    said = []
+
+    class _St:
+        def __getattr__(self, kind):
+            return lambda msg, *a, **k: said.append((kind, msg))
+
+    _exec_nodes(head, {"st": _St(), "np": np, "roll": pd.Series(dtype=float),
+                       "latest": float("nan"), "win": 63, "thresh": 0.75,
+                       "pick_a": "A", "pick_b": "B"})
+    assert not any("Stable" in m or "Concentration" in m for _, m in said), said
+    assert any(k == "info" and "not enough history for a 63-day window" in m.lower()
+               for k, m in said), said
+    said.clear()
+    _exec_nodes(head, {"st": _St(), "np": np, "roll": pd.Series([0.9]),
+                       "latest": 0.9, "win": 21, "thresh": 0.75,
+                       "pick_a": "A", "pick_b": "B"})
+    assert said and said[0][0] == "warning" and "Concentration reading" in said[0][1], said
+
+
 if __name__ == "__main__":
     import sys
 
