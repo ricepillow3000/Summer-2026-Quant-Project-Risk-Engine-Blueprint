@@ -348,6 +348,67 @@ def _ou_end_moments(p: dict, mu_b: float, mu_v: float, b0: float, v0: float,
     }
 
 
+def replay_linkages(frame: pd.DataFrame, pairs: list) -> tuple[list, list]:
+    """Re-derive every linkage number from raw returns with this audit's own
+    loop - not by calling src.pairing again - so a wrong pairing formula cannot
+    agree with itself. `frame` must carry the flyer column the way the map
+    held it (negated for a short book). Returns (mismatches, summaries)."""
+    bad, shown = [], []
+    for pair in pairs:
+        fl, an, r = pair["fl"], pair["an"], pair["real"]
+        if fl not in frame.columns or an not in frame.columns:
+            bad.append(f"{fl}/{an}: leg missing from the audited frame")
+            continue
+        j = frame[[fl, an]].dropna()
+        a, b = j[fl], j[an]
+
+        # rho and the two-asset equal-risk weight: w_a sigma_a = w_b sigma_b
+        rho = float(a.corr(b))
+        w_a = float(b.std() / (a.std() + b.std()))
+
+        # replay the pair: legs drift with actual returns, reset monthly
+        va, vb = w_a, 1.0 - w_a
+        path, prets = [], []
+        for i, (ra, rb) in enumerate(zip(a.values, b.values)):
+            wt = va / (va + vb)
+            prets.append(wt * ra + (1.0 - wt) * rb)
+            va *= 1.0 + ra
+            vb *= 1.0 + rb
+            path.append(va + vb)
+            if (i + 1) % REBALANCE_DAYS == 0:
+                tot = va + vb
+                va, vb = tot * w_a, tot * (1.0 - w_a)
+        pair_path = pd.Series(path, index=j.index)
+        solo_path = (1.0 + a).cumprod()
+        pair_ret = pd.Series(prets, index=j.index)
+
+        def _es(x):                       # ES(97.5): mean of the worst 2.5%
+            s = pd.Series(x).dropna()
+            return float(-s[s <= np.percentile(s, 2.5)].mean())
+
+        def _dd(p):                       # max drawdown, day-one loss included
+            return float((p / p.cummax().clip(lower=1.0) - 1.0).min())
+
+        expect = {
+            "esSolo": _es(a), "esPair": _es(pair_ret),
+            "cushion": _dd(pair_path) - _dd(solo_path),
+            "volPair": float(pair_ret.std() * np.sqrt(252)),
+        }
+        for k, v in expect.items():
+            if not close(v, r[k], 3e-4):
+                bad.append(f"{fl}/{an} {k}: audit {v:.5f} vs map {r[k]}")
+        if not close(rho, pair["rho"], 1.1e-3):
+            bad.append(f"{fl}/{an} rho: audit {rho:.4f} vs map {pair['rho']}")
+        if not close(w_a, pair["wFlyer"], 1.1e-4):
+            bad.append(f"{fl}/{an} weight: audit {w_a:.5f} vs map {pair['wFlyer']}")
+        if r["nDays"] != len(j):
+            bad.append(f"{fl}/{an} history: audit {len(j)}d vs map {r['nDays']}d")
+        shown.append(f"{fl}->{an}: rho {rho:+.3f}, w_flyer {w_a:.3f}, ES solo "
+                     f"{expect['esSolo']:.3%} vs paired {expect['esPair']:.3%}, "
+                     f"drawdown cushion {expect['cushion']:+.3%} over {len(j)}d")
+    return bad, shown
+
+
 def audit_map(name: str, ctx: dict, n_paths: int) -> None:
     rets, w, cols = ctx["returns"], ctx["weights"], ctx["cols"]
     try:
@@ -382,12 +443,16 @@ def audit_map(name: str, ctx: dict, n_paths: int) -> None:
     # compares two different date sets - which is exactly how SI=F, whose
     # futures calendar differs from the ETFs', drifted 0.002 past tolerance on
     # 2026-08-26 and failed a check the engine had not broken.
+    # A held anchor is a holding; the pool is the anchors NOT held. Joining the
+    # whole pool raised on the shared column, and this audit fell back exactly
+    # as the builder did - so 4 presets drew no pool and both agreed (2026-10-17).
+    pool = [t for t in DEFENSIVE_ANCHOR_TICKERS if t not in rets.columns]
     try:
-        anchor_px = fetch_prices(DEFENSIVE_ANCHOR_TICKERS, period="2y")
+        anchor_px = fetch_prices(pool, period="2y")
         unit_frame = rets.join(anchor_px.pct_change().dropna(),
                                how="inner").dropna(axis=1)
     except Exception:  # noqa: BLE001 - offline: the builder falls back the same way
-        unit_frame = rets
+        anchor_px, unit_frame = None, rets
     common = unit_frame.index.intersection(mkt.index)
     mvar = float(mkt.loc[common].var())
     bad, checked = [], 0
@@ -402,9 +467,14 @@ def audit_map(name: str, ctx: dict, n_paths: int) -> None:
             bad.append(f"{t} beta: audit {b} vs map {a['b']}")
         if not close(v, a["v"], 2e-3):
             bad.append(f"{t} vol: audit {v} vs map {a['v']}")
+    drawn_pool = sorted(a["t"] for a in payload["assets"] if a["f"] == "Anchor pool")
+    want_pool = sorted(c for c in unit_frame.columns if c not in cols)
+    if anchor_px is not None and drawn_pool != want_pool:
+        bad.append(f"anchor pool drawn {drawn_pool}, expected {want_pool}")
     record("MAP-02", name, "unit coordinates = measured beta / annualized vol",
            not bad, f"{checked} of {len(payload['assets'])} units re-derived from "
-           "raw returns; " + ("; ".join(bad[:3]) if bad else "all match"), "engine")
+           f"raw returns, anchor pool {drawn_pool}; "
+           + ("; ".join(bad[:3]) if bad else "all match"), "engine")
 
     # -- MAP-03 the perimeter is the disclosed policy, nothing else ---------
     hv = round(min(HAZARD_VOL_CAP,
@@ -511,64 +581,7 @@ def audit_map(name: str, ctx: dict, n_paths: int) -> None:
     # re-derived here from raw returns with this audit's own loop - not by
     # calling src.pairing again - so a wrong pairing formula cannot agree
     # with itself.
-    try:
-        anchors = fetch_prices(DEFENSIVE_ANCHOR_TICKERS, period="2y")
-        frame = rets.join(anchors.pct_change().dropna(), how="inner").dropna(axis=1)
-    except Exception:  # noqa: BLE001 - same fallback the builder uses
-        frame = rets
-    bad, shown = [], []
-    for pair in payload["pairs"]:
-        fl, an, r = pair["fl"], pair["an"], pair["real"]
-        if fl not in frame.columns or an not in frame.columns:
-            bad.append(f"{fl}/{an}: leg missing from the audited frame")
-            continue
-        j = frame[[fl, an]].dropna()
-        a, b = j[fl], j[an]
-
-        # rho and the two-asset equal-risk weight: w_a sigma_a = w_b sigma_b
-        rho = float(a.corr(b))
-        w_a = float(b.std() / (a.std() + b.std()))
-
-        # replay the pair: legs drift with actual returns, reset monthly
-        va, vb = w_a, 1.0 - w_a
-        path, prets = [], []
-        for i, (ra, rb) in enumerate(zip(a.values, b.values)):
-            wt = va / (va + vb)
-            prets.append(wt * ra + (1.0 - wt) * rb)
-            va *= 1.0 + ra
-            vb *= 1.0 + rb
-            path.append(va + vb)
-            if (i + 1) % REBALANCE_DAYS == 0:
-                tot = va + vb
-                va, vb = tot * w_a, tot * (1.0 - w_a)
-        pair_path = pd.Series(path, index=j.index)
-        solo_path = (1.0 + a).cumprod()
-        pair_ret = pd.Series(prets, index=j.index)
-
-        def _es(x):                       # ES(97.5): mean of the worst 2.5%
-            s = pd.Series(x).dropna()
-            return float(-s[s <= np.percentile(s, 2.5)].mean())
-
-        def _dd(p):                       # max drawdown, day-one loss included
-            return float((p / p.cummax().clip(lower=1.0) - 1.0).min())
-
-        expect = {
-            "esSolo": _es(a), "esPair": _es(pair_ret),
-            "cushion": _dd(pair_path) - _dd(solo_path),
-            "volPair": float(pair_ret.std() * np.sqrt(252)),
-        }
-        for k, v in expect.items():
-            if not close(v, r[k], 3e-4):
-                bad.append(f"{fl}/{an} {k}: audit {v:.5f} vs map {r[k]}")
-        if not close(rho, pair["rho"], 1.1e-3):
-            bad.append(f"{fl}/{an} rho: audit {rho:.4f} vs map {pair['rho']}")
-        if not close(w_a, pair["wFlyer"], 1.1e-4):
-            bad.append(f"{fl}/{an} weight: audit {w_a:.5f} vs map {pair['wFlyer']}")
-        if r["nDays"] != len(j):
-            bad.append(f"{fl}/{an} history: audit {len(j)}d vs map {r['nDays']}d")
-        shown.append(f"{fl}->{an}: rho {rho:+.3f}, w_flyer {w_a:.3f}, ES solo "
-                     f"{expect['esSolo']:.3%} vs paired {expect['esPair']:.3%}, "
-                     f"drawdown cushion {expect['cushion']:+.3%} over {len(j)}d")
+    bad, shown = replay_linkages(unit_frame, payload["pairs"])
     audit_map_state_coverage(name, state)
 
     record("MAP-11", name, "every linkage number replayed from raw returns",

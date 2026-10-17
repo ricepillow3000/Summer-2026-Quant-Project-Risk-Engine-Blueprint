@@ -2533,6 +2533,50 @@ def test_map_short_book_keeps_anchor_funds_long():
     assert "keep their own" in sht["footnote"], sht["footnote"]
 
 
+def test_a_universe_holding_an_anchor_keeps_the_rest_of_the_anchor_pool():
+    """The anchor pool was joined to the universe with DataFrame.join, which
+    raises on a shared column; the except fell back to the universe alone. So
+    any universe holding TLT, GLD, XLP, XLU or USMV - four of the twenty
+    presets (sector ETFs, rates & credit, commodities, global macro) and any
+    visitor pair with one of them - drew no anchor pool at all, and the
+    linkage tournament never saw the anchors it did not hold. Found by the
+    every-pair audit, 2026-10-17. A held anchor is drawn once, as a holding."""
+    import src.topology as tp
+    from src.pairing import DEFENSIVE_ANCHOR_TICKERS
+
+    rng = np.random.default_rng(5)
+    idx = pd.bdate_range("2023-01-02", periods=420)
+    mkt = rng.normal(0.0004, 0.010, 420)
+    px = pd.DataFrame({t: 100 * np.cumprod(1 + (0.3 + 0.1 * k) * mkt + rng.normal(0, 0.004, 420))
+                       for k, t in enumerate(DEFENSIVE_ANCHOR_TICKERS)}, index=idx)
+    rets = pd.DataFrame({"AAA": 1.3 * mkt + rng.normal(0, 0.012, 420)}, index=idx)
+    rets["TLT"] = px["TLT"].pct_change().fillna(0)
+    rets = rets.iloc[1:]
+    w = pd.Series([0.5, 0.5], index=["AAA", "TLT"])
+
+    def fake_fetch(tickers, *a, **k):
+        if set(tickers) <= set(DEFENSIVE_ANCHOR_TICKERS):
+            return px[list(tickers)]
+        raise RuntimeError("offline")
+    orig = tp.fetch_prices
+    try:
+        tp.fetch_prices = fake_fetch
+        pl = tp.build_map_payload(rets, w, ["AAA", "TLT"], False)
+    finally:
+        tp.fetch_prices = orig
+
+    units = [a["t"] for a in pl["assets"]]
+    assert sorted(units) == sorted(["AAA", *DEFENSIVE_ANCHOR_TICKERS]), units   # TLT once
+    assert {a["t"]: a["f"] for a in pl["assets"]}["TLT"] == "Universe"
+    assert {a["t"] for a in pl["assets"] if a["f"] == "Anchor pool"} == {"GLD", "XLP", "XLU", "USMV"}
+    assert pl["pairs"] and {p["an"] for p in pl["pairs"]} - {"AAA", "TLT"}, pl["pairs"]
+    # the Balance tab reads the same pool, not a second hand-written join
+    source = (pathlib.Path(__file__).resolve().parent.parent
+              / "main.py").read_text(encoding="utf-8")
+    assert "anchor_frame(returns)" in source
+    assert "fetch_prices(DEFENSIVE_ANCHOR_TICKERS" not in source
+
+
 def test_every_calibration_clamp_is_named_in_the_footnote():
     """The footnote's "Calibration clamps hit" list is the disclosure for every
     number the map draws that was NOT estimated. Three ways it was wrong:

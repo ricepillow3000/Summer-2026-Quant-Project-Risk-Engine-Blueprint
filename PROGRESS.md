@@ -450,6 +450,20 @@ risk-engine/
   as "1 -> 0.995"; the pair_weights docstring kept the false "flyer holds most
   of the risk". Swept every 10px, 360-1920: clean. Below 360px the plot is
   narrower than 260px - the screen, not the layout. Desktop dots unchanged.
+- ✅ **Every ticker, every pair (2026-10-17)** - `tests/pair_audit.py` + the
+  Pair audit workflow: each of the 322 suggested symbols on its own, and all
+  51,681 pairs long and short through the real fetch -> estimators/weights ->
+  map payload path on live data, every number re-derived with independent
+  numpy (two-asset ERC = inverse vol, MRT 2010). Yahoo asked once, 16 shards.
+  Mutation-tested: a wrong beta window, a wrong perimeter cap and the bug below
+  each turn it red. Its first run found that bug: the anchor pool was joined
+  with DataFrame.join, which raises on a shared column, and the fallback
+  dropped ALL anchors - so 4 of 20 presets (sector ETFs, rates & credit,
+  commodities, global macro) and any pair holding TLT/GLD/XLP/XLU/USMV drew no
+  anchor pool, and the Balance tab offered no defensive candidates. The batch
+  audit used the same join and agreed with it. Fixed once in
+  `topology.anchor_frame` (map and Balance both read it); batch audit MAP-02
+  now checks the drawn pool equals the unheld anchors.
 - ✅ **The map on an iPhone (2026-10-17)** - John saw the map cut off on his
   iPhone. The 10-15 note above ("below 360px ... the screen, not the layout")
   was WRONG: the probe sized the map's page, never the page AROUND it. The

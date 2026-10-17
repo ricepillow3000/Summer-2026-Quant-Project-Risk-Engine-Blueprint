@@ -45,6 +45,24 @@ VOL_WINDOW = 21
 TRADING_DAYS = 252
 
 
+def anchor_frame(returns: pd.DataFrame) -> pd.DataFrame:
+    """
+    Universe returns joined, on common days, with the defensive anchors it does
+    not already hold - a held anchor stays once, as a holding. Joining the whole
+    pool raised on the shared column, and every caller's fallback then dropped
+    all anchors: 4 of 20 presets drew no anchor pool and the Balance tab offered
+    no defensive candidates (every-pair audit, 2026-10-17). The map and the
+    Balance tab both read this, so they cannot disagree on the pool. Offline,
+    or when every anchor is held: the universe alone.
+    """
+    pool = [t for t in DEFENSIVE_ANCHOR_TICKERS if t not in returns.columns]
+    try:
+        etf = fetch_prices(pool, period="2y")
+        return returns.join(etf.pct_change().dropna(), how="inner").dropna(axis=1)
+    except Exception:  # noqa: BLE001 - offline: universe only
+        return returns
+
+
 def build_map_payload(returns: pd.DataFrame, weights: pd.Series,
                       loaded: list[str], bearish: bool = False,
                       days: int = 30) -> dict:
@@ -66,11 +84,7 @@ def build_map_payload(returns: pd.DataFrame, weights: pd.Series,
     cal = calibrate_state_dynamics(port, market)
 
     # every unit on the map: universe + defensive anchor pool
-    try:
-        etf = fetch_prices(DEFENSIVE_ANCHOR_TICKERS, period="2y")
-        frame = returns.join(etf.pct_change().dropna(), how="inner").dropna(axis=1)
-    except Exception:  # noqa: BLE001 - offline: universe only
-        frame = returns
+    frame = anchor_frame(returns)
     common = frame.index.intersection(market.index)
     # KNOWN, DISCLOSED MISMATCH (audit finding, 2026-08-25, still open):
     # these are FULL-SAMPLE statistics, while the portfolio mark comes from

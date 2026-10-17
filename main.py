@@ -53,7 +53,7 @@ from src.pairing import (anchor_rank, backtest_pair, crisis_cushion,
                          es_confidence_interval, pair_weights, regime_labels,
                          tail_gap, DEFENSIVE_ANCHOR_TICKERS)
 from src.covariance import estimate_covariance
-from src.topology import build_map_payload, war_room_html
+from src.topology import anchor_frame, build_map_payload, war_room_html
 from src.observability import (log_incident, log_session_start,
                                new_session_ref, setup_logging)
 from src.eigenrisk import eigen_factors, marcenko_pastur_bounds, pc1_exposure
@@ -2348,10 +2348,7 @@ with tab_balance:
                 """Universe returns joined with defensive ETF candidates
                 (Treasuries/gold/staples/utilities/min-vol) - an equity
                 basket usually cannot anchor itself."""
-                etf = fetch_prices(DEFENSIVE_ANCHOR_TICKERS, period="2y")
-                etf_rets = etf.pct_change().dropna()
-                joined_bv = returns.join(etf_rets, how="inner")
-                return joined_bv.dropna(axis=1)
+                return anchor_frame(returns)
 
             @st.cache_data(ttl=6 * 3600, max_entries=64, show_spinner=False)
             def _bv_crisis(a: str, b: str, w: float, short_a: bool = False):
