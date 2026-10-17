@@ -11,12 +11,16 @@
   caller skips without node.
 
   usage: node tests/map_layout.mjs <page.html> [width,width,...]
+  A width written mNNN is a phone: touch, 3x pixels, mobile viewport - the
+  iframe Streamlit gives the map on an iPhone (screen minus the 8px edges
+  static/app.css leaves it: 359 on an SE, 374 on a 13-16, 414 on a Pro Max).
 */
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 
-// 1456 and 1220 sit inside bands where the HUD tiles once spilled under the inspector while every round width passed
-const [pagePath, widthArg = '1920,1456,1440,1280,1220,1180,1024,1000,790,600,390'] = process.argv.slice(2);
+// 1456 and 1220 sit inside bands where the HUD tiles once spilled under the inspector while every round width passed.
+// The m-widths are iPhone frames: the map shipped 278px wide on a 390 iPhone (56px page gutters) and was cut off.
+const [pagePath, widthArg = '1920,1456,1440,1280,1220,1180,1024,1000,790,600,390,m414,m374,m359,m320'] = process.argv.slice(2);
 let pw;
 try {
   pw = await import('playwright');
@@ -32,14 +36,17 @@ try {
 const { chromium } = pw.chromium ? pw : pw.default;
 const browser = await chromium.launch().catch(() => chromium.launch({ channel: 'msedge' }));
 const out = [];
-for (const width of widthArg.split(',').map(Number)) {
-  const page = await browser.newPage({ viewport: { width, height: 820 } });
+for (const spec of widthArg.split(',')) {
+  const phone = spec.startsWith('m'), width = Number(spec.replace('m', ''));
+  const ctx = await browser.newContext({ viewport: { width, height: 820 },
+    ...(phone ? { deviceScaleFactor: 3, isMobile: true, hasTouch: true } : {}) });
+  const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(pathToFileURL(pagePath).href);
   await page.waitForFunction(() => typeof S !== 'undefined' && S.cloud);
   await page.waitForTimeout(400);
-  const m = await page.evaluate(() => {
+  const m = await page.evaluate((phone) => {
     const box = (el) => { const r = el.getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom }; };
     const hit = (a, b) => Math.max(0, Math.min(a.r, b.r) - Math.max(a.l, b.l)) * Math.max(0, Math.min(a.b, b.b) - Math.max(a.t, b.t));
     const panels = { side: '#sidePanel', hud: '.hud', inspector: '#inspPanel', chips: '.chipbar' };
@@ -75,7 +82,15 @@ for (const width of widthArg.split(',').map(Number)) {
     }
     window.scrollTo(0, 0);
     const pw_ = (W - PAD.l - PAD.r) * sx, ph = (H - PAD.t - PAD.b) * sy;
-    if (pw_ < 260 || ph < 260) found.push(`plot too small to read: ${Math.round(pw_)} x ${Math.round(ph)} px`);
+    // 320 is narrower than any phone's frame: there only overflow and covering are checked
+    if ((pw_ < 260 || ph < 260) && innerWidth >= 340) found.push(`plot too small to read: ${Math.round(pw_)} x ${Math.round(ph)} px`);
+    // a phone shows ~660-750px of the frame at once: the map comes first and its x-axis is on that first screen
+    if (phone && innerWidth <= 520) {
+      const st = document.getElementById('stage').getBoundingClientRect();
+      const first = ['.hud', '#sidePanel', '#inspPanel', '.chipbar'].every((s) => document.querySelector(s).getBoundingClientRect().top >= st.bottom - 1);
+      if (!first) found.push('phone: the map is not the first panel');
+      if (plot.b + 20 > 700) found.push(`phone: x-axis below an iPhone screen (${Math.round(plot.b)}px of the frame)`);
+    }
     if (Math.abs(cv.width - W) > 1 || Math.abs(cv.height - H) > 1) found.push(`canvas drawn at ${W}x${H} but shown at ${Math.round(cv.width)}x${Math.round(cv.height)} (stretched)`);
     // stacked (narrow) layout: the x-axis must be on the frame's first screen, not below the fold of the iframe
     if (getComputedStyle(document.querySelector('.stage')).position !== 'absolute' && plot.b + 20 > innerHeight)
@@ -90,9 +105,9 @@ for (const width of widthArg.split(',').map(Number)) {
     const sideways = document.documentElement.scrollWidth - document.documentElement.clientWidth;
     if (sideways > 0) found.push(`scrolls sideways by ${sideways} px`);
     return { plot: [Math.round(pw_), Math.round(ph)], found };
-  });
-  out.push({ width, ...m, errors });
-  await page.close();
+  }, phone);
+  out.push({ width: spec, ...m, errors });
+  await ctx.close();
 }
 await browser.close();
 console.log(JSON.stringify(out));

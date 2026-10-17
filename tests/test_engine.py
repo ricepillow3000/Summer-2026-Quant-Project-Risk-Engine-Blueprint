@@ -2577,6 +2577,29 @@ def _map_function(name: str) -> str:
     return m.group(0)
 
 
+def test_map_names_the_dot_under_the_finger_not_the_first_one_near_it():
+    """On a phone's 260-300px plot AAPL and MSFT sit 8px apart: hover and
+    explain took the FIRST asset within 9-10px, so a finger exactly on MSFT
+    read "AAPL". The nearest asset in range wins."""
+    import shutil
+    import subprocess
+
+    node = shutil.which("node")
+    if not node:
+        print("[skip] node not on PATH - map hit-test check not run")
+        return
+    js = _map_function("nearestAsset") + """
+const DEMO = { assets: [{ t: 'AAPL', b: 0, v: 0 }, { t: 'MSFT', b: 8, v: 0 }, { t: 'XOM', b: 100, v: 0 }] };
+const toX = b => b, toY = v => v;
+const out = [nearestAsset(8, 0, 9), nearestAsset(0, 0, 9), nearestAsset(5, 0, 9), nearestAsset(50, 0, 9)];
+console.log(JSON.stringify(out.map(a => a && a.t)));"""
+    res = subprocess.run([node, "-e", js], capture_output=True, text=True, timeout=30)
+    assert res.returncode == 0, res.stderr
+    assert res.stdout.strip() == '["MSFT","AAPL","MSFT",null]', res.stdout
+    html = (pathlib.Path(__file__).resolve().parent.parent / "prototypes" / "war_room.html").read_text(encoding="utf-8")
+    assert "{ hov = a.t; break; }" not in html, "hover still takes the first asset in range"
+
+
 def test_map_hover_reads_risk_direction_on_a_short_book():
     """The hover's scenario sentence compared raw beta: on a short book danger
     is MORE NEGATIVE beta, so a point toward the hazard perimeter was read as

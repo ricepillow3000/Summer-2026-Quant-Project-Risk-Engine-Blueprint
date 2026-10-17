@@ -450,6 +450,19 @@ risk-engine/
   as "1 -> 0.995"; the pair_weights docstring kept the false "flyer holds most
   of the risk". Swept every 10px, 360-1920: clean. Below 360px the plot is
   narrower than 260px - the screen, not the layout. Desktop dots unchanged.
+- ✅ **The map on an iPhone (2026-10-17)** - John saw the map cut off on his
+  iPhone. The 10-15 note above ("below 360px ... the screen, not the layout")
+  was WRONG: the probe sized the map's page, never the page AROUND it. The
+  page's 56px gutters gave the map a 263-318px frame on every iPhone, a fixed
+  300px pairing SVG pushed it 9-64px sideways, and the numbers panel above the
+  map put the x-axis at 818-868px of the 820px frame. Fixed: the map's iframe
+  spans a phone's screen 8px from each edge (`static/app.css`, phones only;
+  frames 359/374/414px), the SVG scales (`.linkdiag max-width:100%`), and on
+  frames <=520px the map comes first with its numbers under it (x-axis at
+  ~404px). Hover/explain now pick the NEAREST dot - on a phone AAPL and MSFT
+  sit 8px apart and a finger on MSFT read "AAPL". Probe: iPhone frames
+  (m414/m374/m359/m320, touch, 3x) failing on main first; `site_check` phone
+  pass now measures the map inside the real page. Desktop: 0px dot shift.
 - ✅ **Deep scan, every inch (2026-10-15)** - `tools/deep_scan.mjs` (Live audit
   steps 10-11) walks the page as a visitor meets it, then drives every control,
   and measures each button's flight frame by frame. What it found on the live
