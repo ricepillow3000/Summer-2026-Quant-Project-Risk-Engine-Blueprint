@@ -3270,6 +3270,80 @@ def test_no_raw_exception_text_reaches_the_page():
     assert not hits, f"exception text interpolated onto the page: {hits}"
 
 
+# --- council fixes 2026-10-17: replay ---
+def test_replay_excludes_an_asset_priced_at_or_below_zero_in_the_window():
+    """WTI (CL=F) settled -37.63 on 2020-04-20. pct_change() divides by that
+    negative base, so the +47.64 $/bbl rebound to 10.01 replayed as -126.6%
+    and the Futures x COVID verdict read CVaR 99.99%. Simple returns are
+    undefined across a sign change: the name is excluded (and so disclosed),
+    the rest keep the window."""
+    import src.scenarios as sc
+
+    idx = pd.bdate_range("2020-03-02", periods=30)
+    px = pd.DataFrame({"CL": np.linspace(30.0, 20.0, 30),
+                       "ES": np.linspace(3000.0, 2800.0, 30)}, index=idx)
+    px.loc[idx[15], "CL"], px.loc[idx[16], "CL"] = -37.63, 10.01
+    start, end = idx[5], idx[25]
+    orig = sc.fetch_prices
+    try:
+        sc.fetch_prices = lambda *a, **k: px
+        r = sc.replay_returns(["CL", "ES"], str(start.date()), str(end.date()))
+        assert list(r.columns) == ["ES"], (
+            f"a negative price was replayed as returns: {list(r.columns)}, "
+            f"CL on {idx[16].date()} = {r['CL'].get(idx[16]) if 'CL' in r else None}")
+        assert r.index[0] == start and r.index[-1] == end, (r.index[0], r.index[-1])
+
+        # A non-positive close just BEFORE the window is the lead-in base for
+        # the opening bar: it must not be used either.
+        lead_neg = px.copy()
+        lead_neg.loc[idx[4], "ES"] = -1.0
+        lead_neg["CL"] = np.linspace(30.0, 20.0, 30)
+        sc.fetch_prices = lambda *a, **k: lead_neg
+        r2 = sc.replay_returns(["CL", "ES"], str(start.date()), str(end.date()))
+        assert (r2.loc[start:] > -1.0).all().all() and start not in r2.index, (
+            "a non-positive lead-in close was used as the opening bar's base")
+    finally:
+        sc.fetch_prices = orig
+
+
+def test_replay_excludes_a_name_that_lists_partway_through_the_window():
+    """IVV listed 2000-05-15 and IWM 2000-05-22, inside the Dot-com window
+    (2000-03-01..2001-04-30). The row-wise dropna cut EVERY name to the late
+    listing, so 'Index core' lost the Mar-May 2000 leg while the caption
+    claimed the full window and named nothing as excluded. A late lister is
+    now excluded like an absent one, and the survivors keep the window."""
+    import src.scenarios as sc
+
+    idx = pd.bdate_range("2000-02-01", periods=80)
+    px = pd.DataFrame({"SPY": np.linspace(140.0, 120.0, 80),
+                       "QQQ": np.linspace(200.0, 150.0, 80),
+                       "IWM": np.linspace(50.0, 45.0, 80)}, index=idx)
+    start, end = idx[20], idx[70]
+    px.loc[:idx[45], "IWM"] = np.nan           # lists 25 sessions into the window
+    px.loc[:idx[21], "QQQ"] = np.nan           # first print 2 sessions late: a holiday, kept
+    orig = sc.fetch_prices
+    try:
+        sc.fetch_prices = lambda *a, **k: px
+        r = sc.replay_returns(["SPY", "QQQ", "IWM"], str(start.date()), str(end.date()))
+        assert "IWM" not in r.columns and set(r.columns) == {"SPY", "QQQ"}, (
+            f"late lister kept and the window cut to {r.index[0].date()}: {list(r.columns)}")
+        assert r.index[0] <= idx[23] and r.index[-1] == end, (r.index[0], r.index[-1])
+    finally:
+        sc.fetch_prices = orig
+
+
+def test_replay_caption_states_the_dates_actually_replayed():
+    """The caption printed the nominal window from HISTORICAL_REGIMES, so a
+    replay cut short still claimed the whole crisis. It must be built from the
+    replayed returns' own first and last dates."""
+    src = (pathlib.Path(__file__).resolve().parent.parent / "main.py"
+           ).read_text(encoding="utf-8")
+    lines = [ln for ln in src.splitlines() if "Replaying actual market returns from" in ln]
+    assert len(lines) == 1, lines
+    assert "shocked_returns.index[0]" in lines[0] and "shocked_returns.index[-1]" in lines[0], (
+        f"caption does not print the replayed dates: {lines[0].strip()}")
+
+
 if __name__ == "__main__":
     import sys
 

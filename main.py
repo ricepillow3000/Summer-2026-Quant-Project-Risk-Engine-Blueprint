@@ -1336,8 +1336,9 @@ with deck_stress, st.expander("03 · Stress test - shock or replay a crisis",
             "Volatility shock", 0, 300, 0, step=10,
             help="Scales the spread of daily returns to simulate a higher-vol regime.")
     else:
-        s_date, e_date = HISTORICAL_REGIMES[mode]
-        st.caption(f"Replaying actual market returns from {s_date} to {e_date}.")
+        # Filled once the replay is built: the nominal window claimed the whole
+        # crisis even when a late lister had cut the replay short.
+        replay_caption = st.empty()
 
 # Build the return distribution + weights the simulation will sample from.
 if mode == "Custom shock (sliders)":
@@ -1364,6 +1365,7 @@ else:
     if len(sim_assets) < 2:
         st.warning(f"Too few of your assets traded during {mode}. Try another scenario.")
         st.stop()
+    replay_caption.caption(f"Replaying actual market returns from {shocked_returns.index[0].date()} to {shocked_returns.index[-1].date()}.")
     idx = [loaded.index(a) for a in sim_assets]
     sim_weights = weights[idx]
     sim_weights = sim_weights / sim_weights.sum() * weights.sum()  # preserve exposure
@@ -1448,7 +1450,7 @@ if scenario_label:
         # widening the regex later.
         verdict += (" *(Excludes "
                     + ", ".join(html.escape(t) for t in excluded)
-                    + " - not trading in that period.)*")
+                    + " - not trading for the whole period, or priced at or below zero in it.)*")
 else:
     verdict = (
         f"In the worst 5% of simulated years, {alloc_art} {alloc_label} portfolio of these "

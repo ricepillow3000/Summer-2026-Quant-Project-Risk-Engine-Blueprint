@@ -13,7 +13,10 @@ Quant Deep Dive:
 
 Honest limits:
 - An asset that didn't trade during the window (later IPO, new ETF, an FX pair
-  Yahoo lacks history for) is excluded from that scenario, and we say so.
+  Yahoo lacks history for) is excluded from that scenario, and we say so. So
+  is one that lists more than MAX_LEAD_GAP_DAYS after the window opens (it
+  would cut every survivor's window short) and one priced at or below zero
+  in it (simple returns are undefined across a sign change).
 - Magnitudes are whatever actually happened; nothing is hand-tuned.
 """
 
@@ -45,7 +48,9 @@ def replay_returns(tickers: list[str], start: str, end: str) -> pd.DataFrame:
 
     Pulls full history WITHOUT cross-asset date alignment (so different IPO
     dates don't truncate everyone), slices the window, drops assets with no
-    data in it, then aligns the surviving subset within the window.
+    data in it, a non-positive price in it, or a first price more than
+    MAX_LEAD_GAP_DAYS after the earliest one, then aligns the surviving subset
+    within the window.
 
     The window's OPENING day is included. pct_change() taken inside the slice
     has no prior close to measure the first bar against, so it used to drop
@@ -57,6 +62,14 @@ def replay_returns(tickers: list[str], start: str, end: str) -> pd.DataFrame:
     prices = fetch_prices(tickers, period="max", align=False)
     window = prices.loc[start:end]
     window = window.dropna(axis=1, how="all")  # drop assets absent in this window
+    # Simple returns are undefined across a sign change: WTI's -37.63 settle
+    # (2020-04-20) turned a +47.64 $/bbl rebound into a -126.6% "loss".
+    window = window.loc[:, (window > 0).sum() == window.notna().sum()]
+    # A name that lists partway in would drag every survivor's start to its
+    # listing (IVV/IWM cut Mar-May 2000 off Dot-com), so it counts as absent.
+    if not window.empty:
+        firsts = window.notna().idxmax()
+        window = window.loc[:, firsts <= firsts.min() + pd.Timedelta(days=MAX_LEAD_GAP_DAYS)]
     window = window.dropna()                    # align the survivors over the window
     if window.empty:
         return window
@@ -68,8 +81,10 @@ def replay_returns(tickers: list[str], start: str, end: str) -> pd.DataFrame:
     # weeks earlier - a name that had not traded, or a gap in the feed - would
     # manufacture a multi-week move and label it one day, which is worse than
     # losing the bar. Beyond the guard the old behaviour stands and the window
-    # opens on day two, honestly short one observation.
-    if not lead.empty and (first - lead.index[-1]).days <= MAX_LEAD_GAP_DAYS:
+    # opens on day two, honestly short one observation. A lead-in close at or
+    # below zero is refused for the same sign-change reason as above.
+    if (not lead.empty and (first - lead.index[-1]).days <= MAX_LEAD_GAP_DAYS
+            and (lead.to_numpy() > 0).all()):
         window = pd.concat([lead, window])
     return window.pct_change().dropna()
 
