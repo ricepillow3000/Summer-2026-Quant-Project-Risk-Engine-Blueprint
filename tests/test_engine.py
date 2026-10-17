@@ -3787,6 +3787,22 @@ def test_metric_labels_and_values_wrap_instead_of_ending_in_an_ellipsis():
         assert re.search(r"text-overflow:\s*clip", body), f"{part} still ends in an ellipsis"
 
 
+def test_section_titles_wrap_instead_of_running_out_of_their_box():
+    """Live audit run 30 on 77dcccd (device_check, iPhone SE): "VALUE AT RISK -
+    METHODS & BACKTEST" needed 304px of a 301px box and was cut off. The
+    .panel-head title was nowrap; measured at 375px, 5 of 25 titles were wider
+    than their box ("Distribution of simulated 1-year outcomes": 374px of 263).
+    The lintel is flex-wrap, so a title that fits renders the same either way;
+    one that does not must wrap, never run out of its box."""
+    import re
+    css = (pathlib.Path(__file__).resolve().parent.parent / "static" / "app.css"
+           ).read_text(encoding="utf-8")
+    rules = re.findall(r"([^{}]+)\{([^}]*)\}", css)
+    body = " ".join(b for sel, b in rules if re.search(r"\.panel-head\s+\.t\b", sel))
+    assert body, "the .panel-head title rule moved"
+    assert not re.search(r"white-space:\s*nowrap", body), "section titles still kept to one line"
+
+
 def test_every_browser_pick_checks_the_option_took():
     """Live audit run 30, both attempts: recruiter_walk's pick() clicked an
     option, pressed Escape and returned, but the choice had not landed - the

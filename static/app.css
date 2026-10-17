@@ -342,9 +342,11 @@ a.cta-btn:focus-visible, .stButton>button:focus-visible,
       animation-timeline: view(); animation-range: entry 0% cover 20%; }
   @keyframes lintel-draw { to { transform: scaleX(1); } }
 }
+/* Wraps rather than nowrap: on a 375px phone 5 of 25 titles ran out of their
+   box and one was cut off (device_check, 2026-10-17). The lintel is
+   flex-wrap, so a title that fits still sits on one line. */
 .panel-head .t { font-family: 'Helvetica Neue', sans-serif; font-size: 11.5px;
-    letter-spacing: 0.2em; text-transform: uppercase; color: #3F3B35;
-    white-space: nowrap; }
+    letter-spacing: 0.2em; text-transform: uppercase; color: #3F3B35; }
 .panel-head .s { font-size: 13px; color: #ABA499; line-height: 1.5; }
 
 /* Charts glide in with the panel instead of popping */
