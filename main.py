@@ -1086,18 +1086,18 @@ def load_dollar_volume(tickers_tuple: tuple[str, ...], period: str = "2y"):
 
 @st.cache_data(ttl=3600, max_entries=32, show_spinner="Assembling the book…")
 def load_book(px, dv, book_value: float, participation_rate: float,
-              grit_floor: bool, anchors: tuple[str, ...]):
+              grit_floor: bool, anchors: tuple[str, ...], grit: dict):
     """Cached because Streamlit re-executes this whole script on EVERY widget
     interaction, and build_book is not cheap: risk_parity_weights runs 10,000
     coordinate-descent iterations and grit_scores replays every named crisis
     window per ticker. Uncached, dragging the participation slider recomputed
     the entire book on each frame - one visitor holding a slider could pin the
-    single process this app deploys as. The cache key is exactly the six inputs
-    that change the answer."""
+    single process this app deploys as. The cache key is exactly the seven
+    inputs that change the answer."""
     return build_book(px, dv, book_value=book_value,
                       participation_rate=participation_rate,
                       flyer_grit_floor=grit_floor,
-                      fallback_anchors=set(anchors) or None)
+                      fallback_anchors=set(anchors) or None, grit=grit)
 
 
 @st.cache_data(ttl=3600, max_entries=32, show_spinner="Reading the defensive shelf…")
@@ -1672,9 +1672,13 @@ try:
             _bk_dv = pd.concat(
                 [_bk_dv, _a_dv[_keep].reindex(prices.index)], axis=1)
             _bk_anchors = set(_keep)
+    # Grit from FULL history, as the Grit Zone tab scores it - not from the
+    # 2y `prices`, where no named crisis falls and every name's resilience
+    # third read 0 (NVDA 6.9 here vs 73.2 in the tab, council 2026-10-17).
     _the_book = load_book(
         _bk_px, _bk_dv.fillna(0.0), float(_book_size), _book_part,
-        _bk_floor, tuple(sorted(_bk_anchors or ())))
+        _bk_floor, tuple(sorted(_bk_anchors or ())),
+        load_grit(tuple(_bk_px.columns)))
 
     st.markdown(
         f'<div style="background:#F1EDE5;border:1px solid #C4BDAE;'
@@ -1944,7 +1948,12 @@ with tab_breakdown:
     rf = load_risk_free_rate()
     ann_ret = float(port_returns.mean()) * 252
     ann_vol = float(port_returns.std()) * np.sqrt(252)
-    sharpe = sharpe_ratio(port_returns, rf if rf is not None else 0.0)
+    # Unlevered book (base_weights): on the vol-targeted weights Sharpe was
+    # (L*mu - rf)/(L*sigma) - idle cash at 0, borrowing free - so the slider
+    # moved it 1.615 -> 0.975 for the same strategy. With cash and financing at
+    # rf, Sharpe is leverage-invariant (Sharpe 1994). Council 2026-10-17.
+    sharpe = sharpe_ratio((-1 if bearish else 1) * (returns @ base_weights),
+                          rf if rf is not None else 0.0)
     s1, s2, s3 = st.columns(3)
     s1.metric("Sharpe ratio", f"{sharpe:.2f}")
     s2.metric("Annualized return", f"{ann_ret:+.1%}")
@@ -1956,6 +1965,10 @@ with tab_breakdown:
         f"the real (unshocked) "
         f"{'synthetic short book (daily-rebalanced; borrow costs not modeled)' if bearish else 'portfolio'}. "
         f"Risk-free rate: {rf_txt}."
+        + (" Sharpe is taken on the unlevered book: the vol-target overlay only "
+           "rescales it, and with idle cash and borrowing at the risk-free rate "
+           "rescaling leaves Sharpe unchanged. Return and volatility beside it "
+           "are the levered book's." if use_vt else "")
     )
 
 
@@ -2257,10 +2270,15 @@ with tab_balance:
     else:
         try:
             corr_b = correlation_matrix(returns)
-            default_anchor = loaded[int(np.argmax(weights))]  # your biggest position
+            # Keyed, with the default seeded only when no valid choice is
+            # stored: an index= that followed argmax(weights) re-created the
+            # widget on every Weighting change and silently replaced the
+            # visitor's anchor (council 2026-10-17).
+            if st.session_state.get("balance_anchor") not in loaded:
+                st.session_state["balance_anchor"] = loaded[int(np.argmax(weights))]  # your biggest position
             anchor = st.selectbox(
                 "Anchor (the position you want to balance)", loaded,
-                index=loaded.index(default_anchor))
+                key="balance_anchor")
             ranked = rank_hedges(corr_b, anchor)
 
             # Classify by correlation STRENGTH, not just sign: a name at −0.01

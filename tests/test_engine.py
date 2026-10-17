@@ -3270,6 +3270,162 @@ def test_no_raw_exception_text_reaches_the_page():
     assert not hits, f"exception text interpolated onto the page: {hits}"
 
 
+# --- council fixes 2026-10-17: book-sharpe-anchor ---
+
+def _offline_market_prices(tickers=None, period="2y", **_kw):
+    """Ten years of a deterministic market for booting main.py without Yahoo:
+    one common factor with rare crash days (so named crises leave a drawdown
+    for grit to replay) and a per-ticker beta and idio vol seeded by name."""
+    import hashlib
+    from src.ingestion import DEFAULT_UNIVERSE
+    idx = pd.bdate_range(end="2026-10-14", periods=252 * 10)
+    rng = np.random.default_rng(7)
+    mkt = rng.normal(0.0004, 0.011, len(idx))
+    mkt[rng.random(len(idx)) < 0.004] -= 0.05
+    cols = {}
+    for t in list(tickers or DEFAULT_UNIVERSE):
+        r = np.random.default_rng(int(hashlib.md5(t.encode()).hexdigest()[:8], 16))
+        beta, idio = r.uniform(0.3, 1.6), r.uniform(0.10, 0.40)
+        ret = beta * mkt + r.normal(0.0002, idio / np.sqrt(252), len(idx))
+        cols[t] = 100 * np.exp(np.cumsum(np.log1p(np.clip(ret, -0.6, 0.6))))
+    years = {"1y": 1, "2y": 2, "5y": 5, "10y": 10}.get(period, 10)
+    return pd.DataFrame(cols, index=idx).iloc[-252 * years:]
+
+
+def _offline_app(setup=None):
+    """Run the real main.py under AppTest on _offline_market_prices; returns
+    (AppTest, restore). Every src module is imported BEFORE patching, so a
+    module-level `from src.ingestion import fetch_prices` is patched and then
+    restored too, and the Streamlit cache is cleared so no synthetic frame
+    outlives the test."""
+    import importlib
+    import pkgutil
+    import sys
+    import src
+    from streamlit.testing.v1 import AppTest
+    import streamlit as st
+    for m in pkgutil.iter_modules(src.__path__):
+        importlib.import_module(f"src.{m.name}")
+    fakes = {
+        "fetch_prices": _offline_market_prices,
+        "fetch_dollar_volume": lambda tickers=None, period="2y", **k: pd.DataFrame(
+            5e9, index=_offline_market_prices(tickers, period).index,
+            columns=list(tickers)),
+        "average_dollar_volume": lambda tickers=None, *a, **k: pd.Series(
+            5e9, index=list(tickers or [])),
+        "fetch_risk_free_rate": lambda *a, **k: 0.045,
+        "provenance": lambda *a, **k: None,
+    }
+    saved = []
+    for name, mod in list(sys.modules.items()):
+        if name.startswith("src."):
+            for attr, fake in fakes.items():
+                if hasattr(mod, attr):
+                    saved.append((mod, attr, getattr(mod, attr)))
+                    setattr(mod, attr, fake)
+
+    def restore():
+        for mod, attr, orig in saved:
+            setattr(mod, attr, orig)
+        st.cache_data.clear()
+
+    try:
+        app = pathlib.Path(__file__).resolve().parent.parent / "main.py"
+        at = AppTest.from_file(str(app), default_timeout=300)
+        at.run()
+        assert not at.exception, f"app raised: {[e.value for e in at.exception]}"
+    except BaseException:
+        restore()
+        raise
+    return at, restore
+
+
+def _book_grit(at) -> dict:
+    """{ticker: grit} as The Book's sentences print it ("grit 73 of 100")."""
+    import re
+    out = {}
+    for m in at.markdown:
+        hit = re.search(r'line-height:1\.55;">([A-Z0-9.^=-]+) .*?grit (\d+) of 100',
+                        m.value)
+        if hit:
+            out[hit.group(1)] = int(hit.group(2))
+    return out
+
+
+def test_the_books_grit_is_the_grit_zones_full_history_grit():
+    """Council 2026-10-17: The Book scored grit on the 2-year window, where no
+    named crisis falls, so the resilience third was 0 for every name and the
+    same page printed NVDA 6.9 in the Book against 73.2 in the Grit Zone tab.
+    Grit is LONG-horizon (src/narrative.py ruling): the Book must print the
+    tab's numbers for the same universe."""
+    at, restore = _offline_app()
+    try:
+        loaded = list([w for w in at.selectbox if w.label.startswith("Anchor")][0].options)
+        # Defensive anchors widen the Book's peer group (stated on screen as
+        # "across N names"); with them off the two universes are identical.
+        at.toggle(key="book_fallback").set_value(False).run()
+        tab = grit_scores(loaded)["scores"]["grit_score"]
+        book = _book_grit(at)
+        assert set(book) and set(book) <= set(loaded), f"no Book grit parsed: {book}"
+        wrong = {t: (g, round(float(tab[t]))) for t, g in book.items()
+                 if g != round(float(tab[t]))}
+        assert not wrong, f"Book grit vs Grit Zone grit (book, tab): {wrong}"
+        # With the defensive shelf on, still full history - over the Book's
+        # own universe, the peer group its sentences name.
+        at.toggle(key="book_fallback").set_value(True).run()
+        book = _book_grit(at)
+        from src.pairing import DEFENSIVE_ANCHOR_TICKERS
+        full = grit_scores(loaded + [t for t in DEFENSIVE_ANCHOR_TICKERS
+                                     if t not in loaded])["scores"]["grit_score"]
+        wrong = {t: (g, round(float(full[t]))) for t, g in book.items()
+                 if g != round(float(full[t]))}
+        assert not wrong, f"Book grit vs full-history grit (book, full): {wrong}"
+    finally:
+        restore()
+
+
+def test_sharpe_does_not_move_with_the_vol_target_slider():
+    """Council 2026-10-17: Sharpe was taken on returns @ vol-targeted weights,
+    i.e. (L*mu - rf)/(L*sigma) - idle cash earning 0 and borrowing free - so
+    the same strategy read 1.615 unlevered and 0.975 at L=0.28. With cash and
+    financing at rf, Sharpe is leverage-invariant (Sharpe 1994)."""
+    at, restore = _offline_app()
+    try:
+        def sharpe():
+            return [m.value for m in at.metric if m.label == "Sharpe ratio"][0]
+        plain = sharpe()
+        [c for c in at.checkbox if c.label == "Target volatility"][0].check().run()
+        for tv in (5, 10, 30):
+            [s for s in at.slider if s.label == "Target annual vol (%)"][0].set_value(tv).run()
+            assert sharpe() == plain, (
+                f"Sharpe {sharpe()} at a {tv}% vol target vs {plain} unlevered")
+        cap = " ".join(c.value for c in at.caption if c.value.startswith("Sharpe ="))
+        assert "unlevered" in cap, f"Sharpe caption does not say what it is on: {cap}"
+    finally:
+        restore()
+
+
+def test_changing_weighting_keeps_the_visitors_balance_anchor():
+    """Council 2026-10-17: the Balance-tab anchor had no key and its index
+    followed argmax(weights), so switching Weighting re-created the widget and
+    silently swapped the visitor's anchor (GOOGL -> NVDA) and every number
+    under it. Weighting does not enter the Balance maths at all."""
+    at, restore = _offline_app()
+    try:
+        def anchor():
+            return [w for w in at.selectbox if w.label.startswith("Anchor")][0]
+        default = anchor().value
+        pick = [o for o in anchor().options if o != default][-1]
+        anchor().set_value(pick).run()
+        assert anchor().value == pick
+        [r for r in at.radio if r.label == "Weighting"][0].set_value("Risk parity").run()
+        assert anchor().value == pick, (
+            f"anchor became {anchor().value} after a Weighting change; visitor chose {pick}")
+        assert not at.exception, [e.value for e in at.exception]
+    finally:
+        restore()
+
+
 if __name__ == "__main__":
     import sys
 
