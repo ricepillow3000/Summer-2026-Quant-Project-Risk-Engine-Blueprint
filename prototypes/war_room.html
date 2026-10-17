@@ -238,7 +238,7 @@ select {
   scrollbar-width: thin; scrollbar-color: rgba(154,123,79,0.4) transparent; }
 .detail::-webkit-scrollbar { width: 6px; }
 .detail::-webkit-scrollbar-thumb { background: rgba(154,123,79,0.4); }
-.linkdiag { display: block; margin: 0 auto 8px; }
+.linkdiag { display: block; margin: 0 auto 8px; max-width: 100%; height: auto; }  /* 300px drawing: scales down in a phone's frame instead of pushing the map sideways */
 .dgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 6px; }
 .dcell { border: 1px solid var(--line); border-top: 2px solid var(--bronze);
   border-radius: 6px; padding: 8px 10px 7px; background: rgba(21,18,13,0.45); }
@@ -346,6 +346,16 @@ select {
      forcing the whole row wider than the canvas. */
   .chip { white-space: normal; }
   #histCv { width: 100px; }
+}
+/* ---- phone: the map first ------------------------------------------------
+   An iPhone shows ~660-750px of this 820px frame at once. With the HUD on top
+   (370-450px) the x-axis sat at 782px, below the screen. On a phone the map
+   leads, its identity chips under it, then the numbers and the controls -
+   the page's headline CVaR still leads the page above the tabs. */
+@media (max-width: 520px) {
+  .stage { order: 1; }
+  .chipbar { order: 2; }
+  .hud { order: 3; }
 }
 </style>
 </head>
@@ -1123,11 +1133,22 @@ const EXPLAIN = {
     'Every thread is one simulated 30-day future of the book, stepping day by day through dynamics calibrated on its real history. The bright web is where futures crowd; ember threads crossed the danger line.'],
 };
 
+/* the asset nearest the pointer within r px: on a phone's narrow plot two dots
+   can sit closer than r (AAPL/MSFT 8px), and the first one in range was not
+   the one under the finger */
+function nearestAsset(x, y, r) {
+  let best = null, bd = r;
+  for (const a of DEMO.assets) {
+    const d = Math.hypot(toX(a.b) - x, toY(a.v) - y);
+    if (d < bd) { bd = d; best = a; }
+  }
+  return best;
+}
+
 function explainTarget(x, y) {
   /* priority: units > portfolio > links > perimeter > rings > iso > axes > tail > terrain */
-  for (const a of DEMO.assets) {
-    if (Math.hypot(toX(a.b) - x, toY(a.v) - y) < 10) return EXPLAIN.asset(a.t, a.f);
-  }
+  const near = nearestAsset(x, y, 10);
+  if (near) return EXPLAIN.asset(near.t, near.f);
   if (Math.hypot(toX(DEMO.base.beta) - x, toY(DEMO.base.vol) - y) < 20) return EXPLAIN.portfolio();
   if (S.links) {
     for (let i = 0; i < DEMO.pairs.length; i++) {
@@ -1467,10 +1488,8 @@ shell.addEventListener('mousemove', e => {
     return;
   }
   S.mouse = { x: x, y: y };
-  let hov = null;
-  for (const a of DEMO.assets) {
-    if (Math.hypot(toX(a.b) - x, toY(a.v) - y) < 9) { hov = a.t; break; }
-  }
+  const near = nearestAsset(x, y, 9);
+  const hov = near ? near.t : null;
   if (hov !== S.hoverAsset) { S.hoverAsset = hov; drawIntel(); }
   drawOverlay();
   const inPlot = x > PAD.l && x < W - PAD.r && y > PAD.t && y < H - PAD.b;

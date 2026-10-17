@@ -109,6 +109,34 @@ for (const [label, w, h] of [['desktop', 1440, 900], ['phone', 390, 844]]) {
       ok(m.base > 0.5 && m.trail > 0, `desktop: terrain and tracer paths drawn (terrain ${(m.base * 100).toFixed(0)}%, tracers ${(m.trail * 100).toFixed(1)}% of canvas)`);
     }
   }
+  if (label === 'phone') {
+    // The map on an iPhone (2026-10-17): it shipped in a 278px frame inside the
+    // page's 56px gutters, scrolled sideways and put its x-axis below the
+    // screen. Strict on this commit's app (SEO) and on main (EXPECT_BUILD);
+    // a branch run against the not-yet-deployed site only reports.
+    const strict = !!(process.env.SEO || process.env.EXPECT_BUILD);
+    const check = (cond, msg) => (strict ? ok(cond, msg) : console.log(`${cond ? 'INFO ' : 'INFO  (not yet deployed)'} ${msg}`));
+    let map = null;
+    for (let i = 0; i < 60 && !map; i++) {
+      for (const f of page.frames()) {
+        if (await f.$('#cvTrail').catch(() => null)) { map = f; break; }
+      }
+      if (!map) await page.waitForTimeout(1000);
+    }
+    check(!!map, 'phone: Risk Topology map frame rendered');
+    if (map) {
+      const box = await (await map.frameElement()).boundingBox();
+      check(box && box.width >= w - 32, `phone: map frame uses the screen (${Math.round(box ? box.width : 0)}px of ${w})`);
+      await map.waitForFunction(() => typeof S !== 'undefined' && S.cloud, null, { timeout: 60000 }).catch(() => null);
+      const m = await map.evaluate(() => {
+        const cv = document.getElementById('cvBase').getBoundingClientRect();
+        return { sideways: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+                 axis: Math.round(cv.top + (H - PAD.b) * cv.height / H) };
+      });
+      check(m.sideways <= 0, `phone: nothing in the map scrolls sideways (${m.sideways}px)`);
+      check(m.axis + 20 <= 700, `phone: the map's x-axis is on the first screen (${m.axis}px into the frame)`);
+    }
+  }
   await page.locator('.verdict-number').scrollIntoViewIfNeeded();
   await page.screenshot({ path: `${outdir}/${label}-verdict.png` });
   ok(!errors.length, `${label}: no script errors${errors.length ? ` (${errors.slice(0, 2)})` : ''}`);
