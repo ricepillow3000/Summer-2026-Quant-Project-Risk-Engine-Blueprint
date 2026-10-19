@@ -450,6 +450,27 @@ risk-engine/
   as "1 -> 0.995"; the pair_weights docstring kept the false "flyer holds most
   of the risk". Swept every 10px, 360-1920: clean. Below 360px the plot is
   narrower than 260px - the screen, not the layout. Desktop dots unchanged.
+- ✅ **Round 2 of John's laptop test (2026-10-19)** - six complaints, four
+  investigators, a four-member council, each fix test-first:
+  (1) the "Explore what we do" glide aimed once at a showcase row still rising
+  24px on its reveal - overshoot 8-11px, then a crawl back - fought the wheel,
+  flew two flights on a double press, and re-sent the off-screen map's five
+  canvases every frame. Now it follows the target (2px/frame cap), flies one
+  flight, yields to wheel/touch/keys and skips the map's rendering only while
+  flying: 1536x864@1.25, 4x CPU, frame median 50 -> 16.7 ms, overshoot 11 -> 0;
+  wheel reversals 8 -> 0-1. (2) the grit spinner says "Reading full price
+  histories for the grit scores…" (no "Yahoo is the slow part"). (3) "Explain
+  the map" opens a glossary under itself at every width. (4) "pp" -> "16.8
+  points shallower"; the Balance sentence and crisis table say percentage
+  points, not a misleading %. (5) the HUD chips: the app gives the map
+  1471-1488px, just past the old 1470px breakpoint, so they ran out of the
+  band - now a wrapping row at every width. (6) no "OU" on the tiles; chips in
+  words (beta, vol, Baseline), every short form in the glossary. Rule tests:
+  `test_the_glide_follows_a_moving_target_and_yields_to_the_reader`,
+  `test_every_short_form_on_the_map_is_in_its_glossary`,
+  `test_the_pairing_never_shows_pp_or_percent_for_a_points_gap`,
+  `test_every_spinner_is_a_few_calm_words`; map_layout.mjs runs the app's real
+  desktop widths with a Windows-width font.
 - ✅ **The buttons respect reduced motion (2026-10-19)** - John's call on the
   one gap the council flagged: ACCESSIBILITY.md promised every animation honours
   `prefers-reduced-motion`, but the 1.5 s glide is JavaScript, which no media

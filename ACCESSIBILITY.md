@@ -36,7 +36,12 @@ falls short**, so nobody has to discover a gap the hard way.
   and pairings are plotted. It is generated from the same simulation the picture
   is drawn from, so the two cannot drift apart.
 - **Keyboard:** interactive elements take focus and show a visible bronze focus
-  ring; the page is operable without a mouse.
+  ring; the page is operable without a mouse. On the Risk Topology map,
+  "Explain the map" opens a glossary of every short form directly under the
+  button (`aria-expanded`, `aria-controls`); Escape closes it and focus stays on
+  the button. Its text uses only tones that clear AA on the map's dark glass.
+  A button glide stops the moment the reader scrolls, swipes or presses a
+  scroll key.
 - **Motion:** every animation is wrapped in `prefers-reduced-motion`, and the
   map's particle loop idles when off-screen. Nothing flashes. The buttons'
   glide is JavaScript, so it asks the same setting itself and lands at once.
