@@ -3815,6 +3815,36 @@ def test_the_tab_strip_keeps_its_slot_whatever_the_basket():
         restore()
 
 
+def test_every_cached_yahoo_pull_says_what_it_is_doing():
+    """John, 2026-10-19: changing basket, the Grit Zone "looked stalled, as if
+    the project crashed". Grit maths takes 0.2 s; the wait is a new basket's
+    first full-history pulls from Yahoo, and four of them showed nothing (one
+    showed Streamlit's developer text, "Running load_risk_free_rate()"). Every
+    cached function that reaches the feed must say, in words, what it is
+    doing while it waits."""
+    import ast
+    src = (pathlib.Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
+    feed = {"fetch_prices", "fetch_dollar_volume", "average_dollar_volume",
+            "fetch_risk_free_rate", "grit_scores", "crisis_cushion", "replay_returns",
+            "anchor_frame", "build_map_payload", "load_conviction", "security_master"}
+    silent = []
+    for fn in ast.walk(ast.parse(src)):
+        if not isinstance(fn, ast.FunctionDef):
+            continue
+        deco = [d for d in fn.decorator_list if isinstance(d, ast.Call)
+                and ast.unparse(d.func) == "st.cache_data"]
+        calls = {ast.unparse(c.func).split(".")[-1] for c in ast.walk(fn)
+                 if isinstance(c, ast.Call)}
+        if not deco or not (calls & feed):
+            continue
+        spin = {k.arg: k.value for k in deco[0].keywords}.get("show_spinner")
+        words = (isinstance(spin, ast.Constant) and isinstance(spin.value, str)
+                 and spin.value.strip()) or isinstance(spin, ast.JoinedStr)
+        if not words:
+            silent.append(fn.name)
+    assert not silent, f"cached Yahoo pulls with no words on screen: {silent}"
+
+
 def test_section_titles_wrap_instead_of_running_out_of_their_box():
     """Live audit run 30 on 77dcccd (device_check, iPhone SE): "VALUE AT RISK -
     METHODS & BACKTEST" needed 304px of a 301px box and was cut off. The

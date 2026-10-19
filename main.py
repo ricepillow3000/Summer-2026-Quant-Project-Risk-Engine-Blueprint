@@ -1117,13 +1117,17 @@ def load_anchor_shelf(anchors: tuple[str, ...], period: str = "2y"):
             fetch_dollar_volume(list(anchors), period=period))
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner="Reading the 13-week T-bill rate…")
 def load_risk_free_rate():
     """Latest 13-week T-bill yield (^IRX) as an annual decimal, or None."""
     return fetch_risk_free_rate()
 
 
-@st.cache_data(ttl=3600, max_entries=32, show_spinner="Scoring the Grit Zone…")
+# The slow part is the pull, not the score (grit maths ~0.2 s): say so, so a
+# first visit to a basket reads as working, not stalled (John, 2026-10-19).
+@st.cache_data(ttl=3600, max_entries=32, show_spinner=(
+    "Reading each name's full price history for its grit score - a new "
+    "basket's first pull from Yahoo is the slow part…"))
 def load_grit(tickers_tuple: tuple[str, ...]):
     """Grit scores need each asset's FULL price history, not just the 2y window
     used for VaR - grit_scores() pulls it separately (see src.grit)."""
@@ -1404,7 +1408,7 @@ def run_monte_carlo(rets: pd.DataFrame, w: np.ndarray, jump: bool) -> dict:
 # and the process serves sessions one at a time, so 10 simultaneous visitors
 # queued ~35s for the headline. All three are deterministic (the bootstrap is
 # seeded), so caching changes no number.
-@st.cache_data(ttl=3600, max_entries=32, show_spinner=False)
+@st.cache_data(ttl=3600, max_entries=32, show_spinner="Drawing the Risk Topology map…")
 def cached_map_payload(rets: pd.DataFrame, w: np.ndarray, names: tuple, short: bool) -> dict:
     return build_map_payload(rets, w, list(names), short)
 
@@ -2400,18 +2404,20 @@ with tab_balance:
             # "What goes up must come down. We can't cap the fall; we
             # measure the cushion." Council pass 6: cushion never cap,
             # ES@97.5 never CVaR@99, ranks never promises.
-            @st.cache_data(ttl=6 * 3600, max_entries=32, show_spinner=False)
+            @st.cache_data(ttl=6 * 3600, max_entries=32, show_spinner="Reading the defensive shelf…")
             def _bv_anchor_returns(universe_key: str):
                 """Universe returns joined with defensive ETF candidates
                 (Treasuries/gold/staples/utilities/min-vol) - an equity
                 basket usually cannot anchor itself."""
                 return anchor_frame(returns)
 
-            @st.cache_data(ttl=6 * 3600, max_entries=64, show_spinner=False)
+            @st.cache_data(ttl=6 * 3600, max_entries=64,
+                           show_spinner="Replaying this pair through each named crisis…")
             def _bv_crisis(a: str, b: str, w: float, short_a: bool = False):
                 return crisis_cushion(a, b, w, short_a=short_a)
 
-            @st.cache_data(ttl=6 * 3600, max_entries=32, show_spinner=False)
+            @st.cache_data(ttl=6 * 3600, max_entries=32,
+                           show_spinner="Reading full price histories to rank the anchors…")
             def _bv_grit(tickers: tuple):
                 """Grit scores for anchor candidates - the engine's founding
                 question ("who gets back up?") IS the Circle 2 screen."""
