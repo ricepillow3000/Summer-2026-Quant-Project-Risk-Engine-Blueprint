@@ -3787,6 +3787,34 @@ def test_metric_labels_and_values_wrap_instead_of_ending_in_an_ellipsis():
         assert re.search(r"text-overflow:\s*clip", body), f"{part} still ends in an ellipsis"
 
 
+def _tab_strip_slot(at) -> int:
+    """Top-level position of the first st.tabs block (the Risk Topology strip)."""
+    return next(i for i, c in at.main.children.items()
+                if getattr(c, "type", None) == "tab_container")
+
+
+def test_the_tab_strip_keeps_its_slot_whatever_the_basket():
+    """John, 2026-10-19: switching to MAG-7 showed the Risk Topology map twice.
+    Streamlit keys every element by its position; The Book wrote one top-level
+    card per name (17 on the default basket, 13 on MAG-7), so the tab strip
+    moved from slot 44 to 40 and the old strip, map and all, stayed on screen
+    faded until the run ended (~12 s offline, up to ~35 s live). The outside-
+    anchor toggle moved it too and reloaded the map for nothing. Nothing above
+    the tabs may change the number of top-level elements."""
+    at, restore = _offline_app()
+    try:
+        slots = {"default": _tab_strip_slot(at)}
+        at.selectbox[[w.label for w in at.selectbox].index("Preset basket")].set_value(
+            "Mega-cap tech (Mag 7 + QQQ)").run()
+        assert not at.exception, [e.value for e in at.exception]
+        slots["MAG-7"] = _tab_strip_slot(at)
+        at.toggle(key="book_fallback").set_value(False).run()
+        slots["no outside anchor"] = _tab_strip_slot(at)
+        assert len(set(slots.values())) == 1, f"tab strip moved: {slots}"
+    finally:
+        restore()
+
+
 def test_section_titles_wrap_instead_of_running_out_of_their_box():
     """Live audit run 30 on 77dcccd (device_check, iPhone SE): "VALUE AT RISK -
     METHODS & BACKTEST" needed 304px of a 301px box and was cut off. The

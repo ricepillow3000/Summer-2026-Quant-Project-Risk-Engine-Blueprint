@@ -994,8 +994,11 @@ _raw_syms = sorted({t.strip().upper() for t in chosen if t.strip()})
 # symbol deserves to know why it vanished.
 tickers = [t for t in _raw_syms if valid_ticker(t)]
 _rejected = [t for t in _raw_syms if not valid_ticker(t)]
+# Notices that come and go with the basket share ONE slot, so the tab strip
+# below never changes position (test_the_tab_strip_keeps_its_slot_whatever_the_basket).
+_notices = st.container()
 if _rejected:
-    st.warning(
+    _notices.warning(
         "Ignored "
         + ", ".join(f"`{t[:24]}`" for t in _rejected)
         + " - not a valid Yahoo Finance symbol. Symbols are letters, digits "
@@ -1008,7 +1011,7 @@ if len(tickers) > MAX_UNIVERSE:
     # cost lands on every other visitor. src/ingestion.py caps the funnel too,
     # so a caller that skips this check still cannot exceed the budget; this
     # branch exists so the cap is disclosed rather than silently applied.
-    st.warning(
+    _notices.warning(
         f"This engine analyzes up to **{MAX_UNIVERSE}** symbols at once - a "
         "deliberate compute budget on a public, single-process deployment. "
         f"Using the first {MAX_UNIVERSE} alphabetically; dropped "
@@ -1187,7 +1190,7 @@ if len(prices) < MIN_ROWS and len(tickers) > 1:
         _short = [t for t in _unaligned.columns if int(_coverage[t]) < MIN_ROWS]
         _keep = [t for t in tickers if t not in _short]
         if _short and len(_keep) >= 2:
-            st.warning(
+            _notices.warning(
                 "Excluded "
                 + ", ".join(f"`{html.escape(t)}` ({int(_coverage[t])} trading days)"
                             for t in _short)
@@ -1218,7 +1221,7 @@ returns = get_returns(prices)
 # the same way the short-history guard above treats a name it cannot use.
 _flat = flat_columns(returns)
 if _flat:
-    st.warning(
+    _notices.warning(
         "Excluded " + ", ".join(f"`{html.escape(t)}`" for t in _flat)
         + " - its price did not move once in this window (cash and money-market "
         "funds look like this), so it carries no measurable risk and has no "
@@ -1234,7 +1237,7 @@ if len(loaded) < 2:
              + ". Check the spelling or try different tickers.")
     st.stop()
 if missing:
-    st.caption(f"Couldn't load: {', '.join(missing)} - skipped.")
+    _notices.caption(f"Couldn't load: {', '.join(missing)} - skipped.")
 _audit("Data fetch", f"{len(loaded)} tickers loaded from {preset!r}: {', '.join(loaded)}"
       + (f" (missing: {', '.join(missing)})" if missing else ""))
 
@@ -1251,6 +1254,8 @@ st.caption(f"Data: {health['rows']} trading days · through {health['end']} · {
 prov_now = provenance(tickers)
 if prov_now:
     _freshness_ticker(prov_now["fetched_at_utc"])
+else:
+    st.empty()  # hold the ticker's slot: the tab strip below must not move
 
 # ---- Allocation + stress test: one control deck, side by side ----
 deck_alloc, deck_stress = st.columns(2, gap="medium")
@@ -1681,75 +1686,80 @@ _bk_fb = _bk4.toggle(
          "nothing inside your universe cushions, this lets the engine reach "
          "for TLT/GLD/XLP/XLU/USMV - and say on screen that it did.")
 
-try:
-    _bk_px = prices
-    _bk_dv = load_dollar_volume(tuple(tickers)).reindex(
-        columns=loaded).reindex(prices.index)
-    _bk_anchors = None
-    if _bk_fb:
-        _a_px, _a_dv = load_anchor_shelf(tuple(DEFENSIVE_ANCHOR_TICKERS))
-        _keep = [c for c in _a_px.columns if c not in loaded]
-        if _keep:
-            _bk_px = pd.concat(
-                [prices, _a_px[_keep].reindex(prices.index)], axis=1)
-            _bk_dv = pd.concat(
-                [_bk_dv, _a_dv[_keep].reindex(prices.index)], axis=1)
-            _bk_anchors = set(_keep)
-    # Grit from FULL history, as the Grit Zone tab scores it - not from the
-    # 2y `prices`, where no named crisis falls and every name's resilience
-    # third read 0 (NVDA 6.9 here vs 73.2 in the tab, council 2026-10-17).
-    _the_book = load_book(
-        _bk_px, _bk_dv.fillna(0.0), float(_book_size), _book_part,
-        _bk_floor, tuple(sorted(_bk_anchors or ())),
-        load_grit(tuple(_bk_px.columns)))
+# One slot, whatever the basket: The Book writes one card per name, and
+# Streamlit keys elements by position, so a card count that changed with the
+# basket moved the tab strip below it and left the old map on screen, faded,
+# beside the new one (John, 2026-10-19).
+with st.container():
+    try:
+        _bk_px = prices
+        _bk_dv = load_dollar_volume(tuple(tickers)).reindex(
+            columns=loaded).reindex(prices.index)
+        _bk_anchors = None
+        if _bk_fb:
+            _a_px, _a_dv = load_anchor_shelf(tuple(DEFENSIVE_ANCHOR_TICKERS))
+            _keep = [c for c in _a_px.columns if c not in loaded]
+            if _keep:
+                _bk_px = pd.concat(
+                    [prices, _a_px[_keep].reindex(prices.index)], axis=1)
+                _bk_dv = pd.concat(
+                    [_bk_dv, _a_dv[_keep].reindex(prices.index)], axis=1)
+                _bk_anchors = set(_keep)
+        # Grit from FULL history, as the Grit Zone tab scores it - not from the
+        # 2y `prices`, where no named crisis falls and every name's resilience
+        # third read 0 (NVDA 6.9 here vs 73.2 in the tab, council 2026-10-17).
+        _the_book = load_book(
+            _bk_px, _bk_dv.fillna(0.0), float(_book_size), _book_part,
+            _bk_floor, tuple(sorted(_bk_anchors or ())),
+            load_grit(tuple(_bk_px.columns)))
 
-    st.markdown(
-        f'<div style="background:#F1EDE5;border:1px solid #C4BDAE;'
-        f'border-top:2px solid #9A7B4F;border-radius:12px;padding:18px 22px;'
-        f'margin:6px 0 18px;font-family:Georgia,serif;font-size:17px;'
-        f'color:#3F3B35;line-height:1.5;">{headline(_the_book)}</div>',
-        unsafe_allow_html=True)
-
-    # Border tone carries the role (decorative, so bronze is allowed); the
-    # LABEL is words, so it uses the sanctioned on-beige text tone written as a
-    # LITERAL. test_text_colours_meet_wcag_aa scans main.py for `color:#RRGGBB`
-    # and an f-string placeholder hides the value from it - #8A6A3C sat at
-    # ~3.1:1 here unseen because it arrived through a variable.
-    _CHIP = {Role.FLYER: ("#8A6A3C", "#F6F2EA", "LEADS"),
-             Role.CUSHION: ("#3F3B35", "#EFEAE0", "ANCHOR"),
-             Role.EXCLUDED: ("#6B6459", "#EDE9E3", "LEFT OUT")}
-    for _d in _the_book:
-        _col, _bg, _lbl = _CHIP[_d.role]
-        _flag = (' &middot; <span style="color:#6A5030;">outside the chosen '
-                 'universe</span>' if _d.is_fallback_anchor else "")
-        # Redundant on a card that was already excluded FOR capacity - the
-        # sentence there already names the breakpoint.
-        _bind = (' &middot; <span style="color:#6A5030;">liquidity set this '
-                 'size, not risk</span>'
-                 if _d.liquidity_binding and _d.role is not Role.EXCLUDED else "")
         st.markdown(
-            f'<div style="display:flex;gap:14px;align-items:flex-start;'
-            f'background:{_bg};border-left:3px solid {_col};border-radius:8px;'
-            f'padding:12px 16px;margin-bottom:8px;">'
-            f'<div style="flex:0 0 86px;font-family:Helvetica Neue,sans-serif;'
-            f'font-size:9.5px;letter-spacing:.16em;color:#6A5030;'
-            f'padding-top:3px;">{_lbl}</div>'
-            f'<div style="flex:1;font-family:Georgia,serif;font-size:14px;'
-            f'color:#3F3B35;line-height:1.55;">{_d.sentence()}{_flag}{_bind}</div>'
-            f'</div>',
+            f'<div style="background:#F1EDE5;border:1px solid #C4BDAE;'
+            f'border-top:2px solid #9A7B4F;border-radius:12px;padding:18px 22px;'
+            f'margin:6px 0 18px;font-family:Georgia,serif;font-size:17px;'
+            f'color:#3F3B35;line-height:1.5;">{headline(_the_book)}</div>',
             unsafe_allow_html=True)
 
-    read_me(
-        "<b>Read it top to bottom.</b> Every line is a slot-filled template "
-        "over measured numbers - the renderer is handed the dossier and no "
-        "price data, so it cannot say anything the engine did not compute. "
-        "Change the book size and watch names leave: that is the liquidity "
-        "constraint doing real work, not a caption about it.")
-except Exception as _bk_exc:  # noqa: BLE001 - the page must never die on data
-    # safe_err, not str(exc): the message can carry a server path (see safe_err).
-    st.info(
-        f"The Book needs price and volume history for this universe "
-        f"({safe_err('the-book', _bk_exc)}). No placeholder book is shown.")
+        # Border tone carries the role (decorative, so bronze is allowed); the
+        # LABEL is words, so it uses the sanctioned on-beige text tone written as a
+        # LITERAL. test_text_colours_meet_wcag_aa scans main.py for `color:#RRGGBB`
+        # and an f-string placeholder hides the value from it - #8A6A3C sat at
+        # ~3.1:1 here unseen because it arrived through a variable.
+        _CHIP = {Role.FLYER: ("#8A6A3C", "#F6F2EA", "LEADS"),
+                 Role.CUSHION: ("#3F3B35", "#EFEAE0", "ANCHOR"),
+                 Role.EXCLUDED: ("#6B6459", "#EDE9E3", "LEFT OUT")}
+        for _d in _the_book:
+            _col, _bg, _lbl = _CHIP[_d.role]
+            _flag = (' &middot; <span style="color:#6A5030;">outside the chosen '
+                     'universe</span>' if _d.is_fallback_anchor else "")
+            # Redundant on a card that was already excluded FOR capacity - the
+            # sentence there already names the breakpoint.
+            _bind = (' &middot; <span style="color:#6A5030;">liquidity set this '
+                     'size, not risk</span>'
+                     if _d.liquidity_binding and _d.role is not Role.EXCLUDED else "")
+            st.markdown(
+                f'<div style="display:flex;gap:14px;align-items:flex-start;'
+                f'background:{_bg};border-left:3px solid {_col};border-radius:8px;'
+                f'padding:12px 16px;margin-bottom:8px;">'
+                f'<div style="flex:0 0 86px;font-family:Helvetica Neue,sans-serif;'
+                f'font-size:9.5px;letter-spacing:.16em;color:#6A5030;'
+                f'padding-top:3px;">{_lbl}</div>'
+                f'<div style="flex:1;font-family:Georgia,serif;font-size:14px;'
+                f'color:#3F3B35;line-height:1.55;">{_d.sentence()}{_flag}{_bind}</div>'
+                f'</div>',
+                unsafe_allow_html=True)
+
+        read_me(
+            "<b>Read it top to bottom.</b> Every line is a slot-filled template "
+            "over measured numbers - the renderer is handed the dossier and no "
+            "price data, so it cannot say anything the engine did not compute. "
+            "Change the book size and watch names leave: that is the liquidity "
+            "constraint doing real work, not a caption about it.")
+    except Exception as _bk_exc:  # noqa: BLE001 - the page must never die on data
+        # safe_err, not str(exc): the message can carry a server path (see safe_err).
+        st.info(
+            f"The Book needs price and volume history for this universe "
+            f"({safe_err('the-book', _bk_exc)}). No placeholder book is shown.")
 
 st.markdown('<div id="analysis"></div>', unsafe_allow_html=True)
 panel_head("Risk & conviction", "The analysis - where the risk lives")
