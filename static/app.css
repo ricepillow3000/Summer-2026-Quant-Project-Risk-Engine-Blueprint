@@ -502,6 +502,9 @@ div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
 
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
+    /* The smooth-scroll fallback is motion too; main.py's glide lands at once. */
+    html, [data-testid="stAppViewContainer"] section, section.main,
+    [data-testid="stMain"] { scroll-behavior: auto !important; }
     /* Held still, not hidden: a reduced-motion visitor still sees the page's
        shape while it loads. The hero lifts it instantly; the id beats * so the
        30 s safety net survives the rule above. */

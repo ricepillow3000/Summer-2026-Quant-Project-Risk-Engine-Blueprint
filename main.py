@@ -292,6 +292,16 @@ _html("""
     const scroller = findScroller(el);
     if (!scroller) return;               // nothing scrolls: let native run
     e.preventDefault(); e.stopPropagation();
+    /* Reduced motion: land at once, same place. A CSS media query cannot stop
+       a JavaScript flight, so ask on every click (the setting can change
+       while the page is open). */
+    if (window.parent.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      const prevSB = scroller.style.scrollBehavior;
+      scroller.style.scrollBehavior = 'auto';
+      scroller.scrollTo(0, targetY(scroller, el));
+      scroller.style.scrollBehavior = prevSB;
+      return;
+    }
     /* Calm over speed: 1500ms on a slow-out curve reads as being LED
        somewhere, where a fast jump reads as a slide change. */
     glide(scroller, el, 1500, false);

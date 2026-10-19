@@ -450,6 +450,15 @@ risk-engine/
   as "1 -> 0.995"; the pair_weights docstring kept the false "flyer holds most
   of the risk". Swept every 10px, 360-1920: clean. Below 360px the plot is
   narrower than 260px - the screen, not the layout. Desktop dots unchanged.
+- ✅ **The buttons respect reduced motion (2026-10-19)** - John's call on the
+  one gap the council flagged: ACCESSIBILITY.md promised every animation honours
+  `prefers-reduced-motion`, but the 1.5 s glide is JavaScript, which no media
+  query can stop, and the CSS smooth-scroll fallback sat outside every
+  reduced-motion block. Now the glide asks on every click and lands at once
+  (same place, no hash jump), and the fallback stands down. Offline probe, hero
+  CTA + footer link: reduced motion 87/82 frames moving -> 1/1; normal still
+  92/76 frames (glides), both land 26 px from the top. Rule test:
+  `test_the_glide_respects_reduced_motion`.
 - ✅ **Loading you can see, and one map (2026-10-19)** - John, on his laptop:
   no skeleton on opening, the Risk Topology map shown twice and slow after
   switching to MAG-7, the Grit Zone "stalling as if crashed", a loading wheel

@@ -3847,6 +3847,31 @@ def test_the_glide_is_bound_before_any_stop_and_rebinds():
     assert "(now - t0) / dur" not in script, "a busy frame can jump most of the flight again"
 
 
+def test_the_glide_respects_reduced_motion():
+    """ACCESSIBILITY.md promises every animation honours prefers-reduced-motion,
+    but the buttons' 1.5 s glide is driven by JavaScript, which no CSS media
+    query can stop, and the smooth-scroll fallback lived outside every
+    reduced-motion block. With reduced motion a button now lands at once -
+    same place, no flight, and still no hash jump."""
+    import ast
+    import re
+    root = pathlib.Path(__file__).resolve().parent.parent
+    tree = ast.parse((root / "main.py").read_text(encoding="utf-8"))
+    script = next(n.args[0].value for n in ast.walk(tree) if isinstance(n, ast.Call)
+                  and ast.unparse(n.func) == "_html" and n.args
+                  and isinstance(n.args[0], ast.Constant) and "__meleonaGlide" in n.args[0].value)
+    on_link = script[script.index("function onLink"):script.index("P.addEventListener")]
+    assert "prefers-reduced-motion: reduce" in on_link, \
+        "the glide must ask for the visitor's motion setting on every click"
+    still = on_link[on_link.index("prefers-reduced-motion"):on_link.index("glide(scroller, el, 1500")]
+    assert "preventDefault" in on_link and "scrollTo" in still and "return" in still, \
+        "with reduced motion the button must land at once, before any glide starts"
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    blocks = re.findall(r"@media \(prefers-reduced-motion: reduce\) \{(.*?)\n\}", css, re.S)
+    assert any(re.search(r"scroll-behavior:\s*auto\s*!important", b) for b in blocks), \
+        "the CSS smooth-scroll fallback must stand down under reduced motion too"
+
+
 def _top_markdown(at) -> list[tuple[int, str]]:
     """(top-level index, body) of every top-level markdown element, in order."""
     return [(i, c.value) for i, c in at.main.children.items()
