@@ -175,6 +175,146 @@ def load_css() -> None:
 
 load_css()
 
+# ---- Book-glide: eased anchor scrolling on the REAL scroll container ----
+# Streamlit scrolls its own <section>, so `scroll-behavior` on <html> never
+# fires - anchor clicks teleported. This zero-height component reaches into
+# the parent document, intercepts in-page anchor clicks, and drives one eased
+# glide to the destination - a scroll, not a teleport and not a slide change.
+# tools/deep_scan.mjs times every button's flight frame by frame.
+#
+# HERE, right after load_css(), not at the end of the script (John, 2026-10-19:
+# "sometimes the button does not transition"): at the end, every load left the
+# buttons live but unwired for 2.7-4.6 s, and a run ending in st.stop() never
+# sent the frame - Streamlit removed it, its listeners died, and the old
+# bind-once guard kept the next frame from binding until a reload. A new frame
+# now replaces the old listeners instead (no duplicates either way).
+_html("""
+<script>
+(function() {
+  const P = window.parent.document;
+  const prev = P.__meleonaGlide;         // a frame from an earlier run, maybe dead
+  if (prev && prev.onTab) {
+    P.removeEventListener('click', prev.onTab, true);
+    P.removeEventListener('click', prev.onLink, true);
+  }
+
+  /* Charts inside a tab or expander are rendered while their container is
+     HIDDEN, so it measures 0px wide and Plotly falls back to its 700px
+     default - which then sits ~90px short inside a 790px box and leaves a
+     gap. Plotly's responsive mode only re-lays out on a WINDOW resize, and
+     revealing a tab fires no such event, so the stale width sticks.
+     Dispatching one resize after the reveal makes every chart re-fit its
+     real container. Verified: 700px -> 790px exact fit. */
+  function onTab(e) {
+    if (e.target.closest && e.target.closest('[role="tab"], summary')) {
+      /* Twice on purpose: the first nudge catches the common case, the second
+         covers containers still settling their width when the first fires
+         (measured a chart mid-settle at 700px in a 755px box). Two resize
+         events are cheap - Plotly only re-lays out figures whose box moved. */
+      [140, 620].forEach(function(d) {
+        setTimeout(function() {
+          window.parent.dispatchEvent(new Event('resize'));
+        }, d);
+      });
+    }
+  }
+  /* easeInOutSine: the flattest speed profile of the standard in-out curves.
+     Its fastest frame is ~1.6x the average; the quart it replaced peaked at
+     4x, which on the footer's 6000px flights meant ~270px per frame mid-way -
+     a lurch, not a glide. Both ends still settle softly. */
+  const ease = t => -(Math.cos(Math.PI * t) - 1) / 2;
+  /* Streamlit's scroll container has moved between releases - never trust
+     a hardcoded selector. Walk UP from the destination to the first
+     ancestor that really scrolls (proved by a nudge test). */
+  function findScroller(el) {
+    let n = el.parentElement;
+    while (n) {
+      /* Demand a REAL page scroller (hundreds of px of travel). A tiny
+         accidental overflow (e.g. a full-bleed band adding a few px to an
+         inner container) must not hijack the walk - that bug froze every
+         CTA at 1px of movement. */
+      if (n.scrollHeight > n.clientHeight + 120) {
+        /* The scroller carries `scroll-behavior: smooth` (our CSS fallback),
+           which makes a programmatic scrollTop ASYNC - an immediate read-back
+           sees no movement and this test wrongly rejected the real scroller.
+           Force instant behavior for the probe, restore after. */
+        const prevSB = n.style.scrollBehavior;
+        n.style.scrollBehavior = 'auto';
+        /* Nudge BOTH ways. At the bottom of the page - exactly where the
+           footer's links live - a +1 nudge cannot move, the real scroller
+           failed the test, and the footer links were dead (deep scan). */
+        const was = n.scrollTop;
+        n.scrollTop = was + 1;
+        if (n.scrollTop === was) n.scrollTop = was - 1;
+        const ok = n.scrollTop !== was;
+        n.scrollTop = was;
+        n.style.scrollBehavior = prevSB;
+        if (ok) return n;
+      }
+      n = n.parentElement;
+    }
+    return P.scrollingElement;
+  }
+  function targetY(scroller, el) {
+    return el.getBoundingClientRect().top -
+           scroller.getBoundingClientRect().top + scroller.scrollTop - 26;
+  }
+  function glide(scroller, el, dur, settled) {
+    /* Our rAF drives every frame - the scroller's own smooth behavior would
+       fight it (each scrollTo becoming its own animation). Instant while we
+       fly, restored when we land. */
+    const prevSB = scroller.style.scrollBehavior;
+    scroller.style.scrollBehavior = 'auto';
+    const y0 = scroller.scrollTop, d = targetY(scroller, el) - y0,
+          t0 = performance.now();
+    /* Progress advances at most 50 ms per frame. Driven by the clock, one
+       frame that came late (charts mounting while the page builds) covered
+       66-81% of the flight - a jump, not a glide. */
+    let last = t0, run = 0;
+    (function f(now) {
+      run += Math.min(now - last, 50); last = now;
+      const p = Math.min(1, run / dur);
+      scroller.scrollTo(0, y0 + d * ease(p));
+      if (p < 1) { requestAnimationFrame(f); return; }
+      scroller.style.scrollBehavior = prevSB;
+      /* landing check: if the page shifted mid-flight (a chart mounted,
+         a rerun repainted), re-aim once with a short corrective glide -
+         the reader always ends ON the section the button promised. */
+      const drift = targetY(scroller, el) - scroller.scrollTop;
+      if (!settled && Math.abs(drift) > 4) glide(scroller, el, 320, true);
+    })(t0);
+  }
+  function onLink(e) {
+    const a = e.target.closest('a[href^="#"]');
+    if (!a) return;
+    const el = P.getElementById(a.getAttribute('href').slice(1));
+    if (!el) return;
+    const scroller = findScroller(el);
+    if (!scroller) return;               // nothing scrolls: let native run
+    e.preventDefault(); e.stopPropagation();
+    /* Calm over speed: 1500ms on a slow-out curve reads as being LED
+       somewhere, where a fast jump reads as a slide change. */
+    glide(scroller, el, 1500, false);
+    /* release the arrow so it falls ahead of the page it is pulling */
+    if (a.classList.contains('cta-btn')) {
+      a.classList.remove('is-launching'); void a.offsetWidth;
+      a.classList.add('is-launching');
+      setTimeout(function () { a.classList.remove('is-launching'); }, 1250);
+    }
+    /* No arrival theatre on the destination. It used to drop to 25% opacity
+       and slide 26px the instant the button was pressed, then rise in as the
+       glide landed (plus a photo "launch" on the band and a frame on
+       Conviction) - a slide change, not a scroll, and the deep scan measured
+       the flash on every button. The section is simply there when you
+       arrive; the glide is the whole transition. */
+  }
+  P.addEventListener('click', onTab, true);
+  P.addEventListener('click', onLink, true);
+  P.__meleonaGlide = { onTab: onTab, onLink: onLink };
+})();
+</script>
+""", height=0)
+
 # ---- GLOSS LAYER (2026-07-09) ----
 # Institutional sheen over the matte editorial base: specular highlights,
 # layered depth, and a few one-pass arrival glints. Same Citadel palette -
@@ -3051,126 +3191,3 @@ st.markdown("""
 """.replace("__SUPPORT__", SUPPORT_EMAIL).replace("__REF__", SESSION_REF)
    .replace("__NCRISES__", str(len(HISTORICAL_REGIMES))),
     unsafe_allow_html=True)
-
-# ---- Book-glide: eased anchor scrolling on the REAL scroll container ----
-# Streamlit scrolls its own <section>, so `scroll-behavior` on <html> never
-# fires - anchor clicks teleported. This zero-height component reaches into
-# the parent document, intercepts in-page anchor clicks, and drives one eased
-# glide to the destination - a scroll, not a teleport and not a slide change.
-# Guarded so Streamlit reruns never stack duplicate listeners.
-# tools/deep_scan.mjs times every button's flight frame by frame.
-_html("""
-<script>
-(function() {
-  const P = window.parent.document;
-  if (P.__meleonaGlide) return;          // rerun guard: bind once per page
-  P.__meleonaGlide = true;
-
-  /* Charts inside a tab or expander are rendered while their container is
-     HIDDEN, so it measures 0px wide and Plotly falls back to its 700px
-     default - which then sits ~90px short inside a 790px box and leaves a
-     gap. Plotly's responsive mode only re-lays out on a WINDOW resize, and
-     revealing a tab fires no such event, so the stale width sticks.
-     Dispatching one resize after the reveal makes every chart re-fit its
-     real container. Verified: 700px -> 790px exact fit. */
-  P.addEventListener('click', function(e) {
-    if (e.target.closest && e.target.closest('[role="tab"], summary')) {
-      /* Twice on purpose: the first nudge catches the common case, the second
-         covers containers still settling their width when the first fires
-         (measured a chart mid-settle at 700px in a 755px box). Two resize
-         events are cheap - Plotly only re-lays out figures whose box moved. */
-      [140, 620].forEach(function(d) {
-        setTimeout(function() {
-          window.parent.dispatchEvent(new Event('resize'));
-        }, d);
-      });
-    }
-  }, true);
-  /* easeInOutSine: the flattest speed profile of the standard in-out curves.
-     Its fastest frame is ~1.6x the average; the quart it replaced peaked at
-     4x, which on the footer's 6000px flights meant ~270px per frame mid-way -
-     a lurch, not a glide. Both ends still settle softly. */
-  const ease = t => -(Math.cos(Math.PI * t) - 1) / 2;
-  /* Streamlit's scroll container has moved between releases - never trust
-     a hardcoded selector. Walk UP from the destination to the first
-     ancestor that really scrolls (proved by a nudge test). */
-  function findScroller(el) {
-    let n = el.parentElement;
-    while (n) {
-      /* Demand a REAL page scroller (hundreds of px of travel). A tiny
-         accidental overflow (e.g. a full-bleed band adding a few px to an
-         inner container) must not hijack the walk - that bug froze every
-         CTA at 1px of movement. */
-      if (n.scrollHeight > n.clientHeight + 120) {
-        /* The scroller carries `scroll-behavior: smooth` (our CSS fallback),
-           which makes a programmatic scrollTop ASYNC - an immediate read-back
-           sees no movement and this test wrongly rejected the real scroller.
-           Force instant behavior for the probe, restore after. */
-        const prevSB = n.style.scrollBehavior;
-        n.style.scrollBehavior = 'auto';
-        /* Nudge BOTH ways. At the bottom of the page - exactly where the
-           footer's links live - a +1 nudge cannot move, the real scroller
-           failed the test, and the footer links were dead (deep scan). */
-        const was = n.scrollTop;
-        n.scrollTop = was + 1;
-        if (n.scrollTop === was) n.scrollTop = was - 1;
-        const ok = n.scrollTop !== was;
-        n.scrollTop = was;
-        n.style.scrollBehavior = prevSB;
-        if (ok) return n;
-      }
-      n = n.parentElement;
-    }
-    return P.scrollingElement;
-  }
-  function targetY(scroller, el) {
-    return el.getBoundingClientRect().top -
-           scroller.getBoundingClientRect().top + scroller.scrollTop - 26;
-  }
-  function glide(scroller, el, dur, settled) {
-    /* Our rAF drives every frame - the scroller's own smooth behavior would
-       fight it (each scrollTo becoming its own animation). Instant while we
-       fly, restored when we land. */
-    const prevSB = scroller.style.scrollBehavior;
-    scroller.style.scrollBehavior = 'auto';
-    const y0 = scroller.scrollTop, d = targetY(scroller, el) - y0,
-          t0 = performance.now();
-    (function f(now) {
-      const p = Math.min(1, (now - t0) / dur);
-      scroller.scrollTo(0, y0 + d * ease(p));
-      if (p < 1) { requestAnimationFrame(f); return; }
-      scroller.style.scrollBehavior = prevSB;
-      /* landing check: if the page shifted mid-flight (a chart mounted,
-         a rerun repainted), re-aim once with a short corrective glide -
-         the reader always ends ON the section the button promised. */
-      const drift = targetY(scroller, el) - scroller.scrollTop;
-      if (!settled && Math.abs(drift) > 4) glide(scroller, el, 320, true);
-    })(t0);
-  }
-  P.addEventListener('click', function(e) {
-    const a = e.target.closest('a[href^="#"]');
-    if (!a) return;
-    const el = P.getElementById(a.getAttribute('href').slice(1));
-    if (!el) return;
-    const scroller = findScroller(el);
-    if (!scroller) return;               // nothing scrolls: let native run
-    e.preventDefault(); e.stopPropagation();
-    /* Calm over speed: 1500ms on a slow-out curve reads as being LED
-       somewhere, where a fast jump reads as a slide change. */
-    glide(scroller, el, 1500, false);
-    /* release the arrow so it falls ahead of the page it is pulling */
-    if (a.classList.contains('cta-btn')) {
-      a.classList.remove('is-launching'); void a.offsetWidth;
-      a.classList.add('is-launching');
-      setTimeout(function () { a.classList.remove('is-launching'); }, 1250);
-    }
-    /* No arrival theatre on the destination. It used to drop to 25% opacity
-       and slide 26px the instant the button was pressed, then rise in as the
-       glide landed (plus a photo "launch" on the band and a frame on
-       Conviction) - a slide change, not a scroll, and the deep scan measured
-       the flash on every button. The section is simply there when you
-       arrive; the glide is the whole transition. */
-  }, true);
-})();
-</script>
-""", height=0)

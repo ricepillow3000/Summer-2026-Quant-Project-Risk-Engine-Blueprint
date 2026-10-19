@@ -203,8 +203,10 @@ async function glideCheck(linkSel, label) {
     };
     requestAnimationFrame(f);
   }, [scrollerSel, href.slice(1)]);
+  const hashBefore = await page.evaluate(() => location.hash);
   await link.click();
   await page.waitForTimeout(2900);
+  const hashAfter = await page.evaluate(() => location.hash);
   const s = await page.evaluate(() => window.__glide);
   const dist = Math.abs(last(s).top - s[0].top);
   // The sampler's rAF runs before the glide's in each frame, so sample k shows
@@ -228,6 +230,13 @@ async function glideCheck(linkSel, label) {
   // easeInOutSine is ~1.6x; a 4x curve covers a long page in a lurch.
   const surge = flight ? maxRate / (dist / flight) : 0;
   ok(landed, `button "${label}" lands on ${href}`, `section top ${last(s).dy.toFixed(0)}px from the top of the view`);
+  // The browser's own anchor jump (the glide never bound, or its listener
+  // died) passes every frame check below: the scroller's smooth behaviour
+  // turns it into a ~400 ms scroll. It sets the hash; the glide never does,
+  // and the glide takes 1.5 s (John, 2026-10-19: "does not transition").
+  ok(hashAfter === hashBefore && (dist < 80 || flight >= 1000),
+     `button "${label}" is the glide, not the browser's jump`,
+     `hash ${hashBefore || '(none)'} -> ${hashAfter || '(none)'}, flight ${flight}ms`);
   ok(dist < 80 || maxStep / dist <= 0.25, `button "${label}" glides (no teleport frame)`,
      `largest single frame ${maxStep.toFixed(0)}px of ${dist.toFixed(0)}px, flight ${flight}ms`);
   // A frame over 200ms is a visible stutter; a few over 50ms is headless
@@ -591,7 +600,8 @@ async function mapAudit(side) {
   await openTab('Risk Topology');
   const f = await mapFrame();
   if (!f) return say('FAIL', `map [${side}]: frame present`, 'no #cvTrail');
-  await page.locator('iframe').first().scrollIntoViewIfNeeded().catch(() => {});
+  // The map's own frame: the glide's zero-height frame comes first on the page.
+  await (await f.frameElement()).scrollIntoViewIfNeeded().catch(() => {});
   const words = await f.evaluate(() => ({ chips: document.getElementById('chipProv').textContent,
     tag: document.getElementById('provTag').textContent, foot: document.getElementById('paramsFoot').textContent,
     body: document.body.innerText }));
@@ -633,7 +643,7 @@ async function mapAudit(side) {
   }
   // Hover and explain.
   const box = await f.evaluate(() => { const r = document.getElementById('stage').getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; });
-  const fr = await page.locator('iframe').first().boundingBox();
+  const fr = await (await f.frameElement()).boundingBox();
   const cx = fr.x + box.x + box.w * 0.45, cy = fr.y + box.y + box.h * 0.5;
   await page.mouse.move(cx, cy); await page.waitForTimeout(250);
   const tip = await f.evaluate(() => getComputedStyle(document.getElementById('tip')).display !== 'none'

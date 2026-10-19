@@ -165,7 +165,7 @@ html { scroll-behavior: smooth; }
        (its own -16px): margin = 16px x (blocks above + 1), pinned by
        test_the_skeleton_paints_first_and_the_hero_lifts_it. Here, not in the
        photo's <style>, so the skeleton has this shape before the photo comes. */
-    margin: calc(-2.4rem - 80px) calc(50% - 50vw) 0;
+    margin: calc(-2.4rem - 96px) calc(50% - 50vw) 0;
     padding: 96px max(7vw, calc(50vw - 744px)) 48px;
     /* Ledger frame, same grammar as Gotham: 2px bronze rule top and bottom
        with a 1px inner hairline 14px inside each edge. */

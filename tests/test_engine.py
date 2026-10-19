@@ -3815,6 +3815,38 @@ def test_the_tab_strip_keeps_its_slot_whatever_the_basket():
         restore()
 
 
+def test_the_glide_is_bound_before_any_stop_and_rebinds():
+    """John, 2026-10-19: "sometimes the button does not transition". The
+    glide listener came from a zero-height iframe at the END of main.py,
+    behind a bind-once guard. A run that ended in st.stop() never sent the
+    iframe, Streamlit removed it, its listener died, and the guard kept the
+    next iframe from binding: every button jumped until a reload (15/15
+    measured). On every load the buttons were live but unwired for the
+    2.7-4.6 s before the script end. And a clock-driven step jumped 66-81% of
+    the way in one frame when the page was busy."""
+    import ast
+    src = (pathlib.Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
+    tree = ast.parse(src)
+    top = [n for n in tree.body if isinstance(n, ast.Expr) and isinstance(n.value, ast.Call)]
+    def line_of(pred):
+        return next(n.lineno for n in top if pred(n.value))
+    glide = line_of(lambda c: ast.unparse(c.func) == "_html" and c.args
+                    and isinstance(c.args[0], ast.Constant) and "__meleonaGlide" in c.args[0].value)
+    css = line_of(lambda c: ast.unparse(c.func) == "load_css")
+    hero = line_of(lambda c: ast.unparse(c.func) == "st.markdown" and "hero_html" in ast.unparse(c))
+    stops = [n.lineno for n in ast.walk(tree) if isinstance(n, ast.Call)
+             and ast.unparse(n.func) == "st.stop" and n.lineno > css]
+    assert css < glide < hero and glide < min(stops), (
+        f"glide at line {glide}: must follow load_css ({css}) and precede the hero "
+        f"({hero}) and every st.stop() after it (first {min(stops)})")
+    script = next(c.value.args[0].value for c in top if c.value.args
+                  and isinstance(c.value.args[0], ast.Constant)
+                  and "__meleonaGlide" in c.value.args[0].value)
+    assert "__meleonaGlide) return" not in script, "a bind-once guard blocks rebinding again"
+    assert "removeEventListener" in script, "a new glide frame must replace the old listeners"
+    assert "(now - t0) / dur" not in script, "a busy frame can jump most of the flight again"
+
+
 def _top_markdown(at) -> list[tuple[int, str]]:
     """(top-level index, body) of every top-level markdown element, in order."""
     return [(i, c.value) for i, c in at.main.children.items()
