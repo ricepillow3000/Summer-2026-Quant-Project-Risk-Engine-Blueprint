@@ -39,7 +39,7 @@ notices fastest.
 | 27 | Alt text on every image | **Verified** | `site_check` fails on any `<img>` without alt. Photos are decorative CSS backgrounds; the crest SVG carries `role="img"` and a label. |
 | 28 | Mobile breakpoints | **Verified** | 390px: no sideways scroll, crest and CTA on screen; short-viewport tiers in `main.py`. |
 | 29 | Sticky mobile CTA | **N/A by design** | The page has one job and its CTA is above the fold on a phone; a pinned bar would cover the headline verdict on a 390px screen. Revisit if a real visitor study says otherwise. |
-| 30 | Loads under 2 seconds | **Built** | First paint 116ms: a static pre-boot screen in the served HTML draws before Streamlit's JavaScript (it used to be ~3-5s of blank). Disclosed rather than hidden: the hero follows in ~3-5s and the live-data headline after that. |
+| 30 | Loads under 2 seconds | **Built** | First paint under 200ms: the hero's boot skeleton, painted from the served HTML before Streamlit's JavaScript (2026-10-19; before that a plain screen, and on a phone ~7 s of blank page). Disclosed rather than hidden: the hero follows in ~2 s on a laptop, ~5.6 s on a 9 Mbps phone, and the live-data headline after that; an "Updating…" sign shows while the page works. |
 | 31 | Form error states | **Built** | The ticker box is the form. Mistyped or dead symbols, more than 25 symbols, an invalid symbol, a constant-price asset and fewer than two usable symbols each get a specific message, each covered by a test. |
 | 32 | Thank-you pages | **N/A** | Nothing is submitted: no sign-up, no order, no form post. |
 | 33 | Privacy pages | **Built** | `PRIVACY.md`, `TERMS.md`, `ACCESSIBILITY.md`, linked from the footer. |

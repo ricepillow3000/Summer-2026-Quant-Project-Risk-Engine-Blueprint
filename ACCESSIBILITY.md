@@ -38,7 +38,9 @@ falls short**, so nobody has to discover a gap the hard way.
 - **Keyboard:** interactive elements take focus and show a visible bronze focus
   ring; the page is operable without a mouse.
 - **Motion:** every animation is wrapped in `prefers-reduced-motion`, and the
-  map's particle loop idles when off-screen. Nothing flashes.
+  map's particle loop idles when off-screen. Nothing flashes. With reduced
+  motion the loading skeleton and the "Updating…" sign still show, held still:
+  a visitor always has a sign the page is working.
 - **Structure:** one `<h1>`, section headings in order, tables with real header
   cells, and wide content scrolls inside its own container rather than forcing
   the page sideways.
