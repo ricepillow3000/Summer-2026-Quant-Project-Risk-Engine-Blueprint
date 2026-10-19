@@ -450,6 +450,32 @@ risk-engine/
   as "1 -> 0.995"; the pair_weights docstring kept the false "flyer holds most
   of the risk". Swept every 10px, 360-1920: clean. Below 360px the plot is
   narrower than 260px - the screen, not the layout. Desktop dots unchanged.
+- ✅ **Loading you can see, and one map (2026-10-19)** - John, on his laptop:
+  no skeleton on opening, the Risk Topology map shown twice and slow after
+  switching to MAG-7, the Grit Zone "stalling as if crashed", a loading wheel
+  that did not move, buttons that sometimes jumped. Five investigators proved
+  one cause each (offline harness = the real `main.py` on the deterministic
+  test market + the Live audit log), a council reviewed the fix plan:
+  (1) The Book wrote one top-level card per name, so the tab strip moved with
+  the basket (slot 44 -> 40) and the old map stayed on screen, faded, for up to
+  ~35 s - The Book and the come-and-go notices now sit in one container each.
+  (2) The skeleton came after ~5 MB of base64 photos on the websocket and
+  lifted on a 2.1 s timer; nothing Python sends can arrive before Streamlit's
+  JavaScript starts - so `tools/public_files.py` paints the hero's own skeleton
+  (`hero.py`) from index.html with app.css linked in the head, the hero lifts
+  it, the photos are files (`enableStaticServing`). Phone at 9 Mbps: skeleton
+  from 0.6 s, hero 5.6 s (was blank 5.6-12.9 s); skeleton vs hero 0 px at six
+  widths. Shimmers now run until the lift stops them (the 10-15 "finite
+  iterations" rule is replaced by that). (3) Streamlit's running sign lives in
+  the hidden header - app.css now draws a bronze rail and an "UPDATING…" tag
+  off it (still under reduced motion). (4) Every cached Yahoo pull says what
+  it is doing (the grit spinner blamed a 0.2 s step; five pulls were silent).
+  (5) The glide frame sat after every `st.stop()` with a bind-once guard: a
+  stopped run killed it until reload (15/15 jumps), and buttons were unwired
+  for 2.4-4.6 s of each load - it now loads right after app.css, rebinds, and
+  caps each frame's progress (400 ms stall: 5% step, was 40%). deep_scan's
+  glide check now catches the browser's own jump (hash, flight time). Five
+  rule tests, each red on 5b7d575.
 - ✅ **Council review + every device (2026-10-17)** - four independent
   reviewers (map maths vs its papers, the data chain, every chart, every
   control), each claim then reproduced or refuted by a skeptic. The map's maths

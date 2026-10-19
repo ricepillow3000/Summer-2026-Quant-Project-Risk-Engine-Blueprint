@@ -29,8 +29,8 @@ for (const [label, w, h] of [['desktop', 1440, 900], ['phone', 390, 844]]) {
   await page.waitForSelector('#hero .hero-title');
   const heroMs = Date.now() - t0;
   console.log(`INFO  ${label}: hero painted ${heroMs}ms after navigation`);
-  // First Contentful Paint: the static pre-boot screen in index.html is the
-  // first thing drawn, before Streamlit's JavaScript; the hero follows.
+  // First Contentful Paint: the hero's boot skeleton, painted from index.html
+  // (tools/public_files.py) before Streamlit's JavaScript; the hero follows.
   const fcp = await page.evaluate(() => performance.getEntriesByName('first-contentful-paint')[0]?.startTime ?? -1);
   console.log(`INFO  ${label}: first contentful paint ${fcp.toFixed(0)}ms`);
   if (process.env.SEO) ok(fcp >= 0 && fcp < 2000, `${label}: first branded paint under 2s (FCP ${fcp.toFixed(0)}ms)`);

@@ -58,6 +58,7 @@ from src.observability import (log_incident, log_session_start,
                                new_session_ref, setup_logging)
 from src.eigenrisk import eigen_factors, marcenko_pastur_bounds, pc1_exposure
 from src.scenarios import HISTORICAL_REGIMES, replay_returns
+from hero import N_PATHS, hero_html
 from src.liquidity import (days_to_liquidate, liquidity_profile,
                            liquidity_adjusted_cvar)
 from src.grit import grit_scores, MIN_HISTORY_DAYS
@@ -173,6 +174,146 @@ def load_css() -> None:
 
 
 load_css()
+
+# ---- Book-glide: eased anchor scrolling on the REAL scroll container ----
+# Streamlit scrolls its own <section>, so `scroll-behavior` on <html> never
+# fires - anchor clicks teleported. This zero-height component reaches into
+# the parent document, intercepts in-page anchor clicks, and drives one eased
+# glide to the destination - a scroll, not a teleport and not a slide change.
+# tools/deep_scan.mjs times every button's flight frame by frame.
+#
+# HERE, right after load_css(), not at the end of the script (John, 2026-10-19:
+# "sometimes the button does not transition"): at the end, every load left the
+# buttons live but unwired for 2.7-4.6 s, and a run ending in st.stop() never
+# sent the frame - Streamlit removed it, its listeners died, and the old
+# bind-once guard kept the next frame from binding until a reload. A new frame
+# now replaces the old listeners instead (no duplicates either way).
+_html("""
+<script>
+(function() {
+  const P = window.parent.document;
+  const prev = P.__meleonaGlide;         // a frame from an earlier run, maybe dead
+  if (prev && prev.onTab) {
+    P.removeEventListener('click', prev.onTab, true);
+    P.removeEventListener('click', prev.onLink, true);
+  }
+
+  /* Charts inside a tab or expander are rendered while their container is
+     HIDDEN, so it measures 0px wide and Plotly falls back to its 700px
+     default - which then sits ~90px short inside a 790px box and leaves a
+     gap. Plotly's responsive mode only re-lays out on a WINDOW resize, and
+     revealing a tab fires no such event, so the stale width sticks.
+     Dispatching one resize after the reveal makes every chart re-fit its
+     real container. Verified: 700px -> 790px exact fit. */
+  function onTab(e) {
+    if (e.target.closest && e.target.closest('[role="tab"], summary')) {
+      /* Twice on purpose: the first nudge catches the common case, the second
+         covers containers still settling their width when the first fires
+         (measured a chart mid-settle at 700px in a 755px box). Two resize
+         events are cheap - Plotly only re-lays out figures whose box moved. */
+      [140, 620].forEach(function(d) {
+        setTimeout(function() {
+          window.parent.dispatchEvent(new Event('resize'));
+        }, d);
+      });
+    }
+  }
+  /* easeInOutSine: the flattest speed profile of the standard in-out curves.
+     Its fastest frame is ~1.6x the average; the quart it replaced peaked at
+     4x, which on the footer's 6000px flights meant ~270px per frame mid-way -
+     a lurch, not a glide. Both ends still settle softly. */
+  const ease = t => -(Math.cos(Math.PI * t) - 1) / 2;
+  /* Streamlit's scroll container has moved between releases - never trust
+     a hardcoded selector. Walk UP from the destination to the first
+     ancestor that really scrolls (proved by a nudge test). */
+  function findScroller(el) {
+    let n = el.parentElement;
+    while (n) {
+      /* Demand a REAL page scroller (hundreds of px of travel). A tiny
+         accidental overflow (e.g. a full-bleed band adding a few px to an
+         inner container) must not hijack the walk - that bug froze every
+         CTA at 1px of movement. */
+      if (n.scrollHeight > n.clientHeight + 120) {
+        /* The scroller carries `scroll-behavior: smooth` (our CSS fallback),
+           which makes a programmatic scrollTop ASYNC - an immediate read-back
+           sees no movement and this test wrongly rejected the real scroller.
+           Force instant behavior for the probe, restore after. */
+        const prevSB = n.style.scrollBehavior;
+        n.style.scrollBehavior = 'auto';
+        /* Nudge BOTH ways. At the bottom of the page - exactly where the
+           footer's links live - a +1 nudge cannot move, the real scroller
+           failed the test, and the footer links were dead (deep scan). */
+        const was = n.scrollTop;
+        n.scrollTop = was + 1;
+        if (n.scrollTop === was) n.scrollTop = was - 1;
+        const ok = n.scrollTop !== was;
+        n.scrollTop = was;
+        n.style.scrollBehavior = prevSB;
+        if (ok) return n;
+      }
+      n = n.parentElement;
+    }
+    return P.scrollingElement;
+  }
+  function targetY(scroller, el) {
+    return el.getBoundingClientRect().top -
+           scroller.getBoundingClientRect().top + scroller.scrollTop - 26;
+  }
+  function glide(scroller, el, dur, settled) {
+    /* Our rAF drives every frame - the scroller's own smooth behavior would
+       fight it (each scrollTo becoming its own animation). Instant while we
+       fly, restored when we land. */
+    const prevSB = scroller.style.scrollBehavior;
+    scroller.style.scrollBehavior = 'auto';
+    const y0 = scroller.scrollTop, d = targetY(scroller, el) - y0,
+          t0 = performance.now();
+    /* Progress advances at most 50 ms per frame. Driven by the clock, one
+       frame that came late (charts mounting while the page builds) covered
+       66-81% of the flight - a jump, not a glide. */
+    let last = t0, run = 0;
+    (function f(now) {
+      run += Math.min(now - last, 50); last = now;
+      const p = Math.min(1, run / dur);
+      scroller.scrollTo(0, y0 + d * ease(p));
+      if (p < 1) { requestAnimationFrame(f); return; }
+      scroller.style.scrollBehavior = prevSB;
+      /* landing check: if the page shifted mid-flight (a chart mounted,
+         a rerun repainted), re-aim once with a short corrective glide -
+         the reader always ends ON the section the button promised. */
+      const drift = targetY(scroller, el) - scroller.scrollTop;
+      if (!settled && Math.abs(drift) > 4) glide(scroller, el, 320, true);
+    })(t0);
+  }
+  function onLink(e) {
+    const a = e.target.closest('a[href^="#"]');
+    if (!a) return;
+    const el = P.getElementById(a.getAttribute('href').slice(1));
+    if (!el) return;
+    const scroller = findScroller(el);
+    if (!scroller) return;               // nothing scrolls: let native run
+    e.preventDefault(); e.stopPropagation();
+    /* Calm over speed: 1500ms on a slow-out curve reads as being LED
+       somewhere, where a fast jump reads as a slide change. */
+    glide(scroller, el, 1500, false);
+    /* release the arrow so it falls ahead of the page it is pulling */
+    if (a.classList.contains('cta-btn')) {
+      a.classList.remove('is-launching'); void a.offsetWidth;
+      a.classList.add('is-launching');
+      setTimeout(function () { a.classList.remove('is-launching'); }, 1250);
+    }
+    /* No arrival theatre on the destination. It used to drop to 25% opacity
+       and slide 26px the instant the button was pressed, then rise in as the
+       glide landed (plus a photo "launch" on the band and a frame on
+       Conviction) - a slide change, not a scroll, and the deep scan measured
+       the flash on every button. The section is simply there when you
+       arrive; the glide is the whole transition. */
+  }
+  P.addEventListener('click', onTab, true);
+  P.addEventListener('click', onLink, true);
+  P.__meleonaGlide = { onTab: onTab, onLink: onLink };
+})();
+</script>
+""", height=0)
 
 # ---- GLOSS LAYER (2026-07-09) ----
 # Institutional sheen over the matte editorial base: specular highlights,
@@ -391,278 +532,32 @@ def grit_breakdown_fig(scores: pd.DataFrame):
 # Anchored on this file, not the working directory: `streamlit run` from any
 # other folder used to crash here on the very first line of the hero.
 ASSETS = Path(__file__).parent / "assets"
+STATIC = Path(__file__).parent / "static"   # served at /app/static/
 
 # ---- Hero: the pitch, not the dashboard ----
 with open(ASSETS / "logo.svg", "r", encoding="utf-8") as f:
     logo_svg = f.read()
 
-# Architectural plate behind the hero stat deck (replaces the watermark crest).
-# assets/facade.jpg - Unsplash (free commercial license, no attribution
-# required). Duotoned toward the palette in CSS, so the photo can never clash.
-try:
-    with open(ASSETS / "facade.jpg", "rb") as f:
-        _facade_b64 = base64.b64encode(f.read()).decode()
-    st.markdown(
-        # The architecture washes across the WHOLE hero, melting into beige
-        # toward the text side - the building emerges from the page's own
-        # color. Luminosity blend: the photo keeps only its LIGHT - its hue
-        # comes entirely from the base color beneath, which is CITY-STONE
-        # BEIGE in the crest's own warm family (not gray, not orange).
-        f"<style>.hero-section {{ background-color: #C9AF87; "
-        f"background-image: linear-gradient(90deg, "
-        f"#EDE9E3 0%, rgba(237,233,227,.96) 40%, rgba(237,233,227,.62) 66%, "
-        f"rgba(237,233,227,.22) 100%), "
-        f"url(data:image/jpeg;base64,{_facade_b64}); "
-        f"background-size: auto, cover; "
-        f"background-position: left, right 78%; "
-        f"background-blend-mode: normal, luminosity; "
-        # Full-bleed: Casper fills the page edge-to-edge and reaches the top.
-        # The extra -96px swallows the flex-gap of the six zero-height style
-        # blocks Streamlit stacks above the hero (6 x 1rem) - without it a
-        # pale strip of bare page shows between the header and the photo.
-        f"margin: calc(-2.4rem - 96px) calc(50% - 50vw) 0; "
-        f"padding: 96px max(7vw, calc(50vw - 744px)) 48px; "
-        # Ledger frame, same grammar as Gotham: 2px bronze rule top and
-        # bottom with a 1px inner hairline 14px inside each edge.
-        f"box-shadow: inset 0 2px 0 rgba(176,138,85,.55), "
-        f"inset 0 -2px 0 rgba(176,138,85,.55), "
-        f"inset 0 16px 0 -15px rgba(176,138,85,.45), "
-        f"inset 0 -16px 0 -15px rgba(176,138,85,.45); }}</style>",
-        unsafe_allow_html=True)
-except OSError:
-    pass  # no photo on disk -> tiles render on the plain field, nothing breaks
 
-# --- SHORT-VIEWPORT HERO -----------------------------------------------------
-# The primary CTA must be clickable WITHOUT scrolling. Two things stop that on
-# a short screen: below 1100px wide the hero grid drops to ONE column, so the
-# stat deck stacks under the text instead of beside it, and the title clamp
-# pins to its maximum. Measured: a 1198px hero in a 631px viewport, CTA 279px
-# below the fold.
-#
-# The defect is VERTICAL, so this keys off viewport HEIGHT - a tall screen
-# keeps the full editorial scale untouched and only a short one compresses.
-# Nothing is hidden: the stat deck simply sits below the fold, where supporting
-# evidence belongs; the call to action does not.
-#
-# Emitted HERE, unconditionally, and last on purpose. `.hero-title` is
-# redefined twice further up (96px and 84px, both !important) and the hero
-# padding comes from the injected photo <style> just above, which is inside a
-# try/except and may not run. Anything earlier in the sheet is silently
-# shadowed - that is the failure this file has hit before.
-st.markdown("""<style>
-/* A 1080p laptop leaves roughly 900px of viewport after browser chrome, and
-   at full scale the CTA lands at 926px - just under the fold. So the first,
-   gentlest tier starts at 1000px rather than 860px; only genuinely tall
-   screens keep the untouched editorial scale. */
-@media (max-height: 1000px) {
-  .hero-section { padding-top: 46px !important; padding-bottom: 32px !important;
-                  min-height: 0 !important; }
-  .hero-title { font-size: clamp(34px, 6.6vw, 64px) !important;
-                line-height: 1.02 !important; }
-  .hero-sub { font-size: 17px !important; line-height: 1.5 !important; }
-  .hero-crest { width: 104px !important; height: 104px !important; }
-}
-@media (max-height: 860px) {
-  .hero-section { padding-top: 30px !important; padding-bottom: 22px !important;
-                  min-height: 0 !important; gap: 18px !important; }
-  .hero-left { gap: 8px !important; }
-  .hero-title { font-size: clamp(30px, 5.2vw, 50px) !important;
-                line-height: 1.03 !important; margin: 0 !important; }
-  .hero-sub { font-size: 15.5px !important; line-height: 1.42 !important;
-              max-width: 540px !important; }
-  .hero-crest { width: 84px !important; height: 84px !important;
-                padding: 12px !important; }
-  .hero-stats { gap: 8px !important; }
-  .hstat { padding: 10px 12px 8px !important; }
-  .hstat .hnum { font-size: 26px !important; }
-}
-@media (max-height: 700px) {
-  .hero-section { padding-top: 20px !important; padding-bottom: 16px !important; }
-  .hero-title { font-size: clamp(27px, 4.4vw, 40px) !important; }
-  .hero-sub { font-size: 14.5px !important; }
-}
-/* ---- CTA: matte rectangle, Citadel reference -------------------------
-   The buttons read bland because a later rule overrode the flat base with a
-   180deg gradient, an inset white gloss line, a drop shadow and a ::before
-   skew "shine" sweep, with a hover that lifted 2px and animated its own
-   letter-spacing. That is a glossy game pill wearing a serif label, and the
-   motion is doing the work the colour should do.
-
-   Citadel's own buttons are the opposite: a hard rectangle, ONE flat colour,
-   no bevel, no shadow, no shine - and the entire interaction is a confident
-   colour change. That is where the presence comes from, so the dazzle here is
-   the inversion on hover, not an effect layered on top.
-
-   Colours stay strictly inside the palette, and each hover lands on a colour
-   that belongs to the surface the button sits on:
-     light beige field  charcoal -> bronze
-     dark showcase band bronze   -> beige (a clean inversion into the page)
-   Bronze always carries DARK type: cream on bronze measures about 1.8:1,
-   which fails badly, while charcoal on bronze is about 6.8:1. */
-.cta-btn {
-  background-image: none !important;
-  background-color: #3F3B35 !important;
-  color: #F4F1EA !important;
-  border: 1px solid #3F3B35 !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
-  transition: background-color .22s ease, border-color .22s ease,
-              color .22s ease !important;
-}
-/* the shine sweep - the least matte thing in the file */
-.cta-btn::before { display: none !important; }
-.cta-btn:hover {
-  background-image: none !important;
-  background-color: #9A7B4F !important;
-  border-color: #9A7B4F !important;
-  color: #241F1A !important;
-  transform: none !important;
-  letter-spacing: 0.11em !important;
-  box-shadow: none !important;
-}
-.cta-btn:active { transform: none !important; background-color: #8A6A3C !important; }
-
-/* A CTA sitting ON the dark showcase band needs the inverse treatment. The
-   default .cta-btn is a charcoal gradient (#4A453D -> #3A362F) built for the
-   beige field; against the band's own #3F3B35 that is barely eleven points of
-   luminance apart - invisible, the same complaint as a transparent button on
-   beige, just mirrored. This variant inverts to solid bronze with dark type,
-   which is the highest-contrast pairing available inside the palette.
-   Rule: choose the variant by the BACKGROUND the button sits on. */
-.cta-btn.on-dark {
-  background-image: none !important;
-  /* the palette's LIGHTER bronze. It raises BOTH the type contrast on the
-     button and its separation from the #3F3B35 band (4.1 -> ~5.3 and
-     2.8 -> ~3.6); the darker #9A7B4F missed the 4.5 and 3.0 thresholds. */
-  background-color: #B08A55 !important;
-  color: #241F1A !important;
-  border: 1px solid #B08A55 !important;
-  box-shadow: none !important;
-}
-/* Inverts into the page's own beige - maximum separation from the charcoal
-   band without introducing a colour the palette does not already own. */
-.cta-btn.on-dark:hover {
-  background-color: #EDE9E3 !important;
-  border-color: #EDE9E3 !important;
-  color: #2E2B26 !important;
-}
-.cta-btn.on-dark:active { background-color: #D4CDBF !important; }
-
-/* ---- The Slice: fill the width, shorten the column, free the button ----
-   Measured at 1920x860: the row is 465px tall and driven ENTIRELY by the
-   left sketch, while the maths plaque is capped at max-width 560px inside a
-   694px column - 134px of dead width that forces its text into more lines
-   than it needs. Letting the plaque use its column does two jobs at once:
-   the empty space fills, and the same words occupy fewer lines, so the block
-   gets shorter rather than taller. The sketch then comes down to match, and
-   the CTA underneath rises into view instead of sitting on the fold.
-   Widths and rhythm are untouched on tall screens. */
-.st-key-gungnir_zone .gungnir-plaque { max-width: 100% !important; }
-
-@media (max-height: 1000px) {
-  /* the sketch is the tallest thing in the row, and mostly air around the
-     two circles - trim the drawing, not the labels */
-  .st-key-gungnir_zone svg[viewBox="0 0 360 200"] {
-    width: 400px !important; max-width: 100% !important; height: auto !important;
-  }
-  .st-key-gungnir_zone .gungnir-head { margin-bottom: 2px !important; }
-}
-@media (max-height: 860px) {
-  .st-key-gungnir_zone svg[viewBox="0 0 360 200"] { width: 348px !important; }
-  .st-key-gungnir_zone .gungnir-plaque {
-    padding: 14px 18px 12px !important; font-size: 13px !important;
-  }
-}
-
-/* The Slice has to read as one screen: land on it and the controls AND the
-   button onward are both in view. Its zone carries 178px of vertical chrome
-   (64/84 padding plus a 30px margin) before any content, which is generous on
-   a tall display and wasteful on a laptop. Same height-tiered treatment as
-   the hero - nothing removed, just tightened where the screen is short. */
-@media (max-height: 1000px) {
-  .st-key-gungnir_zone { padding: 30px 0 34px !important; margin-top: 14px !important; }
-  .gungnir-head .showcase-title { font-size: 26px !important; margin: 4px 0 8px !important; }
-  .gungnir-sub { font-size: 13.5px !important; }
-  .gungnir-plaque { margin-top: 18px !important; padding: 20px 24px 18px !important; }
-}
-@media (max-height: 860px) {
-  .st-key-gungnir_zone { padding: 20px 0 24px !important; margin-top: 10px !important; }
-  .gungnir-head .showcase-title { font-size: 23px !important; }
-  .gungnir-sub { font-size: 12.5px !important; }
-  .gungnir-plaque { margin-top: 12px !important; padding: 15px 18px 13px !important; }
-}
-</style>""", unsafe_allow_html=True)
-
-# Dark-band plate: the charcoal showcase band gets its own architectural
-# photograph (assets/band.jpg - Unsplash, free commercial license): fog-bound
-# towers, duotoned near-charcoal in CSS with a scrim baked in so the beige
-# text stays the loudest thing on the band. Same graceful fallback.
-try:
-    with open(ASSETS / "band.jpg", "rb") as f:
-        _band_b64 = base64.b64encode(f.read()).decode()
-    st.markdown(
-        f"<style>.showcase-row::before {{ background-image: "
-        f"linear-gradient(165deg, rgba(59,50,40,.42), rgba(45,39,32,.68)), "
-        f"url(data:image/jpeg;base64,{_band_b64}); }}</style>",
-        unsafe_allow_html=True)
-except OSError:
-    pass  # band stays plain charcoal
-
-# The hero's words live here ONCE. The boot skeleton renders this same copy
-# through the same classes as transparent ink, so every shimmer bar is exactly
-# the size and line-break of the text it stands in for, at every viewport and
-# under every short-screen tier. A skeleton drawn with its own boxes drifted
-# out of shape the first time the hero changed; this one cannot.
-HERO_TITLE_LINES = ("Meleona", "Portfolio Risk Engine")
-HERO_SUB = ("A hedge-fund-grade portfolio risk engine - VaR, CVaR, Monte Carlo stress "
-            "testing, and named factor exposures, computed live from real market data. "
-            "But every stock has drawdowns. What sets a name apart is what happens "
-            "after one - that's what we call <strong>grit</strong>.")
-HERO_CTA = "Explore what we do"
-# The tiles quote the engine, so they read its constants rather than restate
-# them: add a crisis to HISTORICAL_REGIMES and the hero, the footer and the
-# replay list all move together.
-N_PATHS = 10_000
-HERO_STATS = ((f"{N_PATHS:,}", "Simulated paths"), (str(len(HISTORICAL_REGIMES)), "Crises replayed"),
-              ("2", "Monte Carlo engines"), ("4", "Factor exposures"))
-_CTA_ARROW = ('<span class="cta-arrow" aria-hidden="true"><svg viewBox="0 0 16 30" fill="none" '
-              'xmlns="http://www.w3.org/2000/svg"><path class="shaft" d="M8 1 V22" '
-              'stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path '
-              'class="head" d="M2.5 16.5 L8 22.5 L13.5 16.5" stroke="currentColor" '
-              'stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>')
+# The short-viewport hero tiers live at the END of static/app.css (search
+# "SHORT-VIEWPORT HERO"): the boot skeleton in index.html needs them from
+# the first frame, before anything here is sent.
 
 
-def hero_html(skeleton: bool = False) -> str:
-    """The hero, or its boot skeleton: same classes, same copy, words masked.
-
-    Kept on one line per element - st.markdown truncates raw HTML at a blank
-    line (Lessons #5)."""
-    ink = (lambda t: f'<span class="sk-ink">{t}</span>') if skeleton else (lambda t: t)
-    title = "".join(f'<span class="hline">{ink(line)}</span>' for line in HERO_TITLE_LINES)
-    stats = "".join(f'<div class="hstat"><div class="n">{ink(n)}</div>'
-                    f'<div class="l">{ink(label)}</div></div>' for n, label in HERO_STATS)
-    if skeleton:
-        head, crest = '<div class="hero-section">', ""
-        cta = f'<span class="cta-btn">{HERO_CTA}{_CTA_ARROW}</span>'
-    else:
-        head, crest = '<div class="hero-section reveal" id="hero">', logo_svg
-        cta = f'<a href="#grit-showcase" class="cta-btn">{HERO_CTA}{_CTA_ARROW}</a>'
-    return (f'{head}<div class="hero-left"><div class="hero-crest">{crest}</div>'
-            f'<h1 class="hero-title">{title}</h1>'
-            f'<div class="hero-sub">{ink(HERO_SUB)}</div>{cta}</div>'
-            f'<div class="hero-stats">{stats}</div></div>')
+# The hero's words and markup live in hero.py, shared with the boot skeleton
+# tools/public_files.py writes into index.html.
 
 
-# Boot veil renders ONLY on the first script run of a session. Streamlit
-# reruns the whole script on every interaction (and the freshness ticker),
-# which would re-create the veil and restart its fade forever - so after
-# the first run it is simply never rendered again.
+# The boot skeleton is painted by index.html itself (tools/public_files.py),
+# from the first frame: sent from here it could only arrive once Streamlit's
+# JavaScript had started, and the first 2.5 s (laptop) to 4.4 s (phone) were a
+# plain screen (2026-10-19). This slot keeps the first-load tile fly-in, which
+# must render ONLY on the first script run of a session - Streamlit reruns the
+# whole script on every interaction, which would replay it forever.
 if not st.session_state.get("_booted"):
     st.session_state["_booted"] = True
     st.markdown(
-        '<div id="boot-skel" aria-hidden="true">' + hero_html(skeleton=True)
-        + '<div class="sk-band"></div><div class="sk-load">Loading market data</div></div>'
-        + """<style>
+        """<style>
   /* First-load only: the intro tiles fly in top-to-down (UFO settle). This
      style block renders solely on the un-booted first pass, so Streamlit
      reruns never replay the arrival. Scoped to #hero so the skeleton's own
@@ -680,7 +575,52 @@ else:
     # visitor changed snapped shut under their cursor (recruiter walkthrough).
     st.markdown("", unsafe_allow_html=True)
 
-st.markdown(hero_html(), unsafe_allow_html=True)
+# Architectural plate behind the hero stat deck (replaces the watermark crest).
+# static/facade.jpg - Unsplash (free commercial license, no attribution
+# required). Duotoned toward the palette in CSS, so the photo can never clash.
+# Served as a file from static/ (config.toml enableStaticServing): inlined as
+# base64 it put ~3.5 MB on the websocket AHEAD of the boot skeleton, which then
+# arrived with the hero it stands in for (2026-10-19). Paint only - the hero's
+# layout (full-bleed margin, padding, ledger frame) lives in app.css, so the
+# skeleton has the hero's shape before this arrives. A missing photo holds the
+# slot, so nothing below moves.
+if (STATIC / "facade.jpg").is_file():
+    st.markdown(
+        # The architecture washes across the WHOLE hero, melting into beige
+        # toward the text side - the building emerges from the page's own
+        # color. Luminosity blend: the photo keeps only its LIGHT - its hue
+        # comes entirely from the base color beneath, which is CITY-STONE
+        # BEIGE in the crest's own warm family (not gray, not orange).
+        "<style>.hero-section { background-color: #C9AF87; "
+        "background-image: linear-gradient(90deg, "
+        "#EDE9E3 0%, rgba(237,233,227,.96) 40%, rgba(237,233,227,.62) 66%, "
+        "rgba(237,233,227,.22) 100%), url(app/static/facade.jpg); "
+        "background-size: auto, cover; "
+        "background-position: left, right 78%; "
+        "background-blend-mode: normal, luminosity; }</style>",
+        unsafe_allow_html=True)
+else:
+    st.markdown("", unsafe_allow_html=True)
+
+# Dark-band plate: the charcoal showcase band gets its own architectural
+# photograph (static/band.jpg - Unsplash, free commercial license): fog-bound
+# towers, duotoned near-charcoal in CSS with a scrim baked in so the beige
+# text stays the loudest thing on the band. A file, not base64 (see above).
+if (STATIC / "band.jpg").is_file():
+    st.markdown(
+        "<style>.showcase-row::before { background-image: "
+        "linear-gradient(165deg, rgba(59,50,40,.42), rgba(45,39,32,.68)), "
+        "url(app/static/band.jpg); }</style>",
+        unsafe_allow_html=True)
+else:
+    st.markdown("", unsafe_allow_html=True)  # band stays plain charcoal
+
+# The hero lifts its own skeleton when it arrives - state, not a timer. The
+# veil used to fade on a fixed 2.1 s clock whether or not anything was ready,
+# and under reduced motion (no animation runs) a timer never fires at all.
+_LIFT_SKELETON = ("<style>#pre-boot,#boot-skel{opacity:0;visibility:hidden}"
+                  "#boot-skel *{animation:none!important}</style>")
+st.markdown(hero_html(crest=logo_svg) + _LIFT_SKELETON, unsafe_allow_html=True)
 
 # ---- Showcase: the Grit Zone innovation, explained before you touch a slider ----
 st.markdown("""
@@ -994,8 +934,11 @@ _raw_syms = sorted({t.strip().upper() for t in chosen if t.strip()})
 # symbol deserves to know why it vanished.
 tickers = [t for t in _raw_syms if valid_ticker(t)]
 _rejected = [t for t in _raw_syms if not valid_ticker(t)]
+# Notices that come and go with the basket share ONE slot, so the tab strip
+# below never changes position (test_the_tab_strip_keeps_its_slot_whatever_the_basket).
+_notices = st.container()
 if _rejected:
-    st.warning(
+    _notices.warning(
         "Ignored "
         + ", ".join(f"`{t[:24]}`" for t in _rejected)
         + " - not a valid Yahoo Finance symbol. Symbols are letters, digits "
@@ -1008,7 +951,7 @@ if len(tickers) > MAX_UNIVERSE:
     # cost lands on every other visitor. src/ingestion.py caps the funnel too,
     # so a caller that skips this check still cannot exceed the budget; this
     # branch exists so the cap is disclosed rather than silently applied.
-    st.warning(
+    _notices.warning(
         f"This engine analyzes up to **{MAX_UNIVERSE}** symbols at once - a "
         "deliberate compute budget on a public, single-process deployment. "
         f"Using the first {MAX_UNIVERSE} alphabetically; dropped "
@@ -1114,13 +1057,17 @@ def load_anchor_shelf(anchors: tuple[str, ...], period: str = "2y"):
             fetch_dollar_volume(list(anchors), period=period))
 
 
-@st.cache_data(ttl=3600)
+@st.cache_data(ttl=3600, show_spinner="Reading the 13-week T-bill rate…")
 def load_risk_free_rate():
     """Latest 13-week T-bill yield (^IRX) as an annual decimal, or None."""
     return fetch_risk_free_rate()
 
 
-@st.cache_data(ttl=3600, max_entries=32, show_spinner="Scoring the Grit Zone…")
+# The slow part is the pull, not the score (grit maths ~0.2 s): say so, so a
+# first visit to a basket reads as working, not stalled (John, 2026-10-19).
+@st.cache_data(ttl=3600, max_entries=32, show_spinner=(
+    "Reading each name's full price history for its grit score - a new "
+    "basket's first pull from Yahoo is the slow part…"))
 def load_grit(tickers_tuple: tuple[str, ...]):
     """Grit scores need each asset's FULL price history, not just the 2y window
     used for VaR - grit_scores() pulls it separately (see src.grit)."""
@@ -1187,7 +1134,7 @@ if len(prices) < MIN_ROWS and len(tickers) > 1:
         _short = [t for t in _unaligned.columns if int(_coverage[t]) < MIN_ROWS]
         _keep = [t for t in tickers if t not in _short]
         if _short and len(_keep) >= 2:
-            st.warning(
+            _notices.warning(
                 "Excluded "
                 + ", ".join(f"`{html.escape(t)}` ({int(_coverage[t])} trading days)"
                             for t in _short)
@@ -1218,7 +1165,7 @@ returns = get_returns(prices)
 # the same way the short-history guard above treats a name it cannot use.
 _flat = flat_columns(returns)
 if _flat:
-    st.warning(
+    _notices.warning(
         "Excluded " + ", ".join(f"`{html.escape(t)}`" for t in _flat)
         + " - its price did not move once in this window (cash and money-market "
         "funds look like this), so it carries no measurable risk and has no "
@@ -1234,7 +1181,7 @@ if len(loaded) < 2:
              + ". Check the spelling or try different tickers.")
     st.stop()
 if missing:
-    st.caption(f"Couldn't load: {', '.join(missing)} - skipped.")
+    _notices.caption(f"Couldn't load: {', '.join(missing)} - skipped.")
 _audit("Data fetch", f"{len(loaded)} tickers loaded from {preset!r}: {', '.join(loaded)}"
       + (f" (missing: {', '.join(missing)})" if missing else ""))
 
@@ -1251,6 +1198,8 @@ st.caption(f"Data: {health['rows']} trading days · through {health['end']} · {
 prov_now = provenance(tickers)
 if prov_now:
     _freshness_ticker(prov_now["fetched_at_utc"])
+else:
+    st.empty()  # hold the ticker's slot: the tab strip below must not move
 
 # ---- Allocation + stress test: one control deck, side by side ----
 deck_alloc, deck_stress = st.columns(2, gap="medium")
@@ -1399,7 +1348,7 @@ def run_monte_carlo(rets: pd.DataFrame, w: np.ndarray, jump: bool) -> dict:
 # and the process serves sessions one at a time, so 10 simultaneous visitors
 # queued ~35s for the headline. All three are deterministic (the bootstrap is
 # seeded), so caching changes no number.
-@st.cache_data(ttl=3600, max_entries=32, show_spinner=False)
+@st.cache_data(ttl=3600, max_entries=32, show_spinner="Drawing the Risk Topology map…")
 def cached_map_payload(rets: pd.DataFrame, w: np.ndarray, names: tuple, short: bool) -> dict:
     return build_map_payload(rets, w, list(names), short)
 
@@ -1681,75 +1630,80 @@ _bk_fb = _bk4.toggle(
          "nothing inside your universe cushions, this lets the engine reach "
          "for TLT/GLD/XLP/XLU/USMV - and say on screen that it did.")
 
-try:
-    _bk_px = prices
-    _bk_dv = load_dollar_volume(tuple(tickers)).reindex(
-        columns=loaded).reindex(prices.index)
-    _bk_anchors = None
-    if _bk_fb:
-        _a_px, _a_dv = load_anchor_shelf(tuple(DEFENSIVE_ANCHOR_TICKERS))
-        _keep = [c for c in _a_px.columns if c not in loaded]
-        if _keep:
-            _bk_px = pd.concat(
-                [prices, _a_px[_keep].reindex(prices.index)], axis=1)
-            _bk_dv = pd.concat(
-                [_bk_dv, _a_dv[_keep].reindex(prices.index)], axis=1)
-            _bk_anchors = set(_keep)
-    # Grit from FULL history, as the Grit Zone tab scores it - not from the
-    # 2y `prices`, where no named crisis falls and every name's resilience
-    # third read 0 (NVDA 6.9 here vs 73.2 in the tab, council 2026-10-17).
-    _the_book = load_book(
-        _bk_px, _bk_dv.fillna(0.0), float(_book_size), _book_part,
-        _bk_floor, tuple(sorted(_bk_anchors or ())),
-        load_grit(tuple(_bk_px.columns)))
+# One slot, whatever the basket: The Book writes one card per name, and
+# Streamlit keys elements by position, so a card count that changed with the
+# basket moved the tab strip below it and left the old map on screen, faded,
+# beside the new one (John, 2026-10-19).
+with st.container():
+    try:
+        _bk_px = prices
+        _bk_dv = load_dollar_volume(tuple(tickers)).reindex(
+            columns=loaded).reindex(prices.index)
+        _bk_anchors = None
+        if _bk_fb:
+            _a_px, _a_dv = load_anchor_shelf(tuple(DEFENSIVE_ANCHOR_TICKERS))
+            _keep = [c for c in _a_px.columns if c not in loaded]
+            if _keep:
+                _bk_px = pd.concat(
+                    [prices, _a_px[_keep].reindex(prices.index)], axis=1)
+                _bk_dv = pd.concat(
+                    [_bk_dv, _a_dv[_keep].reindex(prices.index)], axis=1)
+                _bk_anchors = set(_keep)
+        # Grit from FULL history, as the Grit Zone tab scores it - not from the
+        # 2y `prices`, where no named crisis falls and every name's resilience
+        # third read 0 (NVDA 6.9 here vs 73.2 in the tab, council 2026-10-17).
+        _the_book = load_book(
+            _bk_px, _bk_dv.fillna(0.0), float(_book_size), _book_part,
+            _bk_floor, tuple(sorted(_bk_anchors or ())),
+            load_grit(tuple(_bk_px.columns)))
 
-    st.markdown(
-        f'<div style="background:#F1EDE5;border:1px solid #C4BDAE;'
-        f'border-top:2px solid #9A7B4F;border-radius:12px;padding:18px 22px;'
-        f'margin:6px 0 18px;font-family:Georgia,serif;font-size:17px;'
-        f'color:#3F3B35;line-height:1.5;">{headline(_the_book)}</div>',
-        unsafe_allow_html=True)
-
-    # Border tone carries the role (decorative, so bronze is allowed); the
-    # LABEL is words, so it uses the sanctioned on-beige text tone written as a
-    # LITERAL. test_text_colours_meet_wcag_aa scans main.py for `color:#RRGGBB`
-    # and an f-string placeholder hides the value from it - #8A6A3C sat at
-    # ~3.1:1 here unseen because it arrived through a variable.
-    _CHIP = {Role.FLYER: ("#8A6A3C", "#F6F2EA", "LEADS"),
-             Role.CUSHION: ("#3F3B35", "#EFEAE0", "ANCHOR"),
-             Role.EXCLUDED: ("#6B6459", "#EDE9E3", "LEFT OUT")}
-    for _d in _the_book:
-        _col, _bg, _lbl = _CHIP[_d.role]
-        _flag = (' &middot; <span style="color:#6A5030;">outside the chosen '
-                 'universe</span>' if _d.is_fallback_anchor else "")
-        # Redundant on a card that was already excluded FOR capacity - the
-        # sentence there already names the breakpoint.
-        _bind = (' &middot; <span style="color:#6A5030;">liquidity set this '
-                 'size, not risk</span>'
-                 if _d.liquidity_binding and _d.role is not Role.EXCLUDED else "")
         st.markdown(
-            f'<div style="display:flex;gap:14px;align-items:flex-start;'
-            f'background:{_bg};border-left:3px solid {_col};border-radius:8px;'
-            f'padding:12px 16px;margin-bottom:8px;">'
-            f'<div style="flex:0 0 86px;font-family:Helvetica Neue,sans-serif;'
-            f'font-size:9.5px;letter-spacing:.16em;color:#6A5030;'
-            f'padding-top:3px;">{_lbl}</div>'
-            f'<div style="flex:1;font-family:Georgia,serif;font-size:14px;'
-            f'color:#3F3B35;line-height:1.55;">{_d.sentence()}{_flag}{_bind}</div>'
-            f'</div>',
+            f'<div style="background:#F1EDE5;border:1px solid #C4BDAE;'
+            f'border-top:2px solid #9A7B4F;border-radius:12px;padding:18px 22px;'
+            f'margin:6px 0 18px;font-family:Georgia,serif;font-size:17px;'
+            f'color:#3F3B35;line-height:1.5;">{headline(_the_book)}</div>',
             unsafe_allow_html=True)
 
-    read_me(
-        "<b>Read it top to bottom.</b> Every line is a slot-filled template "
-        "over measured numbers - the renderer is handed the dossier and no "
-        "price data, so it cannot say anything the engine did not compute. "
-        "Change the book size and watch names leave: that is the liquidity "
-        "constraint doing real work, not a caption about it.")
-except Exception as _bk_exc:  # noqa: BLE001 - the page must never die on data
-    # safe_err, not str(exc): the message can carry a server path (see safe_err).
-    st.info(
-        f"The Book needs price and volume history for this universe "
-        f"({safe_err('the-book', _bk_exc)}). No placeholder book is shown.")
+        # Border tone carries the role (decorative, so bronze is allowed); the
+        # LABEL is words, so it uses the sanctioned on-beige text tone written as a
+        # LITERAL. test_text_colours_meet_wcag_aa scans main.py for `color:#RRGGBB`
+        # and an f-string placeholder hides the value from it - #8A6A3C sat at
+        # ~3.1:1 here unseen because it arrived through a variable.
+        _CHIP = {Role.FLYER: ("#8A6A3C", "#F6F2EA", "LEADS"),
+                 Role.CUSHION: ("#3F3B35", "#EFEAE0", "ANCHOR"),
+                 Role.EXCLUDED: ("#6B6459", "#EDE9E3", "LEFT OUT")}
+        for _d in _the_book:
+            _col, _bg, _lbl = _CHIP[_d.role]
+            _flag = (' &middot; <span style="color:#6A5030;">outside the chosen '
+                     'universe</span>' if _d.is_fallback_anchor else "")
+            # Redundant on a card that was already excluded FOR capacity - the
+            # sentence there already names the breakpoint.
+            _bind = (' &middot; <span style="color:#6A5030;">liquidity set this '
+                     'size, not risk</span>'
+                     if _d.liquidity_binding and _d.role is not Role.EXCLUDED else "")
+            st.markdown(
+                f'<div style="display:flex;gap:14px;align-items:flex-start;'
+                f'background:{_bg};border-left:3px solid {_col};border-radius:8px;'
+                f'padding:12px 16px;margin-bottom:8px;">'
+                f'<div style="flex:0 0 86px;font-family:Helvetica Neue,sans-serif;'
+                f'font-size:9.5px;letter-spacing:.16em;color:#6A5030;'
+                f'padding-top:3px;">{_lbl}</div>'
+                f'<div style="flex:1;font-family:Georgia,serif;font-size:14px;'
+                f'color:#3F3B35;line-height:1.55;">{_d.sentence()}{_flag}{_bind}</div>'
+                f'</div>',
+                unsafe_allow_html=True)
+
+        read_me(
+            "<b>Read it top to bottom.</b> Every line is a slot-filled template "
+            "over measured numbers - the renderer is handed the dossier and no "
+            "price data, so it cannot say anything the engine did not compute. "
+            "Change the book size and watch names leave: that is the liquidity "
+            "constraint doing real work, not a caption about it.")
+    except Exception as _bk_exc:  # noqa: BLE001 - the page must never die on data
+        # safe_err, not str(exc): the message can carry a server path (see safe_err).
+        st.info(
+            f"The Book needs price and volume history for this universe "
+            f"({safe_err('the-book', _bk_exc)}). No placeholder book is shown.")
 
 st.markdown('<div id="analysis"></div>', unsafe_allow_html=True)
 panel_head("Risk & conviction", "The analysis - where the risk lives")
@@ -2390,18 +2344,20 @@ with tab_balance:
             # "What goes up must come down. We can't cap the fall; we
             # measure the cushion." Council pass 6: cushion never cap,
             # ES@97.5 never CVaR@99, ranks never promises.
-            @st.cache_data(ttl=6 * 3600, max_entries=32, show_spinner=False)
+            @st.cache_data(ttl=6 * 3600, max_entries=32, show_spinner="Reading the defensive shelf…")
             def _bv_anchor_returns(universe_key: str):
                 """Universe returns joined with defensive ETF candidates
                 (Treasuries/gold/staples/utilities/min-vol) - an equity
                 basket usually cannot anchor itself."""
                 return anchor_frame(returns)
 
-            @st.cache_data(ttl=6 * 3600, max_entries=64, show_spinner=False)
+            @st.cache_data(ttl=6 * 3600, max_entries=64,
+                           show_spinner="Replaying this pair through each named crisis…")
             def _bv_crisis(a: str, b: str, w: float, short_a: bool = False):
                 return crisis_cushion(a, b, w, short_a=short_a)
 
-            @st.cache_data(ttl=6 * 3600, max_entries=32, show_spinner=False)
+            @st.cache_data(ttl=6 * 3600, max_entries=32,
+                           show_spinner="Reading full price histories to rank the anchors…")
             def _bv_grit(tickers: tuple):
                 """Grit scores for anchor candidates - the engine's founding
                 question ("who gets back up?") IS the Circle 2 screen."""
@@ -3235,126 +3191,3 @@ st.markdown("""
 """.replace("__SUPPORT__", SUPPORT_EMAIL).replace("__REF__", SESSION_REF)
    .replace("__NCRISES__", str(len(HISTORICAL_REGIMES))),
     unsafe_allow_html=True)
-
-# ---- Book-glide: eased anchor scrolling on the REAL scroll container ----
-# Streamlit scrolls its own <section>, so `scroll-behavior` on <html> never
-# fires - anchor clicks teleported. This zero-height component reaches into
-# the parent document, intercepts in-page anchor clicks, and drives one eased
-# glide to the destination - a scroll, not a teleport and not a slide change.
-# Guarded so Streamlit reruns never stack duplicate listeners.
-# tools/deep_scan.mjs times every button's flight frame by frame.
-_html("""
-<script>
-(function() {
-  const P = window.parent.document;
-  if (P.__meleonaGlide) return;          // rerun guard: bind once per page
-  P.__meleonaGlide = true;
-
-  /* Charts inside a tab or expander are rendered while their container is
-     HIDDEN, so it measures 0px wide and Plotly falls back to its 700px
-     default - which then sits ~90px short inside a 790px box and leaves a
-     gap. Plotly's responsive mode only re-lays out on a WINDOW resize, and
-     revealing a tab fires no such event, so the stale width sticks.
-     Dispatching one resize after the reveal makes every chart re-fit its
-     real container. Verified: 700px -> 790px exact fit. */
-  P.addEventListener('click', function(e) {
-    if (e.target.closest && e.target.closest('[role="tab"], summary')) {
-      /* Twice on purpose: the first nudge catches the common case, the second
-         covers containers still settling their width when the first fires
-         (measured a chart mid-settle at 700px in a 755px box). Two resize
-         events are cheap - Plotly only re-lays out figures whose box moved. */
-      [140, 620].forEach(function(d) {
-        setTimeout(function() {
-          window.parent.dispatchEvent(new Event('resize'));
-        }, d);
-      });
-    }
-  }, true);
-  /* easeInOutSine: the flattest speed profile of the standard in-out curves.
-     Its fastest frame is ~1.6x the average; the quart it replaced peaked at
-     4x, which on the footer's 6000px flights meant ~270px per frame mid-way -
-     a lurch, not a glide. Both ends still settle softly. */
-  const ease = t => -(Math.cos(Math.PI * t) - 1) / 2;
-  /* Streamlit's scroll container has moved between releases - never trust
-     a hardcoded selector. Walk UP from the destination to the first
-     ancestor that really scrolls (proved by a nudge test). */
-  function findScroller(el) {
-    let n = el.parentElement;
-    while (n) {
-      /* Demand a REAL page scroller (hundreds of px of travel). A tiny
-         accidental overflow (e.g. a full-bleed band adding a few px to an
-         inner container) must not hijack the walk - that bug froze every
-         CTA at 1px of movement. */
-      if (n.scrollHeight > n.clientHeight + 120) {
-        /* The scroller carries `scroll-behavior: smooth` (our CSS fallback),
-           which makes a programmatic scrollTop ASYNC - an immediate read-back
-           sees no movement and this test wrongly rejected the real scroller.
-           Force instant behavior for the probe, restore after. */
-        const prevSB = n.style.scrollBehavior;
-        n.style.scrollBehavior = 'auto';
-        /* Nudge BOTH ways. At the bottom of the page - exactly where the
-           footer's links live - a +1 nudge cannot move, the real scroller
-           failed the test, and the footer links were dead (deep scan). */
-        const was = n.scrollTop;
-        n.scrollTop = was + 1;
-        if (n.scrollTop === was) n.scrollTop = was - 1;
-        const ok = n.scrollTop !== was;
-        n.scrollTop = was;
-        n.style.scrollBehavior = prevSB;
-        if (ok) return n;
-      }
-      n = n.parentElement;
-    }
-    return P.scrollingElement;
-  }
-  function targetY(scroller, el) {
-    return el.getBoundingClientRect().top -
-           scroller.getBoundingClientRect().top + scroller.scrollTop - 26;
-  }
-  function glide(scroller, el, dur, settled) {
-    /* Our rAF drives every frame - the scroller's own smooth behavior would
-       fight it (each scrollTo becoming its own animation). Instant while we
-       fly, restored when we land. */
-    const prevSB = scroller.style.scrollBehavior;
-    scroller.style.scrollBehavior = 'auto';
-    const y0 = scroller.scrollTop, d = targetY(scroller, el) - y0,
-          t0 = performance.now();
-    (function f(now) {
-      const p = Math.min(1, (now - t0) / dur);
-      scroller.scrollTo(0, y0 + d * ease(p));
-      if (p < 1) { requestAnimationFrame(f); return; }
-      scroller.style.scrollBehavior = prevSB;
-      /* landing check: if the page shifted mid-flight (a chart mounted,
-         a rerun repainted), re-aim once with a short corrective glide -
-         the reader always ends ON the section the button promised. */
-      const drift = targetY(scroller, el) - scroller.scrollTop;
-      if (!settled && Math.abs(drift) > 4) glide(scroller, el, 320, true);
-    })(t0);
-  }
-  P.addEventListener('click', function(e) {
-    const a = e.target.closest('a[href^="#"]');
-    if (!a) return;
-    const el = P.getElementById(a.getAttribute('href').slice(1));
-    if (!el) return;
-    const scroller = findScroller(el);
-    if (!scroller) return;               // nothing scrolls: let native run
-    e.preventDefault(); e.stopPropagation();
-    /* Calm over speed: 1500ms on a slow-out curve reads as being LED
-       somewhere, where a fast jump reads as a slide change. */
-    glide(scroller, el, 1500, false);
-    /* release the arrow so it falls ahead of the page it is pulling */
-    if (a.classList.contains('cta-btn')) {
-      a.classList.remove('is-launching'); void a.offsetWidth;
-      a.classList.add('is-launching');
-      setTimeout(function () { a.classList.remove('is-launching'); }, 1250);
-    }
-    /* No arrival theatre on the destination. It used to drop to 25% opacity
-       and slide 26px the instant the button was pressed, then rise in as the
-       glide landed (plus a photo "launch" on the band and a frame on
-       Conviction) - a slide change, not a scroll, and the deep scan measured
-       the flash on every button. The section is simply there when you
-       arrive; the glide is the whole transition. */
-  }, true);
-})();
-</script>
-""", height=0)

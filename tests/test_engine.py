@@ -3147,7 +3147,7 @@ def test_public_files_give_crawlers_and_link_previews_a_real_head(tmp_path=None)
     for tag in ('name="description"', 'property="og:image" content="https://example.test/og-image.png"',
                 'rel="canonical" href="https://example.test/"', "summary_large_image",
                 "location.replace('/404.html')", "./static/js/a.js", "<div id='root'>",
-                'id="pre-boot"'):
+                'id="boot-skel"', 'href="./app/static/app.css"'):
         assert tag in first, tag
     assert "Sitemap: https://example.test/sitemap.xml" in (d / "robots.txt").read_text()
     assert "<loc>https://example.test/</loc>" in (d / "sitemap.xml").read_text()
@@ -3785,6 +3785,197 @@ def test_metric_labels_and_values_wrap_instead_of_ending_in_an_ellipsis():
         body = " ".join(b for sel, b in rules if part in sel)
         assert re.search(r"white-space:\s*normal", body), f"{part} still kept to one line"
         assert re.search(r"text-overflow:\s*clip", body), f"{part} still ends in an ellipsis"
+
+
+def _tab_strip_slot(at) -> int:
+    """Top-level position of the first st.tabs block (the Risk Topology strip)."""
+    return next(i for i, c in at.main.children.items()
+                if getattr(c, "type", None) == "tab_container")
+
+
+def test_the_tab_strip_keeps_its_slot_whatever_the_basket():
+    """John, 2026-10-19: switching to MAG-7 showed the Risk Topology map twice.
+    Streamlit keys every element by its position; The Book wrote one top-level
+    card per name (17 on the default basket, 13 on MAG-7), so the tab strip
+    moved from slot 44 to 40 and the old strip, map and all, stayed on screen
+    faded until the run ended (~12 s offline, up to ~35 s live). The outside-
+    anchor toggle moved it too and reloaded the map for nothing. Nothing above
+    the tabs may change the number of top-level elements."""
+    at, restore = _offline_app()
+    try:
+        slots = {"default": _tab_strip_slot(at)}
+        at.selectbox[[w.label for w in at.selectbox].index("Preset basket")].set_value(
+            "Mega-cap tech (Mag 7 + QQQ)").run()
+        assert not at.exception, [e.value for e in at.exception]
+        slots["MAG-7"] = _tab_strip_slot(at)
+        at.toggle(key="book_fallback").set_value(False).run()
+        slots["no outside anchor"] = _tab_strip_slot(at)
+        assert len(set(slots.values())) == 1, f"tab strip moved: {slots}"
+    finally:
+        restore()
+
+
+def test_the_glide_is_bound_before_any_stop_and_rebinds():
+    """John, 2026-10-19: "sometimes the button does not transition". The
+    glide listener came from a zero-height iframe at the END of main.py,
+    behind a bind-once guard. A run that ended in st.stop() never sent the
+    iframe, Streamlit removed it, its listener died, and the guard kept the
+    next iframe from binding: every button jumped until a reload (15/15
+    measured). On every load the buttons were live but unwired for the
+    2.7-4.6 s before the script end. And a clock-driven step jumped 66-81% of
+    the way in one frame when the page was busy."""
+    import ast
+    src = (pathlib.Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
+    tree = ast.parse(src)
+    top = [n for n in tree.body if isinstance(n, ast.Expr) and isinstance(n.value, ast.Call)]
+    def line_of(pred):
+        return next(n.lineno for n in top if pred(n.value))
+    glide = line_of(lambda c: ast.unparse(c.func) == "_html" and c.args
+                    and isinstance(c.args[0], ast.Constant) and "__meleonaGlide" in c.args[0].value)
+    css = line_of(lambda c: ast.unparse(c.func) == "load_css")
+    hero = line_of(lambda c: ast.unparse(c.func) == "st.markdown" and "hero_html" in ast.unparse(c))
+    stops = [n.lineno for n in ast.walk(tree) if isinstance(n, ast.Call)
+             and ast.unparse(n.func) == "st.stop" and n.lineno > css]
+    assert css < glide < hero and glide < min(stops), (
+        f"glide at line {glide}: must follow load_css ({css}) and precede the hero "
+        f"({hero}) and every st.stop() after it (first {min(stops)})")
+    script = next(c.value.args[0].value for c in top if c.value.args
+                  and isinstance(c.value.args[0], ast.Constant)
+                  and "__meleonaGlide" in c.value.args[0].value)
+    assert "__meleonaGlide) return" not in script, "a bind-once guard blocks rebinding again"
+    assert "removeEventListener" in script, "a new glide frame must replace the old listeners"
+    assert "(now - t0) / dur" not in script, "a busy frame can jump most of the flight again"
+
+
+def _top_markdown(at) -> list[tuple[int, str]]:
+    """(top-level index, body) of every top-level markdown element, in order."""
+    return [(i, c.value) for i, c in at.main.children.items()
+            if getattr(c, "type", None) == "markdown"]
+
+
+def test_the_skeleton_paints_first_and_the_hero_lifts_it():
+    """John, 2026-10-19: "When opening the website, I was not met with a
+    skeleton loader". The skeleton was sent by main.py AFTER ~5 MB of base64
+    photos on the same websocket, so it arrived with the hero it was meant to
+    stand in for (phone at 9 Mbps: 8 s of blank page first); it lifted on a
+    fixed 2.1 s timer; reduced motion hid it. And nothing main.py sends can
+    arrive before Streamlit's JavaScript has started - 2.5 s (laptop) to 4.4 s
+    (phone) of plain screen. Now index.html paints the hero's own skeleton
+    from the first frame, the photos are files, the hero lifts the skeleton
+    when it arrives, and a reduced-motion visitor sees it held still."""
+    import re
+    import tempfile
+    import tools.public_files as pf
+    from hero import boot_skeleton_html
+    root = pathlib.Path(__file__).resolve().parent.parent
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    with tempfile.TemporaryDirectory() as tmp:
+        d = pathlib.Path(tmp)
+        (d / "index.html").write_text(
+            "<!doctype html><html><head><title>Streamlit</title>"
+            '<link href="./static/css/index.css" rel="stylesheet"></head>'
+            "<body><noscript>You need JS.</noscript><div id='root'></div></body></html>",
+            encoding="utf-8")
+        pf.install(d, "https://example.test")
+        page = (d / "index.html").read_text(encoding="utf-8")
+    head, body = page.split("<body>", 1)
+    assert '<link rel="stylesheet" href="./app/static/app.css">' in head, \
+        "the skeleton's stylesheet is not in place for the first paint"
+    assert body.index(boot_skeleton_html()) < body.index("<div id='root'>"), \
+        "index.html does not paint the hero's skeleton before the app"
+    at, restore = _offline_app()
+    try:
+        first = _top_markdown(at)
+        assert not any('id="boot-skel"' in v for _, v in first), \
+            "a second skeleton is sent from the app"
+        hero = next(i for i, v in first if 'id="hero"' in v)
+        assert not any("data:image/jpeg;base64" in v for _, v in first), \
+            "a photo is inlined into the websocket again"
+        assert any("url(app/static/facade.jpg)" in v for _, v in first)
+        assert any("url(app/static/band.jpg)" in v for _, v in first)
+        assert re.search(r"#boot-skel\s*\{[^}]*opacity:\s*0", dict(first)[hero]), \
+            "the hero does not lift the skeleton when it arrives"
+        # The full-bleed hero swallows the 1rem flex gap of each block above it
+        # plus one 16px overshoot the skeleton copies (its own -16px).
+        n = int(re.search(r"calc\(-2\.4rem - (\d+)px\)", css).group(1))
+        assert n == 16 * (hero + 1), f"hero margin {n}px for {hero} blocks above it"
+        at.run()
+        assert next(i for i, v in _top_markdown(at) if 'id="hero"' in v) == hero, \
+            "the hero moved on a rerun"
+    finally:
+        restore()
+    assert not re.search(r"#boot-skel\s*\{[^}]*display:\s*none", css), \
+        "the skeleton is hidden somewhere (reduced motion?)"
+    delay = re.search(r"#boot-skel\s*\{[^}]*animation:\s*boot-off[^;]*?(\d+)s forwards", css)
+    assert delay and int(delay.group(1)) >= 20, "the skeleton lifts on a timer again"
+    import tomllib
+    cfg = tomllib.loads((root / ".streamlit" / "config.toml").read_text(encoding="utf-8"))
+    assert cfg["server"].get("enableStaticServing") is True
+    served = sorted(p.name for p in (root / "static").iterdir())
+    assert served == ["app.css", "band.jpg", "facade.jpg"], \
+        f"static/ is served to the public; keep it to public files: {served}"
+
+
+def test_a_running_script_is_visible_to_the_visitor():
+    """John, 2026-10-19: "the loading wheel has no animation or no clear
+    noticeable visual that it is loading". Streamlit's running indicator lives
+    in the header, which the page hides (it covered the crest); the spinners
+    are 16 px rings, mostly off screen or inside closed drawers, and frozen
+    under reduced motion. While a run is in flight the page must show its own
+    sign: fixed, never in the way of a click, and still there - just still -
+    when motion is reduced."""
+    import re
+    root = pathlib.Path(__file__).resolve().parent.parent
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    on = r'body:has\(\[data-testid="stStatusWidgetRunningIcon"\]\)'
+    rules = re.findall(r"([^{}]+)\{([^}]*)\}", css)
+    rail = " ".join(b for sel, b in rules if re.search(on + r"::before", sel))
+    tag = " ".join(b for sel, b in rules if re.search(on + r"::after", sel))
+    for name, body in (("rail", rail), ("tag", tag)):
+        assert body, f"no running {name} in app.css"
+        assert re.search(r"position:\s*fixed", body), f"running {name} is not fixed"
+        assert re.search(r"pointer-events:\s*none", body), f"running {name} can block clicks"
+    assert re.search(r'content:\s*"Updating', tag), "the running tag says nothing"
+    assert re.search(r"animation:\s*run-rail", rail), "the rail does not move"
+    reduce = " ".join(re.findall(r"@media \(prefers-reduced-motion: reduce\)\s*\{(.*?)\}\s*\}", css, re.S))
+    assert not re.search(on + r"::after[^{]*\{[^}]*(display:\s*none|visibility:\s*hidden)", reduce), (
+        "the running tag is hidden when motion is reduced")
+    # The page keys off Streamlit's own marker; an upgrade that renames it must
+    # fail here, not silently drop the sign (as test_streamlit_header_bar_is_hidden).
+    import streamlit
+    js = pathlib.Path(streamlit.__file__).parent / "static" / "static" / "js"
+    assert any("stStatusWidgetRunningIcon" in p.read_text(encoding="utf-8", errors="ignore")
+               for p in js.glob("index.*.js")), "Streamlit no longer renders stStatusWidgetRunningIcon"
+
+
+def test_every_cached_yahoo_pull_says_what_it_is_doing():
+    """John, 2026-10-19: changing basket, the Grit Zone "looked stalled, as if
+    the project crashed". Grit maths takes 0.2 s; the wait is a new basket's
+    first full-history pulls from Yahoo, and four of them showed nothing (one
+    showed Streamlit's developer text, "Running load_risk_free_rate()"). Every
+    cached function that reaches the feed must say, in words, what it is
+    doing while it waits."""
+    import ast
+    src = (pathlib.Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
+    feed = {"fetch_prices", "fetch_dollar_volume", "average_dollar_volume",
+            "fetch_risk_free_rate", "grit_scores", "crisis_cushion", "replay_returns",
+            "anchor_frame", "build_map_payload", "load_conviction", "security_master"}
+    silent = []
+    for fn in ast.walk(ast.parse(src)):
+        if not isinstance(fn, ast.FunctionDef):
+            continue
+        deco = [d for d in fn.decorator_list if isinstance(d, ast.Call)
+                and ast.unparse(d.func) == "st.cache_data"]
+        calls = {ast.unparse(c.func).split(".")[-1] for c in ast.walk(fn)
+                 if isinstance(c, ast.Call)}
+        if not deco or not (calls & feed):
+            continue
+        spin = {k.arg: k.value for k in deco[0].keywords}.get("show_spinner")
+        words = (isinstance(spin, ast.Constant) and isinstance(spin.value, str)
+                 and spin.value.strip()) or isinstance(spin, ast.JoinedStr)
+        if not words:
+            silent.append(fn.name)
+    assert not silent, f"cached Yahoo pulls with no words on screen: {silent}"
 
 
 def test_section_titles_wrap_instead_of_running_out_of_their_box():

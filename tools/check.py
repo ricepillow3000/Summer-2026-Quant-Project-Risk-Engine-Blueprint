@@ -6,7 +6,7 @@ One command before every push - the easy path is the checked path.
 Runs, in order, and stops nothing early so you see every problem at once:
 
 1. lint      ruff: undefined names, unused imports/variables, syntax errors
-2. security  bandit: medium/high findings in src/, main.py, tools/
+2. security  bandit: medium/high findings in src/, main.py, hero.py, tools/
 3. tests     tests.test_engine - math invariants, security controls, the
              layering rule (src/ never imports the UI), design rules
 4. narrative tests.test_narrative
@@ -22,8 +22,8 @@ import sys
 PY = sys.executable
 STEPS = [
     ("lint", [PY, "-m", "ruff", "check", "--select", "F,E9,PLE", "--ignore", "F541",
-              "main.py", "src", "tests", "tools"]),
-    ("security", [PY, "-m", "bandit", "-q", "-r", "src", "main.py", "tools", "-ll"]),
+              "main.py", "hero.py", "src", "tests", "tools"]),
+    ("security", [PY, "-m", "bandit", "-q", "-r", "src", "main.py", "hero.py", "tools", "-ll"]),
     ("tests", [PY, "-m", "tests.test_engine"]),
     ("narrative", [PY, "-m", "tests.test_narrative"]),
 ]

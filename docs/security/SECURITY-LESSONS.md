@@ -93,5 +93,5 @@ about **knocking the site over** and **showing too much**. Fixed, each test-firs
 Open, for John to decide (measurement first): **one stranger can spend the whole day's Yahoo request budget**
 (`MAX_REQUESTS_PER_DAY` is shared; about 35 fresh 25-name baskets empty it) - a reserve for the presets would fix it;
 and **`server.maxMessageSize` is the 200 MB default** - lowering it needs the largest real page message measured
-first (the inlined `facade.jpg` alone is ~3.5 MB). Lesson for future sweeps: **a hidden button is not a locked
+first (the photos are no longer inlined since 2026-10-19 - `facade.jpg` was ~3.5 MB of one message; the largest left is the map payload, measure it). Lesson for future sweeps: **a hidden button is not a locked
 door** - Streamlit's protocol still answered messages the UI no longer showed.
