@@ -10,7 +10,10 @@ things to Streamlit's static root:
 1. copies `public/` - favicon, apple-touch icon, Open Graph image - and writes
    robots.txt and sitemap.xml for the deployed URL;
 2. adds a title, meta description, canonical URL, Open Graph / Twitter tags and
-   a <noscript> description to index.html's <head>, once (idempotent).
+   a <noscript> description to index.html's <head>, once (idempotent);
+3. paints the hero's boot skeleton straight from index.html (with app.css
+   linked in the head), so a visitor sees the page's shape from the first
+   frame, before Streamlit's JavaScript has started.
 
 It never blocks startup: any failure prints a warning and exits 0, and the app
 runs exactly as before.
@@ -33,6 +36,7 @@ TITLE = "Meleona - Portfolio Risk Engine"
 DESCRIPTION = ("VaR, CVaR, Monte Carlo stress testing and factor exposures, computed "
                "live from Yahoo Finance data - every number traceable to its source.")
 MARK, END = "<!-- meleona-head -->", "<!-- /meleona-head -->"
+BOOT_MARK, BOOT_END = "<!-- meleona-boot -->", "<!-- /meleona-boot -->"
 # The commit this process was built from. Railway sets RAILWAY_GIT_COMMIT_SHA
 # on a GitHub deploy and posts nothing back to GitHub, so "is the fix live?"
 # was guesswork (2026-09-03, 2026-09-09) until the page said so itself.
@@ -40,12 +44,9 @@ BUILD = os.environ.get("RAILWAY_GIT_COMMIT_SHA") or os.environ.get("GITHUB_SHA")
 PUBLIC = pathlib.Path(__file__).resolve().parent.parent / "public"
 
 
-# Painted straight from the HTML, before Streamlit's JavaScript bundle loads:
-# without it the first ~3s of a cold visit were a blank page. Same beige and
-# the same gutter label as the boot skeleton, one layer beneath it; app.css
-# hides it the moment the app's own skeleton arrives, and it fades by itself
-# after 12s so it can never cover a Streamlit connection-error message.
-PRE_BOOT = (
+# The plain screen index.html used to paint first (until 2026-10-19), removed
+# from installs that still carry it.
+OLD_PRE_BOOT = (
     '<div id="pre-boot" aria-hidden="true" style="position:fixed;inset:0;z-index:998;'
     'background:#EDE9E3;animation:pre-boot-off .4s ease 12s forwards">'
     '<style>@keyframes pre-boot-off{to{opacity:0;visibility:hidden}}</style>'
@@ -53,6 +54,28 @@ PRE_BOOT = (
     "font:11px 'Helvetica Neue',Arial,sans-serif;letter-spacing:.24em;"
     'text-transform:uppercase;color:#6A5030">Loading Meleona</div></div>\n'
 )
+
+
+def boot_block() -> str:
+    """The hero's boot skeleton, painted from the HTML before Streamlit starts.
+
+    The first 2.5 s (laptop) to 4.4 s (phone, 9 Mbps) of a visit happen before
+    Streamlit's JavaScript can show anything the app sends; a plain beige
+    screen there read as "no skeleton" (John, 2026-10-19). The skeleton is the
+    hero's own markup (hero.py), styled by app.css (linked in the head), so it
+    has the hero's exact shape; the real hero lifts it (main.py). The inline
+    rules only keep a veil if app.css ever fails to load - words stay
+    invisible - and fade it after 30 s so it can never cover a Streamlit
+    connection-error message for good."""
+    fallback = ('<style>#boot-skel{position:fixed;inset:0;z-index:999;background:#EDE9E3;'
+                'color:transparent;animation:boot-off .55s ease 30s forwards}'
+                '@keyframes boot-off{to{opacity:0;visibility:hidden}}</style>')
+    try:
+        from hero import boot_skeleton_html
+        skel = boot_skeleton_html()
+    except Exception:  # noqa: BLE001 - never block startup: a plain veil instead
+        skel = '<div id="boot-skel" aria-hidden="true"></div>'
+    return f"{BOOT_MARK}\n{fallback}{skel}\n{BOOT_END}\n"
 
 
 def head_tags(site_url: str, build: str = "") -> str:
@@ -66,6 +89,9 @@ def head_tags(site_url: str, build: str = "") -> str:
         f'<link rel="icon" type="image/png" href="/favicon.png">\n'
         f'<link rel="apple-touch-icon" href="/apple-touch-icon.png">\n'
         f'<meta name="theme-color" content="#EDE9E3">\n'
+        # The boot skeleton below the <body> tag is styled by this sheet, so it
+        # must be in place for the first paint (served by enableStaticServing).
+        '<link rel="stylesheet" href="./app/static/app.css">\n'
         f'<meta property="og:type" content="website">\n'
         f'<meta property="og:title" content="{t}">\n'
         f'<meta property="og:description" content="{d}">\n'
@@ -113,7 +139,12 @@ def install(static_dir: pathlib.Path, site_url: str = SITE_URL,
         new = new.replace("<head>", "<head>\n" + block, 1)
         new = new.replace(
             "<noscript>", f"<noscript><p>{html.escape(TITLE)} - {html.escape(DESCRIPTION)}</p>", 1)
-        new = new.replace("<body>", "<body>\n" + PRE_BOOT, 1)
+        new = new.replace("<body>", "<body>\n" + boot_block(), 1)
+    if BOOT_MARK in new:                   # the skeleton follows the hero's copy
+        i, j = new.index(BOOT_MARK), new.index(BOOT_END) + len(BOOT_END) + 1
+        new = new[:i] + boot_block() + new[j:]
+    else:                                  # installed before the skeleton moved here
+        new = new.replace(OLD_PRE_BOOT, "").replace("<body>", "<body>\n" + boot_block(), 1)
     if new != page:
         index.write_text(new, encoding="utf-8")
         done.append("index.html <head>")

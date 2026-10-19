@@ -58,6 +58,7 @@ from src.observability import (log_incident, log_session_start,
                                new_session_ref, setup_logging)
 from src.eigenrisk import eigen_factors, marcenko_pastur_bounds, pc1_exposure
 from src.scenarios import HISTORICAL_REGIMES, replay_returns
+from hero import N_PATHS, hero_html
 from src.liquidity import (days_to_liquidate, liquidity_profile,
                            liquidity_adjusted_cvar)
 from src.grit import grit_scores, MIN_HISTORY_DAYS
@@ -391,278 +392,32 @@ def grit_breakdown_fig(scores: pd.DataFrame):
 # Anchored on this file, not the working directory: `streamlit run` from any
 # other folder used to crash here on the very first line of the hero.
 ASSETS = Path(__file__).parent / "assets"
+STATIC = Path(__file__).parent / "static"   # served at /app/static/
 
 # ---- Hero: the pitch, not the dashboard ----
 with open(ASSETS / "logo.svg", "r", encoding="utf-8") as f:
     logo_svg = f.read()
 
-# Architectural plate behind the hero stat deck (replaces the watermark crest).
-# assets/facade.jpg - Unsplash (free commercial license, no attribution
-# required). Duotoned toward the palette in CSS, so the photo can never clash.
-try:
-    with open(ASSETS / "facade.jpg", "rb") as f:
-        _facade_b64 = base64.b64encode(f.read()).decode()
-    st.markdown(
-        # The architecture washes across the WHOLE hero, melting into beige
-        # toward the text side - the building emerges from the page's own
-        # color. Luminosity blend: the photo keeps only its LIGHT - its hue
-        # comes entirely from the base color beneath, which is CITY-STONE
-        # BEIGE in the crest's own warm family (not gray, not orange).
-        f"<style>.hero-section {{ background-color: #C9AF87; "
-        f"background-image: linear-gradient(90deg, "
-        f"#EDE9E3 0%, rgba(237,233,227,.96) 40%, rgba(237,233,227,.62) 66%, "
-        f"rgba(237,233,227,.22) 100%), "
-        f"url(data:image/jpeg;base64,{_facade_b64}); "
-        f"background-size: auto, cover; "
-        f"background-position: left, right 78%; "
-        f"background-blend-mode: normal, luminosity; "
-        # Full-bleed: Casper fills the page edge-to-edge and reaches the top.
-        # The extra -96px swallows the flex-gap of the six zero-height style
-        # blocks Streamlit stacks above the hero (6 x 1rem) - without it a
-        # pale strip of bare page shows between the header and the photo.
-        f"margin: calc(-2.4rem - 96px) calc(50% - 50vw) 0; "
-        f"padding: 96px max(7vw, calc(50vw - 744px)) 48px; "
-        # Ledger frame, same grammar as Gotham: 2px bronze rule top and
-        # bottom with a 1px inner hairline 14px inside each edge.
-        f"box-shadow: inset 0 2px 0 rgba(176,138,85,.55), "
-        f"inset 0 -2px 0 rgba(176,138,85,.55), "
-        f"inset 0 16px 0 -15px rgba(176,138,85,.45), "
-        f"inset 0 -16px 0 -15px rgba(176,138,85,.45); }}</style>",
-        unsafe_allow_html=True)
-except OSError:
-    pass  # no photo on disk -> tiles render on the plain field, nothing breaks
 
-# --- SHORT-VIEWPORT HERO -----------------------------------------------------
-# The primary CTA must be clickable WITHOUT scrolling. Two things stop that on
-# a short screen: below 1100px wide the hero grid drops to ONE column, so the
-# stat deck stacks under the text instead of beside it, and the title clamp
-# pins to its maximum. Measured: a 1198px hero in a 631px viewport, CTA 279px
-# below the fold.
-#
-# The defect is VERTICAL, so this keys off viewport HEIGHT - a tall screen
-# keeps the full editorial scale untouched and only a short one compresses.
-# Nothing is hidden: the stat deck simply sits below the fold, where supporting
-# evidence belongs; the call to action does not.
-#
-# Emitted HERE, unconditionally, and last on purpose. `.hero-title` is
-# redefined twice further up (96px and 84px, both !important) and the hero
-# padding comes from the injected photo <style> just above, which is inside a
-# try/except and may not run. Anything earlier in the sheet is silently
-# shadowed - that is the failure this file has hit before.
-st.markdown("""<style>
-/* A 1080p laptop leaves roughly 900px of viewport after browser chrome, and
-   at full scale the CTA lands at 926px - just under the fold. So the first,
-   gentlest tier starts at 1000px rather than 860px; only genuinely tall
-   screens keep the untouched editorial scale. */
-@media (max-height: 1000px) {
-  .hero-section { padding-top: 46px !important; padding-bottom: 32px !important;
-                  min-height: 0 !important; }
-  .hero-title { font-size: clamp(34px, 6.6vw, 64px) !important;
-                line-height: 1.02 !important; }
-  .hero-sub { font-size: 17px !important; line-height: 1.5 !important; }
-  .hero-crest { width: 104px !important; height: 104px !important; }
-}
-@media (max-height: 860px) {
-  .hero-section { padding-top: 30px !important; padding-bottom: 22px !important;
-                  min-height: 0 !important; gap: 18px !important; }
-  .hero-left { gap: 8px !important; }
-  .hero-title { font-size: clamp(30px, 5.2vw, 50px) !important;
-                line-height: 1.03 !important; margin: 0 !important; }
-  .hero-sub { font-size: 15.5px !important; line-height: 1.42 !important;
-              max-width: 540px !important; }
-  .hero-crest { width: 84px !important; height: 84px !important;
-                padding: 12px !important; }
-  .hero-stats { gap: 8px !important; }
-  .hstat { padding: 10px 12px 8px !important; }
-  .hstat .hnum { font-size: 26px !important; }
-}
-@media (max-height: 700px) {
-  .hero-section { padding-top: 20px !important; padding-bottom: 16px !important; }
-  .hero-title { font-size: clamp(27px, 4.4vw, 40px) !important; }
-  .hero-sub { font-size: 14.5px !important; }
-}
-/* ---- CTA: matte rectangle, Citadel reference -------------------------
-   The buttons read bland because a later rule overrode the flat base with a
-   180deg gradient, an inset white gloss line, a drop shadow and a ::before
-   skew "shine" sweep, with a hover that lifted 2px and animated its own
-   letter-spacing. That is a glossy game pill wearing a serif label, and the
-   motion is doing the work the colour should do.
-
-   Citadel's own buttons are the opposite: a hard rectangle, ONE flat colour,
-   no bevel, no shadow, no shine - and the entire interaction is a confident
-   colour change. That is where the presence comes from, so the dazzle here is
-   the inversion on hover, not an effect layered on top.
-
-   Colours stay strictly inside the palette, and each hover lands on a colour
-   that belongs to the surface the button sits on:
-     light beige field  charcoal -> bronze
-     dark showcase band bronze   -> beige (a clean inversion into the page)
-   Bronze always carries DARK type: cream on bronze measures about 1.8:1,
-   which fails badly, while charcoal on bronze is about 6.8:1. */
-.cta-btn {
-  background-image: none !important;
-  background-color: #3F3B35 !important;
-  color: #F4F1EA !important;
-  border: 1px solid #3F3B35 !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
-  transition: background-color .22s ease, border-color .22s ease,
-              color .22s ease !important;
-}
-/* the shine sweep - the least matte thing in the file */
-.cta-btn::before { display: none !important; }
-.cta-btn:hover {
-  background-image: none !important;
-  background-color: #9A7B4F !important;
-  border-color: #9A7B4F !important;
-  color: #241F1A !important;
-  transform: none !important;
-  letter-spacing: 0.11em !important;
-  box-shadow: none !important;
-}
-.cta-btn:active { transform: none !important; background-color: #8A6A3C !important; }
-
-/* A CTA sitting ON the dark showcase band needs the inverse treatment. The
-   default .cta-btn is a charcoal gradient (#4A453D -> #3A362F) built for the
-   beige field; against the band's own #3F3B35 that is barely eleven points of
-   luminance apart - invisible, the same complaint as a transparent button on
-   beige, just mirrored. This variant inverts to solid bronze with dark type,
-   which is the highest-contrast pairing available inside the palette.
-   Rule: choose the variant by the BACKGROUND the button sits on. */
-.cta-btn.on-dark {
-  background-image: none !important;
-  /* the palette's LIGHTER bronze. It raises BOTH the type contrast on the
-     button and its separation from the #3F3B35 band (4.1 -> ~5.3 and
-     2.8 -> ~3.6); the darker #9A7B4F missed the 4.5 and 3.0 thresholds. */
-  background-color: #B08A55 !important;
-  color: #241F1A !important;
-  border: 1px solid #B08A55 !important;
-  box-shadow: none !important;
-}
-/* Inverts into the page's own beige - maximum separation from the charcoal
-   band without introducing a colour the palette does not already own. */
-.cta-btn.on-dark:hover {
-  background-color: #EDE9E3 !important;
-  border-color: #EDE9E3 !important;
-  color: #2E2B26 !important;
-}
-.cta-btn.on-dark:active { background-color: #D4CDBF !important; }
-
-/* ---- The Slice: fill the width, shorten the column, free the button ----
-   Measured at 1920x860: the row is 465px tall and driven ENTIRELY by the
-   left sketch, while the maths plaque is capped at max-width 560px inside a
-   694px column - 134px of dead width that forces its text into more lines
-   than it needs. Letting the plaque use its column does two jobs at once:
-   the empty space fills, and the same words occupy fewer lines, so the block
-   gets shorter rather than taller. The sketch then comes down to match, and
-   the CTA underneath rises into view instead of sitting on the fold.
-   Widths and rhythm are untouched on tall screens. */
-.st-key-gungnir_zone .gungnir-plaque { max-width: 100% !important; }
-
-@media (max-height: 1000px) {
-  /* the sketch is the tallest thing in the row, and mostly air around the
-     two circles - trim the drawing, not the labels */
-  .st-key-gungnir_zone svg[viewBox="0 0 360 200"] {
-    width: 400px !important; max-width: 100% !important; height: auto !important;
-  }
-  .st-key-gungnir_zone .gungnir-head { margin-bottom: 2px !important; }
-}
-@media (max-height: 860px) {
-  .st-key-gungnir_zone svg[viewBox="0 0 360 200"] { width: 348px !important; }
-  .st-key-gungnir_zone .gungnir-plaque {
-    padding: 14px 18px 12px !important; font-size: 13px !important;
-  }
-}
-
-/* The Slice has to read as one screen: land on it and the controls AND the
-   button onward are both in view. Its zone carries 178px of vertical chrome
-   (64/84 padding plus a 30px margin) before any content, which is generous on
-   a tall display and wasteful on a laptop. Same height-tiered treatment as
-   the hero - nothing removed, just tightened where the screen is short. */
-@media (max-height: 1000px) {
-  .st-key-gungnir_zone { padding: 30px 0 34px !important; margin-top: 14px !important; }
-  .gungnir-head .showcase-title { font-size: 26px !important; margin: 4px 0 8px !important; }
-  .gungnir-sub { font-size: 13.5px !important; }
-  .gungnir-plaque { margin-top: 18px !important; padding: 20px 24px 18px !important; }
-}
-@media (max-height: 860px) {
-  .st-key-gungnir_zone { padding: 20px 0 24px !important; margin-top: 10px !important; }
-  .gungnir-head .showcase-title { font-size: 23px !important; }
-  .gungnir-sub { font-size: 12.5px !important; }
-  .gungnir-plaque { margin-top: 12px !important; padding: 15px 18px 13px !important; }
-}
-</style>""", unsafe_allow_html=True)
-
-# Dark-band plate: the charcoal showcase band gets its own architectural
-# photograph (assets/band.jpg - Unsplash, free commercial license): fog-bound
-# towers, duotoned near-charcoal in CSS with a scrim baked in so the beige
-# text stays the loudest thing on the band. Same graceful fallback.
-try:
-    with open(ASSETS / "band.jpg", "rb") as f:
-        _band_b64 = base64.b64encode(f.read()).decode()
-    st.markdown(
-        f"<style>.showcase-row::before {{ background-image: "
-        f"linear-gradient(165deg, rgba(59,50,40,.42), rgba(45,39,32,.68)), "
-        f"url(data:image/jpeg;base64,{_band_b64}); }}</style>",
-        unsafe_allow_html=True)
-except OSError:
-    pass  # band stays plain charcoal
-
-# The hero's words live here ONCE. The boot skeleton renders this same copy
-# through the same classes as transparent ink, so every shimmer bar is exactly
-# the size and line-break of the text it stands in for, at every viewport and
-# under every short-screen tier. A skeleton drawn with its own boxes drifted
-# out of shape the first time the hero changed; this one cannot.
-HERO_TITLE_LINES = ("Meleona", "Portfolio Risk Engine")
-HERO_SUB = ("A hedge-fund-grade portfolio risk engine - VaR, CVaR, Monte Carlo stress "
-            "testing, and named factor exposures, computed live from real market data. "
-            "But every stock has drawdowns. What sets a name apart is what happens "
-            "after one - that's what we call <strong>grit</strong>.")
-HERO_CTA = "Explore what we do"
-# The tiles quote the engine, so they read its constants rather than restate
-# them: add a crisis to HISTORICAL_REGIMES and the hero, the footer and the
-# replay list all move together.
-N_PATHS = 10_000
-HERO_STATS = ((f"{N_PATHS:,}", "Simulated paths"), (str(len(HISTORICAL_REGIMES)), "Crises replayed"),
-              ("2", "Monte Carlo engines"), ("4", "Factor exposures"))
-_CTA_ARROW = ('<span class="cta-arrow" aria-hidden="true"><svg viewBox="0 0 16 30" fill="none" '
-              'xmlns="http://www.w3.org/2000/svg"><path class="shaft" d="M8 1 V22" '
-              'stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path '
-              'class="head" d="M2.5 16.5 L8 22.5 L13.5 16.5" stroke="currentColor" '
-              'stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>')
+# The short-viewport hero tiers live at the END of static/app.css (search
+# "SHORT-VIEWPORT HERO"): the boot skeleton in index.html needs them from
+# the first frame, before anything here is sent.
 
 
-def hero_html(skeleton: bool = False) -> str:
-    """The hero, or its boot skeleton: same classes, same copy, words masked.
-
-    Kept on one line per element - st.markdown truncates raw HTML at a blank
-    line (Lessons #5)."""
-    ink = (lambda t: f'<span class="sk-ink">{t}</span>') if skeleton else (lambda t: t)
-    title = "".join(f'<span class="hline">{ink(line)}</span>' for line in HERO_TITLE_LINES)
-    stats = "".join(f'<div class="hstat"><div class="n">{ink(n)}</div>'
-                    f'<div class="l">{ink(label)}</div></div>' for n, label in HERO_STATS)
-    if skeleton:
-        head, crest = '<div class="hero-section">', ""
-        cta = f'<span class="cta-btn">{HERO_CTA}{_CTA_ARROW}</span>'
-    else:
-        head, crest = '<div class="hero-section reveal" id="hero">', logo_svg
-        cta = f'<a href="#grit-showcase" class="cta-btn">{HERO_CTA}{_CTA_ARROW}</a>'
-    return (f'{head}<div class="hero-left"><div class="hero-crest">{crest}</div>'
-            f'<h1 class="hero-title">{title}</h1>'
-            f'<div class="hero-sub">{ink(HERO_SUB)}</div>{cta}</div>'
-            f'<div class="hero-stats">{stats}</div></div>')
+# The hero's words and markup live in hero.py, shared with the boot skeleton
+# tools/public_files.py writes into index.html.
 
 
-# Boot veil renders ONLY on the first script run of a session. Streamlit
-# reruns the whole script on every interaction (and the freshness ticker),
-# which would re-create the veil and restart its fade forever - so after
-# the first run it is simply never rendered again.
+# The boot skeleton is painted by index.html itself (tools/public_files.py),
+# from the first frame: sent from here it could only arrive once Streamlit's
+# JavaScript had started, and the first 2.5 s (laptop) to 4.4 s (phone) were a
+# plain screen (2026-10-19). This slot keeps the first-load tile fly-in, which
+# must render ONLY on the first script run of a session - Streamlit reruns the
+# whole script on every interaction, which would replay it forever.
 if not st.session_state.get("_booted"):
     st.session_state["_booted"] = True
     st.markdown(
-        '<div id="boot-skel" aria-hidden="true">' + hero_html(skeleton=True)
-        + '<div class="sk-band"></div><div class="sk-load">Loading market data</div></div>'
-        + """<style>
+        """<style>
   /* First-load only: the intro tiles fly in top-to-down (UFO settle). This
      style block renders solely on the un-booted first pass, so Streamlit
      reruns never replay the arrival. Scoped to #hero so the skeleton's own
@@ -680,7 +435,52 @@ else:
     # visitor changed snapped shut under their cursor (recruiter walkthrough).
     st.markdown("", unsafe_allow_html=True)
 
-st.markdown(hero_html(), unsafe_allow_html=True)
+# Architectural plate behind the hero stat deck (replaces the watermark crest).
+# static/facade.jpg - Unsplash (free commercial license, no attribution
+# required). Duotoned toward the palette in CSS, so the photo can never clash.
+# Served as a file from static/ (config.toml enableStaticServing): inlined as
+# base64 it put ~3.5 MB on the websocket AHEAD of the boot skeleton, which then
+# arrived with the hero it stands in for (2026-10-19). Paint only - the hero's
+# layout (full-bleed margin, padding, ledger frame) lives in app.css, so the
+# skeleton has the hero's shape before this arrives. A missing photo holds the
+# slot, so nothing below moves.
+if (STATIC / "facade.jpg").is_file():
+    st.markdown(
+        # The architecture washes across the WHOLE hero, melting into beige
+        # toward the text side - the building emerges from the page's own
+        # color. Luminosity blend: the photo keeps only its LIGHT - its hue
+        # comes entirely from the base color beneath, which is CITY-STONE
+        # BEIGE in the crest's own warm family (not gray, not orange).
+        "<style>.hero-section { background-color: #C9AF87; "
+        "background-image: linear-gradient(90deg, "
+        "#EDE9E3 0%, rgba(237,233,227,.96) 40%, rgba(237,233,227,.62) 66%, "
+        "rgba(237,233,227,.22) 100%), url(app/static/facade.jpg); "
+        "background-size: auto, cover; "
+        "background-position: left, right 78%; "
+        "background-blend-mode: normal, luminosity; }</style>",
+        unsafe_allow_html=True)
+else:
+    st.markdown("", unsafe_allow_html=True)
+
+# Dark-band plate: the charcoal showcase band gets its own architectural
+# photograph (static/band.jpg - Unsplash, free commercial license): fog-bound
+# towers, duotoned near-charcoal in CSS with a scrim baked in so the beige
+# text stays the loudest thing on the band. A file, not base64 (see above).
+if (STATIC / "band.jpg").is_file():
+    st.markdown(
+        "<style>.showcase-row::before { background-image: "
+        "linear-gradient(165deg, rgba(59,50,40,.42), rgba(45,39,32,.68)), "
+        "url(app/static/band.jpg); }</style>",
+        unsafe_allow_html=True)
+else:
+    st.markdown("", unsafe_allow_html=True)  # band stays plain charcoal
+
+# The hero lifts its own skeleton when it arrives - state, not a timer. The
+# veil used to fade on a fixed 2.1 s clock whether or not anything was ready,
+# and under reduced motion (no animation runs) a timer never fires at all.
+_LIFT_SKELETON = ("<style>#pre-boot,#boot-skel{opacity:0;visibility:hidden}"
+                  "#boot-skel *{animation:none!important}</style>")
+st.markdown(hero_html(crest=logo_svg) + _LIFT_SKELETON, unsafe_allow_html=True)
 
 # ---- Showcase: the Grit Zone innovation, explained before you touch a slider ----
 st.markdown("""

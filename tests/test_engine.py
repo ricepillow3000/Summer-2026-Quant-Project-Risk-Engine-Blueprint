@@ -3147,7 +3147,7 @@ def test_public_files_give_crawlers_and_link_previews_a_real_head(tmp_path=None)
     for tag in ('name="description"', 'property="og:image" content="https://example.test/og-image.png"',
                 'rel="canonical" href="https://example.test/"', "summary_large_image",
                 "location.replace('/404.html')", "./static/js/a.js", "<div id='root'>",
-                'id="pre-boot"'):
+                'id="boot-skel"', 'href="./app/static/app.css"'):
         assert tag in first, tag
     assert "Sitemap: https://example.test/sitemap.xml" in (d / "robots.txt").read_text()
     assert "<loc>https://example.test/</loc>" in (d / "sitemap.xml").read_text()
@@ -3813,6 +3813,75 @@ def test_the_tab_strip_keeps_its_slot_whatever_the_basket():
         assert len(set(slots.values())) == 1, f"tab strip moved: {slots}"
     finally:
         restore()
+
+
+def _top_markdown(at) -> list[tuple[int, str]]:
+    """(top-level index, body) of every top-level markdown element, in order."""
+    return [(i, c.value) for i, c in at.main.children.items()
+            if getattr(c, "type", None) == "markdown"]
+
+
+def test_the_skeleton_paints_first_and_the_hero_lifts_it():
+    """John, 2026-10-19: "When opening the website, I was not met with a
+    skeleton loader". The skeleton was sent by main.py AFTER ~5 MB of base64
+    photos on the same websocket, so it arrived with the hero it was meant to
+    stand in for (phone at 9 Mbps: 8 s of blank page first); it lifted on a
+    fixed 2.1 s timer; reduced motion hid it. And nothing main.py sends can
+    arrive before Streamlit's JavaScript has started - 2.5 s (laptop) to 4.4 s
+    (phone) of plain screen. Now index.html paints the hero's own skeleton
+    from the first frame, the photos are files, the hero lifts the skeleton
+    when it arrives, and a reduced-motion visitor sees it held still."""
+    import re
+    import tempfile
+    import tools.public_files as pf
+    from hero import boot_skeleton_html
+    root = pathlib.Path(__file__).resolve().parent.parent
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    with tempfile.TemporaryDirectory() as tmp:
+        d = pathlib.Path(tmp)
+        (d / "index.html").write_text(
+            "<!doctype html><html><head><title>Streamlit</title>"
+            '<link href="./static/css/index.css" rel="stylesheet"></head>'
+            "<body><noscript>You need JS.</noscript><div id='root'></div></body></html>",
+            encoding="utf-8")
+        pf.install(d, "https://example.test")
+        page = (d / "index.html").read_text(encoding="utf-8")
+    head, body = page.split("<body>", 1)
+    assert '<link rel="stylesheet" href="./app/static/app.css">' in head, \
+        "the skeleton's stylesheet is not in place for the first paint"
+    assert body.index(boot_skeleton_html()) < body.index("<div id='root'>"), \
+        "index.html does not paint the hero's skeleton before the app"
+    at, restore = _offline_app()
+    try:
+        first = _top_markdown(at)
+        assert not any('id="boot-skel"' in v for _, v in first), \
+            "a second skeleton is sent from the app"
+        hero = next(i for i, v in first if 'id="hero"' in v)
+        assert not any("data:image/jpeg;base64" in v for _, v in first), \
+            "a photo is inlined into the websocket again"
+        assert any("url(app/static/facade.jpg)" in v for _, v in first)
+        assert any("url(app/static/band.jpg)" in v for _, v in first)
+        assert re.search(r"#boot-skel\s*\{[^}]*opacity:\s*0", dict(first)[hero]), \
+            "the hero does not lift the skeleton when it arrives"
+        # The full-bleed hero swallows the 1rem flex gap of each block above it
+        # plus one 16px overshoot the skeleton copies (its own -16px).
+        n = int(re.search(r"calc\(-2\.4rem - (\d+)px\)", css).group(1))
+        assert n == 16 * (hero + 1), f"hero margin {n}px for {hero} blocks above it"
+        at.run()
+        assert next(i for i, v in _top_markdown(at) if 'id="hero"' in v) == hero, \
+            "the hero moved on a rerun"
+    finally:
+        restore()
+    assert not re.search(r"#boot-skel\s*\{[^}]*display:\s*none", css), \
+        "the skeleton is hidden somewhere (reduced motion?)"
+    delay = re.search(r"#boot-skel\s*\{[^}]*animation:\s*boot-off[^;]*?(\d+)s forwards", css)
+    assert delay and int(delay.group(1)) >= 20, "the skeleton lifts on a timer again"
+    import tomllib
+    cfg = tomllib.loads((root / ".streamlit" / "config.toml").read_text(encoding="utf-8"))
+    assert cfg["server"].get("enableStaticServing") is True
+    served = sorted(p.name for p in (root / "static").iterdir())
+    assert served == ["app.css", "band.jpg", "facade.jpg"], \
+        f"static/ is served to the public; keep it to public files: {served}"
 
 
 def test_a_running_script_is_visible_to_the_visitor():
