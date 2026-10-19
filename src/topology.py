@@ -195,7 +195,7 @@ def build_map_payload(returns: pd.DataFrame, weights: pd.Series,
         "days": days,
         "domain": domain,
         "live": True,
-        "provenance": f"Live · yfinance EOD · {cal['n_obs']} state obs",
+        "provenance": f"Live · Yahoo daily closes · {cal['n_obs']} days fitted",
         "footnote": (
             "<b>State model:</b> OU beta and log-OU volatility, calibrated "
             f"by AR(1) on rolling windows of the book's own daily returns "

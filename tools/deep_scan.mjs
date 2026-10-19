@@ -649,12 +649,25 @@ async function mapAudit(side) {
   const tip = await f.evaluate(() => getComputedStyle(document.getElementById('tip')).display !== 'none'
     ? document.getElementById('tip').innerText : '');
   ok(/β/.test(tip) && /VaR95/.test(tip), `map [${side}]: hover reads the terrain`, tip.replace(/\s+/g, ' ').slice(0, 120));
-  await f.click('#btnExplain');
+  // A click alone must show something: the button once only switched on
+  // hover-reading over the plot, so a click with no hover looked dead (John,
+  // 2026-10-19). The glossary opens under it, inside the frame's view.
+  await f.click('#btnExplain'); await page.waitForTimeout(200);
+  const gl = await f.evaluate(() => {
+    const g = document.getElementById('glossary'), r = g.getBoundingClientRect();
+    const side = document.getElementById('sidePanel').getBoundingClientRect();
+    return { open: !g.hidden && r.height > 40, inView: r.top < Math.min(innerHeight, side.bottom) - 40 && r.bottom > 0,
+             e: document.getElementById('btnExplain').getAttribute('aria-expanded'),
+             words: g.innerText.slice(0, 60) };
+  });
+  ok(gl.open && gl.inView && gl.e === 'true', `map [${side}]: a click on Explain (no hover) opens the glossary in view`,
+     `${gl.words.replace(/\s+/g, ' ')}`);
   await page.mouse.move(cx + 3, cy + 3); await page.waitForTimeout(250);
-  const ex = await f.evaluate(() => ({ p: document.getElementById('btnExplain').getAttribute('aria-pressed'),
-                                       t: document.getElementById('tip').innerText }));
-  ok(ex.p === 'true' && /explain mode/i.test(ex.t), `map [${side}]: explain mode names what is under the cursor`, ex.t.replace(/\s+/g, ' ').slice(0, 120));
+  const ex = await f.evaluate(() => ({ t: document.getElementById('tip').innerText }));
+  ok(/explain mode/i.test(ex.t), `map [${side}]: explain mode names what is under the cursor`, ex.t.replace(/\s+/g, ' ').slice(0, 120));
   await f.click('#btnExplain');
+  const shut = await f.evaluate(() => document.getElementById('glossary').hidden);
+  ok(shut, `map [${side}]: a second click closes the glossary`);
   // Every pairing in the league table opens its own detail with finite numbers.
   const rows = await f.locator('.srow').count();
   for (let i = 0; i < rows; i++) {

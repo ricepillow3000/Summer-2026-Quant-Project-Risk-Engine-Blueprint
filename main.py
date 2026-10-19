@@ -196,6 +196,9 @@ _html("""
   if (prev && prev.onTab) {
     P.removeEventListener('click', prev.onTab, true);
     P.removeEventListener('click', prev.onLink, true);
+    if (prev.onYield) ['wheel', 'touchstart', 'keydown'].forEach(function (t) {
+      P.removeEventListener(t, prev.onYield, true);
+    });
   }
 
   /* Charts inside a tab or expander are rendered while their container is
@@ -259,30 +262,76 @@ _html("""
     return el.getBoundingClientRect().top -
            scroller.getBoundingClientRect().top + scroller.scrollTop - 26;
   }
+  /* Every frame's scroll re-sent the Risk Topology map's five canvases to the
+     compositor, even 4300px off screen: 42% of the main thread at 4x CPU,
+     20 fps (John, 2026-10-19: "very laggy"). While a flight runs, the map's
+     box skips rendering when off screen - and renders as usual if the flight
+     passes it. Only while flying: a permanent rule would pause the map's own
+     loops and, on a phone, clip its full-bleed frame (paint containment), so
+     phones (<= 640px, where that bleed lives) are left alone. */
+  function quietMap(on) {
+    const m = P.querySelector('.st-key-risk-map');
+    if (!m) return;
+    const q = on && window.parent.innerWidth > 640;
+    m.style.contentVisibility = q ? 'auto' : '';
+    m.style.containIntrinsicBlockSize = q ? 'auto 820px' : '';
+  }
+  /* Hand scrolling back: the stylesheet's smooth behaviour (never a saved
+     inline value - a second flight would save the first one's 'auto'). */
+  function land(scroller) {
+    scroller.style.scrollBehavior = '';
+    quietMap(false);
+    P.__meleonaStop = null;
+  }
   function glide(scroller, el, dur, settled) {
+    /* One flight at a time: a new press, or the reader's own wheel / touch /
+       key (onYield), bumps the flight number and the old frames stop. Two
+       presses used to fly two flights at once - a 59px jump and a wrong
+       landing. */
+    const id = P.__meleonaFlight = (P.__meleonaFlight || 0) + 1;
+    P.__meleonaFlightAt = performance.now();
+    P.__meleonaStop = function () { land(scroller); };
     /* Our rAF drives every frame - the scroller's own smooth behavior would
        fight it (each scrollTo becoming its own animation). Instant while we
-       fly, restored when we land. */
-    const prevSB = scroller.style.scrollBehavior;
+       fly, handed back when we land. */
     scroller.style.scrollBehavior = 'auto';
-    const y0 = scroller.scrollTop, d = targetY(scroller, el) - y0,
-          t0 = performance.now();
+    quietMap(true);
+    const y0 = scroller.scrollTop, t0 = performance.now();
     /* Progress advances at most 50 ms per frame. Driven by the clock, one
        frame that came late (charts mounting while the page builds) covered
        66-81% of the flight - a jump, not a glide. */
-    let last = t0, run = 0;
+    let aim = targetY(scroller, el), last = t0, run = 0;
     (function f(now) {
+      if (id !== P.__meleonaFlight) return;   // a newer flight, or the reader took over
       run += Math.min(now - last, 50); last = now;
       const p = Math.min(1, run / dur);
-      scroller.scrollTo(0, y0 + d * ease(p));
+      /* The destination can still be moving: the showcase row rises 24px on
+         its scroll-driven reveal while we fly, so a target read once at the
+         click landed 8-11px past it and crawled back. Follow it - at most 2px
+         a frame, so a chart mounting mid-flight cannot yank the page. */
+      aim += Math.max(-2, Math.min(2, targetY(scroller, el) - aim));
+      scroller.scrollTo(0, y0 + (aim - y0) * ease(p));
       if (p < 1) { requestAnimationFrame(f); return; }
-      scroller.style.scrollBehavior = prevSB;
-      /* landing check: if the page shifted mid-flight (a chart mounted,
-         a rerun repainted), re-aim once with a short corrective glide -
-         the reader always ends ON the section the button promised. */
+      land(scroller);
+      /* landing check: if the page shifted mid-flight by more than the
+         per-frame follow could absorb (a chart mounted, a rerun repainted),
+         re-aim once with a short corrective glide - the reader always ends
+         ON the section the button promised. */
       const drift = targetY(scroller, el) - scroller.scrollTop;
       if (!settled && Math.abs(drift) > 4) glide(scroller, el, 320, true);
     })(t0);
+  }
+  /* The reader takes over: a wheel, a touch or a scroll key ends the flight
+     where it is, instead of being pulled back each frame (8 reversals per
+     wheel gesture). A trackpad keeps sending momentum wheel events for a
+     moment after a click, so the first 300 ms ignore the wheel. */
+  const SCROLL_KEYS = ['PageUp', 'PageDown', 'ArrowUp', 'ArrowDown', 'Home', 'End', ' '];
+  function onYield(e) {
+    if (!P.__meleonaStop) return;
+    if (e.type === 'wheel' && performance.now() - P.__meleonaFlightAt < 300) return;
+    if (e.type === 'keydown' && SCROLL_KEYS.indexOf(e.key) < 0) return;
+    P.__meleonaFlight = (P.__meleonaFlight || 0) + 1;
+    P.__meleonaStop();
   }
   function onLink(e) {
     const a = e.target.closest('a[href^="#"]');
@@ -320,7 +369,10 @@ _html("""
   }
   P.addEventListener('click', onTab, true);
   P.addEventListener('click', onLink, true);
-  P.__meleonaGlide = { onTab: onTab, onLink: onLink };
+  ['wheel', 'touchstart', 'keydown'].forEach(function (t) {
+    P.addEventListener(t, onYield, { capture: true, passive: true });
+  });
+  P.__meleonaGlide = { onTab: onTab, onLink: onLink, onYield: onYield };
 })();
 </script>
 """, height=0)
@@ -1878,7 +1930,10 @@ with tab_3d:
         # element container for an st.iframe inside a tab collapsed to 16px -
         # the map rendered fully (tiles, canvas, payload all present in the
         # srcdoc) into a sliver nobody could see. 1.62.0 stretched by default.
-        st.iframe(war_room_html(_wr_payload), width="stretch", height=820)
+        # its own keyed container (.st-key-risk-map): the glide skips the
+        # map's rendering while it flies past it off screen (see quietMap)
+        with st.container(key="risk-map"):
+            st.iframe(war_room_html(_wr_payload), width="stretch", height=820)
         st.caption(
             "The Monte Carlo as a strategy map. The grid is (beta, realized "
             "vol) - beta is how far the book moves when the market moves one "
@@ -2478,7 +2533,13 @@ with tab_balance:
                 f'<b>{bv_anchor}</b> at risk-parity weights '
                 f'(<b>{pw["w_b"]:.0%}</b> anchor / <b>{pw["w_a"]:.0%}</b> flyer, '
                 f'rebalanced monthly) the fall was <b>{bt["max_dd_pair"]:.0%}</b> - '
-                f'a <b>{bt["cushion"]:+.0%}</b> cushion. A cushion, not a cap.</div>'
+                # a gap between two losses, in percentage points: "+17%"
+                # read as a 17% cut (John, 2026-10-19), so say the unit and
+                # the direction in words
+                + (f'<b>{bt["cushion"] * 100:.0f} percentage points shallower</b>. '
+                   'A cushion, not a cap.</div>' if bt["cushion"] >= 0 else
+                   f'<b>{-bt["cushion"] * 100:.0f} percentage points deeper</b>: '
+                   'no cushion in this history.</div>') +
                 f'<div style="font-family:\'Helvetica Neue\',sans-serif;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#5D574D;margin-top:8px;">'
                 f'Safety line (tail gap): ES 97.5% {tg["es_a"]:.1%} vs {tg["es_b"]:.1%} &middot; '
                 f'{"short " if bearish else ""}{flyer} ES 90% CI {ci_lo:.1%}-{ci_hi:.1%} &middot; current phase '
@@ -2514,17 +2575,21 @@ with tab_balance:
                         panel_head("Crisis cushion record",
                                    "The same pair replayed through real crises "
                                    "(both assets must have traded)")
+                        # the cushion is a gap in percentage points, not a %
+                        # change: shown as points, positive = the pair fell less
                         st.dataframe(
-                            cc.rename(columns={
+                            cc.assign(cushion=cc["cushion"] * 100).rename(columns={
                                 "solo_dd": f"{'short ' if bearish else ''}{flyer} alone",
-                                "pair_dd": "pair", "cushion": "cushion",
+                                "pair_dd": "pair", "cushion": "cushion (points)",
                                 "days": "days"})
                               .style.format({f"{'short ' if bearish else ''}{flyer} alone": "{:.1%}",
                                              "pair": "{:.1%}",
-                                             "cushion": "{:+.1%}",
+                                             "cushion (points)": "{:+.1f}",
                                              "days": "{:.0f}"}),
                             width="stretch")
                         st.caption(
+                            "Cushion = how many percentage points less the pair "
+                            "fell than the flyer alone (negative: it fell more). "
                             "Crises where either asset had not yet listed are "
                             "omitted, not guessed. A small or negative cushion "
                             "is the honest signature of correlations converging "
