@@ -1073,11 +1073,11 @@ def load_risk_free_rate():
     return fetch_risk_free_rate()
 
 
-# The slow part is the pull, not the score (grit maths ~0.2 s): say so, so a
-# first visit to a basket reads as working, not stalled (John, 2026-10-19).
-@st.cache_data(ttl=3600, max_entries=32, show_spinner=(
-    "Reading each name's full price history for its grit score - a new "
-    "basket's first pull from Yahoo is the slow part…"))
+# The wait is the full-history pull, not the score (grit maths ~0.2 s): name
+# what is happening so a first visit reads as working, not stalled - in a few
+# calm words, no excuse for the wait (John, 2026-10-19).
+@st.cache_data(ttl=3600, max_entries=32,
+               show_spinner="Reading full price histories for the grit scores…")
 def load_grit(tickers_tuple: tuple[str, ...]):
     """Grit scores need each asset's FULL price history, not just the 2y window
     used for VaR - grit_scores() pulls it separately (see src.grit)."""

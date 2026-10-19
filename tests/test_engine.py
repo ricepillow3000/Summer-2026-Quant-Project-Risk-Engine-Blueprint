@@ -4003,6 +4003,27 @@ def test_every_cached_yahoo_pull_says_what_it_is_doing():
     assert not silent, f"cached Yahoo pulls with no words on screen: {silent}"
 
 
+def test_every_spinner_is_a_few_calm_words():
+    """John, 2026-10-19: "Remove the 'yahoo is the slow part', I cringe
+    looking at that." A loading line says what the page is doing, in a few
+    words - it does not apologise, excuse the wait or blame the data feed."""
+    import ast
+    src = (pathlib.Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
+    texts = []
+    for d in ast.walk(ast.parse(src)):
+        if isinstance(d, ast.Call) and ast.unparse(d.func) in ("st.cache_data", "st.spinner"):
+            spin = ({k.arg: k.value for k in d.keywords}.get("show_spinner")
+                    if ast.unparse(d.func) == "st.cache_data" else (d.args or [None])[0])
+            if isinstance(spin, ast.Constant) and isinstance(spin.value, str):
+                texts.append(spin.value)
+            elif isinstance(spin, ast.JoinedStr):
+                texts.append(ast.unparse(spin))
+    assert texts, "no spinner text found - the scan is broken"
+    bad = [t for t in texts if len(t) > 60
+           or any(w in t.lower() for w in ("slow", "yahoo", "sorry", "please wait", "may take"))]
+    assert not bad, f"spinner lines that excuse the wait or run long: {bad}"
+
+
 def test_section_titles_wrap_instead_of_running_out_of_their_box():
     """Live audit run 30 on 77dcccd (device_check, iPhone SE): "VALUE AT RISK -
     METHODS & BACKTEST" needed 304px of a 301px box and was cut off. The
