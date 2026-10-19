@@ -870,3 +870,23 @@ div[data-baseweb="select"]>div, .stNumberInput input,
    the crest off. Removed, not restyled - it is position:fixed, so nothing in
    the layout moves. */
 [data-testid="stHeader"] { display: none !important; }
+/* The header also held Streamlit's only always-on "running" sign, so hiding it
+   left a visitor with no sign the page was working: John read a cold basket
+   switch as a stall (2026-10-19). Streamlit still mounts its running icon in
+   the hidden header, exactly while a run is in flight (after 500 ms, so quick
+   reruns never flash), and the page draws its own sign off it: a bronze rail
+   moving across the top and a still "Updating…" tag. Neither takes a click. */
+@keyframes run-rail { from { background-position: 100% 0; } to { background-position: -150% 0; } }
+body:has([data-testid="stStatusWidgetRunningIcon"])::before { content: "";
+    position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 990;
+    pointer-events: none;
+    background: linear-gradient(90deg, transparent 0 35%, #9A7B4F 35% 65%, transparent 65%);
+    background-size: 250% 100%; animation: run-rail 1.4s linear infinite; }
+body:has([data-testid="stStatusWidgetRunningIcon"])::after { content: "Updating\2026";
+    position: fixed; top: 10px; right: 12px; z-index: 990; pointer-events: none;
+    padding: 6px 10px; border-radius: 6px; background: #3F3B35; color: #EDE9E3;
+    font: 11px/1 'Helvetica Neue', Arial, sans-serif; letter-spacing: .2em;
+    text-transform: uppercase; }
+/* Reduced motion stops the rail (global rule); it stays, as a still line. */
+@media (prefers-reduced-motion: reduce) {
+    body:has([data-testid="stStatusWidgetRunningIcon"])::before { background: #9A7B4F; } }

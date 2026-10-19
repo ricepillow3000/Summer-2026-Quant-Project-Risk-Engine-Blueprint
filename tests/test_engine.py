@@ -3815,6 +3815,38 @@ def test_the_tab_strip_keeps_its_slot_whatever_the_basket():
         restore()
 
 
+def test_a_running_script_is_visible_to_the_visitor():
+    """John, 2026-10-19: "the loading wheel has no animation or no clear
+    noticeable visual that it is loading". Streamlit's running indicator lives
+    in the header, which the page hides (it covered the crest); the spinners
+    are 16 px rings, mostly off screen or inside closed drawers, and frozen
+    under reduced motion. While a run is in flight the page must show its own
+    sign: fixed, never in the way of a click, and still there - just still -
+    when motion is reduced."""
+    import re
+    root = pathlib.Path(__file__).resolve().parent.parent
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    on = r'body:has\(\[data-testid="stStatusWidgetRunningIcon"\]\)'
+    rules = re.findall(r"([^{}]+)\{([^}]*)\}", css)
+    rail = " ".join(b for sel, b in rules if re.search(on + r"::before", sel))
+    tag = " ".join(b for sel, b in rules if re.search(on + r"::after", sel))
+    for name, body in (("rail", rail), ("tag", tag)):
+        assert body, f"no running {name} in app.css"
+        assert re.search(r"position:\s*fixed", body), f"running {name} is not fixed"
+        assert re.search(r"pointer-events:\s*none", body), f"running {name} can block clicks"
+    assert re.search(r'content:\s*"Updating', tag), "the running tag says nothing"
+    assert re.search(r"animation:\s*run-rail", rail), "the rail does not move"
+    reduce = " ".join(re.findall(r"@media \(prefers-reduced-motion: reduce\)\s*\{(.*?)\}\s*\}", css, re.S))
+    assert not re.search(on + r"::after[^{]*\{[^}]*(display:\s*none|visibility:\s*hidden)", reduce), (
+        "the running tag is hidden when motion is reduced")
+    # The page keys off Streamlit's own marker; an upgrade that renames it must
+    # fail here, not silently drop the sign (as test_streamlit_header_bar_is_hidden).
+    import streamlit
+    js = pathlib.Path(streamlit.__file__).parent / "static" / "static" / "js"
+    assert any("stStatusWidgetRunningIcon" in p.read_text(encoding="utf-8", errors="ignore")
+               for p in js.glob("index.*.js")), "Streamlit no longer renders stStatusWidgetRunningIcon"
+
+
 def test_every_cached_yahoo_pull_says_what_it_is_doing():
     """John, 2026-10-19: changing basket, the Grit Zone "looked stalled, as if
     the project crashed". Grit maths takes 0.2 s; the wait is a new basket's
