@@ -463,6 +463,24 @@ risk-engine/
   switch 40.9s -> 12.8s, headline 4.1s -> 1.0s; left cold: the 2-name crisis
   pair. Tests: `test_the_warm_pass_covers_every_fetch_a_preset_page_makes`,
   `test_security_master_reads_its_disk_cache_and_never_keeps_a_failure`.
+- ✅ **Every word on the map clears AA (2026-10-20)** - the 2026-10-19 council
+  review measured the Risk Topology map's small labels below 4.5:1 on its dark
+  glass (`--dim` 3.86:1, `--bronze` 4.38:1, `--emberhi` 3.99:1).
+  `test_text_colours_meet_wcag_aa` read only `static/app.css` and `main.py`, so
+  the map was never checked. It now also scans `prototypes/war_room.html`: CSS
+  colours (vars resolved), the pairing diagram's SVG text, and every canvas
+  `fillStyle` a `fillText`/`spacedText` draws with (rgba blended onto the
+  ground). Grounds: the glass `#1F1A13`, `#282117` over the bright map, and
+  `#362C1E`, the selected pairing row over the bright map, the lightest ground
+  any word gets. Red first (`--bronze` 3.46:1 on that row). Words got their own
+  tones; rules, bars, dots and focus rings kept theirs: `--dimtext` `#A09788`
+  (3.05 -> 4.74), `--bronzetext` `#B49563` (3.46 -> 4.83), canvas ticks and
+  ring captions `#A09788`, axis titles and sector names `#B49563` (2.67 ->
+  4.83), VaR labels gold 55% -> 75% (3.95 -> 5.05), breach perimeter label
+  `#D98463` (2.16 -> 4.84), Run button hover fill `#6A5030` (beige label 3.26
+  -> 6.20). The suggested `#948B7D` cleared the plain panel (5.14:1) but not
+  the selected row (4.07:1), so it was not used. Layout probe green at every
+  width; ACCESSIBILITY.md carries the table.
 - ✅ **Round 2 of John's laptop test (2026-10-19)** - six complaints, four
   investigators, a four-member council, each fix test-first:
   (1) the "Explore what we do" glide aimed once at a showcase row still rising

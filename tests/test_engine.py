@@ -2385,6 +2385,56 @@ def test_text_colours_meet_wcag_aa():
             f"{on_band:.2f}:1 on charcoal")
     assert "#9A7B4F" in css, "decorative bronze should still exist"
 
+    # The Risk Topology map is its own dark surface, and was never scanned:
+    # the 2026-10-19 council review measured --dim at 3.86:1, --bronze 4.38:1,
+    # --emberhi 3.99:1 and the canvas labels down to 2.16:1 there. Words sit on
+    # the glass panel (#1F1A13; #282117 where it floats over the bright map),
+    # and the selected pairing row tints that to #362C1E - the lightest ground
+    # any word on the map gets. The canvas labels sit on the darker terrain, so
+    # clearing these three grounds covers them too.
+    html = (root / "prototypes" / "war_room.html").read_text(encoding="utf-8")
+    tokens = dict(_re.findall(r"--([\w-]+):\s*(#[0-9A-Fa-f]{6})", html))
+    grounds = ("#1F1A13", "#282117", "#362C1E")
+
+    def over(colour, ground):
+        """An rgba() canvas fill as it lands on the ground, as #rrggbb."""
+        m = _re.fullmatch(r"rgba\((\d+),(\d+),(\d+),([\d.]+)\)", colour)
+        if not m:
+            return colour
+        a = float(m.group(4))
+        bg = [int(ground[i:i + 2], 16) for i in (1, 3, 5)]
+        return "#" + "".join(f"{round(a * int(f) + (1 - a) * b):02X}"
+                             for f, b in zip(m.groups()[:3], bg))
+
+    words = {}
+    for name in _re.findall(r"(?<![-\w])color:\s*var\(--([\w-]+)\)", html):
+        words.setdefault(tokens[name], f"var(--{name})")
+    for colour in _re.findall(r"(?<![-\w])color:\s*(#[0-9A-Fa-f]{6})", html):
+        words.setdefault(colour, "css color")
+    for colour in _re.findall(r"<text[^>]*?fill=\"(#[0-9A-Fa-f]{6})\"", html):
+        words.setdefault(colour, "svg <text>")
+    # canvas: a fillStyle that a fillText/spacedText draws with before the
+    # next fillStyle is set (dots, bars and fog fills are not words)
+    canvas = 0
+    for expr, then in _re.findall(r"fillStyle\s*=\s*([^;]+);(.*?)(?=fillStyle\s*=|$)",
+                                  html, _re.S):
+        if "fillText(" in then or "spacedText(" in then:
+            for colour in _re.findall(r"'(#[0-9A-Fa-f]{6}|rgba\([\d.,\s]+\))'", expr):
+                words.setdefault(colour.replace(" ", ""), "canvas label")
+                canvas += 1
+    assert canvas >= 8, "the canvas label scan found too few labels - regex drift?"
+
+    for colour, where in words.items():
+        worst = min(_contrast(over(colour, g), g) for g in grounds)
+        assert worst >= 4.5, f"map {where} {colour} is {worst:.2f}:1 on its ground"
+
+    # the Run button's hover fill carries the beige label
+    hover = _re.search(r"\.runbtn:hover\s*\{[^}]*?background:\s*([^;]+);", html).group(1)
+    hover = _re.sub(r"var\(--([\w-]+)\)", lambda m: tokens[m.group(1)], hover).strip()
+    assert _contrast(tokens["beige"], hover) >= 4.5, f"Run on hover: {hover}"
+    assert "var(--bronze)" in html and "var(--dim)" in html, \
+        "decorative bronze/dim rules and bars should stay as they are"
+
 
 def test_accessibility_statement_matches_what_the_app_does():
     """A statement claiming more than the code delivers is the liability the
