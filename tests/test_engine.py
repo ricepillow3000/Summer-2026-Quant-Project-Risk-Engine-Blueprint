@@ -4255,6 +4255,48 @@ def test_changing_weighting_keeps_the_visitors_balance_anchor():
         restore()
 
 
+def test_the_watch_pair_follows_the_basket_not_how_fast_it_was_typed():
+    """PR #20 comparison, 2026-10-20: typing F, GM, DAL, UAL, GILD, VZ quickly
+    showed F x UAL in Correlation Watch, typing it slowly F x GM - the same
+    basket. The pair selectboxes had fixed keys, and Streamlit keeps a keyed
+    widget's value while it is still an option, so the pair a rerun on a
+    half-typed basket picked stuck. The default pair must depend on the final
+    basket only; a visitor's own pick within an unchanged basket must stay."""
+    at, restore = _offline_app()
+    try:
+        def pair():
+            return tuple([w for w in at.selectbox if w.label == f"Asset {s}"][0].value
+                          for s in "AB")
+
+        def basket(names):
+            [w for w in at.multiselect if w.label == "Tickers to analyze"][0].set_value(
+                names).run()
+            assert not at.exception, [e.value for e in at.exception]
+
+        final = ["DAL", "F", "GILD", "GM", "UAL", "VZ"]
+        start = [w for w in at.multiselect if w.label == "Tickers to analyze"][0].value
+        assert not set(pair()) & set(final), f"start pair {pair()} would carry into {final}"
+        basket(final)
+        fresh = pair()
+        # Back to the start, then a half-typed basket without one of the final
+        # default pair's names: its own default pair is still an option once
+        # the basket is complete.
+        basket(start)
+        half = [t for t in final if t != fresh[1]]
+        basket(half)
+        assert set(pair()) <= set(half) and pair()[0] != pair()[1]
+        basket(final)
+        assert pair() == fresh, (
+            f"{pair()} after a stop on a half-typed basket; a fresh {final} shows {fresh}")
+        own = [o for o in [w for w in at.selectbox if w.label == "Asset A"][0].options
+               if o not in fresh][0]
+        [w for w in at.selectbox if w.label == "Asset A"][0].set_value(own).run()
+        [w for w in at.slider if w.label == "Rolling window (days)"][0].set_value(30).run()
+        assert pair() == (own, fresh[1]), f"visitor's pick {own} lost: {pair()}"
+    finally:
+        restore()
+
+
 def test_metric_labels_and_values_wrap_instead_of_ending_in_an_ellipsis():
     """Streamlit cuts a metric's label and value to one line with an ellipsis.
     In the narrow metric columns of a phone or a portrait iPad that left

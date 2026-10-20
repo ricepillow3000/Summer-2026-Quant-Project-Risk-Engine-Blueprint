@@ -1801,11 +1801,17 @@ with tab_watch:
     except Exception:  # noqa: BLE001 - degenerate universe; fall back to first two
         def_a, def_b = loaded[0], loaded[1]
 
+    # Keyed on the basket, like the ticker box on its preset: with a fixed key
+    # Streamlit kept whatever pair a rerun on a half-typed basket had picked,
+    # so typing F, GM, DAL, UAL, GILD, VZ fast showed F x UAL and slowly F x GM
+    # (2026-10-20). A new basket starts from its own default pair; a visitor's
+    # pick lasts while the basket does.
+    _basket = "|".join(sorted(loaded))
     wc1, wc2, wc3, wc4 = st.columns([2, 2, 2, 2])
     pick_a = wc1.selectbox("Asset A", loaded, index=loaded.index(def_a),
-                           key="watch_a")
+                           key=f"watch_a__{_basket}")
     pick_b = wc2.selectbox("Asset B", loaded, index=loaded.index(def_b),
-                           key="watch_b")
+                           key=f"watch_b__{_basket}")
     win = wc3.slider("Rolling window (days)", 10, 63, 21, step=1, key="watch_w",
                      help="21 trading days ≈ one month. Shorter reacts faster "
                           "but is noisier.")
