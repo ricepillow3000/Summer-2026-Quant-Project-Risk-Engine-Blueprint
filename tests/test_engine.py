@@ -3293,6 +3293,39 @@ def test_a_stranger_cannot_park_files_in_server_memory():
         "a file_uploader needs an upload budget sized for it, not the 1 MB floor"
 
 
+def test_every_pip_audit_exception_is_unreachable_and_expires():
+    """2026-10-20: 8 Pillow CVEs (crafted PDF/GIF/PPM/TIFF/EPS files) made the
+    Live audit's pip_audit red. Streamlit caps Pillow below 13 in every release
+    up to 1.66, so the fix (13.0) cannot be installed; John chose to skip those
+    IDs rather than leave the gate red. The skip holds only while the app opens
+    no image a visitor supplies, and only while the fix is out of reach - this
+    test fails on either, so the exception cannot outlive its reason."""
+    import importlib.metadata
+    import re
+    import tomllib
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    wf = (root / ".github" / "workflows" / "live-audit.yml").read_text(encoding="utf-8")
+    skipped = re.findall(r"--ignore-vuln\s+(\S+)", wf)
+    if not skipped:
+        return
+    caps = [r for r in importlib.metadata.requires("streamlit") or []
+            if r.lower().replace(" ", "").startswith("pillow")]
+    assert any("<13" in r.replace(" ", "") for r in caps), (
+        f"Streamlit now allows Pillow 13 ({caps}): pin pillow>=13 and delete the "
+        f"--ignore-vuln exceptions in live-audit.yml ({skipped})")
+    cfg = tomllib.loads((root / ".streamlit" / "config.toml").read_text(encoding="utf-8"))
+    assert cfg.get("server", {}).get("maxUploadSize", 200) <= 1, "the app takes files now"
+    files = [root / "main.py", root / "hero.py", *(root / "src").glob("*.py"),
+             *(root / "tools").glob("*.py")]
+    for f in files:
+        code = f.read_text(encoding="utf-8")
+        for door in ("file_uploader", "camera_input", "import PIL", "from PIL"):
+            assert door not in code, (
+                f"{f.name} uses {door}: a visitor's image can now reach Pillow, so the "
+                f"Pillow CVE exceptions in live-audit.yml no longer hold")
+
+
 def test_no_visitor_control_clears_the_shared_cache():
     """st.cache_data.clear() empties every cached result for EVERY visitor in
     this single process. A public "Refresh" button used to call it (and delete
