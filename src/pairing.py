@@ -295,5 +295,5 @@ if __name__ == "__main__":
           f"(ES {tg['es_a']:.2%} vs {tg['es_b']:.2%})")
     bt = backtest_pair(rets["PLTR"], rets[best])
     print(f"Backtest {bt['n_days']}d: solo dd {bt['max_dd_solo']:.1%} vs pair "
-          f"dd {bt['max_dd_pair']:.1%} (cushion {bt['cushion']:+.1%})")
+          f"dd {bt['max_dd_pair']:.1%} (cushion {bt['cushion'] * 100:+.1f} points)")
     print("\nCrisis cushion:\n", crisis_cushion("PLTR", best).round(3))
