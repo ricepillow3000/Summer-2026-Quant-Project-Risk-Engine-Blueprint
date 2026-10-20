@@ -172,13 +172,16 @@ const TYPED_POOL = ['ACN', 'ADI', 'AEP', 'AIG', 'ALL', 'AMT', 'ANET', 'APD', 'BB
                     'CVS', 'DAL', 'DD', 'DG', 'DHR', 'DUK', 'EBAY', 'ECL', 'ELV', 'EMR',
                     'ETN', 'EXC', 'F', 'FCX', 'GD', 'GILD'];
 const typed = [...TYPED_POOL].sort(() => Math.random() - 0.5).slice(0, 3).sort();
+// Streamlit 1.62's ticker box draws each pick as a [data-tag] labelled with it.
 const chips = () => page.evaluate(() =>
-  [...document.querySelectorAll('[data-baseweb="tag"]')].map(e => e.innerText.trim()));
+  [...document.querySelectorAll('[data-testid="stMultiSelectTagsContainer"] [data-tag]')]
+    .map(e => e.getAttribute('aria-label')));
 async function addTicker(sym) {
   // The ticker box clears itself after a pick, so success is the new chip.
   const box = page.getByRole('combobox', { name: 'Tickers to analyze' }).first();
   for (let attempt = 1; ; attempt++) {
     try {
+      if ((await chips()).includes(sym)) return;     // an earlier attempt took
       await box.scrollIntoViewIfNeeded();
       await tagged('open the ticker box', box.click());
       await box.fill(sym);
@@ -187,8 +190,8 @@ async function addTicker(sym) {
       await opt.click({ timeout: 10000 }).catch(() => page.keyboard.press('Enter'));
       await page.keyboard.press('Escape');
       await tagged(`chip "${sym}"`, page.waitForFunction(s =>
-        [...document.querySelectorAll('[data-baseweb="tag"]')].some(e => e.innerText.trim() === s),
-        sym, { timeout: 10000 }));
+        [...document.querySelectorAll('[data-testid="stMultiSelectTagsContainer"] [data-tag]')]
+          .some(e => e.getAttribute('aria-label') === s), sym, { timeout: 10000 }));
       return;
     } catch (e) {
       await page.keyboard.press('Escape');
