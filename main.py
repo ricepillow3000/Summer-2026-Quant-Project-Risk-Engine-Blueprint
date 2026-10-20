@@ -1048,7 +1048,8 @@ def load_tail_fit(tickers_tuple: tuple[str, ...], weights_tuple: tuple[float, ..
     rest of the app uses. Peaks-over-threshold needs enough points ABOVE the
     threshold: 2y of daily data leaves ~25 exceedances at the 95% level, under
     the 50 the asymptotics require, so the fit would (correctly) refuse. 10y
-    gives ~126. Cached because the bootstrap costs ~2s.
+    gives ~126. Cached because the xi bootstrap (200 refits) still costs
+    ~0.6s.
 
     Names without the full history are dropped and the remaining weights are
     rescaled to preserve the book's original gross notional - so the fit

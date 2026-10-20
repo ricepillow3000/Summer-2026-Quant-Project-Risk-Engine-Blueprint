@@ -450,6 +450,18 @@ risk-engine/
   as "1 -> 0.995"; the pair_weights docstring kept the false "flyer holds most
   of the risk". Swept every 10px, 360-1920: clean. Below 360px the plot is
   narrower than 260px - the screen, not the layout. Desktop dots unchanged.
+- ✅ **The tail model fits 6x faster, same numbers (2026-10-20)** - John: "speed up
+  the tail model fit next". The Tail Risk panel spent 3.8 s fitting: two GPD
+  fits (residuals, then raw returns), each with a 200-refit bootstrap of xi.
+  (1) The raw fit's bootstrap fed only `unconditional_xi_ci`, which nothing
+  read: it no longer runs (`n_boot=0`), and the key is gone. (2) scipy's
+  generic fit objective is mostly dispatch overhead; `src/risk._lean_nnlf` is
+  the same numpy calls for genpareto with loc 0, passed as the optimizer's
+  objective, equal bit for bit (3,000+ parameter points incl. every edge) on
+  the pinned scipy 1.18.1. Measured on four 10-year series: 3.82 s -> 0.63 s
+  per call, all 22 published numbers identical. Council caught one real bug in
+  the prototype: `math.log` instead of `np.log` differs in the last bit on
+  some scales (AVX512), which would have moved fits on some machines.
 - ✅ **Typed-in baskets download only their new names (2026-10-20)** - John:
   "make typed-in baskets load faster too". Two investigators: offline, the
   default basket plus three typed names took 29.3s to settle (34.7s for six

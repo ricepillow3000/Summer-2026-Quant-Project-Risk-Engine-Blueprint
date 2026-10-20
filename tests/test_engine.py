@@ -1823,6 +1823,81 @@ def test_mcneil_frey_rescales_by_the_volatility_forecast():
     assert mf["conditional"][0.99]["es"] >= mf["conditional"][0.99]["var"]
 
 
+def test_the_lean_tail_objective_equals_scipys_bit_for_bit():
+    """The tail fit hands scipy a lean copy of its own objective (3x faster).
+    It is only allowed because every value is the same float scipy computes,
+    on the edges too: c = 0 and -0.0, points past a negative c's endpoint,
+    scale <= 0, NaN/inf parameters, and the 0.3-1.5 scales a residual fit
+    lands on (math.log there differs from numpy's in the last bit)."""
+    from scipy import stats
+    from src import risk
+    rng = np.random.default_rng(3)
+    _x0, func, _restore, _args = stats.genpareto._reduce_func(
+        (0.1, 0.0, 1.0), {"floc": 0.0})
+    data = [rng.pareto(4.0, 160) * 0.4, np.abs(rng.standard_t(4, 130)) * 0.01,
+            np.array([0.0, 0.5, 1.0, 3.0])]
+    thetas = [(c, s) for c in (0.0, -0.0, 0.2, 0.7, -0.3, -0.9, 1e-9, -1e-9)
+              for s in (0.01, 0.3, 0.77, 1.0, 1.5, 4.0, 0.0, -1.0)]
+    thetas += [(np.nan, 1.0), (0.1, np.nan), (np.inf, 1.0), (0.1, np.inf)]
+    thetas += [(rng.uniform(-0.5, 0.8), rng.uniform(0.3, 1.5)) for _ in range(3000)]
+    for x in data:
+        for c, s in thetas:
+            a = func(np.array([c, s]), x)
+            b = risk._lean_nnlf(np.array([c, s]), x)
+            assert (np.isnan(a) and np.isnan(b)) or a == b, (c, s, a, b)
+
+
+def test_the_local_logxmax_equals_scipys():
+    """The penalty constant is computed here rather than imported from a
+    private scipy module; it must be the very same float."""
+    from scipy.stats._constants import _LOGXMAX
+    from src import risk
+    assert risk._LOGXMAX == _LOGXMAX
+
+
+def test_the_fast_tail_fit_gives_the_same_numbers_as_scipys_own():
+    """With scipy's stock optimizer put back, every published number of the
+    tail fit - xi, beta, the bootstrap interval, the tail VaR/ES - must not
+    move by one bit, on raw returns and on standardised residuals."""
+    from scipy import optimize
+    from src import risk
+    raw = _garch11(3000, seed=4, innov="t", df=4)
+    sig, _ = ewma_volatility(raw.values)
+    series = [raw, pd.Series(raw.values[60:] / sig[60:])]
+    lean = [gpd_tail_fit(s, n_boot=60) for s in series]
+    keep = risk._lean_fmin
+    try:
+        risk._lean_fmin = optimize.fmin      # what genpareto.fit uses by default
+        stock = [gpd_tail_fit(s, n_boot=60) for s in series]
+    finally:
+        risk._lean_fmin = keep
+    for a, b in zip(lean, stock):
+        assert a["fitted"] and a["xi_ci"] is not None
+        for k in ("xi", "beta", "xi_ci", "tail", "finite_endpoint"):
+            assert a[k] == b[k], (k, a[k], b[k])
+
+
+def test_the_conditional_tail_still_reports_the_unconditional_xi():
+    """The raw-return fit is only there for its xi (the side-by-side that shows
+    the clustering bias); its bootstrap interval was read nowhere and cost half
+    the panel's time, so it is not computed."""
+    r = _garch11(3000, seed=5, innov="t", df=5)
+    mf = mcneil_frey_tail(r, n_boot=60)
+    assert mf["unconditional_xi"] == gpd_tail_fit(r, n_boot=0)["xi"]
+    assert "unconditional_xi_ci" not in mf
+    assert mf["xi_ci"] is not None, "the conditional fit keeps its interval"
+
+
+def test_requirements_pin_scipy():
+    """The tail fit's lean objective mirrors scipy 1.18.1's genpareto
+    likelihood (the bit-for-bit test proves it on that version). Unpinned,
+    the host could resolve a version the test never saw."""
+    root = pathlib.Path(__file__).resolve().parents[1]
+    lines = (root / "requirements.txt").read_text(encoding="utf-8").splitlines()
+    pins = [ln.split("#")[0].strip() for ln in lines if ln.startswith("scipy")]
+    assert pins == ["scipy==1.18.1"], pins
+
+
 def test_mcneil_frey_refuses_a_series_too_short_to_filter():
     """Burn-in plus a tail fit needs history. Say so rather than fit noise."""
     short = pd.Series(np.random.default_rng(9).normal(0, 0.01, 120))
