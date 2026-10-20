@@ -28,6 +28,25 @@ falls short**, so nobody has to discover a gap the hard way.
   already comfortable (5.93:1 on the page, 7.40:1 on panels). A regression test
   recomputes every ratio from the stylesheet, so a future palette edit that
   breaks contrast fails the build rather than shipping.
+
+  The Risk Topology map is its own dark surface and was not scanned until a
+  review on 2026-10-19 measured its small labels below the floor. Its words
+  are now checked against the lightest ground they get, the selected pairing
+  row over the bright map (`#362C1E`); the canvas labels sit on the darker
+  terrain:
+
+  | Used for | Was | Now | Ratio |
+  |---|---|---|---|
+  | Captions, footnotes, ranks (`--dimtext`) | `#7E766A` | `#A09788` | 3.05 -> 4.74 |
+  | Panel and tile labels (`--bronzetext`) | `#9A7B4F` | `#B49563` | 3.46 -> 4.83 |
+  | Axis ticks and ring captions (canvas) | beige at 42-45% | `#A09788` | 3.57 -> 4.74 |
+  | Axis titles, sector names (canvas) | bronze at 65-85% | `#B49563` | 2.67 -> 4.83 |
+  | VaR contour labels (canvas) | gold at 55% | gold at 75% | 3.95 -> 5.05 |
+  | Breach perimeter label (canvas) | ember at 70% | `#D98463` | 2.16 -> 4.84 |
+  | Run button label on hover | on `#9A7B4F` | on `#6A5030` | 3.26 -> 6.20 |
+
+  The same test scans `prototypes/war_room.html`: its CSS colours, the pairing
+  diagram's SVG text and every canvas fill a label is drawn with.
 - **The Risk Topology map has a text alternative.** The map is drawn on canvas,
   which a screen reader cannot inspect. The five canvas layers are marked
   decorative and a live description carries the same numbers in sentences:
