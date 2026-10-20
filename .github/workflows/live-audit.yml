@@ -40,7 +40,21 @@ jobs:
       - name: 0. Self-check (lint, bandit, engine tests with live checks, narrative) + dependency CVEs
         run: |
           python -m tools.check
-          python -m pip_audit -r requirements.txt
+          # Pillow 12.3 (via Streamlit, which caps it <13 in every release up to
+          # 1.66) has 8 CVEs fixed in 13.0, all in parsing a crafted image file.
+          # The app opens no image a visitor supplies: John chose a written
+          # exception, 2026-10-20. It expires itself:
+          # test_every_pip_audit_exception_is_unreachable_and_expires fails the
+          # day Streamlit accepts Pillow 13, or if the app ever takes a file.
+          python -m pip_audit -r requirements.txt \
+            --ignore-vuln CVE-2026-112395 \
+            --ignore-vuln CVE-2026-112397 \
+            --ignore-vuln CVE-2026-112400 \
+            --ignore-vuln CVE-2026-112404 \
+            --ignore-vuln CVE-2026-112895 \
+            --ignore-vuln CVE-2026-112896 \
+            --ignore-vuln CVE-2026-112897 \
+            --ignore-vuln CVE-2026-112899
       - name: 1. Provenance - engine prices vs raw Yahoo API, ^IRX vs the Treasury
         if: always()
         run: python -m tools.live_provenance
