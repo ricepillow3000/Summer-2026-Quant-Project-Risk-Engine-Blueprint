@@ -616,6 +616,11 @@ def test_full_app_boots():
     except Exception as exc:                        # network/data hiccup - don't fail suite
         print(f"[skip] app integration (data/network): {exc}")
         return
+    finally:
+        # Live prices and ^IRX must not outlive this test: they were read by
+        # the next offline boot, half-expired (Live audit 2026-10-20).
+        import streamlit as st
+        st.cache_data.clear()
     assert not at.exception, f"app raised: {at.exception}"
     assert len(at.error) == 0, f"app rendered errors: {[e.value for e in at.error]}"
 
@@ -3637,12 +3642,13 @@ def _offline_market_prices(tickers=None, period="2y", **_kw):
     return pd.DataFrame(cols, index=idx).iloc[-252 * years:]
 
 
-def _offline_app(setup=None):
-    """Run the real main.py under AppTest on _offline_market_prices; returns
-    (AppTest, restore). Every src module is imported BEFORE patching, so a
-    module-level `from src.ingestion import fetch_prices` is patched and then
-    restored too, and the Streamlit cache is cleared so no synthetic frame
-    outlives the test."""
+def _offline_app(setup=None, market=None, rf=0.045):
+    """Run the real main.py under AppTest on _offline_market_prices (or
+    `market`); returns (AppTest, restore). Every src module is imported BEFORE
+    patching, so a module-level `from src.ingestion import fetch_prices` is
+    patched and then restored too, and the Streamlit cache is cleared before
+    and after, so no live frame leaks in and no synthetic frame outlives the
+    test."""
     import importlib
     import pkgutil
     import sys
@@ -3651,14 +3657,15 @@ def _offline_app(setup=None):
     import streamlit as st
     for m in pkgutil.iter_modules(src.__path__):
         importlib.import_module(f"src.{m.name}")
+    market = market or _offline_market_prices
     fakes = {
-        "fetch_prices": _offline_market_prices,
+        "fetch_prices": market,
         "fetch_dollar_volume": lambda tickers=None, period="2y", **k: pd.DataFrame(
-            5e9, index=_offline_market_prices(tickers, period).index,
+            5e9, index=market(tickers, period).index,
             columns=list(tickers)),
         "average_dollar_volume": lambda tickers=None, *a, **k: pd.Series(
             5e9, index=list(tickers or [])),
-        "fetch_risk_free_rate": lambda *a, **k: 0.045,
+        "fetch_risk_free_rate": lambda *a, **k: rf,
         "provenance": lambda *a, **k: None,
     }
     saved = []
@@ -3674,6 +3681,9 @@ def _offline_app(setup=None):
             setattr(mod, attr, orig)
         st.cache_data.clear()
 
+    # Before, not only after: test_full_app_boots leaves the live prices and
+    # ^IRX cached, and their ttls (60 s, 1 h) ran out mid-test (2026-10-20).
+    st.cache_data.clear()
     try:
         app = pathlib.Path(__file__).resolve().parent.parent / "main.py"
         at = AppTest.from_file(str(app), default_timeout=300)
@@ -3746,6 +3756,38 @@ def test_sharpe_does_not_move_with_the_vol_target_slider():
                 f"Sharpe {sharpe()} at a {tv}% vol target vs {plain} unlevered")
         cap = " ".join(c.value for c in at.caption if c.value.startswith("Sharpe ="))
         assert "unlevered" in cap, f"Sharpe caption does not say what it is on: {cap}"
+    finally:
+        restore()
+
+
+def test_an_offline_boot_never_reads_what_a_live_boot_left_in_the_cache():
+    """Live audit 2026-10-20 (run 39347809039): the Sharpe slider test read
+    0.96 unlevered, then 0.64 at a 5% vol target. Tests run in name order, so
+    it was the first offline boot after test_full_app_boots, which runs main.py
+    on live Yahoo and leaves st.cache_data full. Its first run read the live
+    prices (load_universe, cached 60 s) and the live ^IRX (cached 1 h); the
+    60 s ran out between two reruns, and the next read the synthetic prices
+    with the live 4.075% rate - exactly 0.64. Passed whenever the gap fell
+    outside that minute. An offline boot must start from an empty cache."""
+    import streamlit as st
+    # Stand-in for the live boot: another market (ending a week earlier) and
+    # another T-bill rate, and a cache it leaves full on the way out.
+    seed, undo = _offline_app(
+        market=lambda tickers=None, period="2y", **k:
+            _offline_market_prices(tickers, period).iloc[:-5],
+        rf=0.02)
+    real_clear = st.cache_data.clear
+    st.cache_data.clear = lambda *a, **k: None   # test_full_app_boots never clears
+    try:
+        undo()
+    finally:
+        st.cache_data.clear = real_clear
+    at, restore = _offline_app()
+    try:
+        data = [c.value for c in at.caption if c.value.startswith("Data: ")]
+        rate = " ".join(c.value for c in at.caption if c.value.startswith("Sharpe ="))
+        assert data and "through 2026-10-14" in data[0], f"prices from the earlier boot: {data}"
+        assert "Risk-free rate: 4.50%" in rate, f"T-bill rate from the earlier boot: {rate}"
     finally:
         restore()
 
