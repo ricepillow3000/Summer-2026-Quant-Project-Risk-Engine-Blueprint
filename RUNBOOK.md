@@ -291,8 +291,20 @@ visitor pays for a cold Yahoo fetch on Railway (live audit run 24: 101.6s for
 the first Semiconductors pick after the cache expired, against 12.1s on a
 GitHub runner). It has to run inside the web service. A Railway cron service
 is a separate container with its own disk, so it would warm a cache the web
-app never reads. Its passes print to the deploy log, one line per preset, and
-each pass costs about one request per preset from the 5000-a-day budget.
+app never reads. Its passes print to the deploy log, one line per preset.
+
+A pass warms every pull the page makes for a preset, not only its 2y prices:
+the full histories behind The Book and the Grit tab, the 10 years behind the
+tail fit, the anchor pool, the security master, and the page-wide pulls
+(benchmark, recovery race, factor proxies, defensive shelf, T-bill). After a
+deploy the first switch to Semiconductors took 93.1s with only the 2y pull
+warm (John, 2026-10-20); offline, warming everything took that switch from
+40.9s to 12.8s, the headline from 4.1s to 1.0s.
+`test_the_warm_pass_covers_every_fetch_a_preset_page_makes` records the real
+page's fetches and fails if a pass misses one. Not covered: the crisis pair
+(two names chosen by the page) and baskets a visitor types in. A pass costs
+about 800 requests (about 3,900 a day); the warmer is its own process with
+its own 5000-a-day netguard cap, and it pauses 1s between pulls.
 
 To warm by hand (after a restore, or to time a cold refill):
 

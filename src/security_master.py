@@ -23,10 +23,26 @@ Honest limits:
     listings) on the free yfinance feed. Flagged as unavailable, not guessed.
 """
 
+import json
+import os
+import time
+
 import pandas as pd
 import yfinance as yf
 
 from src.netguard import guarded_session
+
+# Reference data changes rarely (an ISIN never; a dividend a quarter), but two
+# Yahoo calls per name, one name after another, cost 20 of the 44.8s an
+# offline basket switch took (John, 2026-10-20). A complete row is kept a day
+# in ONE capped file under DATA_DIR (the parquet budget in src.ingestion does
+# not count it, so it carries its own cap); a row with a failed or missing
+# lookup is kept an hour only - the page promises "Retried within the hour",
+# and an outage must not blank a name for a day.
+SM_MAX_AGE_HOURS = 24.0
+SM_RETRY_HOURS = 1.0
+SM_MAX_ENTRIES = 400
+SM_FILE = "security_master.json"
 
 
 def corporate_actions(ticker: str, lookback_years: int = 5) -> dict:
@@ -89,26 +105,80 @@ def identifier_lookup(ticker: str) -> dict:
     return {"ticker": ticker, "isin": isin}
 
 
-def security_master(tickers: list[str], lookback_years: int = 5) -> pd.DataFrame:
+def _row(ticker: str, lookback_years: int) -> dict:
+    """One ticker's reference row, from Yahoo."""
+    ident = identifier_lookup(ticker)
+    ca = corporate_actions(ticker, lookback_years=lookback_years)
+    return {
+        "isin": ident["isin"] or "unavailable",
+        "dividends_paid": ca["n_dividends"],
+        "total_dividends": (None if ca["n_dividends"] is None
+                            else float(ca["dividends"]["amount"].sum()) if ca["n_dividends"]
+                            else 0.0),
+        "splits": ca["n_splits"],
+        "last_split_date": ca["last_split"]["date"].date().isoformat() if ca["last_split"] else None,
+        "last_split_ratio": ca["last_split"]["ratio"] if ca["last_split"] else None,
+    }
+
+
+def _store_path() -> str:
+    from src.ingestion import DATA_DIR      # read at call time: tests and audits move it
+    return os.path.join(DATA_DIR, SM_FILE)
+
+
+def _load_store() -> dict:
+    try:
+        with open(_store_path(), encoding="utf-8") as fh:
+            store = json.load(fh)
+        return store if isinstance(store, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _save_store(store: dict) -> None:
+    """Newest SM_MAX_ENTRIES rows, written to a temporary name and renamed into
+    place, so a reader (the web process or the warmer) never sees half a file."""
+    keep = sorted(store.items(), key=lambda kv: kv[1].get("fetched_at", 0))[-SM_MAX_ENTRIES:]
+    path = _store_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = f"{path}.{os.getpid()}.tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump(dict(keep), fh)
+    os.replace(tmp, path)
+
+
+def _complete(row: dict) -> bool:
+    return row.get("dividends_paid") is not None and row.get("isin") != "unavailable"
+
+
+def security_master(tickers: list[str], lookback_years: int = 5, use_cache: bool = True,
+                    max_age_hours: float = SM_MAX_AGE_HOURS) -> pd.DataFrame:
     """
     One row per ticker: identifiers + a corporate-action summary. This is the
     reference-data view a risk desk checks BEFORE trusting a price series --
     "is this really the same security the whole way through?"
+
+    With use_cache, a row fetched within `max_age_hours` (SM_RETRY_HOURS for an
+    incomplete one) is read from disk instead of Yahoo.
     """
+    store = _load_store() if use_cache else {}
+    now, fetched = time.time(), False
     rows = {}
     for t in tickers:
-        ident = identifier_lookup(t)
-        ca = corporate_actions(t, lookback_years=lookback_years)
-        rows[t] = {
-            "isin": ident["isin"] or "unavailable",
-            "dividends_paid": ca["n_dividends"],
-            "total_dividends": (None if ca["n_dividends"] is None
-                                else float(ca["dividends"]["amount"].sum()) if ca["n_dividends"]
-                                else 0.0),
-            "splits": ca["n_splits"],
-            "last_split_date": ca["last_split"]["date"].date().isoformat() if ca["last_split"] else None,
-            "last_split_ratio": ca["last_split"]["ratio"] if ca["last_split"] else None,
-        }
+        hit = store.get(t)
+        if hit and hit.get("years") == lookback_years:
+            limit = max_age_hours if _complete(hit["row"]) else min(max_age_hours, SM_RETRY_HOURS)
+            if now - hit.get("fetched_at", 0) < limit * 3600:
+                rows[t] = hit["row"]
+                continue
+        rows[t] = _row(t, lookback_years)
+        store[t] = {"row": rows[t], "fetched_at": time.time(), "years": lookback_years}
+        fetched = True
+    if use_cache and fetched:
+        try:
+            _save_store(store)
+        except OSError:
+            pass                            # a full or read-only disk never breaks the tab
     return pd.DataFrame(rows).T
 
 
