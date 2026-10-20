@@ -533,7 +533,7 @@ def test_security_master_survives_a_failed_fetch():
     real = sm_mod.yf.Ticker
     sm_mod.yf.Ticker = lambda t, session=None: _Failed() if t == "BAD" else _Ok()
     try:
-        sm = sm_mod.security_master(["GOOD", "BAD"])
+        sm = sm_mod.security_master(["GOOD", "BAD"], use_cache=False)
     finally:
         sm_mod.yf.Ticker = real
     assert sm.loc["GOOD", "dividends_paid"] == 2
@@ -542,6 +542,74 @@ def test_security_master_survives_a_failed_fetch():
     assert pd.isna(sm.loc["BAD", "total_dividends"]), "failed fetch reported as 0.0"
     assert pd.isna(sm.loc["BAD", "splits"]), "failed fetch reported as 0 splits"
     assert sm.loc["BAD", "isin"] == "unavailable"
+
+
+def test_security_master_reads_its_disk_cache_and_never_keeps_a_failure():
+    """John, 2026-10-20: the slow first basket switch. The security master
+    made two Yahoo calls per name, one name after another, on every new basket
+    (20 of the 44.8s an offline switch took) and kept nothing on disk.
+    Identifiers and corporate actions change rarely: a complete row is now
+    kept a day, under DATA_DIR, in one capped file. A row with a failed or
+    missing lookup is kept an hour only, so the page's "Retried within the
+    hour" stays true and an outage cannot blank a name for a day."""
+    import json
+    import tempfile
+    import time as _time
+    import src.ingestion as ing
+    import src.security_master as sm_mod
+
+    class _Failed:
+        isin = "-"
+        dividends = None
+        splits = None
+
+    class _Ok:
+        isin = "US0000000001"
+        dividends = pd.Series([0.5, 0.5], index=pd.to_datetime(
+            ["2025-01-02", "2025-07-01"]).tz_localize("UTC"))
+        splits = pd.Series(dtype=float)
+
+    calls = []
+
+    def fake_ticker(t, session=None):
+        calls.append(t)
+        return _Failed() if t == "BAD" else _Ok()
+
+    real_ticker, real_dir = sm_mod.yf.Ticker, ing.DATA_DIR
+    with tempfile.TemporaryDirectory() as tmp:
+        sm_mod.yf.Ticker, ing.DATA_DIR = fake_ticker, tmp
+        try:
+            fresh = sm_mod.security_master(["GOOD", "BAD"])
+            assert sorted(set(calls)) == ["BAD", "GOOD"]
+            calls.clear()
+            again = sm_mod.security_master(["GOOD", "BAD"])
+            assert calls == [], f"a second look within the hour went to Yahoo: {calls}"
+            assert again.equals(fresh), "a cached row differs from the fetched one"
+            path = pathlib.Path(tmp) / "security_master.json"
+            assert path.is_file() and [f.name for f in pathlib.Path(tmp).iterdir()] == [path.name]
+
+            def age_all(hours):
+                store = json.loads(path.read_text())
+                for row in store.values():
+                    row["fetched_at"] = _time.time() - hours * 3600
+                path.write_text(json.dumps(store))
+
+            age_all(2)                       # a failure is retried after an hour...
+            sm_mod.security_master(["GOOD", "BAD"])
+            assert set(calls) == {"BAD"}, calls
+            calls.clear()
+            age_all(25)                      # ...a complete row after a day
+            sm_mod.security_master(["GOOD"])
+            assert set(calls) == {"GOOD"}, calls
+            calls.clear()
+            sm_mod.security_master(["GOOD"], use_cache=False)
+            assert set(calls) == {"GOOD"}, "use_cache=False still read the disk"
+
+            many = [f"T{i}" for i in range(sm_mod.SM_MAX_ENTRIES + 25)]
+            sm_mod.security_master(many)
+            assert len(json.loads(path.read_text())) <= sm_mod.SM_MAX_ENTRIES
+        finally:
+            sm_mod.yf.Ticker, ing.DATA_DIR = real_ticker, real_dir
 
 
 def test_unknown_symbols_get_a_readable_error():
@@ -579,7 +647,7 @@ def test_security_master_live():
         return
     try:
         from src.security_master import security_master
-        sm = security_master(["AAPL", "MSFT"])
+        sm = security_master(["AAPL", "MSFT"], use_cache=False)   # the feed, not the disk
     except Exception as exc:  # noqa: BLE001 - network hiccup, don't fail the suite
         print(f"[skip] security_master live check: {exc}")
         return
@@ -3252,6 +3320,85 @@ def test_the_web_process_keeps_every_preset_warm_before_it_expires():
     assert "&)" in web[loop:serve], web                       # ...in the background
     every = float(web[loop:].split("--every", 1)[1].split()[0].rstrip(")&"))
     assert 0 < every < CACHE_MAX_AGE_HOURS, every
+
+
+def test_the_warm_pass_covers_every_fetch_a_preset_page_makes():
+    """John, 2026-10-20: "fix the slow first basket switch". Right after a
+    deploy the deployed walk took 93.1s to switch to Semiconductors (101.6s in
+    run 24). The headline came in seconds; the rest of the page then paid for
+    cold pulls the warmer never made: it warmed each preset's 2y prices only,
+    while the page also asks for full histories (Book and Grit tab grit), ten
+    years (tail fit), page-wide pulls (conviction, factors, anchors, ^IRX) and
+    the security master. Railway's disk is wiped on every deploy and the cache
+    expires every 6h. A warm pass must now cover every fetch the page makes
+    for a preset - recorded from the real main.py, so the two cannot drift.
+    The one exception is the crisis pair (two names the page picks by its own
+    logic: one small pull)."""
+    import sys
+    import src.security_master as sm_mod
+    import tools.warm_cache as wc
+    from src.ingestion import PRESETS
+    from src.pairing import DEFENSIVE_ANCHOR_TICKERS
+
+    def recorder(store):
+        def fetch(tickers=None, period="2y", *a, **kw):
+            align = kw.get("align", a[1] if len(a) > 1 else True)
+            store.add((tuple(sorted(tickers or [])), period, bool(align)))
+            return _offline_market_prices(tickers, period)
+        return fetch
+
+    page, page_sm = set(), set()
+
+    def page_security_master(tickers, *a, **k):
+        page_sm.update(tickers)
+        return pd.DataFrame({"isin": "unavailable", "dividends_paid": 0, "total_dividends": 0.0,
+                             "splits": 0, "last_split_date": None, "last_split_ratio": None},
+                            index=list(tickers))
+
+    real_sm = sm_mod.security_master
+    sm_mod.security_master = page_security_master
+    try:
+        at, restore = _offline_app(market=recorder(page))
+        try:
+            pick = [w.label for w in at.selectbox].index("Preset basket")
+            first = at.selectbox[pick].value
+            semis = next(n for n in PRESETS if n.startswith("Semiconductors"))
+            at.selectbox[pick].set_value(semis).run()
+            assert not at.exception, [e.value for e in at.exception]
+        finally:
+            restore()
+    finally:
+        sm_mod.security_master = real_sm
+
+    warm, warm_sm = set(), set()
+    saved = []
+    mods = [m for n, m in sys.modules.items() if n.startswith("src.") or n == "tools.warm_cache"]
+    fakes = {"fetch_prices": recorder(warm),
+             "fetch_dollar_volume": lambda tickers=None, period="2y", **k: (
+                 recorder(warm)(tickers, period)),
+             "fetch_risk_free_rate": lambda *a, **k: 0.045,
+             "security_master": lambda tickers, *a, **k: warm_sm.update(tickers)}
+    for mod in mods:
+        for attr, fake in fakes.items():
+            if hasattr(mod, attr):
+                saved.append((mod, attr, getattr(mod, attr)))
+                setattr(mod, attr, fake)
+    sleep, wc.PAUSE_SECONDS = getattr(wc, "PAUSE_SECONDS", None), 0
+    try:
+        wc.run_pass()
+    finally:
+        for mod, attr, orig in saved:
+            setattr(mod, attr, orig)
+        if sleep is not None:
+            wc.PAUSE_SECONDS = sleep
+
+    anchors = set(DEFENSIVE_ANCHOR_TICKERS)
+    universes = [set(PRESETS[first]), set(PRESETS[semis])]
+    pair = {k for k in page if k[1] == "max" and len(k[0]) == 2
+            and any(set(k[0]) <= u | anchors for u in universes)}
+    missing = sorted(page - pair - warm)
+    assert not missing, f"fetches the page makes that no warm pass covers: {missing}"
+    assert page_sm <= warm_sm, f"security master not warmed for: {sorted(page_sm - warm_sm)}"
 
 
 def test_a_cache_file_is_never_seen_half_written():

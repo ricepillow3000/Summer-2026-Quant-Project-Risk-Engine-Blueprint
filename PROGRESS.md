@@ -450,6 +450,19 @@ risk-engine/
   as "1 -> 0.995"; the pair_weights docstring kept the false "flyer holds most
   of the risk". Swept every 10px, 360-1920: clean. Below 360px the plot is
   narrower than 260px - the screen, not the layout. Desktop dots unchanged.
+- ✅ **The first basket switch, warm (2026-10-20)** - John: "fix the slow first
+  basket switch". After a deploy the deployed walk took 93.1s to switch to
+  Semiconductors (101.6s in run 24). Two investigators: the headline came in
+  seconds, then the page paid five cold Yahoo pulls (the cache is keyed per
+  basket, and the warmer warmed only 2y) plus 20 serial security-master calls
+  with no disk cache. A council rejected a per-ticker store and shared keys
+  (both can move numbers: mixed snapshots, slices vs direct pulls, mixed
+  calendars). Instead the warm pass now makes every pull the page makes, by the
+  same calls (cache keys match, no number changes), and the security master
+  keeps a day on disk (an hour for a failed row). Offline, 3s per cold pull:
+  switch 40.9s -> 12.8s, headline 4.1s -> 1.0s; left cold: the 2-name crisis
+  pair. Tests: `test_the_warm_pass_covers_every_fetch_a_preset_page_makes`,
+  `test_security_master_reads_its_disk_cache_and_never_keeps_a_failure`.
 - ✅ **Every word on the map clears AA (2026-10-20)** - the 2026-10-19 council
   review measured the Risk Topology map's small labels below 4.5:1 on its dark
   glass (`--dim` 3.86:1, `--bronze` 4.38:1, `--emberhi` 3.99:1).

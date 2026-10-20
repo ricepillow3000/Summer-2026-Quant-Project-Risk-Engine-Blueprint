@@ -21,32 +21,118 @@ container's own disk, so a separate cron service would warm a disk no visitor
 reads. Each pass refetches anything older than (max age - interval), so no
 preset expires between passes (live audit run 24: an expired cache made the
 first Semiconductors pick on Railway take 101.6s).
+
+A pass warms EVERY pull the page makes for a preset, not only its 2y prices
+(John, 2026-10-20: the first switch to Semiconductors after a deploy still
+took 93.1s - the 2y pull was warm, but the full histories behind the Book and
+the Grit tab, the ten years behind the tail fit, the page-wide pulls and the
+security master were all cold, and Railway's disk is wiped on every deploy).
+Each pull goes through the same function with the same arguments main.py
+uses, so the cache keys match exactly and no number can differ from a cold
+pull; `test_the_warm_pass_covers_every_fetch_a_preset_page_makes` records the
+real page's fetches and fails if a pass misses one. Not covered: the crisis
+pair (two names the page picks by its own logic - one small pull) and baskets
+a visitor types in themselves.
+
+Budget: a pass makes about 800 Yahoo requests (20 presets x 2y, two full
+histories and 10y, plus the page-wide pulls) and the security master's
+lookups when they are due; at one pass every 5 hours that is about 3,900 a day,
+inside the 5,000-a-day netguard cap this process keeps for itself (the cap is
+per process). A 1s pause between pulls keeps it from bursting at Yahoo.
 """
 
 import argparse
 import time
 
-from src.ingestion import CACHE_MAX_AGE_HOURS, PRESETS, fetch_prices
+from src.conviction import AI_CAPEX_BASKET, BENCHMARK
+from src.factors import _PROXIES as FACTOR_PROXIES
+from src.ingestion import (CACHE_MAX_AGE_HOURS, PRESETS, fetch_dollar_volume,
+                           fetch_prices, fetch_risk_free_rate)
 from src.netguard import BudgetExhausted, budget_status
+from src.pairing import DEFENSIVE_ANCHOR_TICKERS
+from src.security_master import SM_MAX_AGE_HOURS, security_master
+
+PAUSE_SECONDS = 1.0     # between pulls, so a pass never bursts at Yahoo
+
+
+def preset_pulls(tickers: list[str]) -> list[tuple[str, object]]:
+    """Every pull the page makes for one preset basket, as (what, call(age)),
+    with the arguments main.py passes - so each lands on the page's own key."""
+    held = set(tickers)
+    pool = [a for a in DEFENSIVE_ANCHOR_TICKERS if a not in held]   # topology.anchor_frame
+    pulls = [
+        ("2y prices", lambda age: fetch_prices(tickers, period="2y", max_age_hours=age)),
+        # The Book and the Balance tab score grit on the universe plus the
+        # defensive shelf (main.py load_grit / _bv_grit), the Grit tab on the
+        # universe alone: two keys, both full history.
+        ("full history + anchors", lambda age: fetch_prices(
+            sorted(held | set(DEFENSIVE_ANCHOR_TICKERS)), period="max", align=False,
+            max_age_hours=age)),
+        ("full history", lambda age: fetch_prices(tickers, period="max", align=False,
+                                                  max_age_hours=age)),
+        ("10y (tail fit)", lambda age: fetch_prices(tickers, period="10y", align=False,
+                                                    max_age_hours=age)),
+    ]
+    if pool:
+        pulls.append(("anchor pool", lambda age: fetch_prices(pool, period="2y",
+                                                              max_age_hours=age)))
+    # Reference data keeps its own (longer) freshness; a repeating pass renews
+    # it the same interval early, and a drill (age 0) forces it too.
+    pulls.append(("security master", lambda age: security_master(
+        tickers, max_age_hours=0 if age == 0 else
+        SM_MAX_AGE_HOURS - (CACHE_MAX_AGE_HOURS - age))))
+    return pulls
+
+
+def page_pulls() -> list[tuple[str, object]]:
+    """The pulls every page view makes whatever the basket."""
+    anchors = list(DEFENSIVE_ANCHOR_TICKERS)
+    return [
+        ("benchmark full history", lambda age: fetch_prices([BENCHMARK], period="max",
+                                                            align=False, max_age_hours=age)),
+        ("recovery race", lambda age: fetch_prices(AI_CAPEX_BASKET + [BENCHMARK], period="max",
+                                                   align=False, max_age_hours=age)),
+        ("market 2y", lambda age: fetch_prices([BENCHMARK], period="2y", max_age_hours=age)),
+        ("factor proxies", lambda age: fetch_prices(FACTOR_PROXIES, period="2y",
+                                                    max_age_hours=age)),
+        ("defensive shelf", lambda age: fetch_prices(anchors, period="2y", align=False,
+                                                     max_age_hours=age)),
+        ("defensive shelf volume", lambda age: fetch_dollar_volume(anchors, period="2y",
+                                                                   max_age_hours=age)),
+        ("anchors 2y", lambda age: fetch_prices(anchors, period="2y", max_age_hours=age)),
+        ("T-bill rate", lambda age: fetch_risk_free_rate(max_age_hours=age)),
+    ]
 
 
 def warm(name: str, tickers: list[str], drill: bool = False,
          max_age: float | None = None) -> dict:
-    """Fetch one universe, returning what it cost."""
+    """Warm one preset universe - every pull its page makes - and return what
+    it cost."""
+    return _run(name, preset_pulls(tickers), drill, max_age)
+
+
+def _run(name: str, pulls: list, drill: bool = False,
+         max_age: float | None = None) -> dict:
+    """Run a list of pulls, returning what they cost."""
     started = time.monotonic()
     spent_before = budget_status()["spent"]
-    try:
-        # max_age_hours=0 in drill mode forces a real fetch, so the timing is a
-        # cold-start number rather than a parquet read.
-        if max_age is None:
-            max_age = 0 if drill else CACHE_MAX_AGE_HOURS
-        prices = fetch_prices(tickers, period="2y", max_age_hours=max_age)
-        detail, ok = f"{prices.shape[0]}d x {prices.shape[1]} names", True
-    except BudgetExhausted as exc:
-        detail, ok = f"budget: {exc}", False
-    except Exception as exc:  # noqa: BLE001 - a warm-up must never take a deploy down
-        detail, ok = f"{type(exc).__name__}: {exc}", False
-    return {"universe": name, "ok": ok, "detail": detail,
+    # max_age_hours=0 in drill mode forces real fetches, so the timing is a
+    # cold-start number rather than a parquet read.
+    if max_age is None:
+        max_age = 0 if drill else CACHE_MAX_AGE_HOURS
+    done, failed = 0, []
+    for what, call in pulls:
+        try:
+            call(max_age)
+            done += 1
+        except BudgetExhausted as exc:
+            failed.append(f"{what}: budget: {exc}")
+            break
+        except Exception as exc:  # noqa: BLE001 - a warm-up must never take a deploy down
+            failed.append(f"{what}: {type(exc).__name__}: {exc}")
+        time.sleep(PAUSE_SECONDS)
+    detail = f"{done}/{len(pulls)} pulls" + (f" - {failed[0]}" if failed else "")
+    return {"universe": name, "ok": not failed, "detail": detail,
             "seconds": round(time.monotonic() - started, 2),
             "requests": budget_status()["spent"] - spent_before}
 
@@ -74,8 +160,9 @@ def main() -> int:
 def run_pass(drill: bool = False, max_age: float | None = None) -> int:
     """Warm every preset once and print what each cost."""
     rows = []
-    for name, tickers in PRESETS.items():
-        row = warm(name, tickers, drill, max_age)
+    for name, pulls in [("Every page view", page_pulls())] + [
+            (name, preset_pulls(tickers)) for name, tickers in PRESETS.items()]:
+        row = _run(name, pulls, drill, max_age)
         rows.append(row)
         flag = "ok  " if row["ok"] else "FAIL"
         print(f"{flag} {row['seconds']:6.2f}s {row['requests']:3d} req  "
