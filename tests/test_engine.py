@@ -612,6 +612,254 @@ def test_security_master_reads_its_disk_cache_and_never_keeps_a_failure():
             sm_mod.yf.Ticker, ing.DATA_DIR = real_ticker, real_dir
 
 
+def _fake_history(t, years=2.0):
+    """One name's daily history the way yfinance's Ticker.history hands it
+    over: tz-aware, on that name's own calendar. Offline and deterministic."""
+    import yfinance.utils as yu
+    if t == "DEAD":
+        raise RuntimeError("possibly delisted")
+    if t == "EMPTY":
+        return yu.empty_df()
+    end, days = pd.Timestamp("2026-10-16"), int(365 * years)
+    if t.endswith("-USD"):                      # crypto: seven days a week
+        idx = pd.date_range(end=end, periods=days, freq="D", tz="UTC")
+    elif t.endswith("=X"):                      # FX: London weekdays
+        idx = pd.bdate_range(end=end, periods=days * 5 // 7, tz="Europe/London")
+    else:                                       # equities: each name its own holiday
+        idx = pd.bdate_range(end=end, periods=days * 5 // 7, tz="America/New_York")
+        idx = idx[(np.arange(len(idx)) % 37) != (sum(map(ord, t)) % 37)]
+    idx = pd.DatetimeIndex(list(idx), name="Date")
+    rng = np.random.default_rng(sum(map(ord, t)))
+    c = 100 * np.exp(np.cumsum(rng.normal(0, 0.02, len(idx))))
+    vol = (np.zeros(len(idx), dtype="int64") if t.endswith("=X")
+           else rng.integers(1, 10**7, len(idx)))
+    return pd.DataFrame({"Open": c, "High": c, "Low": c, "Close": c, "Volume": vol}, index=idx)
+
+
+class _FakeYahoo:
+    """Runs yfinance's REAL yf.download (its threading, timezone strip, union
+    and column sort) on fake per-name histories, records every download's
+    names, and points the cache at a temp folder. Nothing leaves the machine."""
+
+    def __init__(self, years=2.0):
+        self.years, self.downloads = years, []
+
+    def __enter__(self):
+        import tempfile
+        import yfinance.multi as multi
+        import yfinance.utils as yu
+        import src.ingestion as ing
+        fake = self
+
+        class _Ticker:
+            def __init__(self, t, session=None):
+                self.ticker, self._price_history = t, None
+
+            def history(self, **kw):
+                return _fake_history(self.ticker, fake.years)
+
+        self._tmp = tempfile.TemporaryDirectory()
+        self._real = (multi.Ticker, yu.get_ticker_by_isin, ing.yf.download,
+                      ing.check_budget, ing.guarded_session, ing.DATA_DIR)
+        real_download = ing.yf.download
+
+        def recording(tickers, *a, **k):
+            fake.downloads.append(sorted(tickers) if isinstance(tickers, list) else [tickers])
+            return real_download(tickers, *a, **k)
+
+        multi.Ticker = _Ticker
+        yu.get_ticker_by_isin = lambda isin: {"US0000000AA1": "AAA"}.get(isin, "")
+        ing.yf.download, ing.check_budget = recording, (lambda *a, **k: None)
+        ing.guarded_session, ing.DATA_DIR = (lambda: None), self._tmp.name
+        self.dir = pathlib.Path(self._tmp.name)
+        return self
+
+    def reference(self, tickers, period="2y"):
+        """What ONE yf.download of the whole basket returns, unrecorded."""
+        return self._real[2](tickers, period=period, auto_adjust=True, progress=False,
+                             repair=True, timeout=30, session=None)
+
+    def __exit__(self, *exc):
+        import yfinance.multi as multi
+        import yfinance.utils as yu
+        import src.ingestion as ing
+        (multi.Ticker, yu.get_ticker_by_isin, ing.yf.download,
+         ing.check_budget, ing.guarded_session, ing.DATA_DIR) = self._real
+        self._tmp.cleanup()
+
+
+def test_a_basket_stitched_from_single_names_matches_one_download():
+    """John, 2026-10-20: a typed-in basket was slow because the cache kept
+    whole baskets - three new names re-downloaded all fifteen, under each of
+    the page's five keys, and yfinance's repair pass costs seconds of CPU per
+    name per download. Each name is now kept on its own and a basket is
+    stitched from them. yf.download is itself per name (Ticker.history,
+    timezone strip, union of dates, sorted columns), so the stitch must equal
+    ONE download of the whole basket exactly: raw, and after the cleaning pass
+    with both aligns. Mixed calendars, a name that fails, one that is empty."""
+    import src.ingestion as ing
+
+    basket = ["AAA", "BBB", "BTC-USD", "DEAD", "EMPTY", "EURUSD=X"]
+    with _FakeYahoo() as fy:
+        ing._download_close_volume(["AAA", "BTC-USD"], "2y")    # two names known
+        close, volume = ing._download_close_volume(basket, "2y")
+        assert fy.downloads[-1] == ["BBB", "DEAD", "EMPTY", "EURUSD=X"], fy.downloads
+        ref = fy.reference(basket)
+        pd.testing.assert_frame_equal(close, ref["Close"], check_exact=True, check_freq=False)
+        pd.testing.assert_frame_equal(volume, ref["Volume"], check_exact=True,
+                                      check_freq=False, check_dtype=False)
+        for align in (True, False):
+            pd.testing.assert_frame_equal(
+                ing.fetch_prices(basket, align=align),
+                ing._clean_price_frame(ref["Close"], align), check_exact=True, check_freq=False)
+        one, _ = ing._download_close_volume(["BBB"], "2y")       # cached single name
+        pd.testing.assert_frame_equal(one, fy.reference(["BBB"])["Close"],
+                                      check_exact=True, check_freq=False)
+        try:
+            ing._download_close_volume(["DEAD", "EMPTY"], "2y")
+            raise AssertionError("an all-failed basket returned data")
+        except ing.NoDataError as e:
+            assert str(e) == ing.NO_DATA_MSG
+
+
+def test_adding_names_to_a_known_basket_downloads_only_the_new_names():
+    """The point of the per-name cache: a visitor who adds three names to a
+    basket the server already holds costs three downloads, not fifteen. A
+    name past its freshness is pulled again, a failed name is never
+    remembered (a typo or an outage is retried), and the basket's provenance
+    states its OLDEST pull - the age the page shows is the honest one - and
+    its newest."""
+    import datetime as _dt
+    import json
+    import src.ingestion as ing
+
+    with _FakeYahoo() as fy:
+        ing.fetch_prices(["AAA", "BBB"])
+        ing.fetch_prices(["AAA", "BBB", "CCC", "DDD", "DEAD"])
+        assert fy.downloads == [["AAA", "BBB"], ["CCC", "DDD", "DEAD"]], fy.downloads
+        ing.fetch_prices(["CCC", "DEAD"])
+        assert fy.downloads[-1] == ["DEAD"], f"a failed name was remembered: {fy.downloads}"
+
+        def stamp(t, hours_ago):
+            path = ing._raw_path(t, "2y")
+            f = pd.read_parquet(path)
+            when = _dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(hours=hours_ago)
+            f.attrs["fetched_at_utc"] = when.isoformat(timespec="seconds")
+            f.to_parquet(path)
+            return f.attrs["fetched_at_utc"]
+
+        stamp("AAA", 7)                          # past the 6 h window
+        held = stamp("DDD", 2)                   # still fresh
+        n = len(fy.downloads)
+        ing.fetch_prices(["AAA", "DDD"])
+        assert fy.downloads[n:] == [["AAA"]], fy.downloads[n:]
+        meta = json.loads(pathlib.Path(ing._meta_path(
+            ing._cache_path(["AAA", "DDD"], "2y"))).read_text())
+        assert meta["fetched_at_utc"] == held, meta
+        assert meta["fetched_newest_utc"] > held, meta
+
+
+def test_use_cache_false_never_reads_or_writes_a_name_file():
+    """Live checks (tools/live_provenance, the live tests) pass use_cache=False
+    to compare the engine with Yahoo. A per-name file read there would make
+    the check compare the cache with itself, so it must go to the feed for
+    every name and leave nothing behind."""
+    import src.ingestion as ing
+
+    with _FakeYahoo() as fy:
+        ing._download_close_volume(["AAA"], "2y")
+        path = pathlib.Path(ing._raw_path("AAA", "2y"))
+        poisoned = pd.read_parquet(path)
+        poisoned["Close"] = 1.0
+        poisoned.to_parquet(path)
+        before = sorted(p.name for p in fy.dir.iterdir())
+        px = ing.fetch_prices(["AAA", "BBB"], use_cache=False)
+        assert fy.downloads[-1] == ["AAA", "BBB"], fy.downloads
+        assert (px["AAA"] != 1.0).all(), "use_cache=False read a cached name"
+        assert sorted(p.name for p in fy.dir.iterdir()) == before, "use_cache=False wrote a file"
+
+
+def test_an_isin_basket_loads_as_one_download_would():
+    """VALID_TICKER lets an ISIN through and yfinance relabels it: in one
+    download US0000000AA1 and AAA are one series under the ISIN's name. A
+    cached AAA beside a downloaded ISIN would be the same series twice (a
+    singular covariance), so a basket with an ISIN skips the per-name cache."""
+    import src.ingestion as ing
+
+    basket = ["AAA", "BBB", "US0000000AA1"]
+    with _FakeYahoo() as fy:
+        ing.fetch_prices(["AAA"])
+        px = ing.fetch_prices(basket)
+        assert fy.downloads[-1] == basket, fy.downloads
+        pd.testing.assert_frame_equal(
+            px, ing._clean_price_frame(fy.reference(basket)["Close"], True),
+            check_exact=True, check_freq=False)
+
+
+def test_a_warm_pass_fits_inside_the_cache_budget():
+    """The disk cache evicts its oldest files past CACHE_MAX_FILES. At 240 a
+    warm pass already wrote more than that, so the pass evicted its own first
+    presets; the per-name files add ~450 more. A full pass, on fake data, must
+    leave room to spare and evict nothing."""
+    import src.ingestion as ing
+    import src.security_master as sm_mod
+    import tools.warm_cache as wc
+
+    class _Ref:
+        isin = "US0000000001"
+        dividends = pd.Series(dtype=float)
+        splits = pd.Series(dtype=float)
+
+    dropped = []
+    real = (ing._prune_cache, sm_mod.yf.Ticker, wc.PAUSE_SECONDS)
+
+    def counting_prune(*a, **k):
+        dropped.append(real[0](*a, **k))
+        return dropped[-1]
+
+    with _FakeYahoo(years=3.0) as fy:
+        ing._prune_cache, sm_mod.yf.Ticker, wc.PAUSE_SECONDS = (
+            counting_prune, (lambda t, session=None: _Ref()), 0)
+        try:
+            import contextlib
+            import io
+            with contextlib.redirect_stdout(io.StringIO()):
+                wc.run_pass()
+        finally:
+            ing._prune_cache, sm_mod.yf.Ticker, wc.PAUSE_SECONDS = real
+        files = len([p for p in fy.dir.iterdir()
+                     if p.suffix == ".parquet" or p.name.endswith(".meta.json")])
+    assert sum(dropped) == 0, f"a warm pass evicted {sum(dropped)} of its own files"
+    assert files < ing.CACHE_MAX_FILES / 2, f"{files} files against a cap of {ing.CACHE_MAX_FILES}"
+
+
+def test_requirements_pin_yfinance():
+    """The per-name cache splits and stitches downloads the way yfinance
+    1.7.0's multi.py assembles them (the stitch test proves it on that
+    version). Unpinned, the host could resolve a version the test never saw."""
+    root = pathlib.Path(__file__).resolve().parents[1]
+    lines = (root / "requirements.txt").read_text(encoding="utf-8").splitlines()
+    pins = [ln.split("#")[0].strip() for ln in lines if ln.startswith("yfinance")]
+    assert pins == ["yfinance==1.7.0"], pins
+
+
+def test_the_walks_typed_basket_pool_is_in_no_preset():
+    """The deployed walk times a typed-in basket. Its names must stay out of
+    every preset (presets are warmed, so the step would time a warm read) and
+    inside SUGGESTIONS (names the page offers)."""
+    import re
+    from src.ingestion import PRESETS, SUGGESTIONS
+    root = pathlib.Path(__file__).resolve().parents[1]
+    src = (root / "tools" / "recruiter_walk.mjs").read_text(encoding="utf-8")
+    m = re.search(r"const TYPED_POOL = \[([^\]]*)\]", src)
+    assert m, "recruiter_walk.mjs has no TYPED_POOL"
+    pool = re.findall(r"'([^']+)'", m.group(1))
+    in_presets = set().union(*PRESETS.values())
+    assert len(pool) >= 20, pool
+    assert not set(pool) & in_presets, sorted(set(pool) & in_presets)
+    assert set(pool) <= set(SUGGESTIONS), sorted(set(pool) - set(SUGGESTIONS))
+
+
 def test_unknown_symbols_get_a_readable_error():
     """A visitor who mistypes every symbol used to see "Couldn't load market
     data: RuntimeError - quote <ref>", i.e. a crash report for their own typo.

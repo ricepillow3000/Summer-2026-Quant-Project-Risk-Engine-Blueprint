@@ -2974,9 +2974,15 @@ with tab_dq:
 with tab_lineage:
     prov = provenance(tickers)
     if prov:
+        # Each name is pulled on its own, so a basket can span several pulls:
+        # say so rather than print one time for all of them.
+        _newest = prov.get("fetched_newest_utc", prov["fetched_at_utc"])
+        _fetched = (prov["fetched_at_utc"] if _newest == prov["fetched_at_utc"] else
+                    f"{prov['fetched_at_utc']} → {_newest} (each name is pulled "
+                    f"on its own and re-pulled after {CACHE_MAX_AGE_HOURS:g} hours)")
         st.markdown(
             f"- **Source:** {prov['source']}\n"
-            f"- **Fetched (UTC):** {prov['fetched_at_utc']}\n"
+            f"- **Fetched (UTC):** {_fetched}\n"
             f"- **Symbols:** {', '.join(prov['symbols'])}\n"
             f"- **Coverage:** {prov['start']} → {prov['end']} "
             f"({prov['rows']} trading days)\n"

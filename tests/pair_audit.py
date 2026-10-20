@@ -57,7 +57,7 @@ def download(out: str) -> int:
     closes = []
     for i in range(0, len(UNIVERSE + EXTRA), CHUNK):
         chunk = (UNIVERSE + EXTRA)[i:i + CHUNK]
-        close, _ = ing._download_close_volume(chunk, "2y")
+        close, _ = ing._download_close_volume(chunk, "2y", use_cache=False)
         closes.append(close)
         print(f"downloaded {i + len(chunk)}/{len(UNIVERSE + EXTRA)}", flush=True)
     master = pd.concat(closes, axis=1).sort_index()
@@ -68,7 +68,7 @@ def download(out: str) -> int:
     return 0
 
 
-def _serve(tickers, period):
+def _serve(tickers, period, *_, **__):
     """Stand-in for the Yahoo round trip: the same columns yfinance would hand
     back for exactly these symbols, on exactly the days any of them traded."""
     close = _MASTER.reindex(columns=tickers).dropna(how="all")

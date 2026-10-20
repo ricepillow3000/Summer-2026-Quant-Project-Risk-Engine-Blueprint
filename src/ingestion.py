@@ -24,6 +24,7 @@ import os
 import re
 import json
 import hashlib
+import threading
 import datetime
 import numpy as np
 import pandas as pd
@@ -57,8 +58,11 @@ MAX_UNIVERSE = 25
 # Cache is derived data (re-fetchable, no secrets), but the disk it sits on is
 # a small ephemeral volume and any visitor can mint a new cache key by typing
 # a new ticker combination. Bound it so a stream of novel baskets cannot fill
-# the volume; oldest entries go first.
-CACHE_MAX_FILES = 240
+# the volume; oldest entries go first. 1500: a warm pass writes ~720 files
+# (~270 basket files + ~450 per-name files, see _raw_path); at 240 a pass
+# already evicted its own first presets
+# (test_a_warm_pass_fits_inside_the_cache_budget).
+CACHE_MAX_FILES = 1500
 CACHE_MAX_MB = 200
 
 # One-click starting baskets for a wider audience. These are representative,
@@ -296,34 +300,113 @@ def _prune_cache(max_files: int = CACHE_MAX_FILES,
     return dropped
 
 
-def _download_close_volume(tickers: list[str], period: str) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """
-    One Yahoo download → normalized (close, volume) frames, tickers-as-columns.
+def _raw_path(ticker: str, period: str) -> str:
+    """One name's own (Close, Volume) download for one period."""
+    key = hashlib.md5((ticker + "|" + period + "|raw").encode(),
+                      usedforsecurity=False).hexdigest()[:12]
+    return os.path.join(DATA_DIR, f"raw_{key}.parquet")
 
-    This is the single network round-trip that now feeds BOTH the price cache
-    and the dollar-volume cache. yfinance returns a column MultiIndex for
-    multiple tickers and a flat index for one - we normalize both shapes here.
-    """
-    # Every outbound call goes through the egress allowlist (src/netguard.py):
-    # the ticker funnel below is the primary control, this is the second line.
-    # The budget is checked up front so an exhausted cap reads as a cap, not as
-    # a mysterious "possibly delisted" from inside yfinance.
-    check_budget()
-    raw = yf.download(tickers, period=period, auto_adjust=True, progress=False,
-                      repair=True, timeout=30, session=guarded_session())
-    if raw is None or raw.empty:
-        raise NoDataError(NO_DATA_MSG)
+
+def _read_raw(ticker: str, period: str, max_age_hours: float) -> pd.DataFrame | None:
+    """A name's cached download if its RECORDED pull time is fresh (a copied or
+    touched file keeps its old stamp), else None."""
+    try:
+        frame = pd.read_parquet(_raw_path(ticker, period))
+        fetched = datetime.datetime.fromisoformat(frame.attrs["fetched_at_utc"])
+    except (OSError, ValueError, KeyError):
+        return None
+    age = datetime.datetime.now(datetime.timezone.utc) - fetched
+    return frame if age <= datetime.timedelta(hours=max_age_hours) else None
+
+
+def _own_rows(raw: pd.DataFrame, ticker: str, alone: bool) -> pd.DataFrame:
+    """One name's rows out of a yf.download frame. yfinance fills a name's
+    missing volume with 0 and drops its all-empty rows, so a row with no
+    Volume is one the download added only to line up with another name."""
     if isinstance(raw.columns, pd.MultiIndex):
-        close, volume = raw["Close"], raw["Volume"]
+        if ticker not in raw.columns.get_level_values(1):
+            return pd.DataFrame()
+        own = raw.xs(ticker, axis=1, level=1)
+    elif alone:                     # a flat frame is one name's download
+        own = raw
     else:
-        close = raw[["Close"]].copy(); close.columns = tickers[:1]
-        volume = raw[["Volume"]].copy(); volume.columns = tickers[:1]
+        return pd.DataFrame()
+    own = own[["Close", "Volume"]]
+    return own[own["Volume"].notna()]
+
+
+def _download_close_volume(tickers: list[str], period: str,
+                           max_age_hours: float = CACHE_MAX_AGE_HOURS,
+                           use_cache: bool = True) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Normalized (close, volume) frames, tickers-as-columns: the single chokepoint
+    that feeds BOTH the price cache and the dollar-volume cache.
+
+    Each name's own download is kept per period, and only names not already
+    held are downloaded - in ONE yf.download. John, 2026-10-20: a typed-in
+    basket was slow because the cache kept whole baskets, so three new names
+    re-downloaded all fifteen under each of the page's five keys, and
+    yfinance's repair pass costs seconds of CPU per name per download.
+    yf.download is itself per name (Ticker.history, timezone strip, union of
+    dates, sorted columns), so a basket stitched from names equals one download
+    of it exactly (test_a_basket_stitched_from_single_names_matches_one_download).
+    Names may now be pulled at different moments inside the freshness window;
+    close.attrs carries the oldest and newest pull so provenance says so.
+    """
+    # yfinance relabels an ISIN with the ticker it resolves to, so a cached
+    # ticker beside its ISIN would be one series twice: those take one download.
+    use_cache = use_cache and not any(yf.utils.is_isin(t) for t in tickers)
+    frames = {}
+    if use_cache:
+        for t in tickers:
+            cached = _read_raw(t, period, max_age_hours)
+            if cached is not None:
+                frames[t] = cached
+    missing = [t for t in tickers if t not in frames]
+    if missing:
+        # Every outbound call goes through the egress allowlist (src/netguard.py):
+        # the ticker funnel is the primary control, this is the second line.
+        # The budget is checked up front so an exhausted cap reads as a cap, not
+        # as a mysterious "possibly delisted" from inside yfinance.
+        check_budget()
+        raw = yf.download(missing, period=period, auto_adjust=True, progress=False,
+                          repair=True, timeout=30, session=guarded_session())
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
+        for t in missing:
+            own = (pd.DataFrame() if raw is None or raw.empty
+                   else _own_rows(raw, t, alone=len(missing) == 1))
+            if own.empty:
+                continue            # a typo or an outage is retried, never remembered
+            own.attrs["fetched_at_utc"] = now
+            if use_cache:
+                os.makedirs(DATA_DIR, exist_ok=True)
+                _write_parquet(own, _raw_path(t, period))
+            frames[t] = own
+    if not frames:
+        raise NoDataError(NO_DATA_MSG)
+    # A name with no data stays an all-NaN column, as in one multi download.
+    names = sorted(set(tickers))
+    close = pd.concat({t: f["Close"] for t, f in frames.items()}, axis=1,
+                      sort=True).reindex(columns=names)
+    volume = pd.concat({t: f["Volume"] for t, f in frames.items()}, axis=1,
+                       sort=True).reindex(columns=names)
+    stamps = sorted(f.attrs["fetched_at_utc"] for f in frames.values())
     # VALID_TICKER guards what a visitor types; these names are the FEED's, and
     # yfinance can label a column after a search result. 2026-10-15 security
     # audit: they flow into the map, captions and tables, so only ticker-shaped
     # columns leave this chokepoint (it feeds prices and dollar volume alike).
     keep = [c for c in close.columns if valid_ticker(c)]
-    return close[keep], volume.reindex(columns=keep)
+    close = close[keep].rename_axis(columns="Ticker")
+    close.attrs = {"fetched_at_utc": stamps[0], "fetched_newest_utc": stamps[-1]}
+    return close, volume.reindex(columns=keep).rename_axis(columns="Ticker")
+
+
+def _pulled(close: pd.DataFrame) -> tuple[str, str]:
+    """(oldest, newest) pull behind a frame from _download_close_volume; now
+    for a frame served without stamps (tests/pair_audit)."""
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
+    return (close.attrs.get("fetched_at_utc", now),
+            close.attrs.get("fetched_newest_utc", now))
 
 
 def _clean_price_frame(prices: pd.DataFrame, align: bool) -> pd.DataFrame:
@@ -360,13 +443,16 @@ def _dollar_volume(close: pd.DataFrame, volume: pd.DataFrame) -> pd.DataFrame:
 def _write_parquet(frame: pd.DataFrame, path: str) -> None:
     """Write to a temporary name, then rename into place: the web process
     re-warms these files while visitors read them (Procfile), and a rename is
-    atomic, so a reader gets the old file or the new one, never a torn one."""
-    tmp = f"{path}.{os.getpid()}.tmp"
+    atomic, so a reader gets the old file or the new one, never a torn one.
+    The thread is in the name too: two visitors' threads that pull the same
+    new name at once must not write one temp file."""
+    tmp = f"{path}.{os.getpid()}.{threading.get_ident()}.tmp"
     frame.to_parquet(tmp)
     os.replace(tmp, path)
 
 
-def _write_dollar_volume_cache(tickers: list[str], period: str, dv: pd.DataFrame) -> None:
+def _write_dollar_volume_cache(tickers: list[str], period: str, dv: pd.DataFrame,
+                               pulled: tuple[str, str]) -> None:
     """Persist a daily dollar-volume frame + its provenance record."""
     dv = dv.dropna(axis=1, how="all")
     if dv.empty:
@@ -377,8 +463,8 @@ def _write_dollar_volume_cache(tickers: list[str], period: str, dv: pd.DataFrame
     meta = {
         "source": "Yahoo Finance (via yfinance)",
         "metric": "daily dollar volume (adj close x volume)",
-        "fetched_at_utc": datetime.datetime.now(datetime.timezone.utc)
-                          .isoformat(timespec="seconds"),
+        "fetched_at_utc": pulled[0],
+        "fetched_newest_utc": pulled[1],
         "symbols": list(dv.columns),
         "period": period,
         "rows": len(dv),
@@ -427,7 +513,7 @@ def fetch_prices(tickers: list[str] | None = None, period: str = "2y",
         return pd.read_parquet(cache_path)
 
     try:
-        close, volume = _download_close_volume(tickers, period)
+        close, volume = _download_close_volume(tickers, period, max_age_hours, use_cache)
     except BudgetExhausted:
         # The spend cap is spent. Degrade to stale cache rather than hammering
         # a feed that is already rate-limiting us - and let the provenance
@@ -449,10 +535,14 @@ def fetch_prices(tickers: list[str] | None = None, period: str = "2y",
         _prune_cache()      # keep the cache inside its disk budget
         # Provenance: stamp exactly where this data came from and when, so every
         # downstream number is traceable to a real source - not the model.
+        # Names are pulled separately: the oldest pull is the basket's age
+        # (it drives freshness and the "pulled N min ago" line), the newest
+        # says how far apart they are.
+        pulled = _pulled(close)
         meta = {
             "source": "Yahoo Finance (via yfinance)",
-            "fetched_at_utc": datetime.datetime.now(datetime.timezone.utc)
-                              .isoformat(timespec="seconds"),
+            "fetched_at_utc": pulled[0],
+            "fetched_newest_utc": pulled[1],
             "symbols": list(prices.columns),
             "period": period,
             "start": prices.index[0].date().isoformat(),
@@ -468,7 +558,7 @@ def fetch_prices(tickers: list[str] | None = None, period: str = "2y",
         if align:
             try:
                 dv = _dollar_volume(close, volume).reindex(index=prices.index)[prices.columns]
-                _write_dollar_volume_cache(tickers, period, dv)
+                _write_dollar_volume_cache(tickers, period, dv, pulled)
             except Exception:  # noqa: BLE001
                 pass
     return prices
@@ -509,12 +599,12 @@ def fetch_dollar_volume(tickers: list[str] | None = None, period: str = "2y",
     if use_cache and os.path.exists(cache_path) and _cache_is_fresh(meta_path, max_age_hours):
         return pd.read_parquet(cache_path)
 
-    close, volume = _download_close_volume(tickers, period)
+    close, volume = _download_close_volume(tickers, period, max_age_hours, use_cache)
     dollar_vol = _dollar_volume(close, volume).dropna(axis=1, how="all")
     if dollar_vol.empty:
         raise RuntimeError("No volume history for that universe.")
     if use_cache:
-        _write_dollar_volume_cache(tickers, period, dollar_vol)
+        _write_dollar_volume_cache(tickers, period, dollar_vol, _pulled(close))
     return dollar_vol
 
 

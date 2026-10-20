@@ -34,11 +34,14 @@ real page's fetches and fails if a pass misses one, the Balance tab's default
 crisis pair included (`default_crisis_pair`: the page's own rule). Not
 covered: baskets a visitor types in themselves.
 
-Budget: a pass makes about 800 Yahoo requests (20 presets x 2y, two full
-histories and 10y, plus the page-wide pulls) and the security master's
-lookups when they are due; at one pass every 5 hours that is about 3,900 a day,
-inside the 5,000-a-day netguard cap this process keeps for itself (the cap is
-per process). A 1s pause between pulls keeps it from bursting at Yahoo.
+Budget: src/ingestion keeps each name's download per period, so a pass
+downloads each name once per period however many presets share it - about
+450 name-downloads (2y, full history and 10y of ~150 names) plus the page-wide
+pulls and the security master's lookups when they are due - inside the
+5,000-a-day netguard cap this process keeps for itself (the cap is per
+process). The same files serve a basket a visitor types: only its names the
+pass never saw are downloaded. A 1s pause between pulls keeps it from
+bursting at Yahoo.
 """
 
 import argparse
