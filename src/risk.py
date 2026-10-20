@@ -12,7 +12,7 @@ Quant Deep Dive:
 
 import numpy as np
 import pandas as pd
-from scipy import stats, special
+from scipy import optimize, stats, special
 from src.covariance import RISKMETRICS_LAMBDA
 from src.ingestion import fetch_prices, get_returns
 
@@ -73,6 +73,45 @@ def parametric_var(port_returns: pd.Series, confidence: float = 0.95) -> float:
     mu, sigma = port_returns.mean(), port_returns.std()
     z = stats.norm.ppf(1 - confidence)
     return float(-(mu + z * sigma))
+
+
+# genpareto.fit spends ~95% of its time in scipy's generic objective
+# (_penalized_nnlf): argument checks and dispatch around a few numpy calls,
+# run ~150 times per fit and 200 fits per bootstrap. This is that objective
+# for genpareto with loc fixed at 0, the same numpy calls in the same order,
+# so the optimizer walks the same path to the same floats - 3x faster
+# (2026-10-20, John: "speed up the tail model fit"). Equal bit for bit on
+# scipy 1.18.1, which requirements.txt pins
+# (test_the_lean_tail_objective_equals_scipys_bit_for_bit). np.log, not
+# math.log: they differ in the last bit on some scales, which moves the fit.
+_LOGXMAX = np.log(np.finfo(float).max)
+
+
+def _lean_nnlf(theta, data):
+    c, scale = theta[0], theta[1]
+    if not np.isfinite(c) or scale <= 0:
+        return np.inf
+    x = (data - 0.0) / scale
+    n_log_scale = len(x) * np.log(scale)
+    b = -1.0 / c if c < 0 else np.inf
+    with np.errstate(invalid="ignore"):
+        ok = (0.0 <= x) & (x <= b)
+    n_bad = len(x) - np.count_nonzero(ok)
+    if n_bad > 0:
+        x = x[ok]
+    if c != 0:
+        logpdf = -special.xlog1py(c + 1.0, c * x) / c
+        logpdf = np.where(x == x, logpdf, -x)
+    else:
+        logpdf = -x
+    finite = np.isfinite(logpdf)
+    n_bad += logpdf.size - np.count_nonzero(finite)
+    return -np.sum(logpdf[finite]) + n_bad * _LOGXMAX * 100 + n_log_scale
+
+
+def _lean_fmin(func, x0, args=(), disp=0):
+    # scipy's own default optimizer, handed the lean objective instead of func.
+    return optimize.fmin(_lean_nnlf, x0, args=args, disp=disp)
 
 
 def gpd_tail_fit(port_returns: pd.Series, threshold_quantile: float = 0.95,
@@ -154,7 +193,7 @@ def gpd_tail_fit(port_returns: pd.Series, threshold_quantile: float = 0.95,
         return out
 
     # floc=0 because exceedances are already measured FROM the threshold.
-    xi, _loc, beta = stats.genpareto.fit(exceed, floc=0.0)
+    xi, _loc, beta = stats.genpareto.fit(exceed, floc=0.0, optimizer=_lean_fmin)
     xi, beta = float(xi), float(beta)
     out["xi"], out["beta"], out["fitted"] = xi, beta, True
 
@@ -163,7 +202,7 @@ def gpd_tail_fit(port_returns: pd.Series, threshold_quantile: float = 0.95,
     for _ in range(n_boot):
         sample = rng.choice(exceed, size=n_u, replace=True)
         try:
-            b_xi, _, _ = stats.genpareto.fit(sample, floc=0.0)
+            b_xi, _, _ = stats.genpareto.fit(sample, floc=0.0, optimizer=_lean_fmin)
             boot.append(float(b_xi))
         except Exception:  # noqa: BLE001 - a failed refit is dropped, not faked
             continue
@@ -305,10 +344,10 @@ def mcneil_frey_tail(port_returns: pd.Series, lam: float = RISKMETRICS_LAMBDA,
                 "var": sigma_next * vals["var"],
                 "es": None if vals["es"] is None else sigma_next * vals["es"],
             }
-    # For the side-by-side that makes the clustering bias visible.
-    raw = gpd_tail_fit(r, **gpd_kwargs)
+    # For the side-by-side that makes the clustering bias visible. Only its xi
+    # is shown, so its bootstrap (half the panel's time) is not run.
+    raw = gpd_tail_fit(r, **{**gpd_kwargs, "n_boot": 0})
     fit["unconditional_xi"] = raw["xi"]
-    fit["unconditional_xi_ci"] = raw["xi_ci"]
     return fit
 
 
