@@ -303,9 +303,16 @@ warm (John, 2026-10-20); offline, warming everything took that switch from
 `test_the_warm_pass_covers_every_fetch_a_preset_page_makes` records the real
 page's fetches and fails if a pass misses one - the Balance tab's default
 crisis pair included, picked by the page's own rule (most volatile name, top
-of `anchor_rank`). Not covered: baskets a visitor types in. A pass costs
-about 820 requests (about 3,900 a day); the warmer is its own process with
-its own 5000-a-day netguard cap, and it pauses 1s between pulls.
+of `anchor_rank`). Each name's download is kept on its own per period
+(`ingestion._raw_path`), so presets that share names share the work and a
+basket a visitor types downloads only the names the server does not hold yet
+- the rest of it is stitched from what the pass left. A pass makes about 450
+name-downloads (152 names at 2y, 149 at max, 148 at 10y) plus the security
+master's lookups when they are due, down from about 820 requests when each
+basket was downloaded whole; the warmer is its own process with its own
+5000-a-day netguard cap, and it pauses 1s between pulls. The cache holds up to
+`CACHE_MAX_FILES` = 1500 files (a pass writes ~720; at the old 240 a pass
+evicted its own first presets).
 
 To warm by hand (after a restore, or to time a cold refill):
 

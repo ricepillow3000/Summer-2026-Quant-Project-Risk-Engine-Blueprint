@@ -163,6 +163,51 @@ for (const name of ['Risk Topology', 'Risk Breakdown', 'Correlation Watch', 'Bal
   });
 }
 
+// Presets are warmed after every deploy; a basket a visitor types is not
+// (John, 2026-10-20: "make typed-in baskets load faster too"). Three names the
+// page offers but no preset holds (test_the_walks_typed_basket_pool_is_in_no_preset),
+// drawn fresh each run so a recent run's pull does not make the next one warm.
+const TYPED_POOL = ['ACN', 'ADI', 'AEP', 'AIG', 'ALL', 'AMT', 'ANET', 'APD', 'BBY', 'BMY',
+                    'BSX', 'CB', 'CCI', 'CI', 'CL', 'CME', 'CMG', 'CMI', 'CSCO', 'CSX',
+                    'CVS', 'DAL', 'DD', 'DG', 'DHR', 'DUK', 'EBAY', 'ECL', 'ELV', 'EMR',
+                    'ETN', 'EXC', 'F', 'FCX', 'GD', 'GILD'];
+const typed = [...TYPED_POOL].sort(() => Math.random() - 0.5).slice(0, 3).sort();
+const chips = () => page.evaluate(() =>
+  [...document.querySelectorAll('[data-baseweb="tag"]')].map(e => e.innerText.trim()));
+async function addTicker(sym) {
+  // The ticker box clears itself after a pick, so success is the new chip.
+  const box = page.getByRole('combobox', { name: 'Tickers to analyze' }).first();
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await box.scrollIntoViewIfNeeded();
+      await tagged('open the ticker box', box.click());
+      await box.fill(sym);
+      const opt = page.getByRole('option', { name: sym, exact: true }).first();
+      await tagged(`choose "${sym}"`, opt.waitFor({ state: 'visible', timeout: 10000 }));
+      await opt.click({ timeout: 10000 }).catch(() => page.keyboard.press('Enter'));
+      await page.keyboard.press('Escape');
+      await tagged(`chip "${sym}"`, page.waitForFunction(s =>
+        [...document.querySelectorAll('[data-baseweb="tag"]')].some(e => e.innerText.trim() === s),
+        sym, { timeout: 10000 }));
+      return;
+    } catch (e) {
+      await page.keyboard.press('Escape');
+      if (attempt === 3) throw e;
+    }
+  }
+}
+
+await step(`type in your own basket (+${typed.join(', ')})`, async () => {
+  const b = await verdict();
+  await openDrawer('01 · Universe');
+  for (const sym of typed) await addTicker(sym);
+  return `CVaR ${b} -> ${await verdict()}`;
+}, async () => {
+  const have = await chips();
+  const lost = typed.filter(s => !have.includes(s));
+  return !lost.length || `the ticker box lost ${lost.join(', ')}`;
+});
+
 await browser.close();
 if (pageErrors.length) { fails.push('script errors'); console.log(`FAIL  script errors: ${pageErrors.slice(0, 2)}`); }
 const total = steps.reduce((a, s) => a + s.ms, 0) / 1000;

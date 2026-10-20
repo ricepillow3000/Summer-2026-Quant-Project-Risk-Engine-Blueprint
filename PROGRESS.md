@@ -450,6 +450,26 @@ risk-engine/
   as "1 -> 0.995"; the pair_weights docstring kept the false "flyer holds most
   of the risk". Swept every 10px, 360-1920: clean. Below 360px the plot is
   narrower than 260px - the screen, not the layout. Desktop dots unchanged.
+- ✅ **Typed-in baskets download only their new names (2026-10-20)** - John:
+  "make typed-in baskets load faster too". Two investigators: offline, the
+  default basket plus three typed names took 29.3s to settle (34.7s for six
+  new names). The cache kept whole baskets, so the three new names
+  re-downloaded all fifteen under each of the page's five keys (67
+  name-downloads where 9 would do), and a cold download is almost all
+  yfinance's repair pass - CPU, ~2.75s per name for full history, which
+  threads cannot overlap. A council (data honesty + minimalist) chose a
+  per-name cache inside `_download_close_volume`: each name's own download is
+  kept per period and only missing names are downloaded, in one call.
+  yf.download is itself per name, so a stitched basket equals one download of
+  it exactly (`test_a_basket_stitched_from_single_names_matches_one_download`,
+  mixed calendars, failed and empty names). No period is cut out of another.
+  Names in a basket may now be pulled at different moments inside the 6h
+  window: provenance keeps the oldest pull as the basket's age and the Lineage
+  tab shows the span. Failed names are never remembered; `use_cache=False`
+  never reads or writes a name file; an ISIN basket takes one download.
+  yfinance pinned at 1.7.0 (the stitch mirrors its assembly). The cache cap
+  went 240 -> 1500: a warm pass already evicted 37 of its own files.
+  The deployed walk now times a typed basket (three names in no preset).
 - ✅ **The crisis pair, warm too (2026-10-20)** - John: "fix the crisis pair
   slow download next". After the warm pass the one cold pull left on a first
   switch was the Balance tab's crisis replay: the default flyer and anchor's
