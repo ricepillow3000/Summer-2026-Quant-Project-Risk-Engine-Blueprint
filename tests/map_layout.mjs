@@ -20,7 +20,10 @@ import { pathToFileURL } from 'node:url';
 
 // 1456 and 1220 sit inside bands where the HUD tiles once spilled under the inspector while every round width passed.
 // The m-widths are iPhone frames: the map shipped 278px wide on a 390 iPhone (56px page gutters) and was cut off.
-const [pagePath, widthArg = '1920,1456,1440,1280,1220,1180,1024,1000,790,600,390,m414,m374,m359,m320'] = process.argv.slice(2);
+// 1488 and 1476 are what the app really gives the map on a desktop (the page's 1600px cap minus its
+// gutters): the chips spilled out of the HUD there (John, 2026-10-19) while 1920 and 1456 passed;
+// 1688 is where a chip column next to three tiles still spilled with a Windows-width font.
+const [pagePath, widthArg = '1920,1688,1600,1488,1476,1456,1440,1280,1220,1180,1024,1000,790,600,390,m414,m374,m359,m320'] = process.argv.slice(2);
 let pw;
 try {
   pw = await import('playwright');
@@ -46,6 +49,10 @@ for (const spec of widthArg.split(',')) {
   await page.goto(pathToFileURL(pagePath).href);
   await page.waitForFunction(() => typeof S !== 'undefined' && S.cloud);
   await page.waitForTimeout(400);
+  // Worst case for the HUD: the longest calibration name, and chip text widened by ~24px - CI's
+  // Liberation Serif draws Georgia narrower than a Windows laptop does, which hid the spill.
+  await page.addStyleTag({ content: '.chip { letter-spacing: 0.22em !important; }' });
+  await page.evaluate(() => { const s = document.getElementById('selCal'); s.value = 'stress'; S.cal = 'stress'; updateHUD(); });
   const m = await page.evaluate((phone) => {
     const box = (el) => { const r = el.getBoundingClientRect(); return { l: r.left, t: r.top, r: r.right, b: r.bottom }; };
     const hit = (a, b) => Math.max(0, Math.min(a.r, b.r) - Math.max(a.l, b.l)) * Math.max(0, Math.min(a.b, b.b) - Math.max(a.t, b.t));
@@ -62,6 +69,12 @@ for (const spec of widthArg.split(',')) {
       for (const el of document.querySelector(panels[k]).querySelectorAll('.tile, .chip, .verdict, .runbtn, .explbtn, .srow, .dcell')) {
         const e = box(el);
         if (e.r > P[k].r + 1 || e.l < P[k].l - 1 || e.b > P[k].b + 1) found.push(`${k}: ${el.className} spills out of its panel`);
+        // the HUD's chips and tiles must also stay inside its padding: running into it is what
+        // read as "overlapping outside its section" on John's laptop
+        else if (k === 'hud') {
+          const pad = parseFloat(getComputedStyle(document.querySelector(panels.hud)).paddingRight) || 0;
+          if (e.r > P.hud.r - pad + 1) found.push(`hud: ${el.className} runs into the band's padding (${Math.round(e.r - (P.hud.r - pad))} px)`);
+        }
       }
     }
     // the plot, in page coordinates: nothing may lie on it, and the chips may not cover its tick labels
@@ -102,6 +115,18 @@ for (const spec of widthArg.split(',')) {
     if (document.getElementById('tip').style.display === 'block') found.push('explain tooltip shows outside the map');
     document.getElementById('tip').style.display = 'none';
     S.explain = wasExplain;
+    // Explain opens the glossary under itself: it must appear on a click alone, in view, inside the
+    // side panel, without pushing anything sideways (John, 2026-10-19: "a dead button")
+    document.getElementById('btnExplain').click();
+    const g = document.getElementById('glossary'), gr = g.getBoundingClientRect(), sr = document.querySelector(panels.side).getBoundingClientRect();
+    if (g.hidden || gr.height < 40) found.push('Explain: the glossary did not open');
+    else if (!(gr.top < Math.min(innerHeight, sr.bottom) - 40 && gr.bottom > 0)) found.push(`Explain: the glossary opened out of view (top ${Math.round(gr.top)} of ${innerHeight})`);
+    if (gr.left < sr.left - 1 || gr.right > sr.right + 1) found.push('Explain: the glossary spills out of the side panel');
+    const sidewaysOpen = document.documentElement.scrollWidth - document.documentElement.clientWidth;
+    if (sidewaysOpen > 0) found.push(`Explain: the open glossary scrolls the frame sideways by ${sidewaysOpen} px`);
+    document.getElementById('btnExplain').click();
+    document.querySelector(panels.side).scrollTop = 0;
+    window.scrollTo(0, 0);
     const sideways = document.documentElement.scrollWidth - document.documentElement.clientWidth;
     if (sideways > 0) found.push(`scrolls sideways by ${sideways} px`);
     return { plot: [Math.round(pw_), Math.round(ph)], found };

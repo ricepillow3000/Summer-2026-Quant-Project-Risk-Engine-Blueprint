@@ -3847,6 +3847,31 @@ def test_the_glide_is_bound_before_any_stop_and_rebinds():
     assert "(now - t0) / dur" not in script, "a busy frame can jump most of the flight again"
 
 
+def test_the_glide_respects_reduced_motion():
+    """ACCESSIBILITY.md promises every animation honours prefers-reduced-motion,
+    but the buttons' 1.5 s glide is driven by JavaScript, which no CSS media
+    query can stop, and the smooth-scroll fallback lived outside every
+    reduced-motion block. With reduced motion a button now lands at once -
+    same place, no flight, and still no hash jump."""
+    import ast
+    import re
+    root = pathlib.Path(__file__).resolve().parent.parent
+    tree = ast.parse((root / "main.py").read_text(encoding="utf-8"))
+    script = next(n.args[0].value for n in ast.walk(tree) if isinstance(n, ast.Call)
+                  and ast.unparse(n.func) == "_html" and n.args
+                  and isinstance(n.args[0], ast.Constant) and "__meleonaGlide" in n.args[0].value)
+    on_link = script[script.index("function onLink"):script.index("P.addEventListener")]
+    assert "prefers-reduced-motion: reduce" in on_link, \
+        "the glide must ask for the visitor's motion setting on every click"
+    still = on_link[on_link.index("prefers-reduced-motion"):on_link.index("glide(scroller, el, 1500")]
+    assert "preventDefault" in on_link and "scrollTo" in still and "return" in still, \
+        "with reduced motion the button must land at once, before any glide starts"
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    blocks = re.findall(r"@media \(prefers-reduced-motion: reduce\) \{(.*?)\n\}", css, re.S)
+    assert any(re.search(r"scroll-behavior:\s*auto\s*!important", b) for b in blocks), \
+        "the CSS smooth-scroll fallback must stand down under reduced motion too"
+
+
 def _top_markdown(at) -> list[tuple[int, str]]:
     """(top-level index, body) of every top-level markdown element, in order."""
     return [(i, c.value) for i, c in at.main.children.items()
@@ -3976,6 +4001,109 @@ def test_every_cached_yahoo_pull_says_what_it_is_doing():
         if not words:
             silent.append(fn.name)
     assert not silent, f"cached Yahoo pulls with no words on screen: {silent}"
+
+
+def test_the_glide_follows_a_moving_target_and_yields_to_the_reader():
+    """John, 2026-10-19: the "Explore what we do" glide is "very laggy and
+    buggy". Measured on the real page:
+      - it aimed at the showcase row once, while the row was still rising 24px
+        on its scroll-driven reveal, so every press overshot 8-11px, held,
+        then crawled back in a second correction glide;
+      - a wheel during a flight was pulled back each frame (8 reversals), and
+        a second press flew two flights at once (a 59px jump, a wrong landing,
+        smooth scrolling left switched off);
+      - every frame's scroll re-sent the Risk Topology map's five canvases,
+        4300px off screen - 42% of the main thread at 4x CPU, 20 fps.
+    The glide now re-reads its target each frame (capped per frame), flies one
+    flight at a time, yields to the wheel / touch / scroll keys, and skips the
+    off-screen map's rendering only while it flies."""
+    import ast
+    root = pathlib.Path(__file__).resolve().parent.parent
+    src = (root / "main.py").read_text(encoding="utf-8")
+    tree = ast.parse(src)
+    script = next(n.args[0].value for n in ast.walk(tree) if isinstance(n, ast.Call)
+                  and ast.unparse(n.func) == "_html" and n.args
+                  and isinstance(n.args[0], ast.Constant) and "__meleonaGlide" in n.args[0].value)
+    frame = script[script.index("(function f(now)"):script.index("function onLink")]
+    assert "targetY(scroller, el)" in frame and "Math.min(2," in frame, \
+        "the glide must follow the target each frame, a bounded step at a time"
+    assert "__meleonaFlight" in frame, "each frame must check it is still the current flight"
+    for ev in ("wheel", "touchstart", "keydown"):
+        assert f"'{ev}'" in script, f"the glide must yield to the reader's {ev}"
+    rebind = script[:script.index("function onTab")]
+    assert "onYield" in rebind, "a new glide frame must remove the old yield listeners"
+    assert "scrollBehavior = ''" in script, "landing must hand scrolling back to the stylesheet"
+    assert "contentVisibility" in script and ".st-key-risk-map" in script, \
+        "the off-screen map must be skipped while the glide flies"
+    assert 'st.container(key="risk-map")' in src, "the map needs its own keyed container"
+
+
+def test_every_short_form_on_the_map_is_in_its_glossary():
+    """John, 2026-10-19: "pressing the 'explain the map' button does not work
+    or direct me anywhere, its a dead button" and "I don't know what OU is ...
+    add a legend in the topology map that explains all the suffixes and
+    shortened phrases." The button only switched on a hover mode over the plot
+    and tinted itself, so nothing appeared on a click. It now opens a glossary
+    right under itself that defines every short form the map prints, and the
+    tiles and chips speak plain words (no "OU" subtitle; "beta"/"vol", not the
+    Greek letters the chips' uppercase turned into "B"/"S"-like capitals)."""
+    import re
+    html = (pathlib.Path(__file__).resolve().parent.parent / "prototypes" / "war_room.html").read_text(encoding="utf-8")
+    m = re.search(r'<section id="glossary"[^>]*>(.*?)</section>', html, re.S)
+    assert m, "the map has no glossary"
+    gloss = re.sub(r"<[^>]+>", " ", m.group(1)).lower()
+    terms = ["expected shortfall", "var 95", "t+30", "ornstein-uhlenbeck", "ar(1)", "long-run vol",
+             "calm", "baseline", "stressed", "beta", "vol", "daily closes", "days fitted",
+             "perimeter", "breach", "rings", "shock correlation", "leverage", "shocks widened",
+             "drawdown cushion", "flyer", "anchor"]
+    missing = [t for t in terms if t not in gloss]
+    assert not missing, f"short forms the glossary does not define: {missing}"
+    btn = re.search(r'<button[^>]*id="btnExplain"[^>]*>', html).group(0)
+    assert 'aria-controls="glossary"' in btn and "aria-expanded" in btn, \
+        "the button must say it opens the glossary"
+    assert "OU mean-reversion level" not in html, "the tile still explains vol with 'OU'"
+    assert "S.cal.toUpperCase()" not in html, "the engine chip still prints BASE/STRESS codes"
+    assert "'Base · β '" not in html, "the chip still prints Greek letters under uppercase"
+
+
+def test_the_pairing_never_shows_pp_or_percent_for_a_points_gap():
+    """John, 2026-10-19: "find a better way to show status than 'pp', I have
+    no idea what that is." The cushion is the pair's worst fall minus the
+    flyer's worst fall alone (pairing.py: dd_pair - dd_solo), a gap in
+    percentage points. The map printed "+16.8pp", and the Balance sentence and
+    crisis table printed the same gap as "+17%", which reads as a 17% cut.
+    Both now say it in words: "16.8 points shallower" / "deeper"."""
+    import re
+    root = pathlib.Path(__file__).resolve().parent.parent
+    html = (root / "prototypes" / "war_room.html").read_text(encoding="utf-8")
+    assert not re.findall(r"[^A-Za-z]pp[^A-Za-z]", html), "the map still prints a 'pp' unit"
+    assert "shallower" in html and "deeper" in html, \
+        "the map must say which way the cushion points, in words"
+    src = (root / "main.py").read_text(encoding="utf-8")
+    assert 'bt["cushion"]:+.0%' not in src, "the Balance sentence prints a points gap as %"
+    assert '"cushion": "{:+.1%}"' not in src, "the crisis table prints a points gap as %"
+    assert "percentage points" in src, "the Balance sentence must name its unit"
+
+
+def test_every_spinner_is_a_few_calm_words():
+    """John, 2026-10-19: "Remove the 'yahoo is the slow part', I cringe
+    looking at that." A loading line says what the page is doing, in a few
+    words - it does not apologise, excuse the wait or blame the data feed."""
+    import ast
+    src = (pathlib.Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
+    texts = []
+    for d in ast.walk(ast.parse(src)):
+        if isinstance(d, ast.Call) and ast.unparse(d.func) in ("st.cache_data", "st.spinner"):
+            spin = ({k.arg: k.value for k in d.keywords}.get("show_spinner")
+                    if ast.unparse(d.func) == "st.cache_data" else (d.args or [None])[0])
+            if isinstance(spin, ast.Constant) and isinstance(spin.value, str):
+                texts.append(spin.value)
+            elif isinstance(spin, ast.JoinedStr):
+                texts.append(ast.unparse(spin))
+    assert texts, "no spinner text found - the scan is broken"
+    bad = [t for t in texts if len(t) > 60
+           or any(w in t.lower() for w in ("slow", "yahoo", "sorry", "please wait", "may take"))]
+    assert not bad, f"spinner lines that excuse the wait or run long: {bad}"
 
 
 def test_section_titles_wrap_instead_of_running_out_of_their_box():

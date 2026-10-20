@@ -102,11 +102,21 @@ body {
 .explbtn:hover { color: var(--beige); border-color: var(--bronze); }
 .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px;
   overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
-.explbtn[aria-pressed="true"] {
+.explbtn[aria-expanded="true"] {
   color: var(--beige); border-color: var(--bronze);
   background: rgba(154,123,79,0.18);
 }
 .explbtn:focus-visible { outline: 2px solid var(--bronze); outline-offset: 2px; }
+/* the glossary the Explain button opens: words only in AA tokens on this dark
+   glass (terms --bronzesoft 9.75:1, definitions --mute 7.24:1, heading
+   #C6A26B 7.23:1) - never --dim or --bronze, which fail for text here */
+.gloss { margin-top: 10px; padding: 11px 11px 6px; border: 1px solid var(--line2);
+  border-left: 2px solid var(--bronze); border-radius: 6px; background: rgba(21,18,13,0.55);
+  font-size: 11.5px; line-height: 1.5; }
+.gloss .gh { font-size: 11.5px; letter-spacing: 0.16em; text-transform: uppercase; color: #C6A26B; }
+.gloss .gi { color: var(--mute); margin: 4px 0 2px; }
+.gloss dt { color: var(--bronzesoft); margin-top: 9px; }
+.gloss dd { color: var(--mute); }
 .ctl { margin-top: 15px; }
 .ctl-h {
   font-size: 9.5px; letter-spacing: 0.24em; text-transform: uppercase;
@@ -173,11 +183,13 @@ select {
 .tile .v { font-size: 22px; color: var(--beige); line-height: 1.15; margin-top: 3px; }
 .tile .v small { font-size: 12px; color: var(--mute); }
 .tile .d { font-size: 9.5px; color: var(--dim); margin-top: 1px; }
-.chips { display: flex; flex-direction: column; gap: 6px; justify-content: center; }
+/* the chips take their own wrapping row at every width - see "mid canvas" below */
+.chips { display: flex; flex: 1 1 100%; flex-direction: row; flex-wrap: wrap;
+  gap: 6px; justify-content: flex-start; }
 .chip {
   font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase;
   color: var(--mute); border: 1px solid var(--line); border-left: 2px solid var(--bronze);
-  border-radius: 4px; padding: 4px 8px; white-space: nowrap; background: rgba(21,18,13,0.5);
+  border-radius: 4px; padding: 4px 8px; background: rgba(21,18,13,0.5);
 }
 .chip.warn { border-left-color: var(--ember); color: #C99A85; }
 
@@ -229,7 +241,8 @@ select {
 .srow .rk { font-size: 11px; color: var(--dim); width: 16px; }
 .srow .pair { font-size: 14px; color: var(--beige); flex: 1; }
 .srow .pair span { color: var(--dim); font-size: 11px; }
-.srow .cu { font-size: 13px; color: var(--bronzesoft); }
+.srow .cu { font-size: 13px; color: var(--bronzesoft); text-align: right; }
+.srow .cu small { font-size: 11px; color: var(--mute); }
 .srow .bar { position: absolute; left: 42px; right: 16px; bottom: 6px; height: 2px;
   background: rgba(237,233,227,0.07); }
 .srow .bar i { display: block; height: 100%;
@@ -291,21 +304,19 @@ select {
    Measured at a 1158px canvas: HUD 601px holding 773px of content, chips
    ending 172px past the HUD and overlapping the inspector by 160px.
 
-   Below 1450px the chips stop competing for the row and take their own
-   full-width line inside the HUD. Nothing is hidden or truncated - the panel
-   simply grows a little taller, which it can afford as a floating overlay. */
-@media (max-width: 1470px) {
-  .hud { flex-wrap: wrap; }
-  .verdict, .tiles { min-width: 0; }
-  .chips {
-    flex: 1 1 100%;
-    flex-direction: row; flex-wrap: wrap;
-    justify-content: flex-start; gap: 6px;
-  }
-  /* nowrap is what made a chip unshrinkable; let a long one break rather
-     than force the row wider than the panel. */
-  .chip { white-space: normal; }
-}
+   So the chips do not compete for the row: they take their own full-width
+   line inside the HUD. Nothing is hidden or truncated - the panel simply
+   grows a little taller, which it can afford as a floating overlay.
+   At EVERY width, not below a breakpoint (John, 2026-10-19): the old
+   max-width 1470px rule sat just under the 1471-1488px the app gives the map
+   on any desktop (the page's 1600px cap minus its gutters), so the chips ran
+   out of the band on a Windows laptop - and any breakpoint is a guess at a
+   font's width (Windows Georgia is ~20px wider per chip than CI's fonts, and
+   the column still spilled at 1681-1745px). A row that wraps fits any font. */
+.hud { flex-wrap: wrap; }
+.verdict, .tiles { min-width: 0; }
+/* .chip carries no nowrap: that is what made a chip unshrinkable. A long one
+   breaks rather than force the row wider than the panel. */
 /* tiles beside the verdict still spilled past the HUD from 1181 to 1249px;
    their own row from 1260px down, as under 1180px */
 @media (max-width: 1260px) {
@@ -388,7 +399,53 @@ select {
     <h1>Risk Topology</h1>
     <div class="sub">Where the book can drift over the next 30 trading days, and what it costs to be wrong.</div>
     <button class="runbtn" id="btnRun">Run Simulation</button>
-    <button class="explbtn" id="btnExplain" aria-pressed="false">Explain the map</button>
+    <button class="explbtn" id="btnExplain" aria-expanded="false" aria-controls="glossary">Explain the map</button>
+    <!-- John, 2026-10-19: the button "does not work or direct me anywhere" - it
+         only switched on hover-reading over the plot. A click now opens this
+         glossary right under the button (on screen at every width), and every
+         short form the map prints is defined here. Static text: no payload. -->
+    <section id="glossary" class="gloss" aria-label="Reading the map" hidden>
+      <p class="gh">Reading the map</p>
+      <p class="gi">Every short form on this map, in plain words. While this is open, point at or tap any mark on the map to have it named.</p>
+      <dl>
+        <dt>Expected shortfall (ES) 97.5%</dt>
+        <dd>The average loss across the worst 2.5% of the 10,000 simulated 30-trading-day outcomes.</dd>
+        <dt>VaR 95</dt>
+        <dd>The loss that only the worst 5% of those outcomes go beyond.</dd>
+        <dt>T+30</dt>
+        <dd>Thirty trading days after the last close.</dd>
+        <dt>Mean-reverting (Ornstein-Uhlenbeck, OU) Monte Carlo</dt>
+        <dd>The simulation engine. Each path moves the book's beta and volatility day by day, with a pull back toward their long-run levels - an Ornstein-Uhlenbeck process (volatility moves on a log scale).</dd>
+        <dt>AR(1)</dt>
+        <dd>The one-step rule the model is fitted with: tomorrow's value is a constant, plus a fraction of today's, plus a random shock.</dd>
+        <dt>Long-run vol</dt>
+        <dd>The volatility level the simulation pulls the book back toward, estimated from its own history.</dd>
+        <dt>Calm · Baseline · Stressed</dt>
+        <dd>Baseline uses the shock sizes fitted to the book. Stressed makes them 1.4 times larger and adds 0.10 to their correlation; Calm makes them 0.7 times as large. A stated policy, not an estimate.</dd>
+        <dt>Beta</dt>
+        <dd>How much the book moves with the market, measured over the last 63 trading days.</dd>
+        <dt>Vol</dt>
+        <dd>How big the book's daily swings are, over the last 21 trading days, stated per year.</dd>
+        <dt>Daily closes (EOD)</dt>
+        <dd>End-of-day adjusted closing prices from Yahoo Finance - not real-time.</dd>
+        <dt>Days fitted</dt>
+        <dd>The trading days on which both the book's beta and its volatility could be measured; the model is fitted on them.</dd>
+        <dt>Perimeter and breach</dt>
+        <dd>The perimeter is a risk-limit line at 3 times today's volatility (kept between 35% and 90%) or at beta plus 0.8 (capped at 1.9; mirrored for a short book). A breach is a path that touches it at any point in the 30 days.</dd>
+        <dt>Rings 68 · 95 · 99.7%</dt>
+        <dd>The share of simulated end points that falls inside each ring.</dd>
+        <dt>Shock correlation · leverage effect</dt>
+        <dd>How the beta and volatility shocks move together, and how a day's return moves with the volatility shock (usually negative: falling prices tend to lift volatility).</dd>
+        <dt>Shocks widened (k)</dt>
+        <dd>A factor between 1 and 3, measured by replaying the book's own history with only earlier data, that widens the shocks until the 68% ring really holds about 68% of 30-day outcomes.</dd>
+        <dt>Drawdown cushion</dt>
+        <dd>How many percentage points less the pair fell at its worst than the flyer alone, on replayed real days: "shallower" means it fell less, "deeper" more. In the demo, the crisis cushion compares simulated worst-case losses instead.</dd>
+        <dt>Flyer · anchor</dt>
+        <dd>The flyer is a high-volatility holding; the anchor is a steadier, defensive name paired with it, weighted so each carries an equal share of the risk.</dd>
+        <dt>ES 97.5 · daily</dt>
+        <dd>In the pairing panel: the same worst-2.5% average, measured on real daily returns instead of simulated 30-day paths.</dd>
+      </dl>
+    </section>
     <div class="ctl">
       <div class="ctl-h">Engine</div>
       <div class="row"><label for="selCal">Calibration</label>
@@ -434,9 +491,9 @@ select {
       <div class="tile" title="Share of the 10,000 simulated paths that touched the danger perimeter at any point in 30 days."><div class="l">Breach probability</div><div class="v" id="hudTail">--</div><div class="d">paths touching perimeter</div></div>
     </div>
     <div class="chips">
-      <div class="chip" id="chipEngine">Engine · OU-state Monte Carlo</div>
-      <div class="chip" id="chipPaths">Paths · 10,000 · T+30d</div>
-      <div class="chip" id="chipBase">Base · β 1.00 · σ 20%</div>
+      <div class="chip" id="chipEngine">Engine · mean-reverting Monte Carlo</div>
+      <div class="chip" id="chipPaths">10,000 paths · 30 trading days</div>
+      <div class="chip" id="chipBase">Today · beta 1.00 · vol 20%</div>
       <div class="chip warn" id="chipProv">Demo calibration · not live data</div>
     </div>
   </header>
@@ -445,7 +502,7 @@ select {
   <div class="inspector glass" id="inspPanel">
     <div class="insp-h">
       <div class="k">Defensive Pairing</div>
-      <div class="t">League table · ranked by cushion</div>
+      <div class="t">Flyer - anchor · ranked by cushion</div>
     </div>
     <div class="standings" id="standings"></div>
     <div class="detail" id="detail"></div>
@@ -1267,16 +1324,19 @@ function updateHUD() {
   document.getElementById('hudVaR').innerHTML = '-' + (st.var95 * 100).toFixed(1) + '<small>%</small>';
   if (DEMO.live) {
     document.getElementById('hudT2L').textContent = 'Long-run vol · calibrated';
-    document.getElementById('hudT2D').textContent = 'OU mean-reversion level';
+    document.getElementById('hudT2D').textContent = 'level its volatility is pulled back to';
     document.getElementById('hudSharpe').textContent = Math.round(MU_V * 100) + '%';
   } else {
     document.getElementById('hudSharpe').textContent = st.sharpe.toFixed(2);
   }
   document.getElementById('hudTail').textContent = fmtPct(st.pBreach, 1);
+  /* words, not codes: "OU-state" and "BASE"/"STRESS" meant nothing to a
+     visitor, and the chips' uppercase turned β/σ into capitals that read as
+     other letters (John, 2026-10-19). Every term is in the glossary. */
   document.getElementById('chipEngine').textContent =
-    'Engine · OU-state Monte Carlo · ' + S.cal.toUpperCase();
+    'Engine · mean-reverting Monte Carlo · ' + document.getElementById('selCal').selectedOptions[0].text;
   document.getElementById('chipBase').textContent =
-    'Base · β ' + DEMO.base.beta.toFixed(2) + ' · σ ' + Math.round(DEMO.base.vol * 100) + '%';
+    'Today · beta ' + DEMO.base.beta.toFixed(2) + ' · vol ' + Math.round(DEMO.base.vol * 100) + '%';
   drawHist();
   updateSummary();
 }
@@ -1347,6 +1407,15 @@ function cushOf(i) {
   const pr = DEMO.pairs[i];
   return pr.real ? pr.real.cushion : S.pairStats[i].cushion;
 }
+/* The cushion is a gap between two losses in percentage points. A bare
+   "+16.8" plus a two-letter unit meant nothing to a visitor (John,
+   2026-10-19), and a "+" on a loss reads as
+   a gain - so the size goes in digits and the direction in a word. Live it is
+   a drawdown gap (shallower/deeper), demo an ES gap (smaller/larger). */
+function cushText(cu, live) {
+  const way = cu >= 0 ? (live ? 'shallower' : 'smaller') : (live ? 'deeper' : 'larger');
+  return Math.abs(cu * 100).toFixed(1) + '<small> points ' + way + '</small>';
+}
 function renderDetail() {
   const el = document.getElementById('detail');
   if (!DEMO.pairs.length) {
@@ -1369,7 +1438,7 @@ function renderDetail() {
     '<div class="dgrid">' +
     '<div class="dcell"><div class="l">ES 97.5 · solo · ' + esUnit + '</div><div class="v">-' + (esSolo * 100).toFixed(1) + '<small>%</small></div></div>' +
     '<div class="dcell"><div class="l">ES 97.5 · pair · ' + esUnit + '</div><div class="v">-' + (esPair * 100).toFixed(1) + '<small>%</small></div></div>' +
-    '<div class="dcell"><div class="l">' + cushLabel + '</div><div class="v">' + (cush >= 0 ? '+' : '') + (cush * 100).toFixed(1) + '<small>pp</small></div></div>' +
+    '<div class="dcell"><div class="l">' + cushLabel + '</div><div class="v">' + cushText(cush, !!real) + '</div></div>' +
     '<div class="dcell"><div class="l">Blend vol</div><div class="v">' + (volP * 100).toFixed(1) + '<small>%</small></div></div>' +
     '</div>' +
     '<div class="runctr"><div class="l">' + ctrLabel + '</div>' +
@@ -1412,8 +1481,8 @@ function renderStandings() {
   el.innerHTML = rows.map((r, rank) =>
     '<div class="srow' + (r.i === S.selPair ? ' sel' : '') + '" data-i="' + r.i + '">' +
     '<span class="rk">0' + (rank + 1) + '</span>' +
-    '<span class="pair">' + esc(r.pr.fl) + ' - ' + esc(r.pr.an) + ' <span>flyer / anchor</span></span>' +
-    '<span class="cu">' + (r.cu >= 0 ? '+' : '') + (r.cu * 100).toFixed(1) + 'pp</span>' +
+    '<span class="pair">' + esc(r.pr.fl) + ' - ' + esc(r.pr.an) + '</span>' +
+    '<span class="cu">' + cushText(r.cu, !!r.pr.real) + '</span>' +
     '<span class="bar"><i style="width:' + Math.max(4, Math.abs(r.cu) / maxCu * 100).toFixed(0) + '%' +
       // The bar is a MAGNITUDE, so a pair that made the drawdown worse drew a
       // bar identical to one that helped. Sign has to survive into the mark.
@@ -1457,10 +1526,29 @@ function runSimulation() {
 
 /* ---------- events ---------- */
 document.getElementById('btnRun').addEventListener('click', runSimulation);
-document.getElementById('btnExplain').addEventListener('click', e => {
-  S.explain = !S.explain;
-  e.currentTarget.setAttribute('aria-pressed', String(S.explain));
+/* One switch: the glossary opens under the button and hover-reading of the
+   map turns on with it. The glossary is brought into view inside the side
+   panel (wide) or the frame's own page (stacked) - never by scrollIntoView,
+   which would also scroll the app page around the frame. */
+const btnExplain = document.getElementById('btnExplain'), glossary = document.getElementById('glossary');
+function setExplain(on) {
+  S.explain = on;
+  btnExplain.setAttribute('aria-expanded', String(on));
+  btnExplain.textContent = on ? 'Close the explanation' : 'Explain the map';
+  glossary.hidden = !on;
   tip.style.display = 'none';
+  if (!on) return;
+  const side = document.getElementById('sidePanel'), g = glossary.getBoundingClientRect();
+  if (getComputedStyle(side).position === 'absolute') {
+    const sr = side.getBoundingClientRect();
+    if (g.top > sr.bottom - 120) side.scrollTop += g.top - sr.top - 160;
+  } else if (g.top > innerHeight - 120) {
+    window.scrollBy(0, g.top - innerHeight * 0.4);
+  }
+}
+btnExplain.addEventListener('click', () => setExplain(!S.explain));
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && S.explain) { setExplain(false); btnExplain.focus(); }
 });
 document.getElementById('selCal').addEventListener('change', e => { S.cal = e.target.value; runSimulation(); });
 const togMap = { tgAtmo: 'atmo', tgMarks: 'marks', tgLinks: 'links' };
