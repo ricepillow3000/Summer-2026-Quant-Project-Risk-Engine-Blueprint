@@ -3332,13 +3332,13 @@ def test_the_warm_pass_covers_every_fetch_a_preset_page_makes():
     the security master. Railway's disk is wiped on every deploy and the cache
     expires every 6h. A warm pass must now cover every fetch the page makes
     for a preset - recorded from the real main.py, so the two cannot drift.
-    The one exception is the crisis pair (two names the page picks by its own
-    logic: one small pull)."""
+    The crisis pair too (John, 2026-10-20: "fix the crisis pair slow download
+    next"): the page replays its default flyer and anchor through every named
+    crisis, and the warm pass now picks that same pair by the same rule."""
     import sys
     import src.security_master as sm_mod
     import tools.warm_cache as wc
     from src.ingestion import PRESETS
-    from src.pairing import DEFENSIVE_ANCHOR_TICKERS
 
     def recorder(store):
         def fetch(tickers=None, period="2y", *a, **kw):
@@ -3361,7 +3361,6 @@ def test_the_warm_pass_covers_every_fetch_a_preset_page_makes():
         at, restore = _offline_app(market=recorder(page))
         try:
             pick = [w.label for w in at.selectbox].index("Preset basket")
-            first = at.selectbox[pick].value
             semis = next(n for n in PRESETS if n.startswith("Semiconductors"))
             at.selectbox[pick].set_value(semis).run()
             assert not at.exception, [e.value for e in at.exception]
@@ -3392,11 +3391,9 @@ def test_the_warm_pass_covers_every_fetch_a_preset_page_makes():
         if sleep is not None:
             wc.PAUSE_SECONDS = sleep
 
-    anchors = set(DEFENSIVE_ANCHOR_TICKERS)
-    universes = [set(PRESETS[first]), set(PRESETS[semis])]
-    pair = {k for k in page if k[1] == "max" and len(k[0]) == 2
-            and any(set(k[0]) <= u | anchors for u in universes)}
-    missing = sorted(page - pair - warm)
+    pairs = {k for k in page if k[1] == "max" and len(k[0]) == 2}
+    assert len(pairs) >= 2, f"the page replayed no crisis pair for each basket: {pairs}"
+    missing = sorted(page - warm)
     assert not missing, f"fetches the page makes that no warm pass covers: {missing}"
     assert page_sm <= warm_sm, f"security master not warmed for: {sorted(page_sm - warm_sm)}"
 

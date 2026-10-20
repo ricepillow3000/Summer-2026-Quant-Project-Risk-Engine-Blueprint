@@ -301,9 +301,10 @@ deploy the first switch to Semiconductors took 93.1s with only the 2y pull
 warm (John, 2026-10-20); offline, warming everything took that switch from
 40.9s to 12.8s, the headline from 4.1s to 1.0s.
 `test_the_warm_pass_covers_every_fetch_a_preset_page_makes` records the real
-page's fetches and fails if a pass misses one. Not covered: the crisis pair
-(two names chosen by the page) and baskets a visitor types in. A pass costs
-about 800 requests (about 3,900 a day); the warmer is its own process with
+page's fetches and fails if a pass misses one - the Balance tab's default
+crisis pair included, picked by the page's own rule (most volatile name, top
+of `anchor_rank`). Not covered: baskets a visitor types in. A pass costs
+about 820 requests (about 3,900 a day); the warmer is its own process with
 its own 5000-a-day netguard cap, and it pauses 1s between pulls.
 
 To warm by hand (after a restore, or to time a cold refill):

@@ -450,6 +450,15 @@ risk-engine/
   as "1 -> 0.995"; the pair_weights docstring kept the false "flyer holds most
   of the risk". Swept every 10px, 360-1920: clean. Below 360px the plot is
   narrower than 260px - the screen, not the layout. Desktop dots unchanged.
+- ✅ **The crisis pair, warm too (2026-10-20)** - John: "fix the crisis pair
+  slow download next". After the warm pass the one cold pull left on a first
+  switch was the Balance tab's crisis replay: the default flyer and anchor's
+  full history (`replay_returns`). The warm pass now picks that pair by the
+  page's own rule - the most volatile name over 2y, the top of `anchor_rank`
+  over the universe plus the defensive pool, scored with grit - from pulls it
+  has already warmed (CPU, not Yahoo), and warms the pair's history; ~20 more
+  requests a pass. `test_the_warm_pass_covers_every_fetch_a_preset_page_makes`
+  now has no exemption: red until the pair was warmed.
 - ✅ **The first basket switch, warm (2026-10-20)** - John: "fix the slow first
   basket switch". After a deploy the deployed walk took 93.1s to switch to
   Semiconductors (101.6s in run 24). Two investigators: the headline came in

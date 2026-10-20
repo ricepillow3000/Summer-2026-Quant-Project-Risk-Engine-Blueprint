@@ -30,9 +30,9 @@ security master were all cold, and Railway's disk is wiped on every deploy).
 Each pull goes through the same function with the same arguments main.py
 uses, so the cache keys match exactly and no number can differ from a cold
 pull; `test_the_warm_pass_covers_every_fetch_a_preset_page_makes` records the
-real page's fetches and fails if a pass misses one. Not covered: the crisis
-pair (two names the page picks by its own logic - one small pull) and baskets
-a visitor types in themselves.
+real page's fetches and fails if a pass misses one, the Balance tab's default
+crisis pair included (`default_crisis_pair`: the page's own rule). Not
+covered: baskets a visitor types in themselves.
 
 Budget: a pass makes about 800 Yahoo requests (20 presets x 2y, two full
 histories and 10y, plus the page-wide pulls) and the security master's
@@ -46,11 +46,14 @@ import time
 
 from src.conviction import AI_CAPEX_BASKET, BENCHMARK
 from src.factors import _PROXIES as FACTOR_PROXIES
+from src.grit import grit_scores
 from src.ingestion import (CACHE_MAX_AGE_HOURS, PRESETS, fetch_dollar_volume,
-                           fetch_prices, fetch_risk_free_rate)
+                           fetch_prices, fetch_risk_free_rate, flat_columns,
+                           get_returns)
 from src.netguard import BudgetExhausted, budget_status
-from src.pairing import DEFENSIVE_ANCHOR_TICKERS
+from src.pairing import DEFENSIVE_ANCHOR_TICKERS, anchor_rank
 from src.security_master import SM_MAX_AGE_HOURS, security_master
+from src.topology import anchor_frame
 
 PAUSE_SECONDS = 1.0     # between pulls, so a pass never bursts at Yahoo
 
@@ -76,12 +79,39 @@ def preset_pulls(tickers: list[str]) -> list[tuple[str, object]]:
     if pool:
         pulls.append(("anchor pool", lambda age: fetch_prices(pool, period="2y",
                                                               max_age_hours=age)))
+    # The Balance tab replays its default pair through every named crisis
+    # (src.scenarios.replay_returns: the pair's own full history). Left cold,
+    # it was the last Yahoo wait of a first switch (John, 2026-10-20).
+    pulls.append(("crisis pair", lambda age: fetch_prices(
+        default_crisis_pair(tickers, age), period="max", align=False,
+        max_age_hours=age)))
     # Reference data keeps its own (longer) freshness; a repeating pass renews
     # it the same interval early, and a drill (age 0) forces it too.
     pulls.append(("security master", lambda age: security_master(
         tickers, max_age_hours=0 if age == 0 else
         SM_MAX_AGE_HOURS - (CACHE_MAX_AGE_HOURS - age))))
     return pulls
+
+
+def default_crisis_pair(tickers: list[str], age: float) -> list[str]:
+    """The flyer and anchor the Balance tab opens on, picked the way main.py
+    picks them: the most volatile name over the 2y window, and the top of
+    anchor_rank over the universe plus the defensive pool, scored with grit
+    (long side - the page's default). Every input is a pull this pass has
+    already warmed, so this costs CPU, not Yahoo."""
+    returns = get_returns(fetch_prices(tickers, period="2y", max_age_hours=age))
+    returns = returns.drop(columns=flat_columns(returns))
+    flyer = (returns.std() * 252 ** 0.5).idxmax()
+    try:
+        frame = anchor_frame(returns)
+    except Exception:  # noqa: BLE001 - the page falls back the same way
+        frame = returns
+    try:
+        grit = grit_scores(sorted(frame.columns))["scores"]["grit_score"]
+    except Exception:  # noqa: BLE001
+        grit = None
+    anchor = anchor_rank(frame, flyer, grit=grit, direction="long").index[0]
+    return [flyer, anchor]
 
 
 def page_pulls() -> list[tuple[str, object]]:
