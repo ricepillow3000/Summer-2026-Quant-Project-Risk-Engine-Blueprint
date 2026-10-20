@@ -111,6 +111,8 @@ def _lean_nnlf(theta, data):
 
 def _lean_fmin(func, x0, args=(), disp=0):
     # scipy's own default optimizer, handed the lean objective instead of func.
+    # func is ignored, so this is right only for MLE with floc=0 and nothing
+    # else fixed - the one call gpd_tail_fit makes.
     return optimize.fmin(_lean_nnlf, x0, args=args, disp=disp)
 
 

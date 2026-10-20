@@ -457,7 +457,7 @@ risk-engine/
   read: it no longer runs (`n_boot=0`), and the key is gone. (2) scipy's
   generic fit objective is mostly dispatch overhead; `src/risk._lean_nnlf` is
   the same numpy calls for genpareto with loc 0, passed as the optimizer's
-  objective, equal bit for bit (3,000+ parameter points incl. every edge) on
+  objective, equal bit for bit (3,000+ parameter points incl. every edge the fit can reach) on
   the pinned scipy 1.18.1. Measured on four 10-year series: 3.82 s -> 0.63 s
   per call, all 22 published numbers identical. Council caught one real bug in
   the prototype: `math.log` instead of `np.log` differs in the last bit on
