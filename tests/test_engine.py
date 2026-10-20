@@ -606,6 +606,7 @@ def test_full_app_boots():
     if why:
         print(f"[skip] app integration: Yahoo unreachable ({why})")
         return
+    import streamlit as st
     try:
         # AppTest resolves relative paths against the CALLING file, i.e.
         # tests/main.py - which does not exist, so this test silently skipped
@@ -616,6 +617,11 @@ def test_full_app_boots():
     except Exception as exc:                        # network/data hiccup - don't fail suite
         print(f"[skip] app integration (data/network): {exc}")
         return
+    finally:
+        # Live prices sat in load_universe (ttl=60 s) after this test and were
+        # read by the next _offline_app boot until they expired mid-test
+        # (Live audit run 39347809039). Leave nothing behind.
+        st.cache_data.clear()
     assert not at.exception, f"app raised: {at.exception}"
     assert len(at.error) == 0, f"app rendered errors: {[e.value for e in at.error]}"
 
@@ -3641,8 +3647,9 @@ def _offline_app(setup=None):
     """Run the real main.py under AppTest on _offline_market_prices; returns
     (AppTest, restore). Every src module is imported BEFORE patching, so a
     module-level `from src.ingestion import fetch_prices` is patched and then
-    restored too, and the Streamlit cache is cleared so no synthetic frame
-    outlives the test."""
+    restored too, and the Streamlit cache is cleared on the way in (so no live
+    frame left by an earlier test is read, test_offline_app_starts_from_an_empty_cache)
+    and on the way out (so no synthetic frame outlives the test)."""
     import importlib
     import pkgutil
     import sys
@@ -3674,6 +3681,7 @@ def _offline_app(setup=None):
             setattr(mod, attr, orig)
         st.cache_data.clear()
 
+    st.cache_data.clear()
     try:
         app = pathlib.Path(__file__).resolve().parent.parent / "main.py"
         at = AppTest.from_file(str(app), default_timeout=300)
@@ -3683,6 +3691,44 @@ def _offline_app(setup=None):
         restore()
         raise
     return at, restore
+
+
+def test_offline_app_starts_from_an_empty_cache():
+    """Live audit run 39347809039 (2026-10-20): "Sharpe 0.64 at a 5% vol target
+    vs 0.96 unlevered". Tests run alphabetically, so test_full_app_boots (live
+    Yahoo, cache left full) ran just before the Sharpe test, whose first render
+    read the LIVE prices still cached by load_universe (ttl=60 s); that entry
+    expired before the next rerun, which read the offline prices. Two markets,
+    one test. _offline_app must start from an empty cache, not only end on one."""
+    import streamlit as st
+    clear, real = st.cache_data.clear, _offline_market_prices
+
+    def other_market(tickers=None, period="2y", **_kw):   # stands in for Yahoo
+        px = real(tickers, period)
+        return px * np.exp(np.linspace(0.0, -0.8, len(px)))[:, None]
+
+    globals()["_offline_market_prices"] = other_market
+    try:
+        stale_at, stale_restore = _offline_app()
+        stale = [m.value for m in stale_at.metric if m.label == "Sharpe ratio"][0]
+        st.cache_data.clear = lambda: None      # leave the cache full, as a live boot does
+        try:
+            stale_restore()
+        finally:
+            st.cache_data.clear = clear
+    finally:
+        globals()["_offline_market_prices"] = real
+    at, restore = _offline_app()
+    try:
+        first = [m.value for m in at.metric if m.label == "Sharpe ratio"][0]
+        st.cache_data.clear()
+        at.run()
+        fresh = [m.value for m in at.metric if m.label == "Sharpe ratio"][0]
+        assert first == fresh, (
+            f"offline boot read a stale cached market: Sharpe {first} on entry, "
+            f"{fresh} once the cache is empty (stale market reads {stale})")
+    finally:
+        restore()
 
 
 def _book_grit(at) -> dict:
