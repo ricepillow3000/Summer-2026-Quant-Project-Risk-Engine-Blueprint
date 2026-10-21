@@ -1826,9 +1826,11 @@ def test_mcneil_frey_rescales_by_the_volatility_forecast():
 def test_the_lean_tail_objective_equals_scipys_bit_for_bit():
     """The tail fit hands scipy a lean copy of its own objective (3x faster).
     It is only allowed because every value is the same float scipy computes,
-    on the edges too: c = 0 and -0.0, points past a negative c's endpoint,
+    on the edges a fit can reach too: c = 0 and -0.0, points past a negative c's endpoint,
     scale <= 0, NaN/inf parameters, and the 0.3-1.5 scales a residual fit
-    lands on (math.log there differs from numpy's in the last bit)."""
+    lands on (math.log there differs from numpy's in the last bit). Not a
+    one-point sample: scipy keeps an out-of-support lone point there, but
+    the fit never sees fewer than min_exceedances (50)."""
     from scipy import stats
     from src import risk
     rng = np.random.default_rng(3)
