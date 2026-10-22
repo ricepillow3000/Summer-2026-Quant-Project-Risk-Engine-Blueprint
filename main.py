@@ -1098,18 +1098,20 @@ def load_dollar_volume(tickers_tuple: tuple[str, ...], period: str = "2y"):
 
 @st.cache_data(ttl=3600, max_entries=32, show_spinner="Assembling the book…")
 def load_book(px, dv, book_value: float, participation_rate: float,
-              grit_floor: bool, anchors: tuple[str, ...], grit: dict):
+              grit_floor: bool, anchors: tuple[str, ...], grit: dict,
+              fallback_grit: dict | None = None):
     """Cached because Streamlit re-executes this whole script on EVERY widget
     interaction, and build_book is not cheap: risk_parity_weights runs 10,000
     coordinate-descent iterations and grit_scores replays every named crisis
     window per ticker. Uncached, dragging the participation slider recomputed
     the entire book on each frame - one visitor holding a slider could pin the
-    single process this app deploys as. The cache key is exactly the seven
+    single process this app deploys as. The cache key is exactly the eight
     inputs that change the answer."""
     return build_book(px, dv, book_value=book_value,
                       participation_rate=participation_rate,
                       flyer_grit_floor=grit_floor,
-                      fallback_anchors=set(anchors) or None, grit=grit)
+                      fallback_anchors=set(anchors) or None, grit=grit,
+                      fallback_grit=fallback_grit)
 
 
 @st.cache_data(ttl=3600, max_entries=32, show_spinner="Reading the defensive shelf…")
@@ -1723,13 +1725,17 @@ with st.container():
                 _bk_dv = pd.concat(
                     [_bk_dv, _a_dv[_keep].reindex(prices.index)], axis=1)
                 _bk_anchors = set(_keep)
-        # Grit from FULL history, as the Grit Zone tab scores it - not from the
-        # 2y `prices`, where no named crisis falls and every name's resilience
-        # third read 0 (NVDA 6.9 here vs 73.2 in the tab, council 2026-10-17).
+        # Grit from FULL history over the visitor's own names - the Grit Zone
+        # tab's exact call - not from the 2y `prices`, where no named crisis
+        # falls (NVDA 6.9 here vs 73.2 in the tab, council 2026-10-17), and not
+        # ranked against the defensive shelf (V 67 here vs 61 in the tab,
+        # ME-08). The shelf's grit (basket plus shelf) only orders the shelf
+        # when an outside anchor is screened; no sentence prints it.
         _the_book = load_book(
             _bk_px, _bk_dv.fillna(0.0), float(_book_size), _book_part,
             _bk_floor, tuple(sorted(_bk_anchors or ())),
-            load_grit(tuple(_bk_px.columns)))
+            load_grit(tuple(loaded)),
+            load_grit(tuple(_bk_px.columns)) if _bk_anchors else None)
 
         st.markdown(
             f'<div style="background:#F1EDE5;border:1px solid #C4BDAE;'

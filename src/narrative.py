@@ -377,7 +377,8 @@ def build_book(prices: pd.DataFrame, dollar_volume: pd.DataFrame,
                min_weight: float = MIN_MEANINGFUL_WEIGHT,
                flyer_grit_floor: bool = False,
                fallback_anchors: set[str] | None = None,
-               grit: dict | None = None) -> list[TickerDossier]:
+               grit: dict | None = None,
+               fallback_grit: dict | None = None) -> list[TickerDossier]:
     """
     The chain, in the only order it can run.
 
@@ -397,20 +398,32 @@ def build_book(prices: pd.DataFrame, dollar_volume: pd.DataFrame,
             reads two ways and the engine shows the difference rather than
             picking one silently.
         fallback_anchors: columns of `prices` that are defensive holdings from
-            OUTSIDE the user's chosen universe. They never rank as flyers, and
-            are used as a cushion only when nothing inside the universe
+            OUTSIDE the user's chosen universe. They are not part of it: they
+            are never counted, ranked or scored beside the user's names, never
+            rank as flyers, and get a dossier and a weight only when chosen as
+            a cushion - which happens only when nothing inside the universe
             produced a thinner tail. Disclosed on screen when used.
-        grit: a grit_scores() result on FULL history for these same columns.
-            Omitted, grit is scored on `prices` - right only when `prices` is
-            itself long-horizon: on a 2-year window no named crisis falls, so
-            the resilience third of every score was 0 (council 2026-10-17).
+        grit: a grit_scores() result on FULL history for the user's names
+            (every column not in `fallback_anchors`) - the same peer group the
+            Grit Zone tab ranks. Omitted, grit is scored on `prices` - right
+            only when `prices` is itself long-horizon: on a 2-year window no
+            named crisis falls, so the resilience third of every score was 0
+            (council 2026-10-17).
+        fallback_grit: a grit_scores() result covering the fallback columns,
+            used only to screen the fallbacks against each other. Omitted, it
+            is scored on `prices` over every column.
 
-    Returns one TickerDossier per column of `prices`, flyers first, then
-    cushions, then everything excluded.
+    Returns one TickerDossier per user name plus one per fallback actually
+    chosen as an anchor: flyers first, then cushions, then everything excluded.
     """
     if book_value <= 0:
         raise ValueError("book_value must be positive")
-    universe = list(prices.columns)
+    # The user's names and the outside shelf are kept apart from here on:
+    # counted together, a 12-name basket read "17 of 17 names" and its grit
+    # ranked against five ETFs nobody chose (ME-08, 2026-10-22).
+    fallback = set(fallback_anchors or ()) & set(prices.columns)
+    universe = [t for t in prices.columns if t not in fallback]
+    shelf = [t for t in prices.columns if t in fallback]
     if not universe:
         raise ValueError("no tickers")
 
@@ -421,38 +434,31 @@ def build_book(prices: pd.DataFrame, dollar_volume: pd.DataFrame,
     # 1. Grit on the FULL universe, BEFORE any liquidity gate, so that no
     #    score is a function of book size. A name's recovery record does not
     #    change because you brought more money.
-    gr = grit if grit is not None else grit_scores(universe, prices=prices)
+    gr = grit if grit is not None else grit_scores(universe, prices=prices[universe])
     gscores = gr["scores"]
     short_history = set(gr["excluded"])
+    if shelf:
+        fg = (fallback_grit if fallback_grit is not None
+              else grit_scores(list(prices.columns), prices=prices))
+        shelf_grit = fg["scores"]
+        short_history |= set(fg["excluded"]) & set(shelf)
+    else:
+        shelf_grit = gscores
 
     # 2. Liquidity, weight-free. adv_stressed drives the gate; adv is carried
     #    beside it so the optimism of an average tape is visible, not hidden.
     window = dollar_volume.tail(ADV_LOOKBACK_DAYS)
-    adv = window.mean().reindex(universe).fillna(0.0)
-    adv_stressed = window.quantile(ADV_STRESS_QUANTILE).reindex(universe).fillna(0.0)
+    every = universe + shelf
+    adv = window.mean().reindex(every).fillna(0.0)
+    adv_stressed = window.quantile(ADV_STRESS_QUANTILE).reindex(every).fillna(0.0)
     cap_per_day = pd.Series(
         capacity_weight_per_day(adv_stressed, book_value, participation_rate),
-        index=universe)
+        index=every)
     capacity = cap_per_day * max_exit_days
 
-    # 3. What risk alone would have wanted, then what liquidity allows.
-    #    Covariance is fitted on the long-history names only: complete-case
-    #    dropna() across the whole universe would let ONE recent listing throw
-    #    away years of overlap for every other name. Short-history names are
-    #    excluded from the book anyway, so they get target 0.
-    long_names = [t for t in universe if t not in short_history]
-    if len(long_names) >= 2:
-        cov = covariance_matrix(returns[long_names].dropna())
-        target = pd.Series(risk_parity_weights(cov), index=cov.index)
-    else:
-        target = pd.Series(dtype=float)
-    target = target.reindex(universe).fillna(0.0)
-    final = pd.concat([target, capacity], axis=1).min(axis=1)
-    binding = capacity < target
-
-    # 4. Eligibility. Order matters: a name with no feed is a different story
+    # 3. Eligibility. Order matters: a name with no feed is a different story
     #    from one that is merely too big for this book.
-    reason = pd.Series(ExcludedReason.NONE, index=universe, dtype=object)
+    reason = pd.Series(ExcludedReason.NONE, index=every, dtype=object)
     reason[adv_stressed <= 0] = ExcludedReason.NO_VOLUME
     for t in short_history:
         if t in reason.index and reason[t] == ExcludedReason.NONE:
@@ -461,14 +467,14 @@ def build_book(prices: pd.DataFrame, dollar_volume: pd.DataFrame,
     reason[too_small] = ExcludedReason.CAPACITY_AT_BOOK
     eligible = reason == ExcludedReason.NONE
 
-    # 5. The short leg. Measured trailing return per unit of measured
+    # 4. The short leg. Measured trailing return per unit of measured
     #    volatility - deliberately NOT called grit (see module docstring).
     mom = momentum_signal(prices, MOMENTUM_LOOKBACK, MOMENTUM_SKIP).iloc[-1]
     vol = returns.tail(VOL_WINDOW).std() * np.sqrt(252)
     with np.errstate(divide="ignore", invalid="ignore"):
-        mpv = (mom / vol.replace(0.0, np.nan)).reindex(universe)
+        mpv = (mom / vol.replace(0.0, np.nan)).reindex(every)
 
-    fallback = set(fallback_anchors or ())
+    # Ranked among the user's names only: a fallback never takes a flyer rank.
     elig = [t for t in universe if bool(eligible.get(t, False))]
     ranked = mpv[elig].dropna().sort_values(ascending=False)
     mom_rank = {t: i + 1 for i, t in enumerate(ranked.index)}
@@ -478,7 +484,7 @@ def build_book(prices: pd.DataFrame, dollar_volume: pd.DataFrame,
     # market produces fewer flyers rather than a best-of-a-bad-set. Defensive
     # fallback holdings never lead the book at all.
     rising = ranked[ranked > MIN_FLYER_MOMENTUM]
-    flyer_pool = [t for t in rising.index if t not in fallback]
+    flyer_pool = list(rising.index)
     grit_floored = set()
     if flyer_grit_floor:
         fg = gscores["grit_score"].reindex(flyer_pool).dropna().sort_values(
@@ -489,7 +495,7 @@ def build_book(prices: pd.DataFrame, dollar_volume: pd.DataFrame,
             flyer_pool = [t for t in flyer_pool if t not in grit_floored]
     flyers = flyer_pool[:n_flyers]
 
-    # 6. Cushions. anchor_rank is reused unchanged and still ranks, never
+    # 5. Cushions. anchor_rank is reused unchanged and still ranks, never
     #    promises - but it scores grit as one component of four and the brief
     #    is the GRITTIEST cushion, so each pool is cut to its grittiest half
     #    before anchor_rank picks inside it. The chosen universe is tried
@@ -497,14 +503,14 @@ def build_book(prices: pd.DataFrame, dollar_volume: pd.DataFrame,
     #    inside produced a thinner tail, and is disclosed when it is.
     partner, gap, anchor, external = {}, {}, {}, set()
 
-    def _grittiest_half(names):
-        g = gscores["grit_score"].reindex(names).dropna().sort_values(
+    def _grittiest_half(names, scores):
+        g = scores["grit_score"].reindex(names).dropna().sort_values(
             ascending=False)
         if g.empty:
             return list(names)
         return list(g.index[:max(1, int(round(len(g) * GRIT_TOP_FRACTION)))])
 
-    def _best_anchor(flyer, names):
+    def _best_anchor(flyer, names, scores):
         """(ticker, gap, anchor_score) for the best anchor in `names`, else None.
         gap is ES(flyer) - ES(anchor): positive means the anchor is thinner."""
         cands = [n for n in names if n != flyer and n not in partner]
@@ -514,7 +520,7 @@ def build_book(prices: pd.DataFrame, dollar_volume: pd.DataFrame,
         if sub.shape[0] < 2 or sub.shape[1] < 2:
             return None
         try:
-            g_in = gscores["grit_score"].reindex([flyer] + cands).dropna()
+            g_in = scores["grit_score"].reindex([flyer] + cands).dropna()
             ar = anchor_rank(sub, flyer, grit=g_in if len(g_in) >= 2 else None)
         except (ValueError, KeyError):
             return None
@@ -529,15 +535,14 @@ def build_book(prices: pd.DataFrame, dollar_volume: pd.DataFrame,
             return None
         return best, float(g), float(ar.loc[best, "anchor_score"])
 
-    inside = [t for t in elig if t not in flyers and t not in fallback]
-    outside = [t for t in universe
-               if t in fallback and bool(eligible.get(t, False))]
+    inside = [t for t in elig if t not in flyers]
+    outside = [t for t in shelf if bool(eligible.get(t, False))]
     for f in flyers:
-        pick = _best_anchor(f, _grittiest_half(inside))
+        pick = _best_anchor(f, _grittiest_half(inside, gscores), gscores)
         # Reach outside the universe ONLY when the universe itself failed to
         # thin the tail, and only if the outsider actually does better.
         if outside and (pick is None or pick[1] <= 0):
-            alt = _best_anchor(f, _grittiest_half(outside))
+            alt = _best_anchor(f, _grittiest_half(outside, shelf_grit), shelf_grit)
             # The outside sentences say "shallower", so an outsider must be
             # thinner, not merely less deep than the inside pick.
             if (alt is not None and alt[1] > 0
@@ -552,14 +557,33 @@ def build_book(prices: pd.DataFrame, dollar_volume: pd.DataFrame,
         gap[f] = gap[best] = g
 
     cushions = {v for k, v in partner.items() if k in flyers}
-    n_eligible = int(eligible.sum())
+    n_eligible = int(eligible[universe].sum())
+
+    # 6. What risk alone would have wanted, then what liquidity allows - over
+    #    the user's names plus only the outside anchors actually chosen, so an
+    #    unused fallback holds nothing and the shelf toggle changes nothing
+    #    unless an anchor is used (ME-08). Covariance is fitted on the
+    #    long-history names only: complete-case dropna() across the whole
+    #    universe would let ONE recent listing throw away years of overlap for
+    #    every other name. Short-history names are excluded from the book
+    #    anyway, so they get target 0.
+    in_book = universe + [t for t in shelf if t in external]
+    long_names = [t for t in in_book if t not in short_history]
+    if len(long_names) >= 2:
+        cov = covariance_matrix(returns[long_names].dropna())
+        target = pd.Series(risk_parity_weights(cov), index=cov.index)
+    else:
+        target = pd.Series(dtype=float)
+    target = target.reindex(in_book).fillna(0.0)
+    final = pd.concat([target, capacity.reindex(in_book)], axis=1).min(axis=1)
+    binding = capacity.reindex(in_book) < target
 
     def _num(series, t):
         v = series.get(t, np.nan)
         return None if v is None or not np.isfinite(v) else float(v)
 
     out = []
-    for t in universe:
+    for t in in_book:
         is_flyer, is_cushion = t in flyers, t in cushions
         # gap is ES(flyer) - ES(cushion) for BOTH legs, so > 0 always means the
         # anchor's own tail is the thinner one. The wording follows the sign
@@ -603,11 +627,14 @@ def build_book(prices: pd.DataFrame, dollar_volume: pd.DataFrame,
                 ExcludedReason.RANK_BELOW_CUT: SentenceKey.EXCLUDED_RANK,
             }[why]
 
-        in_g = t in gscores.index
-        gs = (float(gscores.loc[t, "grit_score"])
-              if in_g and np.isfinite(gscores.loc[t, "grit_score"]) else None)
-        rec = (float(gscores.loc[t, "pct_recovered"])
-               if in_g and np.isfinite(gscores.loc[t, "pct_recovered"]) else None)
+        # An outside anchor's grit is from the shelf screen it won; no
+        # sentence prints it beside the user's names.
+        gt = shelf_grit if t in fallback else gscores
+        in_g = t in gt.index
+        gs = (float(gt.loc[t, "grit_score"])
+              if in_g and np.isfinite(gt.loc[t, "grit_score"]) else None)
+        rec = (float(gt.loc[t, "pct_recovered"])
+               if in_g and np.isfinite(gt.loc[t, "pct_recovered"]) else None)
         stressed = float(adv_stressed[t])
         w_final = float(final[t])
         days = float(w_final / cap_per_day[t]) if cap_per_day[t] > 0 else float("inf")
@@ -642,7 +669,8 @@ def headline(book: list[TickerDossier]) -> str:
     if not book:
         return "No names in this universe."
     d = book[0]
-    n_ok = sum(1 for x in book if x.eligible)
+    # An outside anchor is not one of the universe's names (ME-08).
+    n_ok = sum(1 for x in book if x.eligible and not x.is_fallback_anchor)
     return (f"${d.book_value:,.0f} book - {n_ok} of {d.n_universe} names hold a "
             f"position worth keeping and leave within {d.max_exit_days:.0f} "
             f"day(s) at {d.participation_rate:.0%} of quiet-tape volume.")

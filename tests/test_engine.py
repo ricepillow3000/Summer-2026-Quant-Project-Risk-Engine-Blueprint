@@ -4283,16 +4283,43 @@ def test_the_books_grit_is_the_grit_zones_full_history_grit():
         wrong = {t: (g, round(float(tab[t]))) for t, g in book.items()
                  if g != round(float(tab[t]))}
         assert not wrong, f"Book grit vs Grit Zone grit (book, tab): {wrong}"
-        # With the defensive shelf on, still full history - over the Book's
-        # own universe, the peer group its sentences name.
+        # With the defensive shelf on, the same: the shelf is offered as an
+        # anchor, never added to the visitor's universe (ME-08, 2026-10-22:
+        # it printed "17 of 17 names" and V 67 against 61 in the tab).
         at.toggle(key="book_fallback").set_value(True).run()
         book = _book_grit(at)
-        from src.pairing import DEFENSIVE_ANCHOR_TICKERS
-        full = grit_scores(loaded + [t for t in DEFENSIVE_ANCHOR_TICKERS
-                                     if t not in loaded])["scores"]["grit_score"]
-        wrong = {t: (g, round(float(full[t]))) for t, g in book.items()
-                 if g != round(float(full[t]))}
-        assert not wrong, f"Book grit vs full-history grit (book, full): {wrong}"
+        assert set(book) <= set(loaded), f"grit printed for names outside the basket: {set(book) - set(loaded)}"
+        wrong = {t: (g, round(float(tab[t]))) for t, g in book.items()
+                 if g != round(float(tab[t]))}
+        assert not wrong, f"Book grit vs Grit Zone grit, shelf on (book, tab): {wrong}"
+        head = [m.value for m in at.markdown if " book - " in m.value and "names hold" in m.value]
+        assert head and f"of {len(loaded)} names hold" in head[0], head
+    finally:
+        restore()
+
+
+def test_the_book_lists_an_outside_etf_only_when_it_is_the_anchor():
+    """ME-03 (2026-10-22): the default page listed TLT, GLD, XLP and USMV as
+    "LEFT OUT" - XLP "simply did not rank in the top 3" though a fallback can
+    never be a flyer - and they held 21.5% of the book. An outside ETF appears
+    only as the anchor it was chosen to be, and says it is from outside."""
+    import re
+    from src.pairing import DEFENSIVE_ANCHOR_TICKERS
+    at, restore = _offline_app()
+    try:
+        loaded = list([w for w in at.selectbox if w.label.startswith("Anchor")][0].options)
+        cards = {}
+        for m in at.markdown:
+            hit = re.match(r"\s*(LEADS|ANCHOR|LEFT OUT)\s+([A-Z0-9.^=-]+) (.*)",
+                           re.sub(r"<[^>]+>", " ", m.value)) if "border-left:3px solid" in m.value else None
+            if hit:
+                cards[hit.group(2)] = (hit.group(1), hit.group(3))
+        assert cards, "no Book cards parsed"
+        shelf = [t for t in DEFENSIVE_ANCHOR_TICKERS if t not in loaded]
+        for t, (role, text) in cards.items():
+            if t in shelf:
+                assert role == "ANCHOR" and "outside the chosen universe" in text, (t, role, text)
+        assert set(cards) - set(shelf) == set(loaded), sorted(cards)
     finally:
         restore()
 

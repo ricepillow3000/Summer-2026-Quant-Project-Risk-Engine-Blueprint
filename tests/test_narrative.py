@@ -483,6 +483,83 @@ def test_headline_counts_match_the_dossiers():
     assert headline([]) == "No names in this universe."
 
 
+# --- ME-08 (2026-10-22): the Book counts only the visitor's names ---
+
+def _with_shelf(prices, dv, shelf):
+    """Add outside-the-universe columns: {name: (drift, daily vol)}."""
+    rng = np.random.default_rng(11)
+    px, vol = prices.copy(), dv.copy()
+    for t, (mu, sd) in shelf.items():
+        r = rng.normal(mu, sd, len(px))
+        r[120:150] -= 0.008
+        px[t] = 100.0 * np.exp(np.cumsum(r))
+        vol[t] = 8.0e8
+    return px, vol
+
+
+def test_the_books_counts_ranks_and_grit_cover_only_the_visitors_names():
+    """ME-03 (2026-10-22): with the defensive shelf on, a 12-name basket
+    printed "17 of 17 names", "ranks 1 of 17 eligible" and grit ranked across
+    17 - V 67 in the Book against 61 in the Grit Zone tab - because the five
+    ETFs offered as fallbacks were counted as the visitor's universe."""
+    from src.grit import grit_scores
+    prices, dv = _anchor_fixture()
+    user = ["FLY", "WILD1", "WILD2"]
+    prices, dv = _with_shelf(prices, dv, {"DEFX": (0.0, 0.03)})
+    book = build_book(prices, dv, book_value=2_000_000, n_flyers=1,
+                      fallback_anchors={"DEFN", "DEFX"})
+    tab = grit_scores(user, prices=prices[user])["scores"]["grit_score"]
+    for d in book:
+        if d.is_fallback_anchor:
+            continue
+        assert d.ticker in user, d.ticker
+        assert d.n_universe == len(user), (d.ticker, d.n_universe)
+        assert d.n_eligible <= len(user), (d.ticker, d.n_eligible)
+        assert d.momentum_rank is None or d.momentum_rank <= len(user)
+        assert d.grit_score is not None and abs(d.grit_score - tab[d.ticker]) < 1e-9, \
+            (d.ticker, d.grit_score, float(tab[d.ticker]))
+    assert f"of {len(user)} names" in headline(book), headline(book)
+
+
+def test_an_unused_fallback_holds_nothing_and_changes_nothing():
+    """ME-03 (2026-10-22): the five defensive ETFs held 21.5% of the default
+    book while printed as "LEFT OUT ... simply did not rank in the top 3" -
+    they can never be flyers - and switching the shelf on moved V from 7.9% to
+    5.5% of the book although no ETF was used. A fallback nobody chose gets no
+    dossier and no weight, so the toggle changes nothing."""
+    prices, dv = _book_fixture()
+    # A wild outside holding: it can never thin anyone's tail.
+    px, vol = _with_shelf(prices, dv, {"SHELF": (0.0, 0.05)})
+    off = build_book(prices, dv, book_value=5_000_000)
+    on = build_book(px, vol, book_value=5_000_000, fallback_anchors={"SHELF"})
+    assert "SHELF" not in {d.ticker for d in on}, "an unused fallback is listed"
+    assert not any(d.is_fallback_anchor for d in on)
+    assert [d.ticker for d in on] == [d.ticker for d in off]
+    for a, b in zip(on, off):
+        assert (a.sentence(), a.final_weight) == (b.sentence(), b.final_weight), a.ticker
+
+
+def test_a_fallback_anchor_that_is_used_is_named_and_sized_with_the_book():
+    """The anchor that IS chosen still appears, outside the universe, with a
+    risk-parity share solved over the visitor's names plus that anchor - and
+    no weight goes to a second fallback that was not chosen."""
+    from src.analytics import covariance_matrix
+    from src.strategies import risk_parity_weights
+    prices, dv = _anchor_fixture()
+    prices, dv = _with_shelf(prices, dv, {"DEFX": (0.0, 0.03)})
+    book = _by_ticker(build_book(prices, dv, book_value=2_000_000, n_flyers=1,
+                                 fallback_anchors={"DEFN", "DEFX"}))
+    assert "DEFX" not in book, "the unused fallback is in the book"
+    defn = book["DEFN"]
+    assert defn.role is Role.CUSHION and defn.is_fallback_anchor
+    assert defn.partner == "FLY" and defn.final_weight > 0
+    names = ["FLY", "WILD1", "WILD2", "DEFN"]
+    rets = prices[names].pct_change().dropna()
+    want = pd.Series(risk_parity_weights(covariance_matrix(rets)), index=names)
+    for t in names:
+        assert abs(book[t].target_weight - want[t]) < 1e-9, (t, book[t].target_weight, want[t])
+
+
 if __name__ == "__main__":
     import sys
 
