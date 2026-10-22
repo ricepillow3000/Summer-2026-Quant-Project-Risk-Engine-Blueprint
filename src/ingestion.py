@@ -25,6 +25,7 @@ import re
 import json
 import hashlib
 import threading
+import time
 import datetime
 import numpy as np
 import pandas as pd
@@ -335,6 +336,16 @@ def _own_rows(raw: pd.DataFrame, ticker: str, alone: bool) -> pd.DataFrame:
     return own[own["Volume"].notna()]
 
 
+# A name that comes back empty is asked for again, alone, at most RETRIES more
+# times, RETRY_PAUSE * attempt seconds apart. Pair audit run 31 (2026-10-22)
+# lost BA to "OperationalError('database is locked')" - yfinance's timezone
+# cache, under its own download threads - and run 28 lost BAC; the same lock
+# can drop a name from a visitor's basket here. Nothing else is retried, and a
+# name still empty is left out exactly as before.
+RETRIES = 2
+RETRY_PAUSE = 0.5
+
+
 def _download_close_volume(tickers: list[str], period: str,
                            max_age_hours: float = CACHE_MAX_AGE_HOURS,
                            use_cache: bool = True) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -355,7 +366,8 @@ def _download_close_volume(tickers: list[str], period: str,
     """
     # yfinance relabels an ISIN with the ticker it resolves to, so a cached
     # ticker beside its ISIN would be one series twice: those take one download.
-    use_cache = use_cache and not any(yf.utils.is_isin(t) for t in tickers)
+    has_isin = any(yf.utils.is_isin(t) for t in tickers)
+    use_cache = use_cache and not has_isin
     frames = {}
     if use_cache:
         for t in tickers:
@@ -369,19 +381,34 @@ def _download_close_volume(tickers: list[str], period: str,
         # The budget is checked up front so an exhausted cap reads as a cap, not
         # as a mysterious "possibly delisted" from inside yfinance.
         check_budget()
-        raw = yf.download(missing, period=period, auto_adjust=True, progress=False,
-                          repair=True, timeout=30, session=guarded_session())
-        now = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
-        for t in missing:
-            own = (pd.DataFrame() if raw is None or raw.empty
-                   else _own_rows(raw, t, alone=len(missing) == 1))
-            if own.empty:
-                continue            # a typo or an outage is retried, never remembered
-            own.attrs["fetched_at_utc"] = now
-            if use_cache:
-                os.makedirs(DATA_DIR, exist_ok=True)
-                _write_parquet(own, _raw_path(t, period))
-            frames[t] = own
+        # No retry beside an ISIN: there a name can come back "empty" because
+        # yfinance filed its series under the ISIN, and asking for it again
+        # would put the same series in twice (a singular covariance).
+        for attempt in range(1 + (0 if has_isin else RETRIES)):
+            if attempt:
+                # Only for names that came back empty, and only with budget
+                # left: the normal path never gets here.
+                try:
+                    check_budget()
+                except BudgetExhausted:
+                    break
+                time.sleep(RETRY_PAUSE * attempt)
+            raw = yf.download(missing, period=period, auto_adjust=True, progress=False,
+                              repair=True, timeout=30, session=guarded_session())
+            now = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
+            for t in missing:
+                own = (pd.DataFrame() if raw is None or raw.empty
+                       else _own_rows(raw, t, alone=len(missing) == 1))
+                if own.empty:
+                    continue        # a typo or an outage is retried, never remembered
+                own.attrs["fetched_at_utc"] = now
+                if use_cache:
+                    os.makedirs(DATA_DIR, exist_ok=True)
+                    _write_parquet(own, _raw_path(t, period))
+                frames[t] = own
+            missing = [t for t in missing if t not in frames]
+            if not missing:
+                break
     if not frames:
         raise NoDataError(NO_DATA_MSG)
     # A name with no data stays an all-NaN column, as in one multi download.

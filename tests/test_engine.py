@@ -641,8 +641,10 @@ class _FakeYahoo:
     and column sort) on fake per-name histories, records every download's
     names, and points the cache at a temp folder. Nothing leaves the machine."""
 
-    def __init__(self, years=2.0):
-        self.years, self.downloads = years, []
+    def __init__(self, years=2.0, flaky=None):
+        # flaky: {name: how many of its requests fail} - the way yfinance's
+        # locked timezone cache dropped BA for one request (pair audit run 31)
+        self.years, self.downloads, self.flaky = years, [], dict(flaky or {})
 
     def __enter__(self):
         import tempfile
@@ -656,11 +658,16 @@ class _FakeYahoo:
                 self.ticker, self._price_history = t, None
 
             def history(self, **kw):
+                if fake.flaky.get(self.ticker, 0) > 0:
+                    fake.flaky[self.ticker] -= 1
+                    raise RuntimeError("OperationalError('database is locked')")
                 return _fake_history(self.ticker, fake.years)
 
         self._tmp = tempfile.TemporaryDirectory()
         self._real = (multi.Ticker, yu.get_ticker_by_isin, ing.yf.download,
-                      ing.check_budget, ing.guarded_session, ing.DATA_DIR)
+                      ing.check_budget, ing.guarded_session, ing.DATA_DIR,
+                      getattr(ing, "RETRY_PAUSE", None))
+        ing.RETRY_PAUSE = 0.0                   # no real waiting in a unit test
         real_download = ing.yf.download
 
         def recording(tickers, *a, **k):
@@ -684,7 +691,11 @@ class _FakeYahoo:
         import yfinance.utils as yu
         import src.ingestion as ing
         (multi.Ticker, yu.get_ticker_by_isin, ing.yf.download,
-         ing.check_budget, ing.guarded_session, ing.DATA_DIR) = self._real
+         ing.check_budget, ing.guarded_session, ing.DATA_DIR, pause) = self._real
+        if pause is None:
+            del ing.RETRY_PAUSE
+        else:
+            ing.RETRY_PAUSE = pause
         self._tmp.cleanup()
 
 
@@ -703,7 +714,9 @@ def test_a_basket_stitched_from_single_names_matches_one_download():
     with _FakeYahoo() as fy:
         ing._download_close_volume(["AAA", "BTC-USD"], "2y")    # two names known
         close, volume = ing._download_close_volume(basket, "2y")
-        assert fy.downloads[-1] == ["BBB", "DEAD", "EMPTY", "EURUSD=X"], fy.downloads
+        # only the names not held, then (ME-14) only the ones that came back empty
+        assert fy.downloads[1:] == [["BBB", "DEAD", "EMPTY", "EURUSD=X"],
+                                    ["DEAD", "EMPTY"], ["DEAD", "EMPTY"]], fy.downloads
         ref = fy.reference(basket)
         pd.testing.assert_frame_equal(close, ref["Close"], check_exact=True, check_freq=False)
         pd.testing.assert_frame_equal(volume, ref["Volume"], check_exact=True,
@@ -736,7 +749,8 @@ def test_adding_names_to_a_known_basket_downloads_only_the_new_names():
     with _FakeYahoo() as fy:
         ing.fetch_prices(["AAA", "BBB"])
         ing.fetch_prices(["AAA", "BBB", "CCC", "DDD", "DEAD"])
-        assert fy.downloads == [["AAA", "BBB"], ["CCC", "DDD", "DEAD"]], fy.downloads
+        # DEAD is never served: asked again twice (ME-14), then left out
+        assert fy.downloads == [["AAA", "BBB"], ["CCC", "DDD", "DEAD"], ["DEAD"], ["DEAD"]], fy.downloads
         ing.fetch_prices(["CCC", "DEAD"])
         assert fy.downloads[-1] == ["DEAD"], f"a failed name was remembered: {fy.downloads}"
 
@@ -5127,6 +5141,72 @@ def test_the_loaded_window_is_counted_one_way_everywhere():
     assert f"{rows} daily returns" not in page, f"{rows} prices called daily returns"
     assert f"{rows - 1} daily returns" in page
 
+
+
+def test_the_pair_audit_download_retries_a_name_the_feed_dropped_and_fails_one_it_never_serves():
+    """Pair audit runs 28 and 31 (2026-10-22) each failed TICK-01 on one name,
+    BAC then BA, with every other check green. Run 31's download log names the
+    cause: "['BA']: OperationalError('database is locked')" - yfinance's own
+    timezone cache, locked under its download threads, dropped the name for
+    one request. The download goes through the app's chokepoint, which now
+    asks again for a dropped name (ME-14): dropped once, BA passes; never
+    served, it still fails TICK-01. Nothing is filled in."""
+    import tempfile
+    import tests.pair_audit as pa
+    victim = "BA"
+    assert victim in pa.UNIVERSE + pa.EXTRA
+    results = {}
+    try:
+        for name, drops in (("once", 1), ("always", 99)):
+            with _FakeYahoo(flaky={victim: drops}):
+                out = pathlib.Path(tempfile.mkdtemp()) / "prices.parquet"
+                assert pa.download(str(out)) == 0
+            pa._MASTER = pd.read_parquet(out)
+            rows = pa.audit_ticker(victim, pa._MASTER.index[-1])
+            results[name] = [r[2] for r in rows if r[0] == "TICK-01"]
+            s = pa._MASTER[victim].dropna() if victim in pa._MASTER else pd.Series(dtype=float)
+            want = len(_fake_history(victim).index)
+            assert s.empty or len(s) == want, f"{name}: {len(s)} rows of {victim}, not {want}"
+    finally:
+        pa._MASTER = None
+    assert results["once"] == ["PASS"], f"a name dropped once must be fetched again: {results}"
+    assert results["always"] == ["FAIL"], f"a name never served must still fail TICK-01: {results}"
+
+
+def test_the_download_asks_again_only_for_a_dropped_name_and_only_with_budget():
+    """ME-14: the lock that dropped BA from the audit can drop a name from a
+    visitor's basket in the same chokepoint. A name that comes back empty is
+    asked for again, alone, at most twice: dropped once it is served and
+    cached; never served it stays missing, uncached and left out exactly as
+    before; with nothing dropped there is no extra request at all; and with
+    no budget left the retry does not spend what is not there."""
+    import src.ingestion as ing
+    with _FakeYahoo() as fy:                              # the normal path
+        ing._download_close_volume(["AAA", "BBB"], "2y")
+        assert fy.downloads == [["AAA", "BBB"]], f"extra requests: {fy.downloads}"
+    with _FakeYahoo(flaky={"BBB": 1}) as fy:              # dropped once
+        close, _ = ing._download_close_volume(["AAA", "BBB"], "2y")
+        assert fy.downloads == [["AAA", "BBB"], ["BBB"]], fy.downloads
+        assert close["BBB"].notna().sum() > 100, "the second request was not used"
+        assert pathlib.Path(ing._raw_path("BBB", "2y")).is_file(), "served but not cached"
+    with _FakeYahoo(flaky={"BBB": 99}) as fy:             # never served
+        close, _ = ing._download_close_volume(["AAA", "BBB"], "2y")
+        assert fy.downloads == [["AAA", "BBB"], ["BBB"], ["BBB"]], fy.downloads
+        assert close["BBB"].isna().all(), "a name never served was filled in"
+        assert not pathlib.Path(ing._raw_path("BBB", "2y")).exists(), "a failure was cached"
+        px = ing.fetch_prices(["AAA", "BBB"], use_cache=False)
+        assert "BBB" not in px.columns, "left out, as a name the feed has no data for"
+    with _FakeYahoo(flaky={"BBB": 1}) as fy:              # no budget for a retry
+        spent = {"n": 0}
+
+        def budget(*a, **k):
+            spent["n"] += 1
+            if spent["n"] > 1:
+                raise ing.BudgetExhausted("spent")
+        ing.check_budget = budget
+        close, _ = ing._download_close_volume(["AAA", "BBB"], "2y")
+        assert fy.downloads == [["AAA", "BBB"]], f"a retry spent a spent budget: {fy.downloads}"
+        assert close["BBB"].isna().all()
 
 if __name__ == "__main__":
     import sys
