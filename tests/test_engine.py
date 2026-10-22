@@ -4454,10 +4454,13 @@ def test_the_glide_respects_reduced_motion():
     script = next(n.args[0].value for n in ast.walk(tree) if isinstance(n, ast.Call)
                   and ast.unparse(n.func) == "_html" and n.args
                   and isinstance(n.args[0], ast.Constant) and "__meleonaGlide" in n.args[0].value)
-    on_link = script[script.index("function onLink"):script.index("P.addEventListener")]
+    # go() is what every press ends in - at once, or once a section still
+    # being written has mounted (onLink / waitFor) - so the question lives there.
+    on_link = script[script.index("function go("):script.index("P.addEventListener")]
+    assert "go(a, el)" in on_link[on_link.index("function onLink"):], "every press must end in go()"
     assert "prefers-reduced-motion: reduce" in on_link, \
         "the glide must ask for the visitor's motion setting on every click"
-    still = on_link[on_link.index("prefers-reduced-motion"):on_link.index("glide(scroller, el, 1500")]
+    still = on_link[on_link.index("prefers-reduced-motion"):on_link.index("glide(scroller, el)")]
     assert "preventDefault" in on_link and "scrollTo" in still and "return" in still, \
         "with reduced motion the button must land at once, before any glide starts"
     css = (root / "static" / "app.css").read_text(encoding="utf-8")
@@ -4630,6 +4633,48 @@ def test_the_glide_follows_a_moving_target_and_yields_to_the_reader():
     assert "contentVisibility" in script and ".st-key-risk-map" in script, \
         "the off-screen map must be skipped while the glide flies"
     assert 'st.container(key="risk-map")' in src, "the map needs its own keyed container"
+
+
+def test_a_button_pressed_while_the_page_is_still_loading_still_glides_all_the_way():
+    """John, 2026-10-22: "sometimes it does not do the transition". Measured on
+    the offline harness at cfceb42 (ME-04), every button glided on a settled
+    page (480/480) but not while the page was still loading:
+      - "See the crisis record" and "Skip to the risk map" were dead 8/8: their
+        target is written only after the data arrives, the click found no
+        element and fell through to the browser's hash jump, which scrolled
+        nowhere and never followed the section once it appeared;
+      - "To the engine" leapt 138-230px in one frame 6/8: the eased position
+        ran past the bottom of the still-growing page, scrollTo clamped it,
+        and the next mount released it all at once;
+      - "Explore what we do" stopped 223px short 8/8 at the bottom of a short
+        page, and a trackpad's momentum still arriving after the click
+        cancelled every flight 30/30 (only 300 ms of the wheel was forgiven).
+    A press with no target yet waits for it (bounded) and then flies; each
+    frame re-aims against the page's current bottom and moves at most a
+    peak-speed step, so a page that grows mid-flight is caught up smoothly;
+    the flight keeps settling until it is on the target; and a wheel only
+    yields when it is not the decaying tail of the gesture running at the click."""
+    import ast
+    root = pathlib.Path(__file__).resolve().parent.parent
+    src = (root / "main.py").read_text(encoding="utf-8")
+    tree = ast.parse(src)
+    script = next(n.args[0].value for n in ast.walk(tree) if isinstance(n, ast.Call)
+                  and ast.unparse(n.func) == "_html" and n.args
+                  and isinstance(n.args[0], ast.Constant) and "__meleonaGlide" in n.args[0].value)
+    link = script[script.index("function onLink"):]
+    assert "if (!el) return;" not in link, \
+        "a press before its section exists must not fall through to the browser's hash jump"
+    assert "e.preventDefault()" in link and link.index("e.preventDefault()") < link.index("getElementById"), \
+        "the press is kept (default prevented) before looking for its target"
+    assert "waitFor(" in link and "10000" in script, "a missing target is waited for, and only for a bounded time"
+    frame = script[script.index("(function f(now)"):script.index("function onLink")]
+    assert "scrollHeight - scroller.clientHeight" in frame, \
+        "each frame must re-aim against the page's current bottom (a growing page clamps scrollTo)"
+    assert "vmax" in frame, "each frame's step is capped at the flight's peak speed - no catch-up leap"
+    assert "glide(scroller, el, 320, true)" not in script, \
+        "one 320 ms correction is not enough on a growing page: the flight settles until it is on target"
+    assert "deltaY" in script and "< 300) return" not in script, \
+        "a wheel yields unless it is the decaying tail of the gesture running at the click"
 
 
 def test_every_short_form_on_the_map_is_in_its_glossary():

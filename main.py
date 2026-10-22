@@ -283,7 +283,7 @@ _html("""
     quietMap(false);
     P.__meleonaStop = null;
   }
-  function glide(scroller, el, dur, settled) {
+  function glide(scroller, el) {
     /* One flight at a time: a new press, or the reader's own wheel / touch /
        key (onYield), bumps the flight number and the old frames stop. Two
        presses used to fly two flights at once - a 59px jump and a wrong
@@ -296,51 +296,101 @@ _html("""
        fly, handed back when we land. */
     scroller.style.scrollBehavior = 'auto';
     quietMap(true);
-    const y0 = scroller.scrollTop, t0 = performance.now();
+    /* Calm over speed: 1500ms on a slow-out curve reads as being LED
+       somewhere, where a fast jump reads as a slide change. */
+    const dur = 1500, y0 = scroller.scrollTop, t0 = performance.now();
     /* Progress advances at most 50 ms per frame. Driven by the clock, one
        frame that came late (charts mounting while the page builds) covered
        66-81% of the flight - a jump, not a glide. */
-    let aim = targetY(scroller, el), last = t0, run = 0;
+    let aim = targetY(scroller, el), last = t0, run = 0, done = 0, grew = t0;
+    let floor = scroller.scrollHeight - scroller.clientHeight;
+    const dir = Math.sign(aim - y0) || 1;
+    /* No frame moves faster than the curve's own peak (pi/2 the average
+       speed, so 2x with margin). A page still loading is shorter than the
+       flight: scrollTo clamped the eased position at its bottom and the next
+       mount released it all at once - 138-230px of a 475px flight in one
+       frame, 6 of 8 presses during load (ME-04). Now a page that grows under
+       the flight is caught up at the flight's own pace. */
+    const vmax = 2 * Math.max(Math.abs(aim - y0), 600) / dur;
     (function f(now) {
       if (id !== P.__meleonaFlight) return;   // a newer flight, or the reader took over
-      run += Math.min(now - last, 50); last = now;
+      const dt = Math.min(now - last, 50); run += dt; last = now;
       const p = Math.min(1, run / dur);
+      const tgt = targetY(scroller, el), cur = scroller.scrollTop;
+      /* Re-aim against the page's CURRENT bottom every frame. */
+      const max = scroller.scrollHeight - scroller.clientHeight;
+      if (max > floor + 1) { floor = max; grew = now; }
       /* The destination can still be moving: the showcase row rises 24px on
          its scroll-driven reveal while we fly, so a target read once at the
          click landed 8-11px past it and crawled back. Follow it - at most 2px
-         a frame, so a chart mounting mid-flight cannot yank the page. */
-      aim += Math.max(-2, Math.min(2, targetY(scroller, el) - aim));
-      scroller.scrollTo(0, y0 + (aim - y0) * ease(p));
+         a frame further away, so a chart mounting mid-flight cannot yank the
+         page; at once when it comes closer (a rerun repainting the page above
+         it), so the flight never runs past it (1 of 4 basket switches
+         overshot "Skip to the risk map" by 220px). */
+      const d = tgt - aim;
+      if (p >= 1 || Math.sign(d) !== dir) aim = tgt;
+      else aim += Math.min(2, Math.abs(d)) * dir;
+      const cap = vmax * dt + 4;
+      let step = (p < 1 ? y0 + (aim - y0) * ease(p) : aim) - cur;
+      /* Behind the curve (the page was too short) or past its end: close in
+         at no more than peak speed, softly over the last stretch - but by a
+         whole pixel at least: scrollTop snaps to device pixels, and a 0.5px
+         step was rounded away, so a flight 3px short of its target kept
+         re-asserting itself for 10 s (it dragged the page back 1 time in 10
+         when the next press moved it). */
+      if (p >= 1 || Math.abs(step) > cap)
+        step = Math.sign(aim - cur) * Math.min(cap, Math.max(1, Math.abs(aim - cur) * 0.15));
+      if (Math.sign(step) !== dir && Math.sign(tgt - cur) === dir) step = 0;   // never back away from a target still ahead
+      scroller.scrollTo(0, Math.max(0, Math.min(cur + step, max)));
       if (p < 1) { requestAnimationFrame(f); return; }
+      /* Settle until the reader is ON the section the button promised. One
+         320 ms correction was not enough on a page still loading: the hero
+         CTA stopped 223px short at the bottom of a 1371px page, 8 of 8
+         (ME-04). While the target sits below the page's end, wait for the
+         page to grow: until its footer (the last thing the run writes) has
+         arrived, or while it still grows - at most 10 s. A quiet spell alone
+         is no sign of the end: the cold harness paused 3 s between mounts
+         and the flight landed 416px short just before the page grew. */
+      if (!done) done = now;
+      const on = Math.abs(tgt - scroller.scrollTop) <= 2;
+      const waiting = tgt > max + 2 &&
+                      (!P.querySelector('.meleona-footer') || now - grew < 3000);
+      if (!on && now - done < 10000 && (waiting || Math.abs(Math.max(0, Math.min(tgt, max)) - scroller.scrollTop) > 2)) {
+        requestAnimationFrame(f); return;
+      }
       land(scroller);
-      /* landing check: if the page shifted mid-flight by more than the
-         per-frame follow could absorb (a chart mounted, a rerun repainted),
-         re-aim once with a short corrective glide - the reader always ends
-         ON the section the button promised. */
-      const drift = targetY(scroller, el) - scroller.scrollTop;
-      if (!settled && Math.abs(drift) > 4) glide(scroller, el, 320, true);
     })(t0);
   }
   /* The reader takes over: a wheel, a touch or a scroll key ends the flight
      where it is, instead of being pulled back each frame (8 reversals per
-     wheel gesture). A trackpad keeps sending momentum wheel events for a
-     moment after a click, so the first 300 ms ignore the wheel. */
+     wheel gesture). But a trackpad flick keeps sending momentum wheel events
+     for a second or two after the press, in the same direction and
+     decaying: that is the gesture the reader already finished, not a new
+     one. Forgiving only the first 300 ms cancelled 30 of 30 flights pressed
+     during a flick (ME-04). A wheel yields unless it continues the gesture
+     that was running at the press (same sign, no bigger, within 2 s, and
+     under 250 ms after the last - the stream paused 168 ms across the press
+     itself in headless Chromium); a reversal, a pause or a fresh, harder
+     swipe yields at once. */
   const SCROLL_KEYS = ['PageUp', 'PageDown', 'ArrowUp', 'ArrowDown', 'Home', 'End', ' '];
+  let wheelAt = 0, wheelDy = 0, tail = false;
   function onYield(e) {
+    if (e.type === 'wheel') {
+      const t = performance.now();
+      const same = t - wheelAt < 250 && Math.sign(e.deltaY) === Math.sign(wheelDy) &&
+                   Math.abs(e.deltaY) <= Math.abs(wheelDy) * 1.25 + 2;
+      wheelAt = t; wheelDy = e.deltaY;
+      if (!P.__meleonaStop) return;
+      if (tail && same && t - P.__meleonaPressAt < 2000) return;
+    }
     if (!P.__meleonaStop) return;
-    if (e.type === 'wheel' && performance.now() - P.__meleonaFlightAt < 300) return;
     if (e.type === 'keydown' && SCROLL_KEYS.indexOf(e.key) < 0) return;
+    tail = false;
     P.__meleonaFlight = (P.__meleonaFlight || 0) + 1;
     P.__meleonaStop();
   }
-  function onLink(e) {
-    const a = e.target.closest('a[href^="#"]');
-    if (!a) return;
-    const el = P.getElementById(a.getAttribute('href').slice(1));
-    if (!el) return;
+  function go(a, el) {
     const scroller = findScroller(el);
-    if (!scroller) return;               // nothing scrolls: let native run
-    e.preventDefault(); e.stopPropagation();
     /* Reduced motion: land at once, same place. A CSS media query cannot stop
        a JavaScript flight, so ask on every click (the setting can change
        while the page is open). */
@@ -349,11 +399,38 @@ _html("""
       scroller.style.scrollBehavior = 'auto';
       scroller.scrollTo(0, targetY(scroller, el));
       scroller.style.scrollBehavior = prevSB;
+      P.__meleonaStop = null;
       return;
     }
-    /* Calm over speed: 1500ms on a slow-out curve reads as being LED
-       somewhere, where a fast jump reads as a slide change. */
-    glide(scroller, el, 1500, false);
+    glide(scroller, el);
+  }
+  /* A press can come before its section exists: #crisis-record is written
+     after the crisis data arrives and #analysis after the whole engine, so
+     during a cold load both buttons fell through to the browser's hash jump,
+     which scrolled nowhere and never followed - dead 8 of 8 (ME-04). Keep
+     the press, wait for the section (at most 10 s, or until the reader
+     scrolls), then fly. */
+  function waitFor(a, id) {
+    const w = P.__meleonaFlight = (P.__meleonaFlight || 0) + 1;
+    P.__meleonaStop = function () { P.__meleonaStop = null; };
+    const t0 = performance.now();
+    (function poll() {
+      if (w !== P.__meleonaFlight) return;   // a newer press, or the reader took over
+      const el = P.getElementById(id);
+      if (el) { go(a, el); return; }
+      if (performance.now() - t0 < 10000) requestAnimationFrame(poll);
+      else P.__meleonaStop = null;
+    })();
+  }
+  function onLink(e) {
+    const a = e.target.closest('a[href^="#"]');
+    const id = a ? a.getAttribute('href').slice(1) : '';
+    if (!id) return;                     // a bare '#': nothing to fly to
+    e.preventDefault(); e.stopPropagation();
+    P.__meleonaPressAt = performance.now();
+    tail = P.__meleonaPressAt - wheelAt < 250;   // a flick still running at the press
+    const el = P.getElementById(id);
+    if (el) go(a, el); else waitFor(a, id);
     /* release the arrow so it falls ahead of the page it is pulling */
     if (a.classList.contains('cta-btn')) {
       a.classList.remove('is-launching'); void a.offsetWidth;
