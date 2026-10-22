@@ -30,6 +30,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from src.covariance import TRADING_DAYS
+
 
 def rolling_windows(returns: pd.Series, window: int = 20, step: int = 5):
     """Rolling return windows as sorted quantile vectors.
@@ -128,7 +130,7 @@ def regime_stats(Q: np.ndarray, labels: np.ndarray) -> list[dict]:
         out.append({
             "label": j,
             "n_windows": int((labels == j).sum()),
-            "ann_vol": float(sd * np.sqrt(252)),
+            "ann_vol": float(sd * np.sqrt(TRADING_DAYS)),
             "mean_daily": float(m),
             "skew": skew,
             "cvar_95": float(-tail.mean()),

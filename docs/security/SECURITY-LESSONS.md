@@ -78,10 +78,11 @@ each with 2FA (a passkey or authenticator, not SMS), signed in only on those two
 ## Findings log
 
 ### 2026-10-20: Pillow CVEs the app cannot reach (a written exception, John's call)
-`pip_audit` went red on 8 new Pillow CVEs (crafted PDF, GIF, PPM, TIFF and EPS files; fixed in 13.0). Streamlit pulls
+`pip_audit` went red on 8 new Pillow CVEs (crafted PDF, GIF, PPM, TIFF and EPS files; fixed in 13.0), and on
+2026-10-22 on 16 more (all Pillow 12.3.0, all fixed only in 13.0.0, per that run's pip_audit table): 24 in all. Streamlit pulls
 Pillow in and caps it below 13 in every release up to 1.66, so the fix cannot be installed. The app opens no image a
 visitor supplies (no uploader or camera input, `maxUploadSize = 1`, no Pillow import in our code), so John chose to
-skip exactly those 8 IDs in Live audit step 0 rather than leave the gate red. The exception is pinned by
+skip exactly those 24 IDs in Live audit step 0 rather than leave the gate red. The exception is pinned by
 `test_every_pip_audit_exception_is_unreachable_and_expires`: it fails the day the installed Streamlit accepts
 Pillow 13 (bump it and delete the exception) or the day the app gains a way to take a file.
 

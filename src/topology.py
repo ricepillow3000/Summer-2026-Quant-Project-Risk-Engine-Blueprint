@@ -29,6 +29,7 @@ from src.ingestion import fetch_prices
 from src.pairing import DEFENSIVE_ANCHOR_TICKERS, anchor_rank, pair_weights, backtest_pair
 from src.risk import portfolio_daily_returns
 from src.state_calibration import calibrate_state_dynamics
+from src.covariance import TRADING_DAYS
 
 
 # Hazard perimeter policy - disclosed in the map footnote, deliberately NOT
@@ -42,7 +43,6 @@ HAZARD_BETA_CAP = 1.9
 
 BETA_WINDOW = 63          # matches state_calibration.rolling_state_series
 VOL_WINDOW = 21
-TRADING_DAYS = 252
 
 
 def anchor_frame(returns: pd.DataFrame) -> pd.DataFrame:

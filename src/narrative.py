@@ -66,7 +66,8 @@ import pandas as pd
 from src.analytics import covariance_matrix
 from src.grit import grit_scores
 from src.pairing import anchor_rank, tail_gap
-from src.signals import momentum_signal
+from src.covariance import TRADING_DAYS
+from src.signals import MOMENTUM_LOOKBACK, MOMENTUM_SKIP, momentum_signal
 from src.strategies import risk_parity_weights
 
 # --- Disclosed judgement calls (not fitted, not optimal - stated so they can
@@ -77,8 +78,8 @@ DEFAULT_N_FLYERS = 3
 MIN_MEANINGFUL_WEIGHT = 0.01      # below 1% of the book a position is noise
 ADV_LOOKBACK_DAYS = 63            # ~3 months, matches ingestion.average_dollar_volume
 ADV_STRESS_QUANTILE = 0.05        # the quiet-tape volume the gate is held to
-MOMENTUM_LOOKBACK = 60
-MOMENTUM_SKIP = 5                 # signals.momentum_signal default: dodges reversal
+# MOMENTUM_LOOKBACK / MOMENTUM_SKIP come from src.signals: one definition of
+# the momentum window, which the Signal Lab demonstrates and the Book ranks on.
 VOL_WINDOW = 60
 # A flyer must actually be flying. Rank alone is relative: in a falling market
 # the "best" of a bad set still has a negative trailing return, and calling it a
@@ -470,7 +471,7 @@ def build_book(prices: pd.DataFrame, dollar_volume: pd.DataFrame,
     # 4. The short leg. Measured trailing return per unit of measured
     #    volatility - deliberately NOT called grit (see module docstring).
     mom = momentum_signal(prices, MOMENTUM_LOOKBACK, MOMENTUM_SKIP).iloc[-1]
-    vol = returns.tail(VOL_WINDOW).std() * np.sqrt(252)
+    vol = returns.tail(VOL_WINDOW).std() * np.sqrt(TRADING_DAYS)
     with np.errstate(divide="ignore", invalid="ignore"):
         mpv = (mom / vol.replace(0.0, np.nan)).reindex(every)
 

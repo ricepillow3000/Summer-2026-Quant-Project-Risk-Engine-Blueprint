@@ -44,10 +44,11 @@ import numpy as np
 import pandas as pd
 
 from src.ingestion import fetch_prices
+from src.covariance import TRADING_DAYS
 from src.scenarios import HISTORICAL_REGIMES
 
 BENCHMARK = "SPY"
-HORIZONS = {"1y later": 252, "3y later": 756}
+HORIZONS = {"1y later": TRADING_DAYS, "3y later": 3 * TRADING_DAYS}
 
 # Names whose capital spending is dominated by compute / AI infrastructure
 # today. Fixed list, disclosed in the UI; their PAST record is shown as-is.
@@ -55,7 +56,7 @@ AI_CAPEX_BASKET = ["NVDA", "MSFT", "GOOGL", "AMZN", "META", "AVGO"]
 
 # How far past the trough we search for a reclaim of the pre-crisis peak
 # before calling it "not recovered" within the horizon (~3 trading years).
-RECOVERY_HORIZON_DAYS = 756
+RECOVERY_HORIZON_DAYS = 3 * TRADING_DAYS
 
 MIN_WINDOW_ROWS = 5  # fewer rows than this and the window isn't usable
 

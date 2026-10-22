@@ -22,11 +22,13 @@ import streamlit as st
 import streamlit.components.v1 as components
 from streamlit.runtime.app_session import AppSession
 
-# ponytail: components.html is deprecated with removal announced for 2026-06-01
-# (still shipping in 1.62). st.iframe is NOT a migration path - it takes a URL,
-# not inline HTML, and the one call here injects a parent-document script. So
-# bind a no-op fallback: if a future Streamlit drops it we lose the CTA scroll
-# glide, not the whole app.
+# ponytail: components.html is deprecated - the pinned Streamlit 1.62 warns on
+# every run that it goes after 2026-06-01. st.iframe is the migration path: it
+# takes inline HTML with scripts and same-origin access (the Risk Topology map
+# already ships through it). The one call left here carries the glide script,
+# which moves in its own change. Until then the binding falls back to a no-op:
+# if a future Streamlit drops components.html we lose the CTA scroll glide, not
+# the whole app.
 _html = getattr(components, "html", lambda *a, **k: None)
 import plotly.graph_objects as go
 
@@ -39,7 +41,7 @@ from src.ingestion import (
 from src.analytics import correlation_matrix, covariance_matrix
 from src.risk import (
     monte_carlo, jump_diffusion_mc, parametric_var, var_backtest, sharpe_ratio,
-    cvar, portfolio_daily_returns, mcneil_frey_tail,
+    cvar, var, portfolio_daily_returns, mcneil_frey_tail,
 )
 from src.comovement import (
     correlation_from_cov, rolling_correlation, most_correlated_pair,
@@ -52,7 +54,7 @@ from src.hedge import min_variance_pair, rank_hedges
 from src.pairing import (anchor_rank, backtest_pair, crisis_cushion,
                          es_confidence_interval, pair_weights, regime_labels,
                          tail_gap, DEFENSIVE_ANCHOR_TICKERS)
-from src.covariance import estimate_covariance, RISKMETRICS_LAMBDA
+from src.covariance import estimate_covariance, RISKMETRICS_LAMBDA, TRADING_DAYS
 from src.topology import anchor_frame, build_map_payload, war_room_html
 from src.observability import (log_incident, log_session_start,
                                new_session_ref, setup_logging)
@@ -69,11 +71,12 @@ from src.regimes import (
     regime_stats, transition_matrix,
 )
 from src.signals import (
+    IC_HORIZON, MOMENTUM_LOOKBACK, MOMENTUM_SKIP,
     momentum_signal, forward_returns, daily_ic, ic_summary,
     fundamental_law_ir, effective_breadth,
 )
 from src.conviction import (
-    load_conviction, AI_CAPEX_BASKET, RECOVERY_HORIZON_DAYS, race_days,
+    load_conviction, AI_CAPEX_BASKET, HORIZONS, RECOVERY_HORIZON_DAYS, race_days,
     race_record,
 )
 
@@ -1361,7 +1364,7 @@ if mode == "Custom shock (sliders)":
     if drawdown_shock != 0:
         # Multiplicative so the year compounds to the labelled drawdown: the
         # additive -0.5/252 compounded to -39%, not the -50% on the slider.
-        shocked_returns = (1 + shocked_returns) * (1 + drawdown_shock / 100) ** (1 / 252) - 1
+        shocked_returns = (1 + shocked_returns) * (1 + drawdown_shock / 100) ** (1 / TRADING_DAYS) - 1
     if vol_shock != 0:
         m = shocked_returns.mean()
         shocked_returns = m + (shocked_returns - m) * (1 + vol_shock / 100)
@@ -1400,7 +1403,7 @@ def run_monte_carlo(rets: pd.DataFrame, w: np.ndarray, jump: bool) -> dict:
     EVERY widget click anywhere on the page, for every visitor. ~0.2MB per
     entry, so the 64-entry cap bounds the cache at roughly 15MB."""
     fn = jump_diffusion_mc if jump else monte_carlo
-    return fn(rets, w, n_simulations=N_PATHS, horizon_days=252)
+    return fn(rets, w, n_simulations=N_PATHS, horizon_days=TRADING_DAYS)
 
 
 # The same rule for the other pure functions of (data, settings) a new visitor
@@ -1432,7 +1435,7 @@ mc = run_monte_carlo(shocked_returns, np.asarray(sim_weights, dtype=float), use_
 _audit("Stress scenario", scenario_label or
       (f"Custom shock (drawdown {drawdown_shock:+d}%, vol {vol_shock:+d}%)"
        if is_shocked else "None (base case)"))
-_audit("Monte Carlo", f"{engine}, {mc['n_simulations']:,} paths x 252 days -> CVaR {mc['cvar']:.2%}")
+_audit("Monte Carlo", f"{engine}, {mc['n_simulations']:,} paths x {mc['horizon_days']} days -> CVaR {mc['cvar']:.2%}")
 
 # ---- Liquidity-adjusted tail ----
 # The CVaR above assumes you're out at the horizon. Widen it for the days it
@@ -1683,7 +1686,8 @@ _book_size = _bk1.number_input(
          "out - not because they got worse, but because you can no longer "
          "leave them.")
 _book_part = _bk2.slider(
-    "Max daily participation (% of volume)", 5, 50, 20, step=5, key="book_part",
+    "Max daily participation (% of volume)", 5, 50,
+    round(DEFAULT_PARTICIPATION * 100), step=5, key="book_part",
     help="How much of a name's daily dollar volume you would be before your own "
          "trading moves the price. Risk desks use ~10-20%.") / 100
 _bk3, _bk4 = st.columns(2)
@@ -1904,8 +1908,8 @@ with tab_watch:
                 # under a short book's heading.
                 pr_before, pr_after = -pr_before, -pr_after
             cv_b, cv_a = cvar(pr_before), cvar(pr_after)
-            vol_b = float(pr_before.std() * np.sqrt(252))
-            vol_a = float(pr_after.std() * np.sqrt(252))
+            vol_b = float(pr_before.std() * np.sqrt(TRADING_DAYS))
+            vol_a = float(pr_after.std() * np.sqrt(TRADING_DAYS))
 
             panel_head("Defensive simulation",
                        f"Cut {pick_a} & {pick_b} by up to 15pts each, "
@@ -2009,8 +2013,8 @@ with tab_breakdown:
 
     panel_head("Risk-adjusted performance", "Sharpe vs the real T-bill rate")
     rf = load_risk_free_rate()
-    ann_ret = float(port_returns.mean()) * 252
-    ann_vol = float(port_returns.std()) * np.sqrt(252)
+    ann_ret = float(port_returns.mean()) * TRADING_DAYS
+    ann_vol = float(port_returns.std()) * np.sqrt(TRADING_DAYS)
     # Unlevered book (base_weights): on the vol-targeted weights Sharpe was
     # (L*mu - rf)/(L*sigma) - idle cash at 0, borrowing free - so the slider
     # moved it 1.615 -> 0.975 for the same strategy. With cash and financing at
@@ -2090,8 +2094,8 @@ with tab_breakdown:
         st.caption(
             f"Merton jump-diffusion: the engine flagged **{jp['n_jumps']} jump days** "
             f"in {jp['n_days']} (moves beyond {jp['k']:.0f}σ), implying "
-            f"**~{jp['lambda_daily'] * 252:.1f} jumps/year** on a diffusion vol of "
-            f"{jp['sigma_d'] * np.sqrt(252):.0%}. Poisson jumps let the tail run "
+            f"**~{jp['lambda_daily'] * TRADING_DAYS:.1f} jumps/year** on a diffusion vol of "
+            f"{jp['sigma_d'] * np.sqrt(TRADING_DAYS):.0%}. Poisson jumps let the tail run "
             "further than any day in the sample; switch the return model to the "
             "bootstrap to compare the two tails on this book."
         )
@@ -2103,7 +2107,7 @@ with tab_breakdown:
     with st.expander("Deep dive - model validation & factor structure"):
         # --- VaR methods + backtest (validates the model, not just reports it) ---
         panel_head("Value at Risk - methods & backtest", "The daily loss line, and whether it holds up")
-        hist_var = float(-np.percentile(port_returns, 5))
+        hist_var = var(port_returns)
         bt = var_backtest(port_returns)
         _chr = bt.get("christoffersen", {})
         # Two dimensions, two words. Kupiec answers "how many?", Christoffersen
@@ -2319,7 +2323,7 @@ engine_txt = (
     if use_jd else "bootstrap Monte Carlo, resampled from"
 )
 st.caption(
-    f"Methodology: {mc['n_simulations']:,}-path {engine_txt} {source_txt}, over a 252-day horizon. "
+    f"Methodology: {mc['n_simulations']:,}-path {engine_txt} {source_txt}, over a {mc['horizon_days']}-day horizon. "
     f"{alloc_label.capitalize()} allocation{lev_txt}."
 )
 
@@ -2456,7 +2460,7 @@ with tab_balance:
                 bv_rets = _bv_anchor_returns(",".join(sorted(loaded)))
             except Exception:  # noqa: BLE001 - offline: universe only
                 bv_rets = returns
-            vols = returns.std() * np.sqrt(252)
+            vols = returns.std() * np.sqrt(TRADING_DAYS)
             flyer = st.selectbox(
                 "High-flyer (Circle 1 - the volatile conviction position)",
                 loaded, index=loaded.index(vols.idxmax()),
@@ -2734,10 +2738,12 @@ with tab_conviction:
         h3.metric("Median crash depth", f"{ctab['depth'].median():.0%}")
 
         panel_head("What a buyer actually got", "Crisis by crisis, best day vs. worst day to buy")
-        show = ctab.copy()
-        show.columns = ["Crisis", "Trough date", "Crash depth",
-                        "Peak buy, 1y later", "Trough buy, 1y later",
-                        "Peak buy, 3y later", "Trough buy, 3y later"]
+        # By key, not position: a reordered table can never put one entry's
+        # returns under the other's heading.
+        show = ctab.rename(columns={
+            "crisis": "Crisis", "trough_date": "Trough date", "depth": "Crash depth",
+            **{f"{e}_{h}": f"{e.capitalize()} buy, {h}"
+               for e in ("peak", "trough") for h in HORIZONS}})
         show = show[["Crisis", "Trough date", "Crash depth",
                      "Trough buy, 1y later", "Trough buy, 3y later",
                      "Peak buy, 1y later", "Peak buy, 3y later"]]
@@ -2870,7 +2876,8 @@ with tab_liquidity:
         help="Total dollars invested. Position sizes - and so the days to unwind "
              "them - scale from this.")
     participation = lc2.slider(
-        "Max daily participation (% of ADV)", 5, 50, 20, step=5,
+        "Max daily participation (% of ADV)", 5, 50,
+        round(DEFAULT_PARTICIPATION * 100), step=5,
         help="How much of a name's average daily dollar volume you'll be before "
              "your own trading moves the price. Risk desks use ~10–20%.") / 100
 
@@ -2898,13 +2905,20 @@ with tab_liquidity:
         elif np.isfinite(lv["lvar"]):
             d1, d2 = st.columns(2)
             d1.metric("Headline CVaR (95%)", f"{lv['cvar']:.1%}")
+            # The delta stays short: st.metric keeps it on one line and cuts it
+            # with an ellipsis, and "+0% relative, for the unwind" was cut on a
+            # 360px phone (device check, Live audit 2026-10-22). What it is
+            # relative to lives in the help.
             d2.metric("Liquidity-adjusted CVaR", f"{lv['lvar']:.1%}",
-                      delta=f"+{(lv['multiplier'] - 1):.0%} relative, for the unwind",
-                      delta_color="inverse")
+                      delta=f"+{(lv['multiplier'] - 1):.0%} relative",
+                      delta_color="inverse",
+                      help="The change is relative to the headline CVaR: +2% means "
+                           "1.02 times it, the extra tail for the unwind at this "
+                           "book size and participation.")
             read_me(
                 "<b>The tail you can't trade out of.</b> The headline CVaR "
                 "assumes you're flat at the horizon. This widens it by "
-                "√(1 + exit-days/252) - the Basel liquidity-horizon convention - "
+                f"√(1 + exit-days/{TRADING_DAYS}) - the Basel liquidity-horizon convention - "
                 "to cover the extra days the market can move against you while "
                 "you're still unwinding. Prices market exposure over the unwind, "
                 "not the spread you pay to trade. A one-day-liquid book is barely "
@@ -3070,13 +3084,14 @@ with tab_signals:
         st.caption(
             "The information coefficient (IC) is the daily cross-sectional Spearman "
             "rank correlation between a signal's ranking of this universe and the "
-            "forward returns that actually followed. Demo signal: 60-day momentum "
-            "skipping the most recent 5 days (to avoid short-term reversal), scored "
-            "against 5-day forward returns - computed from the same live price "
+            "forward returns that actually followed. Demo signal: "
+            f"{MOMENTUM_LOOKBACK}-day momentum skipping the most recent "
+            f"{MOMENTUM_SKIP} days (to avoid short-term reversal), scored against "
+            f"{IC_HORIZON}-day forward returns - computed from the same live price "
             "history as everything above."
         )
     try:
-        SIG_HORIZON = 5
+        SIG_HORIZON = IC_HORIZON
         ic = cached_signal_ic(prices, SIG_HORIZON)
         summ = ic_summary(ic)
 
@@ -3109,9 +3124,9 @@ with tab_signals:
                 f"In-sample, this momentum signal's mean IC of "
                 f"{summ['mean_ic']:+.3f} (t = {t:.2f}, scored over "
                 f"{summ['n_days']} days) **{bar_txt}**. One honest caveat on "
-                f"t itself: daily ICs against a 5-day forward window overlap, "
+                f"t itself: daily ICs against a {SIG_HORIZON}-day forward window overlap, "
                 f"so consecutive ICs are autocorrelated and this iid-style t "
-                f"is inflated (by up to roughly sqrt(5) in the worst case) - "
+                f"is inflated (by up to roughly sqrt({SIG_HORIZON}) in the worst case) - "
                 f"treat the bars as optimistic, not exact."
             )
 
@@ -3138,7 +3153,7 @@ with tab_signals:
             )
 
             panel_head("Grinold's fundamental law", "IR = IC × √breadth")
-            rebalances = 252 / SIG_HORIZON
+            rebalances = TRADING_DAYS / SIG_HORIZON
             raw_breadth = len(loaded) * rebalances
             n_eff = effective_breadth(returns)
             eff_breadth = n_eff * rebalances

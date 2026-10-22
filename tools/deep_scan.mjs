@@ -482,13 +482,16 @@ async function bookState() {
 await step('the book', async () => {
   // "n of N names hold a position worth keeping" counts the LIQUIDITY gate:
   // an eligible name can still be left out for ranking below the cut, so
-  // leaders + anchors <= eligible <= cards, and N is every card on screen.
+  // leaders + anchors <= eligible <= N. N is the visitor's own names (ME-08):
+  // an outside anchor's card is on screen but not one of them, so it counts
+  // in neither N nor the anchors that must fit inside the eligible names.
   const counts = b => (b.head.match(/(\d+) of (\d+) names/) || []).slice(1).map(Number);
+  const own = b => b.total - b.outside, ownAnchors = b => b.anchors - b.outside;
   const cards = b => `cards: ${b.leads} lead, ${b.anchors} anchor, ${b.out} left out, ${b.outside} from outside`;
   const b0 = await bookState();
   const [e0, n0] = counts(b0);
   ok(b0.total > 0, 'book: dossier cards render', cards(b0));
-  ok(n0 === b0.total && b0.leads + b0.anchors <= e0 && e0 <= n0, 'book: the headline counts agree with the cards',
+  ok(n0 === own(b0) && b0.leads + ownAnchors(b0) <= e0 && e0 <= n0, 'book: the headline counts agree with the cards',
      `${b0.head.slice(0, 70)} | ${cards(b0)}`);
   const size = page.locator('input[aria-label="Book size ($)"]').first();
   await size.scrollIntoViewIfNeeded();
@@ -502,7 +505,7 @@ await step('the book', async () => {
     const [e, n] = counts(b);
     const $v = '$' + Number(v).toLocaleString('en-US');
     ok(e <= prevElig, `book: at ${$v} names only leave, never join`, `${prevElig} -> ${e} eligible`);
-    ok(n === b.total && b.leads + b.anchors <= e, `book: headline still agrees with the cards at ${$v}`, cards(b));
+    ok(n === own(b) && b.leads + ownAnchors(b) <= e, `book: headline still agrees with the cards at ${$v}`, cards(b));
     prevElig = e;
   }
   await size.fill('1000000'); await size.press('Enter'); await settle();

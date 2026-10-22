@@ -3372,7 +3372,8 @@ def test_a_stranger_cannot_park_files_in_server_memory():
 
 def test_every_pip_audit_exception_is_unreachable_and_expires():
     """2026-10-20: 8 Pillow CVEs (crafted PDF/GIF/PPM/TIFF/EPS files) made the
-    Live audit's pip_audit red. Streamlit caps Pillow below 13 in every release
+    Live audit's pip_audit red, and 16 more Pillow CVEs on 2026-10-22 (24 in
+    all, every one fixed only in Pillow 13.0.0). Streamlit caps Pillow below 13 in every release
     up to 1.66, so the fix (13.0) cannot be installed; John chose to skip those
     IDs rather than leave the gate red. The skip holds only while the app opens
     no image a visitor supplies, and only while the fix is out of reach - this
@@ -3442,8 +3443,20 @@ def test_a_crafted_clear_cache_message_clears_nothing():
     impl = [n for n in tree.body if isinstance(n, ast.FunctionDef)
             and n.name == getattr(patch[0].value, "id", None)]
 
-    class Session(AppSession):
-        """A subclass, so the real class is never patched by the test."""
+    # main.py patches the real AppSession class for the whole process, so after
+    # any page boot in this process the class already carries the no-op and
+    # the control below failed (ME-10: order-dependent). The control runs on a
+    # pristine copy of Streamlit's own module, loaded under a private name, so
+    # it holds whatever ran before it - and the real class is never touched.
+    import importlib.util
+    import streamlit.runtime.app_session as _app_session_mod
+    spec = importlib.util.spec_from_file_location("_pristine_app_session",
+                                                  _app_session_mod.__file__)
+    pristine = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(pristine)
+
+    class Session(pristine.AppSession):
+        """A subclass of a fresh copy, so no real class is patched by the test."""
 
         def __del__(self):  # the stub never started, so there is nothing to shut down
             pass
@@ -4081,7 +4094,9 @@ def test_market_drawdown_shock_compounds_to_the_labelled_drawdown():
            and ast.unparse(n.test) == "drawdown_shock != 0"]
     assert len(ifs) == 1, "the drawdown-shock step moved"
     for shock in (-50, -30, -5):
+        from src.covariance import TRADING_DAYS
         ns = _exec_nodes(ifs[0].body, {"np": np, "drawdown_shock": shock,
+                                       "TRADING_DAYS": TRADING_DAYS,
                                        "shocked_returns": pd.DataFrame(np.zeros((252, 2)))})
         grown = (1 + ns["shocked_returns"]).prod()
         assert np.allclose(grown, 1 + shock / 100), \
@@ -5019,6 +5034,60 @@ def test_the_balance_tab_ranks_and_sizes_a_pair_on_one_risk_matrix():
     assert cap, "Balance caption missing"
     assert f"**{best}**" in cap[0] and f"{corr:+.2f}" in cap[0], (best, f"{corr:+.2f}", cap[0])
     assert "EWMA" in cap[0], f"the caption does not name its risk matrix: {cap[0]}"
+
+
+# --- ME-10 (2026-10-22): one way to do each thing ---
+
+def test_trading_days_per_year_is_defined_once():
+    """ME-03 (2026-10-22): TRADING_DAYS = 252 was defined in three modules
+    and ~40 bare 252s stood beside them - one number, many places to drift.
+    It lives in src.covariance; every other module imports it."""
+    import ast
+    root = pathlib.Path(__file__).resolve().parent.parent
+    defs, bare = [], []
+    for f in sorted((root / "src").glob("*.py")) + [root / "main.py"]:
+        tree = ast.parse(f.read_text(encoding="utf-8"))
+        the_one = set()
+        for n in ast.walk(tree):
+            if isinstance(n, ast.Assign) and any(
+                    isinstance(t, ast.Name) and t.id == "TRADING_DAYS" for t in n.targets):
+                defs.append(f.name)
+                the_one.add(id(n.value))
+        for n in ast.walk(tree):
+            if (isinstance(n, ast.Constant) and id(n) not in the_one and type(n.value) in (int, float)
+                    and n.value in (252, 756)):
+                bare.append(f"{f.name}:{n.lineno}")
+    assert defs == ["covariance.py"], f"TRADING_DAYS defined in {defs}"
+    assert not bare, f"bare trading-day counts: {bare}"
+
+
+def test_there_is_one_expected_shortfall_and_it_skips_missing_days():
+    """ME-03 (2026-10-22): risk.cvar and pairing.expected_shortfall were two
+    copies of one estimator, and only one dropped missing days - the other
+    returned nan on a series with a gap."""
+    from src.pairing import expected_shortfall
+    rng = np.random.default_rng(9)
+    r = pd.Series(rng.standard_t(4, 600) * 0.01)
+    gappy = r.copy()
+    gappy.iloc[::50] = np.nan
+    assert np.isfinite(cvar(gappy)), "cvar read a missing day as nan"
+    assert cvar(gappy) == cvar(gappy.dropna())
+    for c in (0.95, 0.975, 0.99):
+        assert expected_shortfall(gappy, c) == cvar(gappy, c)
+
+
+def test_the_jump_calibration_uses_the_unbiased_sample_variance():
+    """ME-10 (2026-10-22): calibrate_jump_diffusion is a thresholded method of
+    moments - each part's mean and spread read off its own days - not a
+    Gaussian MLE, so the unbiased (n-1) sample variance is the estimator. Its
+    ddof=0 understated the variance by (n-1)/n: ~7% on a 15-day crisis
+    window, which moved the headline CVaR +1.20 points there (+0.28 on 52
+    days, +0.06 on two years; Monte Carlo s.e. ~0.25)."""
+    from src.risk import calibrate_jump_diffusion
+    lr = np.log1p(np.linspace(-0.01, 0.01, 15))        # 15 calm days, no jumps
+    p = calibrate_jump_diffusion(np.expm1(lr))
+    assert p["n_jumps"] == 0
+    assert abs(p["sigma_d"] ** 2 - lr.var(ddof=1)) < 1e-15, (p["sigma_d"] ** 2, lr.var(ddof=1))
 
 
 if __name__ == "__main__":

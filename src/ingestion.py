@@ -681,6 +681,8 @@ def data_health(prices: pd.DataFrame) -> dict:
     today = pd.Timestamp.now().normalize()
     staleness_days = int(np.busday_count(last_date.date(), today.date()))
 
+    # Weekday holes INCLUDING holidays; data_quality's calendar check asks the
+    # other question (what is missing beyond US federal holidays).
     full_span = pd.bdate_range(prices.index[0], prices.index[-1])
     gap_days = int(len(full_span) - len(prices))
 
