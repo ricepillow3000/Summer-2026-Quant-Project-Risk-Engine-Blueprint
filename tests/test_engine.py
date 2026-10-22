@@ -4469,6 +4469,74 @@ def test_the_glide_respects_reduced_motion():
         "the CSS smooth-scroll fallback must stand down under reduced motion too"
 
 
+def test_every_button_wears_one_focus_ring_that_clears_3_to_1_on_its_ground():
+    """ME-04 (2026-10-22): the CTAs wore a square 2px bronze outline, while
+    the skip link and the footer boxes fell back to Streamlit's rounded
+    box-shadow ring. The bronze outline measured 2.82:1 on the dark band
+    ("See the crisis record"), under the 3:1 a focus indicator needs (WCAG 2.2
+    1.4.11). One rule now draws every in-page link's ring, in a tone chosen by
+    the ground: the dark text bronze on beige, the light one on the charcoal
+    bands. tools/cta_style_check.mjs measures the same thing from pixels."""
+    import re as _re
+    root = pathlib.Path(__file__).resolve().parent.parent
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    rule = next((m for m in _re.finditer(r"([^{}]*:focus-visible[^{}]*)\{([^}]*)\}", css)
+                 if "--ring" in m.group(2)), None)
+    assert rule, "no shared focus rule drawing var(--ring)"
+    sel, body = rule.group(1), rule.group(2)
+    for who in ("a.cta-btn", "a.cta-link", ".f-box"):
+        assert who in sel, f"{who} does not share the focus ring"
+    assert _re.search(r"outline:\s*2px solid var\(--ring\)", body), body
+    assert _re.search(r"box-shadow:\s*none", body), "Streamlit's box-shadow ring must stand down"
+    rings = dict((s.strip(), c) for s, c in
+                 _re.findall(r"([^{}]+)\{[^}]*--ring:\s*(#[0-9A-Fa-f]{6})", css))
+    light = next(c for s, c in rings.items() if ":root" in s)
+    dark = next(c for s, c in rings.items() if ".meleona-footer" in s and ".showcase-row" in s)
+    for ground in ("#EDE9E3", "#E9E4DB", "#D4CDBF"):
+        assert _contrast(light, ground) >= 3, f"ring {light} on {ground}: {_contrast(light, ground):.2f}:1"
+    assert _contrast(dark, "#3F3B35") >= 3, f"ring {dark} on the band: {_contrast(dark, '#3F3B35'):.2f}:1"
+    old = _re.search(r"a\.cta-btn:focus-visible,\s*\.stButton>button:focus-visible,\s*"
+                     r"\[data-baseweb=\"tab\"\]:focus-visible\s*\{([^}]*)\}", css)
+    assert not old or "#9A7B4F" not in old.group(1), "the 2.82:1 bronze outline is still drawn on CTAs"
+
+
+def test_the_outlier_links_and_marks_now_match_their_siblings():
+    """ME-04 (2026-10-22), each one a measured outlier: the skip link was
+    styled inline (no hover, an arrow that never drew, no launch), footer 01
+    and 02 landed on the same spot on a desktop (the two halves of one row),
+    the skip link promised "the risk map" while landing on whichever tab was
+    open, the Data Quality tab was the only bright colour on the page (colour
+    emoji), and Streamlit's sans-serif link icon sat on the serif headings."""
+    import re as _re
+    root = pathlib.Path(__file__).resolve().parent.parent
+    src = (root / "main.py").read_text(encoding="utf-8")
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    skip = _re.search(r"<a href=\"#analysis\"[^>]*>", src).group(0)
+    assert 'class="cta-link"' in skip and "style=" not in skip, skip
+    assert "risk map" not in src[src.index('href="#analysis"'):][:400].lower(), \
+        "the skip link lands on the analysis tabs, whichever is open - it must not promise the map"
+    for state in (".cta-link:hover", ".cta-link:hover .cta-arrow .shaft", ".cta-link.is-launching .cta-arrow"):
+        assert state in css, f"the skip link has no {state} rule"
+    assert "a.querySelector('.cta-arrow')" in src, "every link with an arrow launches it"
+    footer = src[src.index('<div class="meleona-footer">'):]
+    targets = _re.findall(r'class="f-box" href="#([\w-]+)"', footer)
+    assert len(set(targets)) == 3, targets
+    assert not {"grit-showcase", "conviction"} <= set(targets), \
+        "#grit-showcase and #conviction share one row: two footer boxes landed on one spot"
+    for emoji in ("✅", "⚠️", "❌"):
+        assert emoji not in src, f"colour emoji {emoji} on the page"
+    assert _re.search(r'\[data-testid="stHeaderActionElements"\]\s*\{[^}]*visibility:\s*hidden', css), \
+        "Streamlit's sans-serif heading link icon still shows on the serif headings"
+    assert _re.search(r"\.conv-core\s*>\s*\.cta-btn\s*\{[^}]*align-self:\s*flex-start", css), \
+        "the crisis-record button still stretches across its column"
+    # one effective rule set: every .cta-btn rule that only ever lost to a
+    # later !important layer is gone
+    assert len(_re.findall(r"(?m)^\.cta-btn \{", css)) == 1, "dead .cta-btn layers remain"
+    assert len(_re.findall(r"(?m)^\.cta-btn:hover \{", css)) == 1, "dead .cta-btn:hover layers remain"
+    assert ".cta-btn::before" not in css.replace("#boot-skel .cta-btn::before", ""), \
+        "the gloss sheen layer is dead (display:none !important) and should go"
+
+
 def _top_markdown(at) -> list[tuple[int, str]]:
     """(top-level index, body) of every top-level markdown element, in order."""
     return [(i, c.value) for i, c in at.main.children.items()

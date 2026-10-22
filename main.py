@@ -431,8 +431,9 @@ _html("""
     tail = P.__meleonaPressAt - wheelAt < 250;   // a flick still running at the press
     const el = P.getElementById(id);
     if (el) go(a, el); else waitFor(a, id);
-    /* release the arrow so it falls ahead of the page it is pulling */
-    if (a.classList.contains('cta-btn')) {
+    /* release the arrow so it falls ahead of the page it is pulling - every
+       link that carries one, the quiet skip link too */
+    if (a.querySelector('.cta-arrow')) {
       a.classList.remove('is-launching'); void a.offsetWidth;
       a.classList.add('is-launching');
       setTimeout(function () { a.classList.remove('is-launching'); }, 1250);
@@ -1013,11 +1014,10 @@ st.markdown(
     f'<div class="showcase-eyebrow">The Engine</div>'
     f'<h2 class="showcase-title" style="font-size:26px;">Stress-test any '
     f'{"short book" if bearish else "portfolio"}, live</h2>'
-    f'<a href="#analysis" style="display:inline-block;margin-top:10px;'
-    f'font-family:\'Helvetica Neue\',sans-serif;font-size:11px;letter-spacing:.14em;'
-    f'text-transform:uppercase;color:#6A5030;text-decoration:none;'
-    f'border-bottom:1px solid rgba(154,123,79,.4);padding-bottom:2px;">'
-    f'Skip to the risk map<span class="cta-arrow" aria-hidden="true"><svg viewBox="0 0 16 30" fill="none" xmlns="http://www.w3.org/2000/svg"><path class="shaft" d="M8 1 V22" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path class="head" d="M2.5 16.5 L8 22.5 L13.5 16.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a>'
+    # "the analysis", not "the risk map": it lands on the analysis tab strip,
+    # whichever tab the reader left open (ME-04). Styled by .cta-link.
+    f'<a href="#analysis" class="cta-link">'
+    f'Skip to the analysis<span class="cta-arrow" aria-hidden="true"><svg viewBox="0 0 16 30" fill="none" xmlns="http://www.w3.org/2000/svg"><path class="shaft" d="M8 1 V22" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path class="head" d="M2.5 16.5 L8 22.5 L13.5 16.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a>'
     f'</div>',
     unsafe_allow_html=True)
 
@@ -1364,11 +1364,14 @@ with deck_alloc, st.expander("02 · Allocation - how capital is weighted",
     st.caption(f"Risk matrix: {cov_info}.")
     if cov_method == "EWMA":
         st.caption(
-            "⚠️ **Reactive lens.** EWMA spikes on one bad day (≈11-day half-life; "
+            # the palette's warning mark (as in Data Quality), not a yellow emoji
+            '<span class="dq-mark" style="color:#6A5030;font-weight:700;">!</span> '
+            "**Reactive lens.** EWMA spikes on one bad day (≈11-day half-life; "
             "at λ=0.94 about 73% of its weight sits in the last month, and it "
             "takes ~37 trading days to reach 90%). It embodies exactly the panic "
             "[Crisis Conviction] argues against - shown for contrast, so you can see "
-            "how twitchy risk looks, not because the engine recommends reacting."
+            "how twitchy risk looks, not because the engine recommends reacting.",
+            unsafe_allow_html=True,
         )
     acol1, acol2 = st.columns(2)
     method = acol1.radio(
@@ -3043,9 +3046,17 @@ with tab_dq:
         "implausible feed, not a wrong-but-plausible number."
     )
     report = validate_prices(prices)
-    icon = {"PASS": "✅", "WARN": "⚠️", "FAIL": "❌"}
+    # Palette marks, not colour emoji - the emoji were the only bright colours
+    # on the page (ME-04). Each mark is a text tone that clears AA on beige;
+    # the glyph carries the meaning, the weight the urgency. A row, not an
+    # st.caption: Streamlit draws captions at 60% opacity, which would take
+    # the marks (and the results they mark) below AA.
+    mark = {"PASS": '<span class="dq-mark" style="color:#6A5030;">&#10003;</span>',
+            "WARN": '<span class="dq-mark" style="color:#6A5030;font-weight:700;">!</span>',
+            "FAIL": '<span class="dq-mark" style="color:#3F3B35;font-weight:700;">&times;</span>'}
     for c in report["checks"]:
-        st.caption(f"{icon[c['status']]} **{c['check']}** - {c['message']}")
+        st.markdown(f'<div class="dq-row">{mark[c["status"]]} <b>{html.escape(c["check"])}</b>'
+                    f' - {html.escape(c["message"])}</div>', unsafe_allow_html=True)
     verdict_dq = "PASS" if report["passed"] else "FAIL"
     panel_head("Overall data-quality gate", f"This feed: {verdict_dq}")
 
@@ -3323,7 +3334,7 @@ st.markdown("""
   <div class="f-rail">
     <a class="f-box" href="#grit-showcase"><span class="f-num">01</span>The Grit Zone
       <small>Resilience ranked from real drawdowns - recovery, consistency, crisis behavior.</small></a>
-    <a class="f-box" href="#conviction"><span class="f-num">02</span>Crisis Conviction
+    <a class="f-box" href="#crisis-record"><span class="f-num">02</span>Crisis Conviction
       <small>The hardest trade, priced from the actual record of __NCRISES__ named crises.</small></a>
     <a class="f-box" href="#engine"><span class="f-num">03</span>The Engine
       <small>Stress-test any universe live - allocation, scenarios, CVaR verdict.</small></a>

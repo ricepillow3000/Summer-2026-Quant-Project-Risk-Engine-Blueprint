@@ -256,9 +256,9 @@ await step('glide', async () => {
     ['a.cta-btn[href="#crisis-record"]', 'See the crisis record'],
     ['a.cta-btn[href="#the-slice"]', 'From the record to the allocation'],
     ['a.cta-btn[href="#engine"]', 'To the engine'],
-    ['a[href="#analysis"]', 'Skip to the risk map'],
+    ['a[href="#analysis"]', 'Skip to the analysis'],
     ['.meleona-footer a[href="#grit-showcase"]', 'Footer: The Grit Zone'],
-    ['.meleona-footer a[href="#conviction"]', 'Footer: Crisis Conviction'],
+    ['.meleona-footer a[href="#crisis-record"]', 'Footer: Crisis Conviction'],
     ['.meleona-footer a[href="#engine"]', 'Footer: The Engine'],
   ]) { await glideCheck(sel, label); }
 });

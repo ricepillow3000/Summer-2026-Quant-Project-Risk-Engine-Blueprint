@@ -26,9 +26,9 @@ const LINKS = [
   ['a.cta-btn[href="#crisis-record"]', 'See the crisis record'],
   ['a.cta-btn[href="#the-slice"]', 'From the record to the allocation'],
   ['a.cta-btn[href="#engine"]', 'To the engine'],
-  ['a[href="#analysis"]', 'Skip to the risk map'],
+  ['a[href="#analysis"]', 'Skip to the analysis'],
   ['.meleona-footer a[href="#grit-showcase"]', 'Footer 01'],
-  ['.meleona-footer a[href="#conviction"]', 'Footer 02'],
+  ['.meleona-footer a[href="#crisis-record"]', 'Footer 02'],
   ['.meleona-footer a[href="#engine"]', 'Footer 03'],
 ];
 const LOADING = LINKS.slice(0, 5);     // the footer exists only once the run has ended
