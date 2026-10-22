@@ -46,7 +46,7 @@ from src.comovement import (
     defensive_shift, least_correlated_to_pair, cluster_order,
 )
 from src.factors import factor_exposures
-from src.narrative import build_book, headline, Role
+from src.narrative import DEFAULT_PARTICIPATION, build_book, headline, Role
 from src.strategies import risk_contributions, risk_parity_weights, vol_target
 from src.hedge import min_variance_pair, rank_hedges
 from src.pairing import (anchor_rank, backtest_pair, crisis_cushion,
@@ -776,18 +776,18 @@ try:
         st.markdown(f"""<div class="slab"><div class="slab-label">Bought the scariest day</div>
         <div class="slab-num">{round(_t1["pct_positive"] * _t1["n"])} of {_t1["n"]}</div>
         <div class="slab-note">crises were positive one year after the trough
-        - median <b>{_t1["median"]:+.0%}</b>.</div></div>""", unsafe_allow_html=True)
+        - median return <b>{_t1["median"]:+.0%}</b>.</div></div>""", unsafe_allow_html=True)
     with _sl2:
         st.markdown(f"""<div class="slab"><div class="slab-label">Three years on</div>
         <div class="slab-num">{_t3["median"]:+.0%}</div>
-        <div class="slab-note">median gain three years after the scariest day
+        <div class="slab-note">median return three years after the scariest day
         ({round(_t3["pct_positive"] * _t3["n"])} of {_t3["n"]} positive).</div></div>""",
                     unsafe_allow_html=True)
     with _sl3:
         st.markdown(f"""<div class="slab"><div class="slab-label">Worst possible timing</div>
         <div class="slab-num">{round(_p3["pct_positive"] * _p3["n"])} of {_p3["n"]}</div>
-        <div class="slab-note">crises: even a buyer at the pre-crash <b>peak</b>
-        was ahead three years later (median {_p3["median"]:+.0%}).</div></div>""",
+        <div class="slab-note">crises: a buyer at the pre-crash <b>peak</b>
+        was ahead three years later (median return {_p3["median"]:+.0%}).</div></div>""",
                     unsafe_allow_html=True)
     with _sl4:
         st.markdown(f"""<div class="slab"><div class="slab-label">The AI-capex race</div>
@@ -1338,8 +1338,9 @@ with deck_stress, st.expander("03 · Stress test - shock or replay a crisis",
         horizontal=True,
         help="Bootstrap resamples real historical days - it can only replay tails "
              "it has already seen. Jump-diffusion (Merton 1976) adds Poisson jumps "
-             "on top of Gaussian diffusion, generating NEW extremes - deeper crashes "
-             "and jump clusters - for a fatter, more honest tail.")
+             "on top of Gaussian diffusion, so a simulated day can fall further "
+             "than any day in the sample. Switch between the two to compare "
+             "their tails on this book.")
     mode = st.selectbox(
         "Scenario", ["Custom shock (sliders)"] + list(HISTORICAL_REGIMES.keys()),
         help="Custom: set your own drawdown and volatility shock. Or replay the "
@@ -1385,7 +1386,8 @@ else:
     if len(sim_assets) < 2:
         st.warning(f"Too few of your assets traded during {mode}. Try another scenario.")
         st.stop()
-    replay_caption.caption(f"Replaying actual market returns from {shocked_returns.index[0].date()} to {shocked_returns.index[-1].date()}.")
+    _verb = "Calibrating to" if engine.startswith("Jump") else "Replaying"  # nothing replays under JD
+    replay_caption.caption(f"{_verb} actual market returns from {shocked_returns.index[0].date()} to {shocked_returns.index[-1].date()}.")
     idx = [loaded.index(a) for a in sim_assets]
     sim_weights = weights[idx]
     sim_weights = sim_weights / sim_weights.sum() * weights.sum()  # preserve exposure
@@ -1438,12 +1440,14 @@ _audit("Monte Carlo", f"{engine}, {mc['n_simulations']:,} paths x 252 days -> CV
 
 # ---- Liquidity-adjusted tail ----
 # The CVaR above assumes you're out at the horizon. Widen it for the days it
-# actually takes to unwind at 20% of real daily volume (default $1M book). The
+# actually takes to unwind at DEFAULT_PARTICIPATION of real daily volume, for
+# a HEADLINE_BOOK book - named in the sentence, since the days turn on it. The
 # interactive version lives in the Liquidity tab; this is the headline default.
+HEADLINE_BOOK = 1_000_000
 try:
     _adv = load_adv(tuple(tickers)).reindex(loaded).fillna(0.0)
-    _dtl = days_to_liquidate(weights, _adv, book_value=1_000_000,
-                             participation_rate=0.20)
+    _dtl = days_to_liquidate(weights, _adv, book_value=HEADLINE_BOOK,
+                             participation_rate=DEFAULT_PARTICIPATION)
     lvar = liquidity_adjusted_cvar(mc["cvar"],
                                    liquidity_profile(_dtl)["full_exit_days"])
 except Exception:  # noqa: BLE001 - headline must still render if volume feed is down
@@ -1458,11 +1462,16 @@ _tail = (f"loses an average of <b>{mc['cvar']:.1%}</b>" if mc["cvar"] > 0 else
          f"still ends up an average of <b>{-mc['cvar']:+.1%}</b> - this window gives "
          f"the book no tail loss to measure")
 if scenario_label:
+    # Jump-diffusion replays nothing: it fits a model to the window. Either
+    # way the N-day window becomes a year, and the sentence says so.
     verdict = (
+        f"With a jump-diffusion model calibrated to the actual returns of "
+        f"{scenario_label} ({len(shocked_returns)} trading days) and run for a "
+        f"year, " if use_jd else
         f"Replaying the actual returns of {scenario_label} "
-        f"({len(shocked_returns)} trading days), {alloc_art} {alloc_label} portfolio{lev_txt} "
-        f"{_tail} in the worst 5% of simulated years."
-    )
+        f"({len(shocked_returns)} trading days), resampled into a year, "
+    ) + (f"{alloc_art} {alloc_label} portfolio{lev_txt} "
+         f"{_tail} in the worst 5% of simulated years.")
     if excluded:
         # Ticker names are user-supplied and this string is rendered with
         # unsafe_allow_html. VALID_TICKER already forbids "<", so this escape
@@ -1493,7 +1502,9 @@ if (mc["cvar"] > 0 and lvar and np.isfinite(lvar["lvar"])
         and lvar["multiplier"] > 1.005):
     verdict += (
         f" Adjusted for the ~<b>{lvar['full_exit_days']:.0f} trading days</b> "
-        f"it takes to fully unwind at 20% of daily volume, that tail widens to "
+        f"it takes to fully unwind a ${HEADLINE_BOOK:,.0f} book at "
+        f"{DEFAULT_PARTICIPATION:.0%} of each name's average daily dollar volume, "
+        f"that tail widens to "
         f"<b>{lvar['lvar']:.1%}</b>."
     )
 
@@ -1538,7 +1549,7 @@ with f_col:
     _se_txt = (f" CVaR sampling error: ±{mc['cvar_se']:.2%} "
                f"({mc['n_simulations']:,} paths, "
                + ("parametric Merton paths" if mc.get("engine") == "jump-diffusion"
-                  else f"resampled in {mc['block_days']}-day blocks so crash weeks stay intact"
+                  else f"resampled in blocks averaging {mc['block_days']} days"
                   if mc.get("block_days", 1) > 1
                   else "resampled day by day (window too short for blocks)")
                + " - a simulated estimate, not an exact truth)."
@@ -1627,9 +1638,9 @@ def eigen_factor_panel(cov, weights, returns) -> None:
         f"{' effective days under EWMA' if cov_method == 'EWMA' else ''}). "
         "Heuristic reference at this universe size, not a hard test - the "
         "Ledoit-Wolf estimator is the production defense against inversion "
-        "noise. Flip the covariance estimator to EWMA in Engine controls to "
-        "see the CURRENT regime's factor structure instead of the 2-year "
-        "average.")
+        "noise. Flip the covariance estimator to EWMA in 02 · Allocation to "
+        "see the CURRENT regime's factor structure instead of the "
+        f"{len(returns)}-trading-day average.")
 
     with st.expander("Factor loadings - how each name anchors onto each factor"):
         ld = fac["loadings"]
@@ -1898,10 +1909,10 @@ with tab_watch:
                        f"move the freed weight into {dest}")
             d1, d2 = st.columns(2)
             d1.metric("Daily CVaR (95%)", f"{cv_a:.2%}",
-                      delta=f"{cv_a - cv_b:+.2%} vs current",
+                      delta=f"{(cv_a - cv_b) * 100:+.2f} points vs current",
                       delta_color="inverse")
             d2.metric("Annualized vol", f"{vol_a:.1%}",
-                      delta=f"{vol_a - vol_b:+.1%} vs current",
+                      delta=f"{(vol_a - vol_b) * 100:+.1f} points vs current",
                       delta_color="inverse")
             verdict_shift = ("reduced" if cv_a < cv_b else
                              "did NOT reduce")
@@ -2031,8 +2042,8 @@ with tab_breakdown:
         "Names are ordered by a correlation tree, so the ones that move "
         "together sit next to each other and each group reads as one block. "
         "Sample: the returns AFTER the stress-test choice above - under a "
-        "crisis replay this matrix is that crisis window, not the full "
-        "two-year history the Correlation Watch tab averages.")
+        "crisis replay this matrix is that crisis window, not the "
+        f"{len(returns)}-trading-day history the Correlation Watch tab averages.")
     corr = correlation_matrix(shocked_returns)
     # Reorder BEFORE the mask and the bold text are built, so both follow the
     # new order. In input order a block of names that move together is
@@ -2078,7 +2089,8 @@ with tab_breakdown:
             f"in {jp['n_days']} (moves beyond {jp['k']:.0f}σ), implying "
             f"**~{jp['lambda_daily'] * 252:.1f} jumps/year** on a diffusion vol of "
             f"{jp['sigma_d'] * np.sqrt(252):.0%}. Poisson jumps let the tail run "
-            "deeper than any single historical day - a fatter, more honest crash."
+            "further than any day in the sample; switch the return model to the "
+            "bootstrap to compare the two tails on this book."
         )
 
     # --- Deep dive: the three statistical-test-heavy panels fold behind one
@@ -2220,7 +2232,7 @@ with tab_breakdown:
                 f"({_tf['threshold_return']:.2%} of the book at today's volatility; "
                 f"{_tf['threshold_z']:.2f} in standardised units), drawn from "
                 f"{_tf_days} trading days "
-                f"(~{_tf_years:.1f} years - the 2-year window used elsewhere leaves too few "
+                f"(~{_tf_years:.1f} years - the {len(returns)}-trading-day window used elsewhere leaves too few "
                 f"exceedances to fit honestly). **ξ = {_xi:+.2f}**{_ci_txt}: {_shape}"
                 + (f" At this ξ the {', '.join(_broken)} of the loss "
                    f"distribution {'is' if len(_broken) == 1 else 'are'} "
@@ -2296,8 +2308,9 @@ with tab_breakdown:
         except Exception as exc:  # noqa: BLE001 - degrade like the panel above
             st.caption(f"Statistical risk factors unavailable: {safe_err('statistical-risk-factors-unavailable', exc)}")
 
-source_txt = f"the {scenario_label} window" if scenario_label else \
-    "2 years of daily historical returns"
+source_txt = f"the {scenario_label} window" if scenario_label else (
+    f"the {len(shocked_returns)} trading days of daily returns loaded "
+    f"({shocked_returns.index[0].date()} to {shocked_returns.index[-1].date()})")
 engine_txt = (
     "Merton jump-diffusion (Poisson jumps on Gaussian diffusion), calibrated to"
     if use_jd else "bootstrap Monte Carlo, resampled from"
@@ -2527,7 +2540,7 @@ with tab_balance:
                 f'</div>'
                 f'<div style="flex:1 1 100%;min-width:0;max-width:980px;margin:0 auto;">'
                 f'<div style="font-family:Georgia;font-size:15px;color:#3F3B35;line-height:1.55;">'
-                f'In the loaded 2-year history, {"shorting" if bearish else "holding"} '
+                f'Over the loaded {bt["n_days"]} trading days, {"shorting" if bearish else "holding"} '
                 f'<b>{flyer}</b> alone fell <b>{bt["max_dd_solo"]:.0%}</b> at its worst'
                 f'{" (a short bleeds when the name rallies - the squeeze)" if bearish else ""}; '
                 f'tethered to {"a correlated long in " if bearish else ""}'
@@ -2710,7 +2723,7 @@ with tab_conviction:
         h1, h2, h3 = st.columns(3)
         h1.metric("Positive 1y after the trough",
                   f"{round(t1['pct_positive'] * t1['n'])} / {t1['n']} crises")
-        h2.metric("Median 1y gain from the trough", f"{t1['median']:+.0%}")
+        h2.metric("Median 1y return from the trough", f"{t1['median']:+.0%}")
         h3.metric("Median crash depth", f"{ctab['depth'].median():.0%}")
 
         panel_head("What a buyer actually got", "Crisis by crisis, best day vs. worst day to buy")
@@ -2879,7 +2892,7 @@ with tab_liquidity:
             d1, d2 = st.columns(2)
             d1.metric("Headline CVaR (95%)", f"{lv['cvar']:.1%}")
             d2.metric("Liquidity-adjusted CVaR", f"{lv['lvar']:.1%}",
-                      delta=f"+{(lv['multiplier'] - 1):.0%} for the unwind",
+                      delta=f"+{(lv['multiplier'] - 1):.0%} relative, for the unwind",
                       delta_color="inverse")
             read_me(
                 "<b>The tail you can't trade out of.</b> The headline CVaR "
@@ -3128,7 +3141,7 @@ with tab_signals:
             g2.metric(f"IR at effective breadth ({eff_breadth:.0f} bets/yr)",
                       f"{fundamental_law_ir(summ['mean_ic'], eff_breadth):.2f}")
             st.caption(
-                f"Raw breadth counts {len(loaded)} names × {rebalances:.0f} "
+                f"Raw breadth counts {len(loaded)} names × {rebalances:.1f} "
                 f"rebalances a year as independent bets, but average pairwise "
                 f"correlation collapses these {len(loaded)} names to about "
                 f"**{n_eff:.1f} independent bets** - correlated stocks are "

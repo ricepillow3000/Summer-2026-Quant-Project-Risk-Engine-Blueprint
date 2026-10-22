@@ -151,7 +151,8 @@ SENTENCES: dict[SentenceKey, str] = {
         "{ticker} carries {final_weight:.1%} of the book and would clear "
         "{exit_bucket} at {participation_rate:.0%} of its quiet-tape volume. "
         "It ranks {momentum_rank} of {n_eligible} eligible names on "
-        "{momentum_lookback}-day return per unit of volatility "
+        "{momentum_lookback}-day return to {momentum_skip} days ago per unit of "
+        "volatility "
         "({momentum_per_vol:+.2f}), and it has a recovery record: grit "
         "{grit_score:.0f} of 100 across {n_universe} names. Paired with "
         "{partner}, whose own tail is {tail_gap:.1%} shallower at ES 97.5."
@@ -160,7 +161,8 @@ SENTENCES: dict[SentenceKey, str] = {
         "{ticker} carries {final_weight:.1%} of the book and would clear "
         "{exit_bucket} at {participation_rate:.0%} of its quiet-tape volume. "
         "It ranks {momentum_rank} of {n_eligible} eligible names on "
-        "{momentum_lookback}-day return per unit of volatility "
+        "{momentum_lookback}-day return to {momentum_skip} days ago per unit of "
+        "volatility "
         "({momentum_per_vol:+.2f}), and it has a recovery record: grit "
         "{grit_score:.0f} of 100 across {n_universe} names. Its anchor "
         "{partner} won the screen on factor independence and steadiness, but "
@@ -170,7 +172,8 @@ SENTENCES: dict[SentenceKey, str] = {
     SentenceKey.FLYER_UNPAIRED: (
         "{ticker} carries {final_weight:.1%} of the book and would clear "
         "{exit_bucket}. It ranks {momentum_rank} of {n_eligible} on "
-        "{momentum_lookback}-day return per unit of volatility "
+        "{momentum_lookback}-day return to {momentum_skip} days ago per unit of "
+        "volatility "
         "({momentum_per_vol:+.2f}). No eligible name cleared the anchor screen "
         "beside it, so it is shown unpaired rather than paired with a name that "
         "did not qualify."
@@ -211,7 +214,8 @@ SENTENCES: dict[SentenceKey, str] = {
     SentenceKey.EXCLUDED_MOMENTUM: (
         "{ticker} clears the liquidity and history gates - it would leave "
         "{exit_bucket}, grit {grit_score:.0f} of 100 - but its "
-        "{momentum_lookback}-day return per unit of volatility is "
+        "{momentum_lookback}-day return to {momentum_skip} days ago per unit of "
+        "volatility is "
         "{momentum_per_vol:+.2f}. It is not rising, so it is not offered as a "
         "high-flyer."
     ),
@@ -219,7 +223,8 @@ SENTENCES: dict[SentenceKey, str] = {
         "{ticker} carries {final_weight:.1%} of the book and would clear "
         "{exit_bucket} at {participation_rate:.0%} of its quiet-tape volume. "
         "It ranks {momentum_rank} of {n_eligible} eligible names on "
-        "{momentum_lookback}-day return per unit of volatility "
+        "{momentum_lookback}-day return to {momentum_skip} days ago per unit of "
+        "volatility "
         "({momentum_per_vol:+.2f}), with grit {grit_score:.0f} of 100 across "
         "{n_universe} names. Nothing in the chosen universe thinned its tail, "
         "so the anchor beside it is {partner}, a defensive holding from "
@@ -235,7 +240,8 @@ SENTENCES: dict[SentenceKey, str] = {
         "than the name beside it."
     ),
     SentenceKey.EXCLUDED_GRIT_FLOOR: (
-        "{ticker} is rising - {momentum_lookback}-day return per unit of "
+        "{ticker} is rising - {momentum_lookback}-day return to {momentum_skip} "
+        "days ago per unit of "
         "volatility {momentum_per_vol:+.2f} - and would leave {exit_bucket}, "
         "but grit {grit_score:.0f} of 100 puts it outside the grittiest half "
         "of the eligible names, and the grit floor is on."
@@ -243,7 +249,8 @@ SENTENCES: dict[SentenceKey, str] = {
     SentenceKey.EXCLUDED_RANK: (
         "{ticker} clears every gate - it would leave {exit_bucket}, grit "
         "{grit_score:.0f} of 100 - and simply did not rank in the top "
-        "{n_flyers} on {momentum_lookback}-day return per unit of volatility."
+        "{n_flyers} on {momentum_lookback}-day return to {momentum_skip} days ago "
+        "per unit of volatility."
     ),
 }
 
@@ -317,6 +324,7 @@ class TickerDossier:
     # narrative
     sentence_key: SentenceKey
     momentum_lookback: int = MOMENTUM_LOOKBACK
+    momentum_skip: int = MOMENTUM_SKIP
 
     def sentence(self) -> str:
         """Render this dossier's one sentence. Pure function of the fields.
@@ -530,7 +538,10 @@ def build_book(prices: pd.DataFrame, dollar_volume: pd.DataFrame,
         # thin the tail, and only if the outsider actually does better.
         if outside and (pick is None or pick[1] <= 0):
             alt = _best_anchor(f, _grittiest_half(outside))
-            if alt is not None and (pick is None or alt[1] > pick[1]):
+            # The outside sentences say "shallower", so an outsider must be
+            # thinner, not merely less deep than the inside pick.
+            if (alt is not None and alt[1] > 0
+                    and (pick is None or alt[1] > pick[1])):
                 external.add(alt[0])
                 pick = alt
         if pick is None:

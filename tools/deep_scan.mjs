@@ -422,10 +422,13 @@ await step('stress test', async () => {
       await settle();
       const sen = await sentence(), v = await verdict();
       const days = (sen.match(/\((\d+) trading days\)/) || [])[1];
-      ok(sen.includes(`Replaying the actual returns of ${sc}`) && /^-?\d+(\.\d+)?%$/.test(v),
+      // The verb follows the engine (ME-07): jump-diffusion replays nothing.
+      const jd = eng.startsWith('Jump');
+      const said = jd ? `calibrated to the actual returns of ${sc}` : `Replaying the actual returns of ${sc}`;
+      ok(sen.includes(said) && /^-?\d+(\.\d+)?%$/.test(v),
          `stress [${eng.split(' ')[0]}]: ${sc} replays and names itself`, `CVaR ${v}, ${days} trading days`
          + (/Excludes/.test(sen) ? `, ${sen.match(/Excludes ([^-]+)-/)?.[1].trim()} excluded and disclosed` : ''));
-      const cap = await page.locator('[data-testid="stCaptionContainer"]', { hasText: 'Replaying actual market returns from' }).first().textContent().catch(() => '');
+      const cap = await page.locator('[data-testid="stCaptionContainer"]', { hasText: jd ? 'Calibrating to actual market returns from' : 'Replaying actual market returns from' }).first().textContent().catch(() => '');
       ok(/\d{4}-\d\d-\d\d to \d{4}-\d\d-\d\d/.test(cap), `stress: ${sc} window shown`, cap.trim());
       await coneAgrees(`${sc}`);
     }
@@ -557,7 +560,7 @@ await step('balance, every flyer', async () => {
     await pick('High-flyer (Circle 1 - the volatile conviction position)', f); await settle();
     const t = await page.evaluate(() => [...document.querySelectorAll('svg text')].map(e => e.textContent).find(s => /^GAP /.test(s)) || '');
     const line = await page.evaluate(() => [...document.querySelectorAll('div')].map(d => d.textContent)
-      .find(s => /^In the loaded 2-year history/.test(s)) || '');
+      .find(s => /^Over the loaded \d+ trading days/.test(s)) || '');
     ok(/^GAP -?\d+(\.\d+)?%$/.test(t) && /cushion/.test(line), `balance: flyer ${f} pairs and measures its cushion`,
        `${t}; ${line.slice(0, 110)}`);
   }

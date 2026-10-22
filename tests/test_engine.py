@@ -3895,7 +3895,8 @@ def test_replay_caption_states_the_dates_actually_replayed():
     replayed returns' own first and last dates."""
     src = (pathlib.Path(__file__).resolve().parent.parent / "main.py"
            ).read_text(encoding="utf-8")
-    lines = [ln for ln in src.splitlines() if "Replaying actual market returns from" in ln]
+    # The verb follows the engine (ME-07): "Replaying" or "Calibrating to".
+    lines = [ln for ln in src.splitlines() if "actual market returns from" in ln]
     assert len(lines) == 1, lines
     assert "shocked_returns.index[0]" in lines[0] and "shocked_returns.index[-1]" in lines[0], (
         f"caption does not print the replayed dates: {lines[0].strip()}")
@@ -4062,7 +4063,12 @@ def test_fan_chart_caption_claims_block_resampling_only_when_it_happened():
     assert "resampled day by day (window too short for blocks)" in iid, iid
     blk = monte_carlo(_clustered_returns(n=800), np.array([1.0]), n_simulations=400)
     assert blk["block_days"] > 1
-    assert f"resampled in {blk['block_days']}-day blocks so crash weeks stay intact" in caption(blk)
+    # A geometric block of mean N keeps nothing intact by construction, so the
+    # caption says what the bootstrap does and claims nothing more (ME-03,
+    # 2026-10-22: the default page printed "2-day blocks so crash weeks stay
+    # intact").
+    assert f"resampled in blocks averaging {blk['block_days']} days" in caption(blk), caption(blk)
+    assert "crash weeks" not in caption(blk), caption(blk)
 
 
 def test_market_drawdown_shock_compounds_to_the_labelled_drawdown():
@@ -4194,7 +4200,7 @@ def _offline_market_prices(tickers=None, period="2y", **_kw):
     return pd.DataFrame(cols, index=idx).iloc[-252 * years:]
 
 
-def _offline_app(setup=None, market=None, rf=0.045):
+def _offline_app(setup=None, market=None, rf=0.045, adv=5e9):
     """Run the real main.py under AppTest on _offline_market_prices (or
     `market`); returns (AppTest, restore). Every src module is imported BEFORE
     patching, so a module-level `from src.ingestion import fetch_prices` is
@@ -4216,7 +4222,7 @@ def _offline_app(setup=None, market=None, rf=0.045):
             5e9, index=market(tickers, period).index,
             columns=list(tickers)),
         "average_dollar_volume": lambda tickers=None, *a, **k: pd.Series(
-            5e9, index=list(tickers or [])),
+            adv, index=list(tickers or [])),
         "fetch_risk_free_rate": lambda *a, **k: rf,
         "provenance": lambda *a, **k: None,
     }
@@ -4735,6 +4741,177 @@ def test_every_browser_pick_checks_the_option_took():
         assert re.search(r"inputValue\(\)[^\n]*!==\s*option", m.group(1)), (
             f"{js.name}: pick() returns without checking the box shows the option")
     assert picks >= 2, f"expected the walk's and the deep scan's pick(), found {picks}"
+
+
+# --- ME-07 (2026-10-22): every sentence follows its numbers ---
+
+def _page_text(at) -> list[str]:
+    """Every sentence a visitor can read on one rendered run, tags stripped."""
+    import re
+    out = [m.value for m in at.markdown] + [c.value for c in at.caption]
+    out += [w.value for w in at.warning] + [i.value for i in at.info]
+    out += [f"{m.label} = {m.value} ({m.proto.delta})" for m in at.metric]
+    return [re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", t)) for t in out]
+
+
+_PAGES = {}
+
+
+def _offline_page(name="default", **boot):
+    """One offline boot per distinct setup, read once and shared by the tests
+    that only read it (each boot costs ~15 s)."""
+    if name not in _PAGES:
+        at, restore = _offline_app(**boot)
+        try:
+            _PAGES[name] = {"text": _page_text(at),
+                            "expanders": [e.label for e in at.expander]}
+        finally:
+            restore()
+    return _PAGES[name]
+
+
+def _crisis_pages():
+    """The COVID replay under each engine, from one boot."""
+    if "crisis" not in _PAGES:
+        at, restore = _offline_app()
+        try:
+            [s for s in at.selectbox if s.label == "Scenario"][0].set_value(
+                "COVID-19 crash (2020)").run()
+            boot = _page_text(at)
+            [r for r in at.radio if r.label == "Return model"][0].set_value(
+                "Jump-diffusion (Merton)").run()
+            radio = [r for r in at.radio if r.label == "Return model"][0]
+            _PAGES["crisis"] = {"bootstrap": boot, "jump": _page_text(at),
+                                "engine_help": radio.help}
+        finally:
+            restore()
+    return _PAGES["crisis"]
+
+
+def _verdict(text):
+    hits = [t for t in text if "1-Year CVaR (95% confidence)" in t]
+    assert len(hits) == 1, hits
+    return hits[0]
+
+
+def test_every_history_length_on_the_page_is_read_from_the_loaded_returns():
+    """ME-03 (2026-10-22): one name listed 120 trading days ago cut the
+    aligned basket to 120 rows - "Data: 120 trading days" - while the
+    Methodology line said "resampled from 2 years of daily historical
+    returns" and the pair panel "In the loaded 2-year history". Five sentences
+    hard-coded the window; each must be read from the loaded returns."""
+    import re
+
+    def young(tickers=None, period="2y", align=True, **_):
+        df = _offline_market_prices(tickers, period)
+        if "V" in df.columns:
+            df.loc[df.index[:-120], "V"] = np.nan
+        return df.dropna() if align else df
+
+    text = _offline_page("young", market=young)["text"]
+    page = " ".join(text)
+    rows = int(re.search(r"Data: (\d+) trading days", page).group(1))
+    assert rows == 120, f"fixture no longer shortens the basket: {rows} rows"
+    for stale in ("2-year", "2 years", "two-year", "two years"):
+        assert stale not in page, f"the page still says {stale!r} over {rows} rows"
+    method = [t for t in text if t.startswith("Methodology:")]
+    assert method and f"{rows - 1} trading days" in method[0], method
+
+
+def test_the_crisis_verdict_names_the_engine_that_made_it():
+    """ME-03 (2026-10-22): under jump-diffusion the verdict still said
+    "Replaying the actual returns of COVID-19 crash (2020) (52 trading days)",
+    yet nothing is replayed - a Merton model is calibrated to the window. And
+    under the bootstrap the 52 days are resampled into a full year, which the
+    sentence did not say."""
+    pages = _crisis_pages()
+    boot, jump = _verdict(pages["bootstrap"]), _verdict(pages["jump"])
+    assert "Replaying the actual returns of COVID-19 crash (2020)" in boot, boot
+    assert "resampled into a year" in boot, boot
+    assert "Replaying" not in jump and "replay" not in jump.lower(), jump
+    assert "calibrated to the actual returns of COVID-19 crash (2020)" in jump, jump
+    cap = [t for t in pages["jump"] if "actual market returns from" in t]
+    assert cap and not cap[0].startswith("Replaying"), cap
+    assert any(t.startswith("Replaying actual market returns from")
+               for t in pages["bootstrap"])
+
+
+def test_the_jump_diffusion_caption_states_its_method_not_a_result():
+    """ME-03 (2026-10-22): "a fatter, more honest crash" was printed whatever
+    the two engines' CVaRs were - a result stated as a fixed sentence. The
+    caption and the engine help describe what the model does, not how its
+    answer compares."""
+    pages = _crisis_pages()
+    jd = [t for t in pages["jump"] if t.startswith("Merton jump-diffusion:")]
+    assert jd, "jump-diffusion caption missing"
+    for said in (jd[0], pages["engine_help"]):
+        for claim in ("fatter", "more honest"):
+            assert claim not in said, f"{claim!r} stated as a fact: {said}"
+
+
+def test_a_difference_of_two_percentages_says_points_and_a_ratio_says_relative():
+    """ME-03 (2026-10-22): the defensive shift read "Annualized vol 17.8%
+    (-2.9% vs current)" for a fall from 20.7% - 2.9 points, a 14% relative
+    cut - and the unwind delta "+0% for the unwind" beside a CVaR in percent
+    was a relative change. A difference of two percentages says points; a
+    ratio says relative."""
+    text = _offline_page()["text"]
+    shift = [t for t in text if t.startswith(("Daily CVaR (95%) =",
+                                              "Annualized vol ="))]
+    assert len(shift) == 2, f"defensive simulation not on the page: {shift}"
+    for t in shift:
+        assert "points vs current" in t, t
+    unwind = [t for t in text if t.startswith("Liquidity-adjusted CVaR =")]
+    assert unwind and "relative" in unwind[0], unwind
+
+
+def test_the_headline_unwind_names_its_book_size_and_participation():
+    """ME-03 (2026-10-22): the verdict widened the tail for "the ~N trading
+    days it takes to fully unwind at 20% of daily volume" without saying the
+    days were for a $1,000,000 book - the one input they turn on - while The
+    Book and the Liquidity tab each let the visitor pick another size."""
+    from src.narrative import DEFAULT_PARTICIPATION
+    v = _verdict(_offline_page("thin volume", adv=5e4)["text"])
+    assert "tail widens to" in v, f"thin volume did not widen the tail: {v}"
+    assert "$1,000,000 book" in v, v
+    assert f"{DEFAULT_PARTICIPATION:.0%} of each name's average daily dollar volume" in v, v
+
+
+def test_a_median_that_can_be_negative_is_called_a_return_not_a_gain():
+    """ME-03 (2026-10-22): the crisis slabs printed "median gain three years
+    after the scariest day" over -21% and "even a buyer at the pre-crash peak
+    was ahead three years later (median -39%)"; the tab's metric read "Median
+    1y gain from the trough = -19%". Words that assume a sign cannot sit on a
+    number that can take either."""
+    import re
+    page = " ".join(_offline_page()["text"])
+    assert re.search(r"median return -\d+%", page), \
+        "fixture no longer shows a negative median"
+    for word in ("median gain", "Median 1y gain", "even a buyer"):
+        assert word not in page, f"{word!r} on the page"
+
+
+def test_the_breadth_label_and_its_caption_quote_the_same_numbers():
+    """ME-03 (2026-10-22): "IR at raw breadth (605 bets/yr)" over a caption
+    "12 names x 50 rebalances a year" - 252/5 = 50.4 was rounded only in the
+    caption, so the two printed products disagreed."""
+    import re
+    page = " ".join(_offline_page()["text"])
+    label = int(re.search(r"IR at raw breadth \((\d+) bets/yr\)", page).group(1))
+    names, reb = re.search(r"Raw breadth counts (\d+) names × ([\d.]+) rebalances",
+                           page).groups()
+    assert round(int(names) * float(reb)) == label, (names, reb, label)
+
+
+def test_the_page_points_only_to_controls_that_exist():
+    """ME-03 (2026-10-22): the factor caption said "Flip the covariance
+    estimator to EWMA in Engine controls"; no control on the page has that
+    name - the estimator lives in the 02 drawer."""
+    page = _offline_page()
+    text = " ".join(page["text"])
+    assert "Engine controls" not in text
+    alloc = [e.split(" - ")[0] for e in page["expanders"] if e.startswith("02 ")]
+    assert alloc and f"to EWMA in {alloc[0]}" in text, alloc
 
 
 if __name__ == "__main__":

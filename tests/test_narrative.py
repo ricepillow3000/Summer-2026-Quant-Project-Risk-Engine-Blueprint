@@ -280,6 +280,58 @@ def test_tail_wording_follows_the_sign_of_the_gap():
             if d.partner is not None:
                 assert d.tail_gap is not None, d.ticker
 
+    # The outside-the-universe templates say "shallower" too, so an outside
+    # anchor may only be brought in when it really is thinner. ME-03
+    # (2026-10-22): one was accepted for merely being LESS deep than the
+    # inside pick and printed "whose own tail is -1.4% shallower".
+    external = {SentenceKey.FLYER_PAIRED_EXTERNAL,
+                SentenceKey.CUSHION_ANCHOR_EXTERNAL}
+    for k in external:
+        assert "shallower" in SENTENCES[k] and "{tail_gap:" in SENTENCES[k]
+    prices, dv = _deeper_everywhere_fixture()
+    for d in build_book(prices, dv, book_value=1e6, fallback_anchors={"DEF"}):
+        if d.sentence_key in external:
+            assert d.tail_gap is not None and d.tail_gap > 0, (
+                f"{d.ticker}: outside anchor with a deeper tail - {d.sentence()}")
+        if d.sentence_key in shallower | external:
+            assert "-" not in d.sentence().split("shallower")[0].split("tail")[-1], \
+                d.sentence()
+
+
+def _deeper_everywhere_fixture():
+    """A calm riser, two wild names and a medium-vol outside holding: every
+    anchor on offer has a DEEPER tail than the calm leader, the outside one
+    only less so."""
+    rng = np.random.default_rng(1)
+    n = 1600
+    idx = pd.bdate_range("2019-01-01", periods=n)
+
+    def path(mu, sig):
+        return 100 * np.exp(np.cumsum(rng.normal(mu, sig, n)))
+    prices = pd.DataFrame({"CALM": path(0.0012, 0.006),
+                           "WILD": path(-0.0005, 0.04),
+                           "WILD2": path(-0.0005, 0.035),
+                           "DEF": path(0.0002, 0.012)}, index=idx)
+    return prices, pd.DataFrame(5e9, index=idx, columns=prices.columns)
+
+
+def test_the_momentum_sentence_names_the_days_it_skips():
+    """momentum_signal measures the 60 days ending 5 days ago, but every
+    sentence said "60-day return", which is a different window (ME-03,
+    2026-10-22). The skip is a constant of the engine, so the sentence reads
+    it from the dossier rather than restating it."""
+    from src.narrative import MOMENTUM_LOOKBACK, MOMENTUM_SKIP
+    for key, tpl in SENTENCES.items():
+        if "{momentum_lookback}-day return" in tpl:
+            assert "{momentum_skip}" in tpl, f"{key.value} hides the skipped days"
+    prices, dv = _book_fixture()
+    said = [d.sentence() for d in build_book(prices, dv, book_value=1e6)
+            if "-day return" in d.sentence()]
+    assert said, "no momentum sentence rendered"
+    for s in said:
+        assert (f"{MOMENTUM_LOOKBACK}-day return to {MOMENTUM_SKIP} days ago"
+                in s), s
+
 
 def test_exit_bucket_boundaries_and_no_collapsed_zero():
     """days_to_exit collapses to "0.00" for a mega-cap at a small book, which
