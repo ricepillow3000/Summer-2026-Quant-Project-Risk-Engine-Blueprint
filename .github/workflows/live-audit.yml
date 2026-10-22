@@ -115,6 +115,30 @@ jobs:
         run: |
           mkdir -p site-shots/devices
           node tools/device_check.mjs http://127.0.0.1:8501 site-shots/devices
+      # Every button glide lands (tools/glide_load_check.mjs): on the settled
+      # page, through a trackpad flick, under a reader's swipe back and a
+      # steady mouse wheel - and pressed while the page is still loading. Each
+      # loading press gets its own cold app: a copy of this checkout with an
+      # empty data/ cache, restarted, on its own port, so the app the other
+      # steps use keeps its cache. (Clearing the cache from the page is not an
+      # option: no visitor control may clear it - SECURITY-LESSONS.md.)
+      - name: 8c. This commit - every button glide lands, settled and mid-load
+        if: always()
+        run: |
+          node tools/glide_load_check.mjs http://127.0.0.1:8501 momentum 2
+          node tools/glide_load_check.mjs http://127.0.0.1:8501 reader 2
+          node tools/glide_load_check.mjs http://127.0.0.1:8501 steady 1
+          node tools/glide_load_check.mjs http://127.0.0.1:8501 rest 2
+          rm -rf /tmp/cold && cp -r . /tmp/cold
+          status=0
+          for b in 1 2 3 4 5; do
+            rm -rf /tmp/cold/data /tmp/cold/logs
+            (cd /tmp/cold && nohup streamlit run main.py --server.port 8502 --server.headless true > /tmp/cold-$b.log 2>&1 &)
+            for i in $(seq 1 60); do curl -sf http://127.0.0.1:8502/_stcore/health >/dev/null && break; sleep 2; done
+            ONLY=$b node tools/glide_load_check.mjs http://127.0.0.1:8502 early 1 || status=1
+            pkill -f "server.port 8502" || true; sleep 2
+          done
+          exit $status
       - name: 9. Deployed site - recruiter walk (informational until this branch is deployed)
         if: always()
         continue-on-error: true

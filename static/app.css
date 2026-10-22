@@ -33,10 +33,16 @@ h1, h2, h3 { color: #3F3B35; font-weight: 400; letter-spacing: -0.01em; }
 /* Sharpen the whole app - kill Streamlit's default rounded corners */
 [data-testid="stExpander"], [data-baseweb="tab"], .stButton>button,
 [data-testid="stMetric"], div[data-baseweb="select"]>div { border-radius: 0 !important; }
+/* Captions: the quiet ink at full strength. Streamlit draws st.caption at
+   60% opacity, so the #524E47 written here reached the page as 2.74-2.77:1
+   (screenshot pixels, ME-13). A lighter tone at opacity 1 keeps the quiet
+   look and clears 4.5:1 on every beige ground (4.5 page - 6.2 tile). */
 .stCaption, [data-testid="stCaptionContainer"],
 [data-testid="stCaptionContainer"] p, [data-testid="stCaptionContainer"] div {
-    font-size: 13.5px !important; color: #524E47 !important; line-height: 1.5 !important; }
-[data-testid="stMetricLabel"] p { font-size: 11px !important; color: #ABA499 !important;
+    font-size: 13.5px !important; color: #5D574D !important; line-height: 1.5 !important;
+    opacity: 1 !important; }
+/* Metric labels: #ABA499 measured 2.14-2.17:1 on their tiles (ME-13). */
+[data-testid="stMetricLabel"] p { font-size: 11px !important; color: #5D574D !important;
     letter-spacing: 0.14em !important; text-transform: uppercase !important; }
 [data-testid="stMetricValue"] { font-family: Georgia, serif !important;
     color: #3F3B35 !important; letter-spacing: -0.01em; }
@@ -984,10 +990,9 @@ body:has([data-testid="stStatusWidgetRunningIcon"])::after { content: "Updating\
 .cta-btn:active { background-color: #8A6A3C !important; }
 
 /* A CTA sitting ON the dark showcase band needs the inverse treatment. The
-   default .cta-btn is a charcoal gradient (#4A453D -> #3A362F) built for the
-   beige field; against the band's own #3F3B35 that is barely eleven points of
-   luminance apart - invisible, the same complaint as a transparent button on
-   beige, just mirrored. This variant inverts to solid bronze with dark type,
+   default .cta-btn is a flat charcoal slab (#3F3B35) built for the beige
+   field; on the band's own #3F3B35 it would vanish - the same complaint as a
+   transparent button on beige, just mirrored. This variant inverts to solid bronze with dark type,
    which is the highest-contrast pairing available inside the palette.
    Rule: choose the variant by the BACKGROUND the button sits on. */
 .cta-btn.on-dark {

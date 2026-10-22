@@ -2675,6 +2675,62 @@ def _contrast(fg: str, bg: str) -> float:
     return (max(a, b) + 0.05) / (min(a, b) + 0.05)
 
 
+def _blend(fg: str, bg: str, opacity: float) -> str:
+    """The colour a visitor sees: fg drawn at `opacity` over bg, as #rrggbb."""
+    f = [int(fg[i:i + 2], 16) for i in (1, 3, 5)]
+    g = [int(bg[i:i + 2], 16) for i in (1, 3, 5)]
+    return "#" + "".join(f"{round(opacity * a + (1 - opacity) * b):02X}" for a, b in zip(f, g))
+
+
+# Streamlit 1.62 draws st.caption at opacity 0.6 (computed on the page,
+# 2026-10-22); app.css must override it or the blend below is what ships.
+STREAMLIT_CAPTION_OPACITY = 0.6
+
+
+def test_captions_and_small_labels_clear_aa_after_their_opacity():
+    """ME-13 (2026-10-22): the stylesheet said captions were #524E47 - 6.5:1 on
+    the panel - and test_text_colours_meet_wcag_aa agreed. The page drew them
+    at Streamlit's 60% opacity: measured from screenshot pixels, every caption
+    read 2.74-2.77:1 at 1440px and 390px (tools/caption_contrast_check.mjs).
+    The metric labels (#ABA499) read 2.14-2.17:1 on their beige tiles; the
+    older test excused them because the same colour clears 4.5:1 on charcoal,
+    a ground they never sit on. Text sizes here are body or smaller, so 4.5:1,
+    after opacity, on every beige ground."""
+    import re as _re
+    css = (pathlib.Path(__file__).resolve().parent.parent / "static" / "app.css").read_text(encoding="utf-8")
+    grounds = ("#D4CDBF", "#E9E4DB", "#EDE9E3", "#F3EFE6")   # page, panel, column, metric tile
+
+    def rules(token):
+        return [(s, b) for s, b in _re.findall(r"([^{}]+)\{([^}]*)\}", css) if token in s]
+
+    def colour(token):
+        found = [m.group(1) for _, b in rules(token)
+                 for m in [_re.search(r"(?<![-\w])color:\s*(#[0-9A-Fa-f]{6})", b)] if m]
+        assert found, f"no colour set for {token}"
+        return found[-1]
+
+    def opacity(token, default):
+        found = [float(m.group(1)) for _, b in rules(token)
+                 for m in [_re.search(r"(?<![-\w])opacity:\s*([\d.]+)", b)] if m]
+        return found[-1] if found else default
+
+    checks = {
+        "caption": (colour("stCaptionContainer"), opacity("stCaptionContainer", STREAMLIT_CAPTION_OPACITY)),
+        "metric label": (colour('[data-testid="stMetricLabel"] p'), opacity('[data-testid="stMetricLabel"]', 1.0)),
+    }
+    # any other rule that dims a coloured text with opacity is judged the same way
+    for sel, body in _re.findall(r"([^{}]+)\{([^}]*)\}", css):
+        c = _re.search(r"(?<![-\w])color:\s*(#[0-9A-Fa-f]{6})", body)
+        o = _re.search(r"(?<![-\w])opacity:\s*(0?\.\d+)", body)
+        if c and o:
+            checks[sel.strip()[-60:]] = (c.group(1), float(o.group(1)))
+    for name, (fg, op) in checks.items():
+        for g in grounds:
+            seen = _blend(fg, g, op)
+            assert _contrast(seen, g) >= 4.5, (
+                f"{name}: {fg} at opacity {op} reads {seen} on {g} - {_contrast(seen, g):.2f}:1")
+
+
 def test_text_colours_meet_wcag_aa():
     """Every colour the stylesheet uses for TEXT must clear 4.5:1 on the ground
     it sits on. Bronze #9A7B4F measured 2.50:1 and is why this test exists - it
@@ -4525,6 +4581,14 @@ def test_the_outlier_links_and_marks_now_match_their_siblings():
         "#grit-showcase and #conviction share one row: two footer boxes landed on one spot"
     for emoji in ("✅", "⚠️", "❌"):
         assert emoji not in src, f"colour emoji {emoji} on the page"
+    # Council B: each mark says its meaning to a screen reader, and none sits
+    # in a 60%-opacity caption
+    for word in ("Pass", "Warning", "Fail"):
+        assert f'role="img" aria-label="{word}"' in src, f"the {word} mark has no spoken name"
+    assert not _re.search(r"st\.caption\([^)]*dq-mark", src, _re.S), "a mark is still inside an st.caption"
+    # footer 02 and "See the crisis record" land even when the record fails to load
+    assert src.index('<div id="crisis-record"') < src.index("_conv = load_conviction_data()"), \
+        "#crisis-record must be written before (and whatever happens to) the crisis data"
     assert _re.search(r'\[data-testid="stHeaderActionElements"\]\s*\{[^}]*visibility:\s*hidden', css), \
         "Streamlit's sans-serif heading link icon still shows on the serif headings"
     assert _re.search(r"\.conv-core\s*>\s*\.cta-btn\s*\{[^}]*align-self:\s*flex-start", css), \
@@ -4701,6 +4765,46 @@ def test_the_glide_follows_a_moving_target_and_yields_to_the_reader():
     assert "contentVisibility" in script and ".st-key-risk-map" in script, \
         "the off-screen map must be skipped while the glide flies"
     assert 'st.container(key="risk-map")' in src, "the map needs its own keyed container"
+
+
+def test_only_a_decaying_flick_is_forgiven_and_every_exit_restores_the_page():
+    """Council B's review of ME-05 (2026-10-22), each probe reproduced:
+      - steady: a reader wheeling down at a steady 100px a notch pressed footer
+        01 and was dragged UP 2.7k px - "no bigger" let a constant wheel pass
+        as a trackpad's decaying tail (glide_load_check steady: 0/16 before);
+      - leak: a newer press bumped the flight number without landing the old
+        flight, leaving the scroller on 'auto' and the map's rendering skipped;
+      - a scrollbar drag (no wheel, touch or key) was pulled back by the
+        settle phase on a page still growing.
+    tools/glide_load_check.mjs steady/momentum and the Live audit step 8c run
+    the behaviour; this pins the rules in the script."""
+    import ast
+    root = pathlib.Path(__file__).resolve().parent.parent
+    src = (root / "main.py").read_text(encoding="utf-8")
+    script = next(n.args[0].value for n in ast.walk(ast.parse(src)) if isinstance(n, ast.Call)
+                  and ast.unparse(n.func) == "_html" and n.args
+                  and isinstance(n.args[0], ast.Constant) and "__meleonaGlide" in n.args[0].value)
+    assert "function onScroll" in script, "a scrollbar drag (scroll events only) never reaches the yield"
+    yield_fn = script[script.index("function onYield"):script.index("function onScroll")]
+    assert "Math.abs(e.deltaY) < Math.abs(wheelDy)" in yield_fn, "only a strictly decaying wheel is a tail"
+    assert "<= Math.abs(wheelDy)" not in yield_fn and "* 1.25" not in yield_fn, \
+        "a wheel that does not decay (a steady notch) must yield"
+    assert "Math.sign(e.deltaY) === P.__meleonaDir" in yield_fn, "a wheel against the flight must yield"
+    assert "P.__meleonaDir = dir" in script, "the flight must publish its direction"
+    for fn in ("function glide", "function waitFor"):
+        body = script[script.index(fn):]
+        assert body.index("supersede()") < body.index("__meleonaFlight = "), \
+            f"{fn} must land the running flight before it takes over"
+    assert "supersede();" in script[script.index("prefers-reduced-motion"):script.index("glide(scroller, el);")]
+    land = script[script.index("function land"):script.index("function supersede")]
+    for undo in ("scrollBehavior = ''", "overflowAnchor = ''", "quietMap(false)", "__meleonaStop = null"):
+        assert undo in land, f"landing must undo {undo}"
+    assert "P.addEventListener('scroll', onScroll" in script, "a scrollbar drag must reach the yield"
+    assert "prev.onScroll" in script[:script.index("function onTab")], "a new frame removes the old scroll listener"
+    assert "__meleonaSetY = scroller.scrollTop" in script, "the flight records where it put the page"
+    wf = (root / ".github" / "workflows" / "live-audit.yml").read_text(encoding="utf-8")
+    assert "glide_load_check.mjs http://127.0.0.1:8501 steady" in wf and "early 1" in wf, \
+        "the Live audit must run the glide check, steady and cold mid-load presses included"
 
 
 def test_a_button_pressed_while_the_page_is_still_loading_still_glides_all_the_way():

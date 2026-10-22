@@ -1,6 +1,6 @@
 // Every button glide lands - also while the page is still loading.
 //
-//   node tools/glide_load_check.mjs <url> [early|momentum|reader|rest|all] [repeats]
+//   node tools/glide_load_check.mjs <url> [early|momentum|reader|steady|rest|all] [repeats]
 //
 // deep_scan.mjs times each button on a settled page, where every glide passed
 // (480/480 on the offline harness, ME-04). The failures lived elsewhere:
@@ -11,6 +11,7 @@
 //   momentum  a trackpad's flick still arriving after the press (the flight was
 //             cancelled 30/30);
 //   reader    a swipe back mid-flight still stops the flight at once;
+//   steady    a steady mouse wheel turned through the press stops it too;
 //   rest      the settled page, so a fix for the two above breaks nothing.
 // Each press is sampled every frame. A press fails when it is DEAD (never
 // moves), TELEPORTS (one frame covers >25% of the flight), or STOPS SHORT
@@ -86,8 +87,12 @@ async function settled(page) {
   await page.waitForTimeout(1500);
 }
 
+// ONLY=3 (or a label's words) presses one button: the Live audit restarts the
+// app on an empty cache before each one, so every early press is cold.
+const only = process.env.ONLY;
+const pick = list => only ? list.filter((x, i) => String(i + 1) === only || x[1].includes(only)) : list;
 if (which === 'early' || which === 'all') {
-  for (const [sel, label] of LOADING) for (let i = 0; i < N; i++) {
+  for (const [sel, label] of pick(LOADING)) for (let i = 0; i < N; i++) {
     const page = await ctx.newPage();
     await page.goto(url);
     await page.waitForSelector(sel, { timeout: 120000 });
@@ -111,7 +116,8 @@ if (which === 'momentum' || which === 'all') {
       // trackpad ever makes)
       const now = await l.boundingBox();
       await page.mouse.click(now.x + now.width / 2, now.y + now.height / 2);
-      for (let k = 0; k < 50 && d >= 1; k++) { d *= 0.93; await page.mouse.wheel(0, Math.max(1, Math.round(d))); await page.waitForTimeout(16); }
+      // each delta strictly smaller than the last, as a trackpad's momentum is
+      for (let k = 0; k < 50 && d >= 0.5; k++) { d *= 0.93; await page.mouse.wheel(0, d); await page.waitForTimeout(16); }
     });
   }
   await page.close();
@@ -141,6 +147,44 @@ if (which === 'reader' || which === 'all') {
   }
   await page.close();
 }
+if (which === 'steady' || which === 'all') {
+  // A mouse wheel turned at a steady 100px a notch is the reader scrolling,
+  // never a trackpad's decaying tail (Council B, 2026-10-22: a press during a
+  // steady wheel flew 2.7k px UP against it). The flight must end by the
+  // second notch after the press, and the page must never move against the
+  // wheel. Footer targets sit above (the wheel opposes the flight); the CTAs'
+  // sit below (same direction, but not decaying).
+  const page = await ctx.newPage(); await settled(page);
+  for (const [sel, label] of LINKS) for (let i = 0; i < N; i++) {
+    const l = page.locator(sel).first();
+    await l.evaluate((a, s) => {
+      const sc = document.querySelector(s); sc.style.scrollBehavior = 'auto';
+      sc.scrollTop += a.getBoundingClientRect().top - sc.getBoundingClientRect().top - 500;
+      sc.style.scrollBehavior = '';
+    }, SC);
+    await page.waitForTimeout(400);
+    let box = await l.boundingBox();
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    for (let k = 0; k < 3; k++) { await page.mouse.wheel(0, 100); await page.waitForTimeout(100); }
+    box = await l.boundingBox();
+    await page.evaluate(s => { window.__ys = []; const f = () => { window.__ys.push(document.querySelector(s).scrollTop);
+      if (window.__ys.length < 240) requestAnimationFrame(f); }; requestAnimationFrame(f); }, SC);
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    for (let k = 0; k < 2; k++) { await page.mouse.wheel(0, 100); await page.waitForTimeout(100); }
+    const flying = await page.evaluate(() => !!document.__meleonaStop);
+    for (let k = 0; k < 10; k++) { await page.mouse.wheel(0, 100); await page.waitForTimeout(100); }
+    await page.waitForTimeout(1500);
+    const ys = await page.evaluate(() => window.__ys);
+    // after the flight has had two notches to yield, count frames that moved UP
+    const up = ys.slice(20).reduce((n, y, k, a) => n + (k && y < a[k - 1] - 3 ? 1 : 0), 0);
+    const k = `steady   ${label}`;
+    tally[k] = tally[k] || { ok: 0, DEAD: 0, TELEPORT: 0, SHORT: 0 };
+    if (!flying && up === 0) tally[k].ok++;
+    else { tally[k].DEAD++; fails.push({ mode: 'steady', label, v: 'OVERRULED-THE-WHEEL', stillFlying: flying, framesAgainstWheel: up }); }
+    await page.evaluate(() => history.replaceState(null, '', location.pathname));
+  }
+  await page.close();
+}
 if (which === 'rest' || which === 'all') {
   const page = await ctx.newPage(); await settled(page);
   for (const [sel, label] of LINKS) for (let i = 0; i < N; i++)
@@ -152,5 +196,5 @@ for (const [k, t] of Object.entries(tally))
   console.log(`${k.padEnd(46)} ok ${t.ok}  dead ${t.DEAD}  teleport ${t.TELEPORT}  short ${t.SHORT}`);
 for (const f of fails) console.log('FAIL', JSON.stringify(f));
 const n = Object.values(tally).reduce((a, t) => a + t.ok + t.DEAD + t.TELEPORT + t.SHORT, 0);
-console.log(`${n - fails.length}/${n} presses landed`);
+console.log(`${n - fails.length}/${n} presses passed`);
 process.exit(fails.length ? 1 : 0);
