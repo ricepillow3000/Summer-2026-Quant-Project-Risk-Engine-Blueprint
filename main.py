@@ -386,15 +386,18 @@ _html("""
      decaying: that is the gesture the reader already finished, not a new
      one. Forgiving only the first 300 ms cancelled 30 of 30 flights pressed
      during a flick (ME-04). Only that tail is forgiven: the gesture running
-     at the press, in the flight's own direction, each delta STRICTLY smaller
-     than the last, under 250 ms apart (the stream paused 168 ms across the
-     press itself in headless Chromium), within 2 s. A steady mouse wheel
-     (100px a notch, never decaying) counted as "no bigger" and was forgiven,
-     so a reader wheeling down was dragged 2.7k px UP by a footer press
-     (Council B, 2026-10-22). Anything else - a reversal, a pause, a wheel
-     that does not decay, one against the flight - yields at once. */
+     at the press, in the flight's own direction, under 250 ms apart (the
+     stream paused 168 ms across the press itself in headless Chromium),
+     within 2 s, each delta no bigger than the last - and only once the
+     stream has SHRUNK at least once since the press. A steady mouse wheel
+     (100px a notch) never shrinks: forgiven as "no bigger", it dragged a
+     reader wheeling down 2.7k px UP by a footer press (Council B). Requiring
+     every delta to shrink fixed that but cancelled real tails, whose integer
+     deltas repeat (2, 2, 1, 1: momentum 0/10, Council B's second review).
+     Anything else - a reversal, a pause, a harder wheel, a wheel that has
+     never shrunk, one against the flight - yields at once. */
   const SCROLL_KEYS = ['PageUp', 'PageDown', 'ArrowUp', 'ArrowDown', 'Home', 'End', ' '];
-  let wheelAt = 0, wheelDy = 0, tail = false, forgivenAt = 0;
+  let wheelAt = 0, wheelDy = 0, tail = false, shrunk = false, forgivenAt = 0;
   function yieldNow() {
     tail = false;
     P.__meleonaFlight = (P.__meleonaFlight || 0) + 1;
@@ -403,11 +406,12 @@ _html("""
   function onYield(e) {
     if (e.type === 'wheel') {
       const t = performance.now();
-      const decaying = t - wheelAt < 250 && Math.sign(e.deltaY) === Math.sign(wheelDy) &&
-                       Math.abs(e.deltaY) < Math.abs(wheelDy);
+      const same = t - wheelAt < 250 && Math.sign(e.deltaY) === Math.sign(wheelDy);
+      const noBigger = same && Math.abs(e.deltaY) <= Math.abs(wheelDy);
+      if (same && Math.abs(e.deltaY) < Math.abs(wheelDy)) shrunk = true;   // reset at every press
       wheelAt = t; wheelDy = e.deltaY;
       if (!P.__meleonaStop) return;
-      if (tail && decaying && Math.sign(e.deltaY) === P.__meleonaDir &&
+      if (tail && noBigger && shrunk && Math.sign(e.deltaY) === P.__meleonaDir &&
           t - P.__meleonaPressAt < 2000) { forgivenAt = t; return; }
     }
     if (!P.__meleonaStop) return;
@@ -469,6 +473,7 @@ _html("""
     e.preventDefault(); e.stopPropagation();
     P.__meleonaPressAt = performance.now();
     tail = P.__meleonaPressAt - wheelAt < 250;   // a flick still running at the press
+    shrunk = false;                              // ...that has yet to shrink since it
     const el = P.getElementById(id);
     if (el) go(a, el); else waitFor(a, id);
     /* release the arrow so it falls ahead of the page it is pulling - every
@@ -1640,29 +1645,38 @@ if (mc["cvar"] > 0 and lvar and np.isfinite(lvar["lvar"])
 # Marks name the two states that change what the number means: a shock or
 # crisis replay applied above, and the short side. All inside the verdict's
 # own markdown, so nothing above the tab strip gains an element.
+def cvar_scale_html(now: float, prev: float | None) -> str:
+    """The headline's scale, its ticks and the move in words.
+
+    Everything is read from the headlines AS DISPLAYED (one decimal): the raw
+    values 22.540% and 22.480% both read "22.5%", and the page said "-0.1
+    points vs your last setting" between two equal numbers (Council B,
+    2026-10-22). Equal displays say nothing. A CVaR past 100% (a leveraged or
+    short book can lose more than it holds) sits at the scale's end, and the
+    end says so instead of clamping silently."""
+    shown = lambda v: float(f"{v:.1%}"[:-1])                 # exactly what the headline prints
+    on_scale = lambda v: min(max(shown(v), 0.0), 100.0)      # a gain sits at 0
+    beyond = shown(now) > 100
+    moved = None if prev is None else round(shown(now) - shown(prev), 1)
+    return (
+        '<div class="cvar-scale" aria-hidden="true">'
+        + (f'<span class="cvar-tick prev" style="left:{on_scale(prev):.1f}%"></span>'
+           if prev is not None else "")
+        + f'<span class="cvar-tick now{" beyond" if beyond else ""}" style="left:{on_scale(now):.1f}%;'
+          f'--from:{on_scale(now if prev is None else prev):.1f}%"></span></div>'
+        '<div class="cvar-scale-ends" aria-hidden="true"><span>0%</span>'
+        + ('<span class="beyond">beyond the whole book &#8250;</span>' if beyond
+           else '<span>the whole book</span>') + '</div>'
+        + (f'<div class="cvar-delta">{"+" if moved > 0 else chr(0x2212)}{abs(moved):.1f} '
+           f'points vs your last setting</div>' if moved else ""))
+
+
+# The last DIFFERENT headline this session displayed (compared as displayed).
 _cv = float(mc["cvar"])
-if st.session_state.get("_cvar_now") is None or abs(st.session_state["_cvar_now"] - _cv) > 1e-12:
+if st.session_state.get("_cvar_now") is None or f"{st.session_state['_cvar_now']:.1%}" != f"{_cv:.1%}":
     st.session_state["_cvar_prev"] = st.session_state.get("_cvar_now")
     st.session_state["_cvar_now"] = _cv
-_cv_prev = st.session_state.get("_cvar_prev")
-
-
-def _on_scale(v: float) -> float:
-    """A CVaR as a position on the 0-100% scale (a gain sits at 0)."""
-    return min(max(v * 100, 0.0), 100.0)
-
-
-_moved = (_cv - _cv_prev) * 100 if _cv_prev is not None else 0.0
-_sign = "+" if _moved > 0 else "\u2212"   # a real minus sign
-_scale = (
-    '<div class="cvar-scale" aria-hidden="true">'
-    + (f'<span class="cvar-tick prev" style="left:{_on_scale(_cv_prev):.1f}%"></span>'
-       if _cv_prev is not None else "")
-    + f'<span class="cvar-tick now" style="left:{_on_scale(_cv):.1f}%;'
-      f'--from:{_on_scale(_cv if _cv_prev is None else _cv_prev):.1f}%"></span></div>'
-    '<div class="cvar-scale-ends" aria-hidden="true"><span>0%</span><span>the whole book</span></div>'
-    + (f'<div class="cvar-delta">{_sign}{abs(_moved):.1f} points '
-       f'vs your last setting</div>' if abs(_moved) >= 0.05 else ""))
+_scale = cvar_scale_html(_cv, st.session_state.get("_cvar_prev"))
 _marks = "".join(
     f' <span class="state-mark" title="{why}">{name}</span>'
     for name, why, on in (

@@ -4518,6 +4518,38 @@ def test_the_headline_accents_follow_real_state():
         restore()
 
 
+def _main_function(name):
+    """One top-level function of main.py, compiled on its own (main.py is a
+    script: importing it would run the app)."""
+    import ast
+    src = (pathlib.Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
+    node = next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == name)
+    scope = {}
+    exec(compile(ast.Module(body=[node], type_ignores=[]), "main.py", "exec"), scope)
+    return scope[name]
+
+
+def test_the_headline_move_is_read_from_the_numbers_as_displayed():
+    """Council B (2026-10-22): 22.540% then 22.480% both display "22.5%", and
+    the page said "-0.1 points vs your last setting" between two equal
+    numbers. The move is the difference of the displayed headlines; equal
+    displays say nothing. And a CVaR past 100% no longer clamps silently at
+    "the whole book": the scale's end says the loss is beyond it."""
+    scale = _main_function("cvar_scale_html")
+    same = scale(0.22540, 0.22480)
+    assert f"{0.22540:.1%}" == f"{0.22480:.1%}"
+    assert "vs your last setting" not in same, same
+    moved = scale(0.2266, 0.2254)                 # 22.7% after 22.5%
+    assert "+0.2 points vs your last setting" in moved, moved
+    down = scale(0.2049, 0.2254)                  # 20.5% after 22.5%
+    assert "\u22122.0 points vs your last setting" in down, down
+    assert "vs your last setting" not in scale(0.2254, None), "a first headline has nothing to compare"
+    over = scale(1.374, 0.9)
+    assert "beyond the whole book" in over and "cvar-tick now beyond" in over, over
+    assert 'left:100.0%' in over, "a loss past the whole book sits at the scale's end"
+    assert "beyond" not in scale(0.999, None), "100% or less is on the scale"
+
+
 def test_the_freshness_dot_and_the_reading_line_are_honest_and_still():
     """ME-11: the freshness stamp gets a dot that pulses once per minute tick
     only while the data is live (end-of-day, at most a day old) and sits grey
@@ -4536,12 +4568,18 @@ def test_the_freshness_dot_and_the_reading_line_are_honest_and_still():
         "the dot's state must come from the measured staleness"
     live = _re.search(r"\.fresh-dot\.is-live\s*\{([^}]*)\}", css)
     assert live and _re.search(r"animation:[^;]*\b1\b", live.group(1)), "a live dot pulses once per tick"
-    assert "@keyframes" in css and _re.search(r"\.fresh-dot\.is-stale\s*\{[^}]*background", css)
+    assert "@keyframes" in css
     assert _re.search(r'\[data-testid="stMain"\]\s*\{[^}]*scroll-timeline:\s*--page', css), \
         "the reading line must ride the real scroller's own timeline"
     line = _re.search(r'\[data-testid="stMain"\]::before\s*\{([^}]*)\}', css)
     assert line and "animation-timeline: --page" in line.group(1), "no JS: a scroll-driven animation"
     assert "scaleX(0)" in line.group(1), "with animations off (reduced motion) the line stays still"
+    sup = css.index("@supports (animation-timeline: scroll())")
+    assert sup < css.index('[data-testid="stMain"]::before {') < css.index("}\n}", sup) + 3, \
+        "the reading line must sit inside an @supports guard (no full-width bar where timelines are missing)"
+    assert _re.search(r"\.fresh-dot\.is-stale\s*\{[^}]*border:[^}]*#7E776B", css), \
+        "stale is a hollow ring, not only a missing pulse"
+    assert _contrast("#7E776B", "#EDE9E3") >= 3 and _contrast("#9A7B4F", "#EDE9E3") >= 3
     rm = _re.search(r"@media \(prefers-reduced-motion: reduce\) \{\s*\*, \*::before, \*::after \{ animation: none", css)
     assert rm, "the global reduced-motion rule must still stop every animation"
 
@@ -4867,9 +4905,14 @@ def test_only_a_decaying_flick_is_forgiven_and_every_exit_restores_the_page():
                   and isinstance(n.args[0], ast.Constant) and "__meleonaGlide" in n.args[0].value)
     assert "function onScroll" in script, "a scrollbar drag (scroll events only) never reaches the yield"
     yield_fn = script[script.index("function onYield"):script.index("function onScroll")]
-    assert "Math.abs(e.deltaY) < Math.abs(wheelDy)" in yield_fn, "only a strictly decaying wheel is a tail"
-    assert "<= Math.abs(wheelDy)" not in yield_fn and "* 1.25" not in yield_fn, \
-        "a wheel that does not decay (a steady notch) must yield"
+    # Council B's second review: real tails repeat integer deltas (2, 2, 1, 1),
+    # so "strictly smaller" cancelled them all; a steady wheel never shrinks.
+    assert "Math.abs(e.deltaY) < Math.abs(wheelDy)) shrunk = true" in yield_fn, \
+        "the stream must be seen to shrink before any of it is forgiven"
+    assert "noBigger && shrunk" in yield_fn, "a tail is forgiven only once it has shrunk"
+    assert "* 1.25" not in yield_fn, "a harder wheel must yield"
+    link = script[script.index("function onLink"):]
+    assert "shrunk = false" in link, "every press starts a tail that has not shrunk yet"
     assert "Math.sign(e.deltaY) === P.__meleonaDir" in yield_fn, "a wheel against the flight must yield"
     assert "P.__meleonaDir = dir" in script, "the flight must publish its direction"
     for fn in ("function glide", "function waitFor"):

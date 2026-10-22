@@ -116,8 +116,10 @@ if (which === 'momentum' || which === 'all') {
       // trackpad ever makes)
       const now = await l.boundingBox();
       await page.mouse.click(now.x + now.width / 2, now.y + now.height / 2);
-      // each delta strictly smaller than the last, as a trackpad's momentum is
-      for (let k = 0; k < 50 && d >= 0.5; k++) { d *= 0.93; await page.mouse.wheel(0, d); await page.waitForTimeout(16); }
+      // a real tail: decaying, in WHOLE pixels, so the small deltas repeat
+      // (2, 2, 1, 1) - float deltas hid that the strict-decay rule cancelled
+      // every real tail (Council B, 2026-10-22)
+      for (let k = 0; k < 50 && d >= 0.6; k++) { d *= 0.93; await page.mouse.wheel(0, Math.max(1, Math.round(d))); await page.waitForTimeout(16); }
     });
   }
   await page.close();
