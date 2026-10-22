@@ -74,6 +74,7 @@ from src.signals import (
 )
 from src.conviction import (
     load_conviction, AI_CAPEX_BASKET, RECOVERY_HORIZON_DAYS, race_days,
+    race_record,
 )
 
 # Title and icon match the <head> tools/public_files.py serves to crawlers and
@@ -754,16 +755,9 @@ try:
     _s = _conv["summary"]
     _t1, _t3 = _s["trough_1y_later"], _s["trough_3y_later"]
     _p3 = _s["peak_3y_later"]
-    _race = _conv["race"]
-    # A crisis counts as a race when at least one side actually fell. Ranking
-    # is by race_days: never fell (0) beats a reclaim, which beats never
-    # getting back (inf).
-    _decided = _race[_race["bench_fell"] | _race["basket_fell"]]
-    _bwin = int(sum(
-        race_days(r["basket_days"], r["basket_fell"], np.inf)
-        < race_days(r["bench_days"], r["bench_fell"], np.inf)
-        for _, r in _decided.iterrows()))
-    _nrace = int(len(_decided))
+    # Counted once, in src/conviction.race_record, for the slab and the tab.
+    _rec = race_record(_conv["race"])
+    _bwin, _nrace = _rec["wins"], _rec["n"]
 
     # Landing target for the GOTHAM button above. Zero-height marker rather
     # than a heading, so the section keeps its current typography - the glide
@@ -1731,8 +1725,11 @@ with st.container():
         # ranked against the defensive shelf (V 67 here vs 61 in the tab,
         # ME-08). The shelf's grit (basket plus shelf) only orders the shelf
         # when an outside anchor is screened; no sentence prints it.
+        # Missing volume days stay NaN: build_book's mean and 5th percentile
+        # skip them. Zero-filled, 4 gaps in 63 days dragged the quiet-tape
+        # volume to 0 and printed "reports no volume on this feed" (ME-09).
         _the_book = load_book(
-            _bk_px, _bk_dv.fillna(0.0), float(_book_size), _book_part,
+            _bk_px, _bk_dv, float(_book_size), _book_part,
             _bk_floor, tuple(sorted(_bk_anchors or ())),
             load_grit(tuple(loaded)),
             load_grit(tuple(_bk_px.columns)) if _bk_anchors else None)
@@ -2337,7 +2334,10 @@ with tab_balance:
         st.caption("Balance needs at least two assets in the universe.")
     else:
         try:
-            corr_b = correlation_matrix(returns)
+            # The blend below is sized on the selected estimator's `cov`, so the
+            # partner is ranked on the same matrix: under EWMA the sample
+            # correlation differed by up to 0.47 on the offline market (ME-09).
+            corr_b = correlation_from_cov(cov)
             # Keyed, with the default seeded only when no valid choice is
             # stored: an index= that followed argmax(weights) re-created the
             # widget on every Weighting change and silently replaced the
@@ -2410,7 +2410,8 @@ with tab_balance:
                 f"**{pair['w_hedge']:.0%} {best}** takes the pair's annual volatility "
                 f"from **{pair['anchor_vol']:.1%}** ({anchor} alone) down to "
                 f"**{pair['blended_vol']:.1%}** - a {pair['vol_reduction']:.0%} "
-                "reduction, from diversification. Long-only minimum-variance weights."
+                "reduction, from diversification. Long-only minimum-variance weights, "
+                f"on the {cov_method} risk matrix (02 · Allocation)."
             )
             # Caveat kept one click away but signposted in the title, so the
             # honesty is never buried - just not competing with the number.
@@ -2492,13 +2493,13 @@ with tab_balance:
             # money is read off the weights, not assumed (2026-10-17 council).
             _bv_money = (
                 f'Why the anchor holds most of the capital: equal-risk split - '
-                f'{flyer} runs {pw["vol_a"]:.0%} annual vol to {bv_anchor}\'s '
+                f'{flyer} runs {pw["vol_a"]:.0%} realized annual vol to {bv_anchor}\'s '
                 f'{pw["vol_b"]:.0%}, so each dollar of {flyer} carries '
                 f'{pw["vol_a"] / pw["vol_b"]:.1f}x the risk. Each leg carries the '
                 f'same share of the RISK; the anchor holds most of the MONEY.'
                 if pw["w_b"] >= 0.5 else
                 f'Why {flyer} holds more of the capital: equal-risk split - '
-                f'{flyer} runs {pw["vol_a"]:.0%} annual vol to {bv_anchor}\'s '
+                f'{flyer} runs {pw["vol_a"]:.0%} realized annual vol to {bv_anchor}\'s '
                 f'{pw["vol_b"]:.0%}, so here {flyer} is the steadier leg and each '
                 f'dollar of it carries {pw["vol_a"] / pw["vol_b"]:.1f}x the risk. '
                 f'Each leg carries the same share of the RISK; {flyer} holds more '
@@ -2792,8 +2793,9 @@ with tab_conviction:
             f"trading days from each side's trough back to its own "
             f"pre-crisis level."
         )
-        # Show a crisis if at least one side actually fell in it.
-        rr = race[race["bench_fell"] | race["basket_fell"]]
+        # Raced: the basket traded through it and at least one side fell.
+        rrec = race_record(race)
+        rr = rrec["decided"]
         cap = RECOVERY_HORIZON_DAYS
 
         def _lbl(days, fell):
@@ -2822,19 +2824,18 @@ with tab_conviction:
             legend=dict(orientation="h", y=1.08, x=0, font=dict(size=11)))
         st.plotly_chart(race_fig, width="stretch", config=PLOTLY_CFG)
 
-        decided = rr
-        bwin = int(sum(
-            race_days(r["basket_days"], r["basket_fell"], np.inf)
-            < race_days(r["bench_days"], r["bench_fell"], np.inf)
-            for _, r in decided.iterrows()))
         st.markdown(
             f'<div class="read-me"><b>How to read this.</b> Shorter bar = '
             f'faster recovery. The basket got back up faster in '
-            f'<b>{bwin} of {len(decided)}</b> crises. Where a bar says '
+            f'<b>{rrec["wins"]} of {rrec["n"]}</b> crises. Where a bar says '
             f'"not within 3y", that side never reclaimed its pre-crisis '
             f'level inside ~3 trading years; "never fell" means it did not '
             f'decline at all inside that window, so it had nothing to '
-            f'reclaim - shown, not hidden.</div>',
+            f'reclaim - shown, not hidden.'
+            + (f' Left out: {", ".join(rrec["left_out"])} - none of the '
+               f'basket\'s names was trading yet, so there was no race to '
+               f'count.' if rrec["left_out"] else '')
+            + '</div>',
             unsafe_allow_html=True)
         st.caption(
             "*Honest limits: the basket carries today's \"AI capex\" label - "

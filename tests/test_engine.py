@@ -4200,7 +4200,7 @@ def _offline_market_prices(tickers=None, period="2y", **_kw):
     return pd.DataFrame(cols, index=idx).iloc[-252 * years:]
 
 
-def _offline_app(setup=None, market=None, rf=0.045, adv=5e9):
+def _offline_app(setup=None, market=None, rf=0.045, adv=5e9, dollar_volume=None):
     """Run the real main.py under AppTest on _offline_market_prices (or
     `market`); returns (AppTest, restore). Every src module is imported BEFORE
     patching, so a module-level `from src.ingestion import fetch_prices` is
@@ -4218,9 +4218,9 @@ def _offline_app(setup=None, market=None, rf=0.045, adv=5e9):
     market = market or _offline_market_prices
     fakes = {
         "fetch_prices": market,
-        "fetch_dollar_volume": lambda tickers=None, period="2y", **k: pd.DataFrame(
+        "fetch_dollar_volume": dollar_volume or (lambda tickers=None, period="2y", **k: pd.DataFrame(
             5e9, index=market(tickers, period).index,
-            columns=list(tickers)),
+            columns=list(tickers))),
         "average_dollar_volume": lambda tickers=None, *a, **k: pd.Series(
             adv, index=list(tickers or [])),
         "fetch_risk_free_rate": lambda *a, **k: rf,
@@ -4939,6 +4939,86 @@ def test_the_page_points_only_to_controls_that_exist():
     assert "Engine controls" not in text
     alloc = [e.split(" - ")[0] for e in page["expanders"] if e.startswith("02 ")]
     assert alloc and f"to EWMA in {alloc[0]}" in text, alloc
+
+
+# --- ME-09 (2026-10-22): data-quality holes ---
+
+def test_a_day_with_no_volume_reported_is_skipped_not_read_as_zero():
+    """ME-03 (2026-10-22): the Book zero-filled missing dollar-volume days
+    (`fillna(0.0)`), so a name with a few gaps in its last 63 days had its
+    5th-percentile volume dragged to 0 and was printed as "reports no volume
+    on this feed" - a feed that did report volume on every other day."""
+    def gappy(tickers=None, period="2y", **_):
+        idx = _offline_market_prices(tickers, period).index
+        dv = pd.DataFrame(5e9, index=idx, columns=list(tickers))
+        if "V" in dv.columns:
+            dv.iloc[-63::6, dv.columns.get_loc("V")] = np.nan   # 11 of 63 days
+        return dv
+    at, restore = _offline_app(dollar_volume=gappy)
+    try:
+        cards = [m.value for m in at.markdown if "border-left:3px solid" in m.value]
+        v = [c for c in cards if ">V " in c]
+        assert v, "no Book card for V"
+        assert "reports no volume" not in v[0], v[0]
+    finally:
+        restore()
+
+
+def test_a_crisis_with_none_of_the_basket_trading_is_left_out_of_the_race():
+    """ME-03 (2026-10-22): when no basket member traded at a crisis's start,
+    recovery_race set basket_fell=False, which the page reads as "never fell"
+    and race_days() as 0 - a basket WIN in a race it never ran. It must be
+    left out of the count and named as left out."""
+    import src.conviction as conv
+    from src.scenarios import HISTORICAL_REGIMES
+    idx = pd.bdate_range("1999-01-04", "2026-10-14")
+    rng = np.random.default_rng(4)
+    px = pd.DataFrame(100 * np.exp(np.cumsum(rng.normal(0.0003, 0.012, (len(idx), 3)), axis=0)),
+                      index=idx, columns=["SPY", "NEW1", "NEW2"])
+    px.loc[px.index < "2012-01-03", ["NEW1", "NEW2"]] = np.nan
+    real = conv.fetch_prices
+    conv.fetch_prices = lambda tickers, **k: px[list(tickers)]
+    try:
+        race = conv.recovery_race(basket=["NEW1", "NEW2"], benchmark="SPY")
+    finally:
+        conv.fetch_prices = real
+    early = [n for n, (s, _) in HISTORICAL_REGIMES.items() if pd.Timestamp(s) < pd.Timestamp("2012-01-03")]
+    assert early, "fixture no longer has a crisis before the basket listed"
+    rec = conv.race_record(race)
+    assert set(early) <= set(rec["left_out"]), rec["left_out"]
+    assert not set(early) & set(rec["decided"]["crisis"]), list(rec["decided"]["crisis"])
+    assert rec["n"] == len(rec["decided"]) and 0 <= rec["wins"] <= rec["n"]
+
+
+def test_the_balance_tab_ranks_and_sizes_a_pair_on_one_risk_matrix():
+    """ME-03 (2026-10-22): Balance ranked partners on the sample correlation
+    but sized the blend on the selected estimator. Under EWMA the two differ
+    by up to 0.47 in correlation and 16 points of annual vol on the offline
+    market, so the page could name a "least-correlated" partner and quote a
+    correlation the blend beside it was not computed from."""
+    from src.covariance import estimate_covariance
+    from src.comovement import correlation_from_cov
+    from src.hedge import rank_hedges
+    from src.ingestion import get_returns
+    at, restore = _offline_app()
+    try:
+        [s for s in at.selectbox if s.label == "Covariance estimator"][0].set_value("EWMA").run()
+        loaded = list([w for w in at.selectbox if w.label.startswith("Anchor")][0].options)
+        anchor = [w for w in at.selectbox if w.label.startswith("Anchor")][0].value
+        cap = [c.value for c in at.caption if "Long-only minimum-variance weights" in c.value]
+        # The defensive pair beside it is a real-history backtest on plain
+        # sample volatility, so it says "realized" rather than borrow the label.
+        pair = [m.value for m in at.markdown if "annual vol to" in m.value]
+        assert pair and "realized annual vol to" in pair[0], pair[:1]
+    finally:
+        restore()
+    rets = get_returns(_offline_market_prices(loaded, "2y"))
+    cov, _ = estimate_covariance(rets, "EWMA")
+    ranked = rank_hedges(correlation_from_cov(cov), anchor)
+    best, corr = ranked.index[0], float(ranked.iloc[0])
+    assert cap, "Balance caption missing"
+    assert f"**{best}**" in cap[0] and f"{corr:+.2f}" in cap[0], (best, f"{corr:+.2f}", cap[0])
+    assert "EWMA" in cap[0], f"the caption does not name its risk matrix: {cap[0]}"
 
 
 if __name__ == "__main__":
