@@ -1271,7 +1271,7 @@ def load_security_master(tickers_tuple: tuple[str, ...]):
 # 93% of a core doing nothing - and every new visitor queued behind them.
 # The data is end-of-day; a minute counter loses nothing a second one said.
 @st.fragment(run_every="60s")
-def _freshness_ticker(fetched_at_iso: str):
+def _freshness_ticker(fetched_at_iso: str, live: bool):
     """Live-ticking 'as of N min ago' -- reruns only this fragment, not the app."""
     fetched = pd.Timestamp(fetched_at_iso)
     now = pd.Timestamp.now(tz=fetched.tzinfo) if fetched.tzinfo else pd.Timestamp.now()
@@ -1280,8 +1280,15 @@ def _freshness_ticker(fetched_at_iso: str):
     # Nothing polls: this fragment only re-renders the counter. Yahoo is hit
     # again only once the disk copy is older than CACHE_MAX_AGE_HOURS - the old
     # "quotes cached 60s" wording described the in-memory re-read, not a pull.
-    st.caption(f"⟳ Data pulled {ago} · re-pulled from Yahoo once older "
-               f"than {CACHE_MAX_AGE_HOURS:g}h, on your next interaction - not on a timer.")
+    # The dot (ME-11) says what the stamp says, at a glance: bronze, pulsing
+    # once each time this fragment ticks, while the data is live (its last row
+    # at most a day old); still and grey once it is stale. Never a "real-time"
+    # claim - it beats with the minute counter, not with the market.
+    dot = ('<span class="fresh-dot is-live" role="img" aria-label="Data is current"></span>' if live
+           else '<span class="fresh-dot is-stale" role="img" aria-label="Data is stale"></span>')
+    st.caption(f"{dot} Data pulled {ago} · re-pulled from Yahoo once older "
+               f"than {CACHE_MAX_AGE_HOURS:g}h, on your next interaction - not on a timer.",
+               unsafe_allow_html=True)
 
 
 # ---- Audit trail: what this run actually did, in order (see Lineage tab) ----
@@ -1383,7 +1390,7 @@ fresh = "live" if health["staleness_days"] <= 1 else f"{health['staleness_days']
 st.caption(f"Data: {health['rows']} trading days · through {health['end']} · {fresh}")
 prov_now = provenance(tickers)
 if prov_now:
-    _freshness_ticker(prov_now["fetched_at_utc"])
+    _freshness_ticker(prov_now["fetched_at_utc"], live=fresh == "live")
 else:
     st.empty()  # hold the ticker's slot: the tab strip below must not move
 
@@ -1625,13 +1632,52 @@ if (mc["cvar"] > 0 and lvar and np.isfinite(lvar["lvar"])
         f"<b>{lvar['lvar']:.1%}</b>."
     )
 
+# ---- Headline accents (ME-11): each one a state this run computed ----
+# The orientation promises "watch the headline number move"; a number that
+# changes in place is easy to miss. A hairline 0-100% scale (no loss to the
+# whole book) carries a tick at this CVaR and a faint one at the last
+# DIFFERENT headline this session showed, and the move is said in words.
+# Marks name the two states that change what the number means: a shock or
+# crisis replay applied above, and the short side. All inside the verdict's
+# own markdown, so nothing above the tab strip gains an element.
+_cv = float(mc["cvar"])
+if st.session_state.get("_cvar_now") is None or abs(st.session_state["_cvar_now"] - _cv) > 1e-12:
+    st.session_state["_cvar_prev"] = st.session_state.get("_cvar_now")
+    st.session_state["_cvar_now"] = _cv
+_cv_prev = st.session_state.get("_cvar_prev")
+
+
+def _on_scale(v: float) -> float:
+    """A CVaR as a position on the 0-100% scale (a gain sits at 0)."""
+    return min(max(v * 100, 0.0), 100.0)
+
+
+_moved = (_cv - _cv_prev) * 100 if _cv_prev is not None else 0.0
+_sign = "+" if _moved > 0 else "\u2212"   # a real minus sign
+_scale = (
+    '<div class="cvar-scale" aria-hidden="true">'
+    + (f'<span class="cvar-tick prev" style="left:{_on_scale(_cv_prev):.1f}%"></span>'
+       if _cv_prev is not None else "")
+    + f'<span class="cvar-tick now" style="left:{_on_scale(_cv):.1f}%;'
+      f'--from:{_on_scale(_cv if _cv_prev is None else _cv_prev):.1f}%"></span></div>'
+    '<div class="cvar-scale-ends" aria-hidden="true"><span>0%</span><span>the whole book</span></div>'
+    + (f'<div class="cvar-delta">{_sign}{abs(_moved):.1f} points '
+       f'vs your last setting</div>' if abs(_moved) >= 0.05 else ""))
+_marks = "".join(
+    f' <span class="state-mark" title="{why}">{name}</span>'
+    for name, why, on in (
+        ("Stressed", "A shock or a crisis replay is applied in 03 · Stress test", is_shocked),
+        ("Short book", "The bearish side: a synthetic daily-rebalanced short", bearish))
+    if on)
+
 # ---- Verdict + the cone of simulated outcomes: one wide row ----
 v_col, f_col = st.columns([5, 7], gap="large")
 with v_col:
     st.markdown(f"""
 <div class="verdict-box">
-  <div class="verdict-label">1-Year CVaR (95% confidence)</div>
+  <div class="verdict-label">1-Year CVaR (95% confidence){_marks}</div>
   <div class="verdict-number">{mc['cvar']:.1%}</div>
+  {_scale}
   <div class="verdict-sentence">{verdict}</div>
 </div>
 """, unsafe_allow_html=True)

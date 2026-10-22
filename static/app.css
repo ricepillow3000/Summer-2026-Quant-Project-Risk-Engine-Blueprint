@@ -1096,3 +1096,53 @@ a.cta-btn:focus-visible, a.cta-link:focus-visible, .meleona-footer a.f-box:focus
    glyph, so a column of checks lines up like a ledger. */
 .dq-mark { display: inline-block; width: 1.1em; text-align: center;
     font-family: Georgia, 'Times New Roman', serif; }
+
+/* ---- Accents with meaning (ME-11, 2026-10-22) ---------------------------
+   John: "make the website feel alive ... accent marks that are meaningful".
+   Each one draws a state the page already computed; none is decoration for
+   its own sake, words carry AA tones, and the global reduced-motion rule
+   (animation: none) leaves every one of them still. */
+
+/* The headline's scale: where this CVaR sits between no loss and the whole
+   book. The live tick slides in from the last headline this session showed;
+   that one stays as a faint tick, and the move is said in words below. */
+.cvar-scale { position: relative; height: 9px; max-width: 420px; margin: 12px 0 0;
+    border-bottom: 1px solid #C4BDAE; }
+.cvar-tick { position: absolute; bottom: -1px; width: 2px; height: 9px;
+    transform: translateX(-1px); }
+.cvar-tick.now { background: #3F3B35; animation: cvar-tick-in .9s cubic-bezier(.22,.61,.36,1) both; }
+.cvar-tick.prev { background: #9A7B4F; opacity: .45; height: 6px; }
+@keyframes cvar-tick-in { from { left: var(--from); } }
+.cvar-scale-ends { display: flex; justify-content: space-between; max-width: 420px;
+    margin: 4px 0 0; font-family: 'Helvetica Neue', sans-serif; font-size: 10px;
+    letter-spacing: .16em; text-transform: uppercase; color: #6A5030; }
+.cvar-delta { margin: 6px 0 2px; font-size: 13.5px; color: #6A5030; }
+
+/* State marks on the verdict's label: the two states that change what the
+   number means - a shock or crisis replay applied, and the short side. */
+.state-mark { display: inline-block; margin-left: 10px; padding: 2px 7px 1px;
+    border: 1px solid #9A7B4F; color: #6A5030; font-size: 10px;
+    letter-spacing: .18em; vertical-align: 1px; }
+
+/* The freshness dot beside "Data pulled N min ago": one pulse per minute tick
+   (the fragment re-renders, the animation runs once) while the data is live;
+   still and grey once it is stale. The words beside it say the same. */
+.fresh-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+    margin-right: 6px; vertical-align: 1px; }
+.fresh-dot.is-live { background: #9A7B4F; animation: fresh-pulse 1.6s ease-out 1; }
+.fresh-dot.is-stale { background: #8E877B; }
+@keyframes fresh-pulse { 0% { box-shadow: 0 0 0 0 rgba(154,123,79,.55); }
+                         100% { box-shadow: 0 0 0 7px rgba(154,123,79,0); } }
+
+/* Reading progress: a 1px bronze line across the top, as far along as the
+   reader is down the page. Driven by the real scroller's own timeline - no
+   scroll listener, no JS - and it follows a glide too, so a button's flight
+   reads even at the edge of the eye. Decorative only (pointer-events none,
+   no words). Under reduced motion the global rule stops the animation and
+   the line rests at scaleX(0): still, and out of the way. */
+[data-testid="stMain"] { scroll-timeline: --page block; }
+[data-testid="stMain"]::before { content: ""; position: fixed; top: 0; left: 0; right: 0;
+    height: 1px; z-index: 989; pointer-events: none; background: #9A7B4F;
+    transform: scaleX(0); transform-origin: 0 50%;
+    animation: read-progress linear both; animation-timeline: --page; }
+@keyframes read-progress { to { transform: scaleX(1); } }

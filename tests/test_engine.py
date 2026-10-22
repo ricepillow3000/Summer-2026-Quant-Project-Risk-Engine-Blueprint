@@ -4465,6 +4465,87 @@ def test_the_tab_strip_keeps_its_slot_whatever_the_basket():
         restore()
 
 
+def _verdict_html(at) -> str:
+    return next(m.value for m in at.markdown if 'class="verdict-box"' in m.value)
+
+
+def test_the_headline_accents_follow_real_state():
+    """ME-11 (2026-10-22), John: "make the website feel alive ... add visual
+    details and accent marks that are meaningful". Each accent is a state the
+    page already computed, drawn where the reader looks: a 0-100% hairline
+    under the CVaR with a tick at the value and a faint tick at this session's
+    last different headline, "+N points vs your last setting" in words; a
+    "Stressed" mark while a shock or crisis replay is applied; a "Short book"
+    mark on the bearish side. All inside the verdict's own markdown, so the
+    tab strip keeps its slot."""
+    import re
+    from src.scenarios import HISTORICAL_REGIMES
+    at, restore = _offline_app()
+    try:
+        slot = _tab_strip_slot(at)
+        box = _verdict_html(at)
+        shown = lambda b: float(re.search(r'class="verdict-number">(-?[\d.]+)%', b).group(1))
+        v0 = shown(box)
+        tick = re.search(r'class="cvar-tick now" style="left:([\d.]+)%', box)
+        assert tick and abs(float(tick.group(1)) - min(max(v0, 0), 100)) < 0.11, box
+        assert "vs your last setting" not in box and "cvar-tick prev" not in box, \
+            "a first headline has nothing to compare against"
+        assert "state-mark" not in box, "no stress, no short: no mark"
+
+        at.radio[[w.label for w in at.radio].index("Weighting")].set_value("Risk parity").run()
+        assert not at.exception, [e.value for e in at.exception]
+        box = _verdict_html(at)
+        v1 = shown(box)
+        assert v1 != v0, "fixture: risk parity should move the headline"
+        said = re.search(r"([+\u2212-][\d.]+) points vs your last setting", box)
+        assert said, box
+        delta = float(said.group(1).replace("\u2212", "-"))
+        assert abs(delta - (v1 - v0)) <= 0.11, (delta, v0, v1)
+        prev = re.search(r'class="cvar-tick prev" style="left:([\d.]+)%', box)
+        assert prev and abs(float(prev.group(1)) - min(max(v0, 0), 100)) < 0.11, box
+
+        at.selectbox[[w.label for w in at.selectbox].index("Scenario")].set_value(
+            list(HISTORICAL_REGIMES)[-1]).run()
+        assert not at.exception, [e.value for e in at.exception]
+        assert ">Stressed<" in _verdict_html(at), "a crisis replay must mark the headline"
+        assert _tab_strip_slot(at) == slot
+
+        at.radio(key="bv_direction").set_value("Bearish - short the book").run()
+        assert not at.exception, [e.value for e in at.exception]
+        assert ">Short book<" in _verdict_html(at), "the bearish side must mark the headline"
+        assert _tab_strip_slot(at) == slot, "an accent moved the tab strip"
+    finally:
+        restore()
+
+
+def test_the_freshness_dot_and_the_reading_line_are_honest_and_still():
+    """ME-11: the freshness stamp gets a dot that pulses once per minute tick
+    only while the data is live (end-of-day, at most a day old) and sits grey
+    when stale; a 1px reading-progress line rides the page's own scroll
+    (CSS scroll-timeline, no JS listener). Both are decorative beside words
+    that already say the state, and both are still under reduced motion."""
+    import re as _re
+    root = pathlib.Path(__file__).resolve().parent.parent
+    src = (root / "main.py").read_text(encoding="utf-8")
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    tick = src[src.index("def _freshness_ticker"):]
+    tick = tick[:tick.index("\n\n\n")]
+    assert "live" in tick.split(")")[0], "the ticker must be told whether the data is live"
+    assert "fresh-dot is-live" in tick and "fresh-dot is-stale" in tick, tick
+    assert _re.search(r"_freshness_ticker\([^)]*staleness_days", src) or "live=fresh" in src.replace(" ", ""), \
+        "the dot's state must come from the measured staleness"
+    live = _re.search(r"\.fresh-dot\.is-live\s*\{([^}]*)\}", css)
+    assert live and _re.search(r"animation:[^;]*\b1\b", live.group(1)), "a live dot pulses once per tick"
+    assert "@keyframes" in css and _re.search(r"\.fresh-dot\.is-stale\s*\{[^}]*background", css)
+    assert _re.search(r'\[data-testid="stMain"\]\s*\{[^}]*scroll-timeline:\s*--page', css), \
+        "the reading line must ride the real scroller's own timeline"
+    line = _re.search(r'\[data-testid="stMain"\]::before\s*\{([^}]*)\}', css)
+    assert line and "animation-timeline: --page" in line.group(1), "no JS: a scroll-driven animation"
+    assert "scaleX(0)" in line.group(1), "with animations off (reduced motion) the line stays still"
+    rm = _re.search(r"@media \(prefers-reduced-motion: reduce\) \{\s*\*, \*::before, \*::after \{ animation: none", css)
+    assert rm, "the global reduced-motion rule must still stop every animation"
+
+
 def test_the_glide_is_bound_before_any_stop_and_rebinds():
     """John, 2026-10-19: "sometimes the button does not transition". The
     glide listener came from a zero-height iframe at the END of main.py,
