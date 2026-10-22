@@ -4952,6 +4952,32 @@ def test_the_glide_follows_a_moving_target_and_yields_to_the_reader():
     assert 'st.container(key="risk-map")' in src, "the map needs its own keyed container"
 
 
+def test_a_press_waits_for_its_section_as_long_as_the_page_is_still_being_written():
+    """ME-05, third review (Live audit run 39737935470, real Yahoo, cold start):
+    "Skip to the analysis" was DEAD. #analysis is written only after the whole
+    engine has run, and the press stopped waiting after a fixed 10 s; offline
+    with 4 s pulls the section came 12.3-15.7 s after the press and 0 of 2
+    presses landed (tools/glide_load_check.mjs early, which now waits for the
+    section however long it takes). The wait now lasts while Streamlit's
+    running sign is up, ends once the run is over without the section, and a
+    scroll the reader makes ends it too."""
+    import ast
+    src = (pathlib.Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
+    script = next(n.args[0].value for n in ast.walk(ast.parse(src)) if isinstance(n, ast.Call)
+                  and ast.unparse(n.func) == "_html" and n.args
+                  and isinstance(n.args[0], ast.Constant) and "__meleonaGlide" in n.args[0].value)
+    wait = script[script.index("function waitFor"):script.index("function onLink")]
+    assert "pageRunning()" in wait and '[data-testid="stStatusWidgetRunningIcon"]' in script, \
+        "the wait must last while the page is still being written"
+    assert "now - t0 < 10000 || idleSince === null" in wait, \
+        "10 s is a floor, not a cap: the wait goes on while the run goes on"
+    assert "now - idleSince < 2000" in wait and "P.__meleonaStop()" in wait, \
+        "once the run has ended without the section, the wait ends (no leak)"
+    assert "requestAnimationFrame(poll)" not in wait, "a long wait polls gently, not every frame"
+    assert "P.__meleonaScroller = scroller" in wait and "P.__meleonaSetY = scroller.scrollTop" in wait, \
+        "a scroll the reader makes while the press waits must end the wait"
+
+
 def test_only_a_decaying_flick_is_forgiven_and_every_exit_restores_the_page():
     """Council B's review of ME-05 (2026-10-22), each probe reproduced:
       - steady: a reader wheeling down at a steady 100px a notch pressed footer

@@ -299,6 +299,9 @@ _html("""
   function supersede() {
     if (P.__meleonaStop) P.__meleonaStop();
   }
+  /* Is Streamlit still writing the page? Its running icon (the one app.css
+     draws "Updating..." from) is mounted exactly while a run is in flight. */
+  const pageRunning = () => !!P.querySelector('[data-testid="stStatusWidgetRunningIcon"]');
   function glide(scroller, el) {
     /* One flight at a time: a new press, or the reader's own wheel / touch /
        key (onYield), bumps the flight number and the old frames stop. Two
@@ -373,12 +376,16 @@ _html("""
          page to grow: until its footer (the last thing the run writes) has
          arrived, or while it still grows - at most 10 s. A quiet spell alone
          is no sign of the end: the cold harness paused 3 s between mounts
-         and the flight landed 416px short just before the page grew. */
+         and the flight landed 416px short just before the page grew. And
+         the 10 s is a floor, not a cap, while the run goes on: on a slow cold
+         start the page below a late section (#analysis) kept growing for
+         longer than that (ME-05, third review). */
       if (!done) done = now;
       const on = Math.abs(tgt - scroller.scrollTop) <= 2;
       const waiting = tgt > max + 2 &&
                       (!P.querySelector('.meleona-footer') || now - grew < 3000);
-      if (!on && now - done < 10000 && (waiting || Math.abs(Math.max(0, Math.min(tgt, max)) - scroller.scrollTop) > 2)) {
+      if (!on && (now - done < 10000 || (waiting && pageRunning())) &&
+          (waiting || Math.abs(Math.max(0, Math.min(tgt, max)) - scroller.scrollTop) > 2)) {
         requestAnimationFrame(f); return;
       }
       land(scroller);
@@ -456,19 +463,36 @@ _html("""
      the whole engine (and #crisis-record was, until it moved ahead of its
      data), so during a cold load both buttons fell through to the browser's
      hash jump, which scrolled nowhere and never followed - dead 8 of 8
-     (ME-04). Keep the press, wait for the section (at most 10 s, or until
-     the reader scrolls), then fly. */
+     (ME-04). Keep the press, wait for the section, then fly.
+     How long: as long as the page is still being written. A fixed 10 s was
+     not enough on a real cold start - the Live audit (run 39737935470) saw
+     "Skip to the analysis" give up and do nothing, and offline with 4 s pulls
+     the section came 12.3-15.7 s after the press, 0 of 2 landed. The wait now
+     lasts while Streamlit's running sign is up (the icon app.css draws its
+     "Updating..." from), and 10 s from the press in any case; once the run has
+     ended (no running sign for 2 s) with the section still absent, nothing is
+     left that could write it and the wait ends. The reader ends it at once:
+     a wheel, a touch or a scroll key (onYield), or a scroll they make
+     (onScroll, measured from where the page stood at the press). No anchor
+     can be written early instead: #analysis has to sit right above the tab
+     strip, which only exists once the engine has run. */
   function waitFor(a, id) {
     supersede();                          // a flight still running lands first
     const w = P.__meleonaFlight = (P.__meleonaFlight || 0) + 1;
-    P.__meleonaStop = function () { P.__meleonaStop = null; };   // a wait changes nothing to restore
+    const scroller = findScroller(a);
+    P.__meleonaStop = function () { P.__meleonaStop = null; P.__meleonaScroller = null; };   // nothing else to restore
+    P.__meleonaScroller = scroller;       // so a scroll the reader makes while it waits ends the wait
+    P.__meleonaSetY = scroller.scrollTop;
     const t0 = performance.now();
+    let idleSince = null;
     (function poll() {
       if (w !== P.__meleonaFlight) return;   // a newer press, or the reader took over
       const el = P.getElementById(id);
       if (el) { go(a, el); return; }
-      if (performance.now() - t0 < 10000) requestAnimationFrame(poll);
-      else P.__meleonaStop = null;
+      const now = performance.now();
+      idleSince = pageRunning() ? null : (idleSince === null ? now : idleSince);
+      if (now - t0 < 10000 || idleSince === null || now - idleSince < 2000) setTimeout(poll, 100);
+      else P.__meleonaStop();             // the run is over and the section never came
     })();
   }
   function onLink(e) {

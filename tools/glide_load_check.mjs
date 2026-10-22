@@ -36,7 +36,7 @@ const LOADING = LINKS.slice(0, 5);     // the footer exists only once the run ha
 
 const b = await chromium.launch(process.env.CHROMIUM ? { executablePath: process.env.CHROMIUM } : {});
 const ctx = await b.newContext({ viewport: { width: 1440, height: 900 } });
-const tally = {}, fails = [];
+const tally = {}, fails = [], waits = {};
 
 async function sample(page, id, ms) {
   await page.evaluate(([s, id, ms]) => {
@@ -61,7 +61,7 @@ function judge(s) {
   if (end === null || Math.abs(end) > 60) return { v: 'SHORT', dist, maxStep, end };
   return { v: 'ok', dist, maxStep, end };
 }
-async function press(page, sel, label, mode, ms, act) {
+async function press(page, sel, label, mode, ms, act, until) {
   const href = await page.locator(sel).first().getAttribute('href');
   // Start where a reader would: the button on screen, 300px down the view.
   await page.locator(sel).first().evaluate((a, s) => {
@@ -72,12 +72,14 @@ async function press(page, sel, label, mode, ms, act) {
   await page.waitForTimeout(150);
   await sample(page, href.slice(1), ms);
   await act(page.locator(sel).first());
-  await page.waitForTimeout(ms + 100);
-  const r = judge(await page.evaluate(() => window.__g));
+  const extra = until ? await until(href.slice(1)) : {};
+  if (!until) await page.waitForTimeout(ms + 100);
+  const r = { ...judge(await page.evaluate(() => window.__g)), ...extra };
   const k = `${mode.padEnd(8)} ${label}`;
   tally[k] = tally[k] || { ok: 0, DEAD: 0, TELEPORT: 0, SHORT: 0 };
   tally[k][r.v]++;
   if (r.v !== 'ok') fails.push({ mode, label, ...r });
+  if (r.waited !== undefined) (waits[k] = waits[k] || []).push(r.waited);
   await page.evaluate(() => history.replaceState(null, '', location.pathname));
 }
 async function settled(page) {
@@ -97,8 +99,20 @@ if (which === 'early' || which === 'all') {
     await page.goto(url);
     await page.waitForSelector(sel, { timeout: 120000 });
     await page.waitForTimeout(200);
-    // a press may wait for its section, then fly: give it 12 s to land
-    await press(page, sel, label, 'early', 12000, l => l.click({ force: true }));
+    // A press may wait for its section, then fly. The section can arrive long after the press: on a cold start
+    // with live Yahoo pulls the whole engine runs before #analysis is written (Live audit run 39737935470: one
+    // press gave up after 10 s and did nothing). So wait for the section however long it takes (up to 3 min),
+    // then for the rest of the page (the run ends with the footer: a section near the end cannot reach the top of
+    // the view before the page below it exists), then give the flight 5 s, and say how long the section took.
+    const until = async (id) => {
+      const t0 = Date.now();
+      await page.waitForFunction((i) => !!document.getElementById(i), id, { timeout: 180000, polling: 250 }).catch(() => {});
+      const waited = Math.round((Date.now() - t0) / 100) / 10;
+      await page.waitForSelector('.meleona-footer', { timeout: 180000 }).catch(() => {});
+      await page.waitForTimeout(5000);
+      return { waited };
+    };
+    await press(page, sel, label, 'early', 190000, l => l.click({ force: true }), until);
     await page.close();
   }
 }
@@ -196,6 +210,7 @@ if (which === 'rest' || which === 'all') {
 await b.close();
 for (const [k, t] of Object.entries(tally))
   console.log(`${k.padEnd(46)} ok ${t.ok}  dead ${t.DEAD}  teleport ${t.TELEPORT}  short ${t.SHORT}`);
+for (const [k, w] of Object.entries(waits)) console.log(`${k.padEnd(46)} section arrived ${w.join(', ')} s after the press`);
 for (const f of fails) console.log('FAIL', JSON.stringify(f));
 const n = Object.values(tally).reduce((a, t) => a + t.ok + t.DEAD + t.TELEPORT + t.SHORT, 0);
 console.log(`${n - fails.length}/${n} presses passed`);
