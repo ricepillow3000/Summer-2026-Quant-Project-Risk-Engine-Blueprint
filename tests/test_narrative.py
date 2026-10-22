@@ -560,6 +560,30 @@ def test_a_fallback_anchor_that_is_used_is_named_and_sized_with_the_book():
         assert abs(book[t].target_weight - want[t]) < 1e-9, (t, book[t].target_weight, want[t])
 
 
+def test_a_held_name_is_never_labelled_left_out():
+    """ME-12 (2026-10-22): every card without a role wore "LEFT OUT", yet
+    most of them still hold capital - on the default page META held 4.1% of
+    the book under that chip. A name with weight is held without a role; only
+    a name that holds nothing is left out."""
+    from src.narrative import role_label
+    prices, dv = _book_fixture()
+    seen = set()
+    for book_value in (1e6, 5e8):
+        for d in build_book(prices, dv, book_value=book_value):
+            label = role_label(d)
+            seen.add(label)
+            if d.final_weight > 0:
+                for word in ("LEFT OUT", "EXCLUDED"):
+                    assert word not in label.upper(), (d.ticker, d.final_weight, label)
+            else:
+                assert label == "LEFT OUT", (d.ticker, label)
+            if d.role is Role.FLYER:
+                assert label == "LEADS"
+            if d.role is Role.CUSHION:
+                assert label == "ANCHOR"
+    assert {"NO ROLE", "LEFT OUT"} <= seen, f"fixture no longer shows both: {seen}"
+
+
 if __name__ == "__main__":
     import sys
 

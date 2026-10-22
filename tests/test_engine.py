@@ -4325,7 +4325,7 @@ def test_the_book_lists_an_outside_etf_only_when_it_is_the_anchor():
         loaded = list([w for w in at.selectbox if w.label.startswith("Anchor")][0].options)
         cards = {}
         for m in at.markdown:
-            hit = re.match(r"\s*(LEADS|ANCHOR|LEFT OUT)\s+([A-Z0-9.^=-]+) (.*)",
+            hit = re.match(r"\s*(LEADS|ANCHOR|NO ROLE|LEFT OUT)\s+([A-Z0-9.^=-]+) (.*)",
                            re.sub(r"<[^>]+>", " ", m.value)) if "border-left:3px solid" in m.value else None
             if hit:
                 cards[hit.group(2)] = (hit.group(1), hit.group(3))

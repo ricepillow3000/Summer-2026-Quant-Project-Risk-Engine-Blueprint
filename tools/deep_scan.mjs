@@ -468,26 +468,27 @@ await step('every preset', async () => {
 async function bookState() {
   return page.evaluate(() => {
     // A dossier card is the flex row whose first cell is its role label.
-    const ROLES = ['LEADS', 'ANCHOR', 'LEFT OUT'];
+    const ROLES = ['LEADS', 'ANCHOR', 'NO ROLE', 'LEFT OUT'];
     const cards = [...document.querySelectorAll('[data-testid="stMarkdownContainer"] div')]
       .filter(d => d.children.length === 2 && ROLES.includes(d.firstElementChild.textContent.trim()));
     const lbl = c => c.firstElementChild?.textContent.trim();
     const head = [...document.querySelectorAll('[data-testid="stMarkdownContainer"] div')]
       .map(d => d.textContent).find(t => /^\$[\d,]+ book - \d+ of \d+ names/.test(t)) || '';
     return { leads: cards.filter(c => lbl(c) === 'LEADS').length, anchors: cards.filter(c => lbl(c) === 'ANCHOR').length,
+             held: cards.filter(c => lbl(c) === 'NO ROLE').length,
              out: cards.filter(c => lbl(c) === 'LEFT OUT').length, total: cards.length, head,
              outside: cards.filter(c => /outside the chosen universe/.test(c.textContent)).length };
   });
 }
 await step('the book', async () => {
   // "n of N names hold a position worth keeping" counts the LIQUIDITY gate:
-  // an eligible name can still be left out for ranking below the cut, so
+  // an eligible name can still hold no role for ranking below the cut, so
   // leaders + anchors <= eligible <= N. N is the visitor's own names (ME-08):
   // an outside anchor's card is on screen but not one of them, so it counts
   // in neither N nor the anchors that must fit inside the eligible names.
   const counts = b => (b.head.match(/(\d+) of (\d+) names/) || []).slice(1).map(Number);
   const own = b => b.total - b.outside, ownAnchors = b => b.anchors - b.outside;
-  const cards = b => `cards: ${b.leads} lead, ${b.anchors} anchor, ${b.out} left out, ${b.outside} from outside`;
+  const cards = b => `cards: ${b.leads} lead, ${b.anchors} anchor, ${b.held} held without a role, ${b.out} left out, ${b.outside} from outside`;
   const b0 = await bookState();
   const [e0, n0] = counts(b0);
   ok(b0.total > 0, 'book: dossier cards render', cards(b0));

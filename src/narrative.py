@@ -665,6 +665,21 @@ def build_book(prices: pd.DataFrame, dollar_volume: pd.DataFrame,
     return sorted(out, key=lambda d: (order[d.role], d.momentum_rank or 10**6))
 
 
+def role_label(d: TickerDossier) -> str:
+    """The card's chip, read off the dossier's role AND its weight.
+
+    Role.EXCLUDED means "no lead or anchor role", not "not in the book": an
+    eligible name below the momentum cut still holds its risk-parity size
+    (capped by liquidity). Labelling those "LEFT OUT" read as holding nothing
+    (ME-12). Only a name with no weight at all is left out.
+    """
+    if d.role is Role.FLYER:
+        return "LEADS"
+    if d.role is Role.CUSHION:
+        return "ANCHOR"
+    return "NO ROLE" if d.final_weight > 0 else "LEFT OUT"
+
+
 def headline(book: list[TickerDossier]) -> str:
     """The one number the book leads with, per Meleona constraint 3."""
     if not book:

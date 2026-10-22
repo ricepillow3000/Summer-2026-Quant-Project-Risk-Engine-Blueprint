@@ -48,7 +48,7 @@ from src.comovement import (
     defensive_shift, least_correlated_to_pair, cluster_order,
 )
 from src.factors import factor_exposures
-from src.narrative import DEFAULT_PARTICIPATION, build_book, headline, Role
+from src.narrative import DEFAULT_PARTICIPATION, build_book, headline, role_label, Role
 from src.strategies import risk_contributions, risk_parity_weights, vol_target
 from src.hedge import min_variance_pair, rank_hedges
 from src.pairing import (anchor_rank, backtest_pair, crisis_cushion,
@@ -1750,11 +1750,13 @@ with st.container():
         # LITERAL. test_text_colours_meet_wcag_aa scans main.py for `color:#RRGGBB`
         # and an f-string placeholder hides the value from it - #8A6A3C sat at
         # ~3.1:1 here unseen because it arrived through a variable.
-        _CHIP = {Role.FLYER: ("#8A6A3C", "#F6F2EA", "LEADS"),
-                 Role.CUSHION: ("#3F3B35", "#EFEAE0", "ANCHOR"),
-                 Role.EXCLUDED: ("#6B6459", "#EDE9E3", "LEFT OUT")}
+        # The chip's words come from narrative.role_label: a name with no role
+        # can still hold capital, so "LEFT OUT" is only for a name holding none.
+        _CHIP = {Role.FLYER: ("#8A6A3C", "#F6F2EA"),
+                 Role.CUSHION: ("#3F3B35", "#EFEAE0"),
+                 Role.EXCLUDED: ("#6B6459", "#EDE9E3")}
         for _d in _the_book:
-            _col, _bg, _lbl = _CHIP[_d.role]
+            (_col, _bg), _lbl = _CHIP[_d.role], role_label(_d)
             _flag = (' &middot; <span style="color:#6A5030;">outside the chosen '
                      'universe</span>' if _d.is_fallback_anchor else "")
             # Redundant on a card that was already excluded FOR capacity - the
@@ -1778,6 +1780,9 @@ with st.container():
             "<b>Read it top to bottom.</b> Every line is a slot-filled template "
             "over measured numbers - the renderer is handed the dossier and no "
             "price data, so it cannot say anything the engine did not compute. "
+            "<b>NO ROLE</b> names are still held, at the size risk parity and "
+            "liquidity give them, just without a lead or anchor role; "
+            "<b>LEFT OUT</b> names hold nothing. "
             "Change the book size and watch names leave: that is the liquidity "
             "constraint doing real work, not a caption about it.")
     except Exception as _bk_exc:  # noqa: BLE001 - the page must never die on data
