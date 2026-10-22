@@ -172,7 +172,7 @@ const TYPED_POOL = ['ACN', 'ADI', 'AEP', 'AIG', 'ALL', 'AMT', 'ANET', 'APD', 'BB
                     'CVS', 'DAL', 'DD', 'DG', 'DHR', 'DUK', 'EBAY', 'ECL', 'ELV', 'EMR',
                     'ETN', 'EXC', 'F', 'FCX', 'GD', 'GILD'];
 const typed = [...TYPED_POOL].sort(() => Math.random() - 0.5).slice(0, 3).sort();
-// Streamlit 1.62's ticker box draws each pick as a [data-tag] labelled with it.
+// Streamlit's ticker box (1.62 to 1.66.1) draws each pick as a [data-tag] labelled with it.
 const chips = () => page.evaluate(() =>
   [...document.querySelectorAll('[data-testid="stMultiSelectTagsContainer"] [data-tag]')]
     .map(e => e.getAttribute('aria-label')));
