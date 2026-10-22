@@ -29,7 +29,7 @@ one.
 import numpy as np
 import pandas as pd
 
-from src.ingestion import MIN_ROWS
+from src.ingestion import MIN_ROWS, data_health
 
 EXTREME_MOVE_THRESHOLD = 0.50  # single-day |return| beyond this gets flagged
 
@@ -93,9 +93,8 @@ def validate_prices(prices: pd.DataFrame) -> dict:
 
     # --- Staleness ---
     if rows:
-        last_date = prices.index[-1]
-        today = pd.Timestamp.now().normalize()
-        staleness_days = int(np.busday_count(last_date.date(), today.date()))
+        # The same count the page's "Data: ... · Nd old" line shows.
+        staleness_days = data_health(prices)["staleness_days"]
         checks.append(_check(
             "freshness.staleness",
             "PASS" if staleness_days <= 1 else "WARN",
@@ -104,6 +103,8 @@ def validate_prices(prices: pd.DataFrame) -> dict:
 
     # --- Gaps vs. full business-day calendar ---
     if rows >= 2:
+        # Not ingestion.data_health's gap_days, deliberately: that one counts
+        # holidays as gaps; this one asks what is missing beyond them.
         # bdate_range removes weekends ONLY, so all ~9 US market holidays a
         # year counted as unexplained holes - the exact distinction the module
         # docstring claims to draw. USFederalHolidayCalendar ships with pandas,

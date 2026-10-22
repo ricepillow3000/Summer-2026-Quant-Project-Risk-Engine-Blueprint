@@ -16,6 +16,7 @@ Quant Deep Dive:
 import numpy as np
 import pandas as pd
 from src.ingestion import fetch_prices, get_returns, fetch_risk_free_rate
+from src.covariance import TRADING_DAYS
 
 # ETF proxies used to construct the factors.
 #   Market   = SPY (broad market)
@@ -58,7 +59,7 @@ def factor_exposures(portfolio_returns: pd.Series, period: str = "2y") -> dict:
         raise RuntimeError("Not enough overlapping history to estimate factors.")
 
     rf_annual = fetch_risk_free_rate()
-    rf_daily = (rf_annual / 252.0) if rf_annual is not None else 0.0
+    rf_daily = (rf_annual / TRADING_DAYS) if rf_annual is not None else 0.0
 
     y = df["port"].values - rf_daily
     X = df[["Market", "Size", "Value", "Momentum"]].values.astype(float).copy()
@@ -73,7 +74,7 @@ def factor_exposures(portfolio_returns: pd.Series, period: str = "2y") -> dict:
 
     names = ["Market", "Size", "Value", "Momentum"]
     return {
-        "alpha_annual": float(beta[0] * 252),
+        "alpha_annual": float(beta[0] * TRADING_DAYS),
         "risk_free_annual": rf_annual,
         "alpha_basis": (
             f"excess of the 13-week T-bill at {rf_annual:.2%} annual"

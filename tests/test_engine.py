@@ -641,8 +641,10 @@ class _FakeYahoo:
     and column sort) on fake per-name histories, records every download's
     names, and points the cache at a temp folder. Nothing leaves the machine."""
 
-    def __init__(self, years=2.0):
-        self.years, self.downloads = years, []
+    def __init__(self, years=2.0, flaky=None):
+        # flaky: {name: how many of its requests fail} - the way yfinance's
+        # locked timezone cache dropped BA for one request (pair audit run 31)
+        self.years, self.downloads, self.flaky = years, [], dict(flaky or {})
 
     def __enter__(self):
         import tempfile
@@ -656,11 +658,16 @@ class _FakeYahoo:
                 self.ticker, self._price_history = t, None
 
             def history(self, **kw):
+                if fake.flaky.get(self.ticker, 0) > 0:
+                    fake.flaky[self.ticker] -= 1
+                    raise RuntimeError("OperationalError('database is locked')")
                 return _fake_history(self.ticker, fake.years)
 
         self._tmp = tempfile.TemporaryDirectory()
         self._real = (multi.Ticker, yu.get_ticker_by_isin, ing.yf.download,
-                      ing.check_budget, ing.guarded_session, ing.DATA_DIR)
+                      ing.check_budget, ing.guarded_session, ing.DATA_DIR,
+                      getattr(ing, "RETRY_PAUSE", None))
+        ing.RETRY_PAUSE = 0.0                   # no real waiting in a unit test
         real_download = ing.yf.download
 
         def recording(tickers, *a, **k):
@@ -684,7 +691,11 @@ class _FakeYahoo:
         import yfinance.utils as yu
         import src.ingestion as ing
         (multi.Ticker, yu.get_ticker_by_isin, ing.yf.download,
-         ing.check_budget, ing.guarded_session, ing.DATA_DIR) = self._real
+         ing.check_budget, ing.guarded_session, ing.DATA_DIR, pause) = self._real
+        if pause is None:
+            del ing.RETRY_PAUSE
+        else:
+            ing.RETRY_PAUSE = pause
         self._tmp.cleanup()
 
 
@@ -703,7 +714,9 @@ def test_a_basket_stitched_from_single_names_matches_one_download():
     with _FakeYahoo() as fy:
         ing._download_close_volume(["AAA", "BTC-USD"], "2y")    # two names known
         close, volume = ing._download_close_volume(basket, "2y")
-        assert fy.downloads[-1] == ["BBB", "DEAD", "EMPTY", "EURUSD=X"], fy.downloads
+        # only the names not held, then (ME-14) only the ones that came back empty
+        assert fy.downloads[1:] == [["BBB", "DEAD", "EMPTY", "EURUSD=X"],
+                                    ["DEAD", "EMPTY"], ["DEAD", "EMPTY"]], fy.downloads
         ref = fy.reference(basket)
         pd.testing.assert_frame_equal(close, ref["Close"], check_exact=True, check_freq=False)
         pd.testing.assert_frame_equal(volume, ref["Volume"], check_exact=True,
@@ -736,7 +749,8 @@ def test_adding_names_to_a_known_basket_downloads_only_the_new_names():
     with _FakeYahoo() as fy:
         ing.fetch_prices(["AAA", "BBB"])
         ing.fetch_prices(["AAA", "BBB", "CCC", "DDD", "DEAD"])
-        assert fy.downloads == [["AAA", "BBB"], ["CCC", "DDD", "DEAD"]], fy.downloads
+        # DEAD is never served: asked again twice (ME-14), then left out
+        assert fy.downloads == [["AAA", "BBB"], ["CCC", "DDD", "DEAD"], ["DEAD"], ["DEAD"]], fy.downloads
         ing.fetch_prices(["CCC", "DEAD"])
         assert fy.downloads[-1] == ["DEAD"], f"a failed name was remembered: {fy.downloads}"
 
@@ -3372,7 +3386,9 @@ def test_a_stranger_cannot_park_files_in_server_memory():
 
 def test_every_pip_audit_exception_is_unreachable_and_expires():
     """2026-10-20: 8 Pillow CVEs (crafted PDF/GIF/PPM/TIFF/EPS files) made the
-    Live audit's pip_audit red. Streamlit caps Pillow below 13 in every release
+    Live audit's pip_audit red, and 16 more Pillow CVEs on 2026-10-22 (24 in
+    all, every one fixed only in Pillow 13.0.0); 16 more IDs approved by John
+    on 2026-10-22. Streamlit caps Pillow below 13 in every release
     up to 1.66, so the fix (13.0) cannot be installed; John chose to skip those
     IDs rather than leave the gate red. The skip holds only while the app opens
     no image a visitor supplies, and only while the fix is out of reach - this
@@ -3442,8 +3458,20 @@ def test_a_crafted_clear_cache_message_clears_nothing():
     impl = [n for n in tree.body if isinstance(n, ast.FunctionDef)
             and n.name == getattr(patch[0].value, "id", None)]
 
-    class Session(AppSession):
-        """A subclass, so the real class is never patched by the test."""
+    # main.py patches the real AppSession class for the whole process, so after
+    # any page boot in this process the class already carries the no-op and
+    # the control below failed (ME-10: order-dependent). The control runs on a
+    # pristine copy of Streamlit's own module, loaded under a private name, so
+    # it holds whatever ran before it - and the real class is never touched.
+    import importlib.util
+    import streamlit.runtime.app_session as _app_session_mod
+    spec = importlib.util.spec_from_file_location("_pristine_app_session",
+                                                  _app_session_mod.__file__)
+    pristine = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(pristine)
+
+    class Session(pristine.AppSession):
+        """A subclass of a fresh copy, so no real class is patched by the test."""
 
         def __del__(self):  # the stub never started, so there is nothing to shut down
             pass
@@ -3895,7 +3923,8 @@ def test_replay_caption_states_the_dates_actually_replayed():
     replayed returns' own first and last dates."""
     src = (pathlib.Path(__file__).resolve().parent.parent / "main.py"
            ).read_text(encoding="utf-8")
-    lines = [ln for ln in src.splitlines() if "Replaying actual market returns from" in ln]
+    # The verb follows the engine (ME-07): "Replaying" or "Calibrating to".
+    lines = [ln for ln in src.splitlines() if "actual market returns from" in ln]
     assert len(lines) == 1, lines
     assert "shocked_returns.index[0]" in lines[0] and "shocked_returns.index[-1]" in lines[0], (
         f"caption does not print the replayed dates: {lines[0].strip()}")
@@ -4062,7 +4091,12 @@ def test_fan_chart_caption_claims_block_resampling_only_when_it_happened():
     assert "resampled day by day (window too short for blocks)" in iid, iid
     blk = monte_carlo(_clustered_returns(n=800), np.array([1.0]), n_simulations=400)
     assert blk["block_days"] > 1
-    assert f"resampled in {blk['block_days']}-day blocks so crash weeks stay intact" in caption(blk)
+    # A geometric block of mean N keeps nothing intact by construction, so the
+    # caption says what the bootstrap does and claims nothing more (ME-03,
+    # 2026-10-22: the default page printed "2-day blocks so crash weeks stay
+    # intact").
+    assert f"resampled in blocks averaging {blk['block_days']} days" in caption(blk), caption(blk)
+    assert "crash weeks" not in caption(blk), caption(blk)
 
 
 def test_market_drawdown_shock_compounds_to_the_labelled_drawdown():
@@ -4075,7 +4109,9 @@ def test_market_drawdown_shock_compounds_to_the_labelled_drawdown():
            and ast.unparse(n.test) == "drawdown_shock != 0"]
     assert len(ifs) == 1, "the drawdown-shock step moved"
     for shock in (-50, -30, -5):
+        from src.covariance import TRADING_DAYS
         ns = _exec_nodes(ifs[0].body, {"np": np, "drawdown_shock": shock,
+                                       "TRADING_DAYS": TRADING_DAYS,
                                        "shocked_returns": pd.DataFrame(np.zeros((252, 2)))})
         grown = (1 + ns["shocked_returns"]).prod()
         assert np.allclose(grown, 1 + shock / 100), \
@@ -4194,7 +4230,7 @@ def _offline_market_prices(tickers=None, period="2y", **_kw):
     return pd.DataFrame(cols, index=idx).iloc[-252 * years:]
 
 
-def _offline_app(setup=None, market=None, rf=0.045):
+def _offline_app(setup=None, market=None, rf=0.045, adv=5e9, dollar_volume=None):
     """Run the real main.py under AppTest on _offline_market_prices (or
     `market`); returns (AppTest, restore). Every src module is imported BEFORE
     patching, so a module-level `from src.ingestion import fetch_prices` is
@@ -4212,11 +4248,11 @@ def _offline_app(setup=None, market=None, rf=0.045):
     market = market or _offline_market_prices
     fakes = {
         "fetch_prices": market,
-        "fetch_dollar_volume": lambda tickers=None, period="2y", **k: pd.DataFrame(
+        "fetch_dollar_volume": dollar_volume or (lambda tickers=None, period="2y", **k: pd.DataFrame(
             5e9, index=market(tickers, period).index,
-            columns=list(tickers)),
+            columns=list(tickers))),
         "average_dollar_volume": lambda tickers=None, *a, **k: pd.Series(
-            5e9, index=list(tickers or [])),
+            adv, index=list(tickers or [])),
         "fetch_risk_free_rate": lambda *a, **k: rf,
         "provenance": lambda *a, **k: None,
     }
@@ -4277,16 +4313,46 @@ def test_the_books_grit_is_the_grit_zones_full_history_grit():
         wrong = {t: (g, round(float(tab[t]))) for t, g in book.items()
                  if g != round(float(tab[t]))}
         assert not wrong, f"Book grit vs Grit Zone grit (book, tab): {wrong}"
-        # With the defensive shelf on, still full history - over the Book's
-        # own universe, the peer group its sentences name.
+        # With the defensive shelf on, the same: the shelf is offered as an
+        # anchor, never added to the visitor's universe (ME-08, 2026-10-22:
+        # it printed "17 of 17 names" and V 67 against 61 in the tab).
         at.toggle(key="book_fallback").set_value(True).run()
         book = _book_grit(at)
-        from src.pairing import DEFENSIVE_ANCHOR_TICKERS
-        full = grit_scores(loaded + [t for t in DEFENSIVE_ANCHOR_TICKERS
-                                     if t not in loaded])["scores"]["grit_score"]
-        wrong = {t: (g, round(float(full[t]))) for t, g in book.items()
-                 if g != round(float(full[t]))}
-        assert not wrong, f"Book grit vs full-history grit (book, full): {wrong}"
+        assert set(book) <= set(loaded), f"grit printed for names outside the basket: {set(book) - set(loaded)}"
+        wrong = {t: (g, round(float(tab[t]))) for t, g in book.items()
+                 if g != round(float(tab[t]))}
+        assert not wrong, f"Book grit vs Grit Zone grit, shelf on (book, tab): {wrong}"
+        head = [m.value for m in at.markdown if " book - " in m.value and "names hold" in m.value]
+        assert head and f"of your {len(loaded)} names hold" in head[0], head
+    finally:
+        restore()
+
+
+def test_the_book_lists_an_outside_etf_only_when_it_is_the_anchor():
+    """ME-03 (2026-10-22): the default page listed TLT, GLD, XLP and USMV as
+    "LEFT OUT" - XLP "simply did not rank in the top 3" though a fallback can
+    never be a flyer - and they held 21.5% of the book. An outside ETF appears
+    only as the anchor it was chosen to be, and says it is from outside."""
+    import re
+    from src.pairing import DEFENSIVE_ANCHOR_TICKERS
+    at, restore = _offline_app()
+    try:
+        loaded = list([w for w in at.selectbox if w.label.startswith("Anchor")][0].options)
+        cards = {}
+        for m in at.markdown:
+            hit = re.match(r"\s*(LEADS|ANCHOR|NO ROLE|LEFT OUT)\s+((?:\d+\.\d%|<0\.1%) of the book\s+)?"
+                           r"([A-Z0-9.^=-]+) (.*)",
+                           re.sub(r"<[^>]+>", " ", m.value)) if "border-left:3px solid" in m.value else None
+            if hit:
+                # a NO ROLE card, and only that one, says what it holds (ME-12 review)
+                assert bool(hit.group(2)) == (hit.group(1) == "NO ROLE"), hit.group(0)[:80]
+                cards[hit.group(3)] = (hit.group(1), hit.group(4))
+        assert cards, "no Book cards parsed"
+        shelf = [t for t in DEFENSIVE_ANCHOR_TICKERS if t not in loaded]
+        for t, (role, text) in cards.items():
+            if t in shelf:
+                assert role == "ANCHOR" and "outside the chosen universe" in text, (t, role, text)
+        assert set(cards) - set(shelf) == set(loaded), sorted(cards)
     finally:
         restore()
 
@@ -4736,6 +4802,411 @@ def test_every_browser_pick_checks_the_option_took():
             f"{js.name}: pick() returns without checking the box shows the option")
     assert picks >= 2, f"expected the walk's and the deep scan's pick(), found {picks}"
 
+
+# --- ME-07 (2026-10-22): every sentence follows its numbers ---
+
+def _page_text(at) -> list[str]:
+    """Every sentence a visitor can read on one rendered run, tags stripped."""
+    import re
+    out = [m.value for m in at.markdown] + [c.value for c in at.caption]
+    out += [w.value for w in at.warning] + [i.value for i in at.info]
+    out += [f"{m.label} = {m.value} ({m.proto.delta})" for m in at.metric]
+    return [re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", t)) for t in out]
+
+
+_PAGES = {}
+
+
+def _offline_page(name="default", **boot):
+    """One offline boot per distinct setup, read once and shared by the tests
+    that only read it (each boot costs ~15 s)."""
+    if name not in _PAGES:
+        at, restore = _offline_app(**boot)
+        try:
+            _PAGES[name] = {"text": _page_text(at),
+                            "expanders": [e.label for e in at.expander]}
+        finally:
+            restore()
+    return _PAGES[name]
+
+
+def _crisis_pages():
+    """The COVID replay under each engine, from one boot."""
+    if "crisis" not in _PAGES:
+        at, restore = _offline_app()
+        try:
+            [s for s in at.selectbox if s.label == "Scenario"][0].set_value(
+                "COVID-19 crash (2020)").run()
+            boot = _page_text(at)
+            [r for r in at.radio if r.label == "Return model"][0].set_value(
+                "Jump-diffusion (Merton)").run()
+            radio = [r for r in at.radio if r.label == "Return model"][0]
+            _PAGES["crisis"] = {"bootstrap": boot, "jump": _page_text(at),
+                                "engine_help": radio.help}
+        finally:
+            restore()
+    return _PAGES["crisis"]
+
+
+def _verdict(text):
+    hits = [t for t in text if "1-Year CVaR (95% confidence)" in t]
+    assert len(hits) == 1, hits
+    return hits[0]
+
+
+def test_every_history_length_on_the_page_is_read_from_the_loaded_returns():
+    """ME-03 (2026-10-22): one name listed 120 trading days ago cut the
+    aligned basket to 120 rows - "Data: 120 trading days" - while the
+    Methodology line said "resampled from 2 years of daily historical
+    returns" and the pair panel "In the loaded 2-year history". Five sentences
+    hard-coded the window; each must be read from the loaded returns."""
+    import re
+
+    def young(tickers=None, period="2y", align=True, **_):
+        df = _offline_market_prices(tickers, period)
+        if "V" in df.columns:
+            df.loc[df.index[:-120], "V"] = np.nan
+        return df.dropna() if align else df
+
+    text = _offline_page("young", market=young)["text"]
+    page = " ".join(text)
+    rows = int(re.search(r"Data: (\d+) trading days of prices", page).group(1))
+    assert rows == 120, f"fixture no longer shortens the basket: {rows} rows"
+    for stale in ("2-year", "2 years", "two-year", "two years"):
+        assert stale not in page, f"the page still says {stale!r} over {rows} rows"
+    method = [t for t in text if t.startswith("Methodology:")]
+    assert method and f"{rows - 1} daily returns" in method[0], method
+
+
+def test_the_crisis_verdict_names_the_engine_that_made_it():
+    """ME-03 (2026-10-22): under jump-diffusion the verdict still said
+    "Replaying the actual returns of COVID-19 crash (2020) (52 trading days)",
+    yet nothing is replayed - a Merton model is calibrated to the window. And
+    under the bootstrap the 52 days are resampled into a full year, which the
+    sentence did not say."""
+    pages = _crisis_pages()
+    boot, jump = _verdict(pages["bootstrap"]), _verdict(pages["jump"])
+    assert "Replaying the actual returns of COVID-19 crash (2020)" in boot, boot
+    assert "resampled into a year" in boot, boot
+    assert "Replaying" not in jump and "replay" not in jump.lower(), jump
+    assert "calibrated to the actual returns of COVID-19 crash (2020)" in jump, jump
+    cap = [t for t in pages["jump"] if "actual market returns from" in t]
+    assert cap and not cap[0].startswith("Replaying"), cap
+    assert any(t.startswith("Replaying actual market returns from")
+               for t in pages["bootstrap"])
+
+
+def test_the_jump_diffusion_caption_states_its_method_not_a_result():
+    """ME-03 (2026-10-22): "a fatter, more honest crash" was printed whatever
+    the two engines' CVaRs were - a result stated as a fixed sentence. The
+    caption and the engine help describe what the model does, not how its
+    answer compares."""
+    pages = _crisis_pages()
+    jd = [t for t in pages["jump"] if t.startswith("Merton jump-diffusion:")]
+    assert jd, "jump-diffusion caption missing"
+    for said in (jd[0], pages["engine_help"]):
+        for claim in ("fatter", "more honest"):
+            assert claim not in said, f"{claim!r} stated as a fact: {said}"
+
+
+def test_a_difference_of_two_percentages_says_points_and_a_ratio_says_relative():
+    """ME-03 (2026-10-22): the defensive shift read "Annualized vol 17.8%
+    (-2.9% vs current)" for a fall from 20.7% - 2.9 points, a 14% relative
+    cut - and the unwind delta "+0% for the unwind" beside a CVaR in percent
+    was a relative change. A difference of two percentages says points; a
+    ratio says relative."""
+    import re
+    text = _offline_page()["text"]
+    shift = [t for t in text if t.startswith(("Daily CVaR (95%) =",
+                                              "Annualized vol ="))]
+    assert len(shift) == 2, f"defensive simulation not on the page: {shift}"
+    for t in shift:
+        assert "points vs current" in t, t
+    unwind = [t for t in text if t.startswith("Liquidity-adjusted CVaR =")]
+    assert unwind and "relative" in unwind[0], unwind
+    # The Book's tail gap is a difference of two ES figures: points too
+    # (Council A review, 2026-10-22: "2.4% shallower at ES 97.5").
+    gaps = [t for t in text if "shallower at ES" in t or "DEEPER at ES" in t]
+    assert gaps, "no Book tail-gap sentence on the page"
+    for t in gaps:
+        assert re.search(r"\d points (shallower|DEEPER) at ES", t), t
+
+
+def test_the_headline_unwind_names_its_book_size_and_participation():
+    """ME-03 (2026-10-22): the verdict widened the tail for "the ~N trading
+    days it takes to fully unwind at 20% of daily volume" without saying the
+    days were for a $1,000,000 book - the one input they turn on - while The
+    Book and the Liquidity tab each let the visitor pick another size."""
+    from src.narrative import DEFAULT_PARTICIPATION
+    v = _verdict(_offline_page("thin volume", adv=5e4)["text"])
+    assert "tail widens to" in v, f"thin volume did not widen the tail: {v}"
+    assert "$1,000,000 book" in v, v
+    assert f"{DEFAULT_PARTICIPATION:.0%} of each name's average daily dollar volume" in v, v
+
+
+def test_a_median_that_can_be_negative_is_called_a_return_not_a_gain():
+    """ME-03 (2026-10-22): the crisis slabs printed "median gain three years
+    after the scariest day" over -21% and "even a buyer at the pre-crash peak
+    was ahead three years later (median -39%)"; the tab's metric read "Median
+    1y gain from the trough = -19%". Words that assume a sign cannot sit on a
+    number that can take either."""
+    import re
+    page = " ".join(_offline_page()["text"])
+    assert re.search(r"median return -\d+%", page), \
+        "fixture no longer shows a negative median"
+    for word in ("median gain", "Median 1y gain", "even a buyer"):
+        assert word not in page, f"{word!r} on the page"
+
+
+def test_the_breadth_label_and_its_caption_quote_the_same_numbers():
+    """ME-03 (2026-10-22): "IR at raw breadth (605 bets/yr)" over a caption
+    "12 names x 50 rebalances a year" - 252/5 = 50.4 was rounded only in the
+    caption, so the two printed products disagreed."""
+    import re
+    page = " ".join(_offline_page()["text"])
+    label = int(re.search(r"IR at raw breadth \((\d+) bets/yr\)", page).group(1))
+    names, reb = re.search(r"Raw breadth counts (\d+) names × ([\d.]+) rebalances",
+                           page).groups()
+    assert round(int(names) * float(reb)) == label, (names, reb, label)
+
+
+def test_the_page_points_only_to_controls_that_exist():
+    """ME-03 (2026-10-22): the factor caption said "Flip the covariance
+    estimator to EWMA in Engine controls"; no control on the page has that
+    name - the estimator lives in the 02 drawer."""
+    page = _offline_page()
+    text = " ".join(page["text"])
+    assert "Engine controls" not in text
+    alloc = [e.split(" - ")[0] for e in page["expanders"] if e.startswith("02 ")]
+    assert alloc and f"to EWMA in {alloc[0]}" in text, alloc
+
+
+# --- ME-09 (2026-10-22): data-quality holes ---
+
+def test_a_day_with_no_volume_reported_is_skipped_not_read_as_zero():
+    """ME-03 (2026-10-22): the Book zero-filled missing dollar-volume days
+    (`fillna(0.0)`), so a name with a few gaps in its last 63 days had its
+    5th-percentile volume dragged to 0 and was printed as "reports no volume
+    on this feed" - a feed that did report volume on every other day."""
+    def gappy(tickers=None, period="2y", **_):
+        idx = _offline_market_prices(tickers, period).index
+        dv = pd.DataFrame(5e9, index=idx, columns=list(tickers))
+        if "V" in dv.columns:
+            dv.iloc[-63::6, dv.columns.get_loc("V")] = np.nan   # 11 of 63 days
+        return dv
+    at, restore = _offline_app(dollar_volume=gappy)
+    try:
+        cards = [m.value for m in at.markdown if "border-left:3px solid" in m.value]
+        v = [c for c in cards if ">V " in c]
+        assert v, "no Book card for V"
+        assert "reports no volume" not in v[0], v[0]
+    finally:
+        restore()
+
+
+def test_a_crisis_with_none_of_the_basket_trading_is_left_out_of_the_race():
+    """ME-03 (2026-10-22): when no basket member traded at a crisis's start,
+    recovery_race set basket_fell=False, which the page reads as "never fell"
+    and race_days() as 0 - a basket WIN in a race it never ran. It must be
+    left out of the count and named as left out."""
+    import src.conviction as conv
+    from src.scenarios import HISTORICAL_REGIMES
+    idx = pd.bdate_range("1999-01-04", "2026-10-14")
+    rng = np.random.default_rng(4)
+    px = pd.DataFrame(100 * np.exp(np.cumsum(rng.normal(0.0003, 0.012, (len(idx), 3)), axis=0)),
+                      index=idx, columns=["SPY", "NEW1", "NEW2"])
+    px.loc[px.index < "2012-01-03", ["NEW1", "NEW2"]] = np.nan
+    real = conv.fetch_prices
+    conv.fetch_prices = lambda tickers, **k: px[list(tickers)]
+    try:
+        race = conv.recovery_race(basket=["NEW1", "NEW2"], benchmark="SPY")
+    finally:
+        conv.fetch_prices = real
+    early = [n for n, (s, _) in HISTORICAL_REGIMES.items() if pd.Timestamp(s) < pd.Timestamp("2012-01-03")]
+    assert early, "fixture no longer has a crisis before the basket listed"
+    rec = conv.race_record(race)
+    assert set(early) <= set(rec["left_out"]), rec["left_out"]
+    assert not set(early) & set(rec["decided"]["crisis"]), list(rec["decided"]["crisis"])
+    assert rec["n"] == len(rec["decided"]) and 0 <= rec["wins"] <= rec["n"]
+
+
+def test_the_balance_tab_ranks_and_sizes_a_pair_on_one_risk_matrix():
+    """ME-03 (2026-10-22): Balance ranked partners on the sample correlation
+    but sized the blend on the selected estimator. Under EWMA the two differ
+    by up to 0.47 in correlation and 16 points of annual vol on the offline
+    market, so the page could name a "least-correlated" partner and quote a
+    correlation the blend beside it was not computed from."""
+    from src.covariance import estimate_covariance
+    from src.comovement import correlation_from_cov
+    from src.hedge import rank_hedges
+    from src.ingestion import get_returns
+    at, restore = _offline_app()
+    try:
+        [s for s in at.selectbox if s.label == "Covariance estimator"][0].set_value("EWMA").run()
+        loaded = list([w for w in at.selectbox if w.label.startswith("Anchor")][0].options)
+        anchor = [w for w in at.selectbox if w.label.startswith("Anchor")][0].value
+        cap = [c.value for c in at.caption if "Long-only minimum-variance weights" in c.value]
+        # The defensive pair beside it is a real-history backtest on plain
+        # sample volatility, so it says "realized" rather than borrow the label.
+        pair = [m.value for m in at.markdown if "annual vol to" in m.value]
+        assert pair and "realized annual vol to" in pair[0], pair[:1]
+    finally:
+        restore()
+    rets = get_returns(_offline_market_prices(loaded, "2y"))
+    cov, _ = estimate_covariance(rets, "EWMA")
+    ranked = rank_hedges(correlation_from_cov(cov), anchor)
+    best, corr = ranked.index[0], float(ranked.iloc[0])
+    assert cap, "Balance caption missing"
+    assert f"**{best}**" in cap[0] and f"{corr:+.2f}" in cap[0], (best, f"{corr:+.2f}", cap[0])
+    assert "EWMA" in cap[0], f"the caption does not name its risk matrix: {cap[0]}"
+
+
+# --- ME-10 (2026-10-22): one way to do each thing ---
+
+def test_trading_days_per_year_is_defined_once():
+    """ME-03 (2026-10-22): TRADING_DAYS = 252 was defined in three modules
+    and ~40 bare 252s stood beside them - one number, many places to drift.
+    It lives in src.covariance; every other module imports it."""
+    import ast
+    root = pathlib.Path(__file__).resolve().parent.parent
+    defs, bare = [], []
+    for f in sorted((root / "src").glob("*.py")) + [root / "main.py"]:
+        tree = ast.parse(f.read_text(encoding="utf-8"))
+        the_one = set()
+        for n in ast.walk(tree):
+            if isinstance(n, ast.Assign) and any(
+                    isinstance(t, ast.Name) and t.id == "TRADING_DAYS" for t in n.targets):
+                defs.append(f.name)
+                the_one.add(id(n.value))
+        for n in ast.walk(tree):
+            if (isinstance(n, ast.Constant) and id(n) not in the_one and type(n.value) in (int, float)
+                    and n.value in (252, 756)):
+                bare.append(f"{f.name}:{n.lineno}")
+    assert defs == ["covariance.py"], f"TRADING_DAYS defined in {defs}"
+    assert not bare, f"bare trading-day counts: {bare}"
+
+
+def test_there_is_one_expected_shortfall_and_it_skips_missing_days():
+    """ME-03 (2026-10-22): risk.cvar and pairing.expected_shortfall were two
+    copies of one estimator, and only one dropped missing days - the other
+    returned nan on a series with a gap."""
+    from src.pairing import expected_shortfall
+    rng = np.random.default_rng(9)
+    r = pd.Series(rng.standard_t(4, 600) * 0.01)
+    gappy = r.copy()
+    gappy.iloc[::50] = np.nan
+    assert np.isfinite(cvar(gappy)), "cvar read a missing day as nan"
+    assert cvar(gappy) == cvar(gappy.dropna())
+    for c in (0.95, 0.975, 0.99):
+        assert expected_shortfall(gappy, c) == cvar(gappy, c)
+
+
+def test_the_jump_calibration_uses_the_unbiased_sample_variance():
+    """ME-10 (2026-10-22): calibrate_jump_diffusion is a thresholded method of
+    moments - each part's mean and spread read off its own days - not a
+    Gaussian MLE, so the unbiased (n-1) sample variance is the estimator. Its
+    ddof=0 understated the variance by (n-1)/n: ~7% on a 15-day crisis
+    window, which moved the headline CVaR +1.20 points there (+0.28 on 52
+    days, +0.06 on two years; Monte Carlo s.e. ~0.25)."""
+    from src.risk import calibrate_jump_diffusion
+    lr = np.log1p(np.linspace(-0.01, 0.01, 15))        # 15 calm days, no jumps
+    p = calibrate_jump_diffusion(np.expm1(lr))
+    assert p["n_jumps"] == 0
+    assert abs(p["sigma_d"] ** 2 - lr.var(ddof=1)) < 1e-15, (p["sigma_d"] ** 2, lr.var(ddof=1))
+
+
+
+def test_a_fall_is_written_as_its_size_never_as_a_double_negative():
+    """Council A review (2026-10-22): the defensive pair read "holding META
+    alone fell -36% at its worst" - fell, minus: a reader can take it as a
+    rise. A fall is stated by its size beside the verb."""
+    import re
+    page = " ".join(_offline_page()["text"])
+    assert re.search(r"alone fell \d+% at its worst", page), "pair sentence missing"
+    assert re.search(r"the fall was \d+%", page), "pair sentence missing"
+    for bad in (r"fell -\d", r"fall was -\d"):
+        assert not re.search(bad, page), bad
+
+
+def test_the_loaded_window_is_counted_one_way_everywhere():
+    """Council A review (2026-10-22): the same window read "Data: 504 trading
+    days" in one caption and "503 trading days" in the next - 504 prices give
+    503 daily returns, but one noun with two counts reads as a contradiction.
+    Prices are counted in trading days, returns in daily returns, and the
+    window's two counts are never swapped."""
+    import re
+    page = " ".join(_offline_page()["text"])
+    rows = int(re.search(r"Data: (\d+) trading days of prices \((\d+) daily returns\)", page).group(1))
+    assert f"{rows - 1} trading days" not in page, f"{rows - 1} returns called trading days"
+    assert f"{rows} daily returns" not in page, f"{rows} prices called daily returns"
+    assert f"{rows - 1} daily returns" in page
+
+
+
+def test_the_pair_audit_download_retries_a_name_the_feed_dropped_and_fails_one_it_never_serves():
+    """Pair audit runs 28 and 31 (2026-10-22) each failed TICK-01 on one name,
+    BAC then BA, with every other check green. Run 31's download log names the
+    cause: "['BA']: OperationalError('database is locked')" - yfinance's own
+    timezone cache, locked under its download threads, dropped the name for
+    one request. The download goes through the app's chokepoint, which now
+    asks again for a dropped name (ME-14): dropped once, BA passes; never
+    served, it still fails TICK-01. Nothing is filled in."""
+    import tempfile
+    import tests.pair_audit as pa
+    victim = "BA"
+    assert victim in pa.UNIVERSE + pa.EXTRA
+    results = {}
+    try:
+        for name, drops in (("once", 1), ("always", 99)):
+            with _FakeYahoo(flaky={victim: drops}):
+                out = pathlib.Path(tempfile.mkdtemp()) / "prices.parquet"
+                assert pa.download(str(out)) == 0
+            pa._MASTER = pd.read_parquet(out)
+            rows = pa.audit_ticker(victim, pa._MASTER.index[-1])
+            results[name] = [r[2] for r in rows if r[0] == "TICK-01"]
+            s = pa._MASTER[victim].dropna() if victim in pa._MASTER else pd.Series(dtype=float)
+            want = len(_fake_history(victim).index)
+            assert s.empty or len(s) == want, f"{name}: {len(s)} rows of {victim}, not {want}"
+    finally:
+        pa._MASTER = None
+    assert results["once"] == ["PASS"], f"a name dropped once must be fetched again: {results}"
+    assert results["always"] == ["FAIL"], f"a name never served must still fail TICK-01: {results}"
+
+
+def test_the_download_asks_again_only_for_a_dropped_name_and_only_with_budget():
+    """ME-14: the lock that dropped BA from the audit can drop a name from a
+    visitor's basket in the same chokepoint. A name that comes back empty is
+    asked for again, alone, at most twice: dropped once it is served and
+    cached; never served it stays missing, uncached and left out exactly as
+    before; with nothing dropped there is no extra request at all; and with
+    no budget left the retry does not spend what is not there."""
+    import src.ingestion as ing
+    with _FakeYahoo() as fy:                              # the normal path
+        ing._download_close_volume(["AAA", "BBB"], "2y")
+        assert fy.downloads == [["AAA", "BBB"]], f"extra requests: {fy.downloads}"
+    with _FakeYahoo(flaky={"BBB": 1}) as fy:              # dropped once
+        close, _ = ing._download_close_volume(["AAA", "BBB"], "2y")
+        assert fy.downloads == [["AAA", "BBB"], ["BBB"]], fy.downloads
+        assert close["BBB"].notna().sum() > 100, "the second request was not used"
+        assert pathlib.Path(ing._raw_path("BBB", "2y")).is_file(), "served but not cached"
+    with _FakeYahoo(flaky={"BBB": 99}) as fy:             # never served
+        close, _ = ing._download_close_volume(["AAA", "BBB"], "2y")
+        assert fy.downloads == [["AAA", "BBB"], ["BBB"], ["BBB"]], fy.downloads
+        assert close["BBB"].isna().all(), "a name never served was filled in"
+        assert not pathlib.Path(ing._raw_path("BBB", "2y")).exists(), "a failure was cached"
+        px = ing.fetch_prices(["AAA", "BBB"], use_cache=False)
+        assert "BBB" not in px.columns, "left out, as a name the feed has no data for"
+    with _FakeYahoo(flaky={"BBB": 1}) as fy:              # no budget for a retry
+        spent = {"n": 0}
+
+        def budget(*a, **k):
+            spent["n"] += 1
+            if spent["n"] > 1:
+                raise ing.BudgetExhausted("spent")
+        ing.check_budget = budget
+        close, _ = ing._download_close_volume(["AAA", "BBB"], "2y")
+        assert fy.downloads == [["AAA", "BBB"]], f"a retry spent a spent budget: {fy.downloads}"
+        assert close["BBB"].isna().all()
 
 if __name__ == "__main__":
     import sys

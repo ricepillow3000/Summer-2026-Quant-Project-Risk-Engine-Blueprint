@@ -38,6 +38,7 @@ import numpy as np
 import pandas as pd
 
 from src.scenarios import HISTORICAL_REGIMES
+from src.covariance import TRADING_DAYS
 
 # Need enough history to say anything about multi-year drawdown recovery and
 # rolling-window consistency - much longer than the 60-row floor risk.py uses
@@ -49,7 +50,7 @@ MIN_HISTORY_DAYS = 400
 DEFAULT_DD_THRESHOLD = 0.05
 
 # Trading days of rolling window for the consistency metric (~1 year).
-DEFAULT_CONSISTENCY_WINDOW = 252
+DEFAULT_CONSISTENCY_WINDOW = TRADING_DAYS
 
 # How far past a crisis window we'll look for the price to reclaim its
 # pre-crisis level before calling it "not recovered" (~2 trading years).

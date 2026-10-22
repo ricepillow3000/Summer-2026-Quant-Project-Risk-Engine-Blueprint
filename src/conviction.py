@@ -40,13 +40,15 @@ Honest limits:
   analysis, not investment advice.
 """
 
+import numpy as np
 import pandas as pd
 
 from src.ingestion import fetch_prices
+from src.covariance import TRADING_DAYS
 from src.scenarios import HISTORICAL_REGIMES
 
 BENCHMARK = "SPY"
-HORIZONS = {"1y later": 252, "3y later": 756}
+HORIZONS = {"1y later": TRADING_DAYS, "3y later": 3 * TRADING_DAYS}
 
 # Names whose capital spending is dominated by compute / AI infrastructure
 # today. Fixed list, disclosed in the UI; their PAST record is shown as-is.
@@ -54,7 +56,7 @@ AI_CAPEX_BASKET = ["NVDA", "MSFT", "GOOGL", "AMZN", "META", "AVGO"]
 
 # How far past the trough we search for a reclaim of the pre-crisis peak
 # before calling it "not recovered" within the horizon (~3 trading years).
-RECOVERY_HORIZON_DAYS = 756
+RECOVERY_HORIZON_DAYS = 3 * TRADING_DAYS
 
 MIN_WINDOW_ROWS = 5  # fewer rows than this and the window isn't usable
 
@@ -193,7 +195,7 @@ def recovery_race(basket: list[str] | None = None,
             continue
         comp = _composite(members, s)
         cwin = comp.loc[s:e]
-        row = {"crisis": name}
+        row = {"crisis": name, "basket_traded": False}
 
         # Benchmark leg. `*_fell` separates "never declined in this window"
         # (nothing to reclaim) from "declined and never got back" (days=None).
@@ -206,6 +208,7 @@ def recovery_race(basket: list[str] | None = None,
         # Basket leg - needs enough members trading through the window
         if len(cwin) >= MIN_WINDOW_ROWS:
             c_peak, c_trough = _peak_trough(cwin)
+            row["basket_traded"] = True
             row["basket_fell"] = c_peak is not None
             row["basket_days"] = (
                 _days_to_reclaim(comp, c_trough, float(cwin.loc[c_peak]))
@@ -220,6 +223,27 @@ def recovery_race(basket: list[str] | None = None,
             row["basket_members"] = 0
         rows.append(row)
     return pd.DataFrame(rows)
+
+
+def race_record(race: pd.DataFrame) -> dict:
+    """The race as the page reports it: the crises actually raced, the
+    basket's wins among them, and the crises left out.
+
+    A crisis is raced when the basket had members trading through it and at
+    least one side fell. With no member trading, recovery_race reports
+    basket_fell=False, which race_days() reads as "never fell" - 0 days, a
+    win in a race the basket never ran (ME-03, 2026-10-22). Those crises are
+    left out and named instead. Ranking is by race_days: never fell (0) beats
+    a reclaim, which beats never getting back (inf).
+    """
+    traded = race.get("basket_traded", pd.Series(True, index=race.index)).astype(bool)
+    shown = race[traded & (race["bench_fell"] | race["basket_fell"])]
+    wins = int(sum(
+        race_days(r["basket_days"], r["basket_fell"], np.inf)
+        < race_days(r["bench_days"], r["bench_fell"], np.inf)
+        for _, r in shown.iterrows()))
+    return {"decided": shown, "wins": wins, "n": int(len(shown)),
+            "left_out": race.loc[~traded, "crisis"].tolist()}
 
 
 def load_conviction(benchmark: str = BENCHMARK) -> dict:

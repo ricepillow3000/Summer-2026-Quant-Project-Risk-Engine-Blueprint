@@ -40,7 +40,8 @@ import numpy as np
 import pandas as pd
 from scipy import stats as sstats
 
-TRADING_DAYS = 252
+from src.covariance import TRADING_DAYS
+
 DT = 1.0 / TRADING_DAYS
 
 # Sanity clamps: keep a degenerate fit (short history, flat series) from

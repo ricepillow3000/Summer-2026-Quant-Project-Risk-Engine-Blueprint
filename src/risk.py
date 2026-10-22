@@ -13,7 +13,7 @@ Quant Deep Dive:
 import numpy as np
 import pandas as pd
 from scipy import optimize, stats, special
-from src.covariance import RISKMETRICS_LAMBDA
+from src.covariance import RISKMETRICS_LAMBDA, TRADING_DAYS
 from src.ingestion import fetch_prices, get_returns
 
 
@@ -40,13 +40,16 @@ def cvar(port_returns: pd.Series, confidence: float = 0.95) -> float:
     This is the number risk desks actually use - it captures tail severity,
     not just where the tail begins.
     """
-    threshold = np.percentile(port_returns, (1 - confidence) * 100)
-    tail = port_returns[port_returns <= threshold]
+    # The engine's one ES estimator: pairing.expected_shortfall is this at
+    # the pairing's ES 97.5. Missing days are dropped, never read as returns.
+    r = pd.Series(port_returns).dropna()
+    threshold = np.percentile(r, (1 - confidence) * 100)
+    tail = r[r <= threshold]
     return float(-tail.mean())
 
 
 def sharpe_ratio(port_returns: pd.Series, risk_free_rate: float = 0.0,
-                 periods: int = 252) -> float:
+                 periods: int = TRADING_DAYS) -> float:
     """
     Annualized Sharpe ratio: excess return per unit of volatility.
 
@@ -600,7 +603,7 @@ def monte_carlo(
     returns: pd.DataFrame,
     weights: np.ndarray,
     n_simulations: int = 10_000,
-    horizon_days: int = 252,
+    horizon_days: int = TRADING_DAYS,
     confidence: float = 0.95,
     block: bool = True,
 ) -> dict:
@@ -781,7 +784,10 @@ def calibrate_jump_diffusion(port_returns, k: float = 3.0) -> dict:
     """
     r = np.asarray(port_returns, dtype=float)
     lr = np.log1p(r)                       # log-returns: diffusion + jumps add
-    m, s = float(lr.mean()), float(lr.std())
+    # ddof=1: this is a method of moments on each part's own days, not a
+    # Gaussian MLE, so the unbiased variance is the estimator. ddof=0 cut the
+    # variance by (n-1)/n - ~7% on a 15-day crisis window (ME-10).
+    m, s = float(lr.mean()), float(lr.std(ddof=1))
     if s == 0:                             # degenerate constant series
         return {"mu_d": m, "sigma_d": 0.0, "lambda_daily": 0.0,
                 "mu_j": 0.0, "sigma_j": 0.0, "k": k, "n_jumps": 0, "n_days": len(lr)}
@@ -790,11 +796,11 @@ def calibrate_jump_diffusion(port_returns, k: float = 3.0) -> dict:
     calm, jumps = lr[~is_jump], lr[is_jump]
 
     mu_d = float(calm.mean()) if calm.size else m
-    sigma_d = float(calm.std()) if calm.size > 1 else s
+    sigma_d = float(calm.std(ddof=1)) if calm.size > 1 else s
     lambda_daily = float(is_jump.mean())
     if jumps.size:
         mu_j = float(jumps.mean() - mu_d)          # jump = move in EXCESS of drift
-        sigma_j = float(jumps.std()) if jumps.size > 1 else 0.0
+        sigma_j = float(jumps.std(ddof=1)) if jumps.size > 1 else 0.0
     else:
         mu_j = sigma_j = 0.0
 
@@ -809,7 +815,7 @@ def jump_diffusion_mc(
     returns: pd.DataFrame,
     weights: np.ndarray,
     n_simulations: int = 10_000,
-    horizon_days: int = 252,
+    horizon_days: int = TRADING_DAYS,
     confidence: float = 0.95,
     k: float = 3.0,
 ) -> dict:
@@ -877,8 +883,8 @@ if __name__ == "__main__":
     jd = jump_diffusion_mc(returns, equal_weights)
     p = jd["jump_params"]
     print(f"  Calibration: {p['n_jumps']} jump days in {p['n_days']} "
-          f"(> {p['k']}sigma) -> {p['lambda_daily'] * 252:.1f} jumps/yr expected")
-    print(f"  Diffusion vol (annual): {p['sigma_d'] * np.sqrt(252):.1%}")
+          f"(> {p['k']}sigma) -> {p['lambda_daily'] * TRADING_DAYS:.1f} jumps/yr expected")
+    print(f"  Diffusion vol (annual): {p['sigma_d'] * np.sqrt(TRADING_DAYS):.1%}")
     print(f"  1-Year VaR  (95%)    : {jd['var']:.1%}")
     print(f"  1-Year CVaR (95%)    : {jd['cvar']:.1%}")
     print(f"  Worst simulated year : {jd['worst_case']:+.1%}")
