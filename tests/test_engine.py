@@ -3440,39 +3440,33 @@ def test_a_stranger_cannot_park_files_in_server_memory():
         "a file_uploader needs an upload budget sized for it, not the 1 MB floor"
 
 
-def test_every_pip_audit_exception_is_unreachable_and_expires():
-    """2026-10-20: 8 Pillow CVEs (crafted PDF/GIF/PPM/TIFF/EPS files) made the
-    Live audit's pip_audit red, and 16 more Pillow CVEs on 2026-10-22 (24 in
-    all, every one fixed only in Pillow 13.0.0); 16 more IDs approved by John
-    on 2026-10-22. Streamlit caps Pillow below 13 in every release
-    up to 1.66, so the fix (13.0) cannot be installed; John chose to skip those
-    IDs rather than leave the gate red. The skip holds only while the app opens
-    no image a visitor supplies, and only while the fix is out of reach - this
-    test fails on either, so the exception cannot outlive its reason."""
+def test_the_dependency_audit_skips_no_cve():
+    """2026-10-20 to 2026-10-22: Pillow 12.3 collected 35 CVEs fixed only in
+    13.0.0 while every Streamlit up to 1.66.0 capped Pillow below 13, so John
+    approved skipping 24 of them in the Live audit's pip_audit (the other 11
+    turned it red on main, run 80). That exception was written to expire: its
+    test failed the day Streamlit accepted Pillow 13. Streamlit 1.66.1 does
+    (pillow<14), so ME-16 bumped Streamlit, pinned pillow>=13 and deleted all
+    the skips. This keeps it closed: no workflow or tool skips a CVE, the
+    requirements ask for the fixed Pillow, and the Streamlit installed here
+    allows it. A new skip needs John's call and this test changed with it."""
     import importlib.metadata
     import re
-    import tomllib
 
     root = pathlib.Path(__file__).resolve().parent.parent
-    wf = (root / ".github" / "workflows" / "live-audit.yml").read_text(encoding="utf-8")
-    skipped = re.findall(r"--ignore-vuln\s+(\S+)", wf)
-    if not skipped:
-        return
-    caps = [r for r in importlib.metadata.requires("streamlit") or []
-            if r.lower().replace(" ", "").startswith("pillow")]
-    assert any("<13" in r.replace(" ", "") for r in caps), (
-        f"Streamlit now allows Pillow 13 ({caps}): pin pillow>=13 and delete the "
-        f"--ignore-vuln exceptions in live-audit.yml ({skipped})")
-    cfg = tomllib.loads((root / ".streamlit" / "config.toml").read_text(encoding="utf-8"))
-    assert cfg.get("server", {}).get("maxUploadSize", 200) <= 1, "the app takes files now"
-    files = [root / "main.py", root / "hero.py", *(root / "src").glob("*.py"),
-             *(root / "tools").glob("*.py")]
-    for f in files:
+    for f in [*(root / ".github" / "workflows").glob("*.yml"), *(root / "tools").glob("*.py")]:
         code = f.read_text(encoding="utf-8")
-        for door in ("file_uploader", "camera_input", "import PIL", "from PIL"):
-            assert door not in code, (
-                f"{f.name} uses {door}: a visitor's image can now reach Pillow, so the "
-                f"Pillow CVE exceptions in live-audit.yml no longer hold")
+        assert "ignore-vuln" not in code and "ignore_vuln" not in code, \
+            f"{f.name} skips a CVE in the dependency audit"
+    audits = [f.name for f in (root / ".github" / "workflows").glob("*.yml")
+              if re.search(r"pip_audit -r requirements\.txt\s*$", f.read_text(encoding="utf-8"), re.M)]
+    assert audits == ["live-audit.yml"], f"the dependency audit moved or went: {audits}"
+    req = (root / "requirements.txt").read_text(encoding="utf-8")
+    assert re.search(r"^pillow>=13\b", req, re.M | re.I), "requirements.txt no longer asks for Pillow 13"
+    caps = [r.replace(" ", "") for r in importlib.metadata.requires("streamlit") or []
+            if r.lower().startswith("pillow")]
+    assert caps and not any("<13" in r for r in caps), \
+        f"the installed Streamlit caps Pillow below 13 again ({caps})"
 
 
 def test_no_visitor_control_clears_the_shared_cache():
@@ -3501,7 +3495,7 @@ def test_a_crafted_clear_cache_message_clears_nothing():
     from streamlit.runtime.app_session import AppSession
 
     # A Streamlit upgrade that renames the handler would turn the patch into a
-    # silent no-op on a dead attribute (requirements.txt pins ~=1.62.0).
+    # silent no-op on a dead attribute (requirements.txt pins ~=1.66.1).
     assert hasattr(AppSession, "_handle_clear_cache_request"), \
         "Streamlit renamed the clear_cache handler - re-point the patch in main.py"
 

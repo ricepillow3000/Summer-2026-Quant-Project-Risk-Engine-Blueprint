@@ -22,9 +22,9 @@ import streamlit as st
 import streamlit.components.v1 as components
 from streamlit.runtime.app_session import AppSession
 
-# ponytail: components.html is deprecated - the pinned Streamlit 1.62 warns on
-# every run that it goes after 2026-06-01. st.iframe is the migration path: it
-# takes inline HTML with scripts and same-origin access (the Risk Topology map
+# ponytail: components.html is deprecated - the pinned Streamlit 1.66.1 warns
+# on every run that it goes after 2026-06-01. st.iframe is the migration path:
+# it takes inline HTML with scripts and same-origin access (the Risk Topology map
 # already ships through it). The one call left here carries the glide script,
 # which moves in its own change. Until then the binding falls back to a no-op:
 # if a future Streamlit drops components.html we lose the CTA scroll glide, not
@@ -95,7 +95,7 @@ st.set_page_config(page_title="Meleona - Portfolio Risk Engine",
 # looping that message pins the single process recomputing cold pages. This
 # app has no visitor action that should clear shared state, so the handler
 # becomes a no-op; operators restart the process or run tools.warm_cache.
-# The name is Streamlit-private and checked against the pinned ~=1.62.0
+# The name is Streamlit-private and checked against the pinned ~=1.66.1
 # (requirements.txt) by test_a_crafted_clear_cache_message_clears_nothing.
 # Re-assigning on every rerun is idempotent.
 def _ignore_clear_cache_request(self) -> None:
