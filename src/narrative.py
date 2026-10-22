@@ -156,7 +156,7 @@ SENTENCES: dict[SentenceKey, str] = {
         "volatility "
         "({momentum_per_vol:+.2f}), and it has a recovery record: grit "
         "{grit_score:.0f} of 100 across {n_universe} names. Paired with "
-        "{partner}, whose own tail is {tail_gap:.1%} shallower at ES 97.5."
+        "{partner}, whose own tail is {tail_gap_pts:.1f} points shallower at ES 97.5."
     ),
     SentenceKey.FLYER_PAIRED_DEEPER: (
         "{ticker} carries {final_weight:.1%} of the book and would clear "
@@ -167,7 +167,7 @@ SENTENCES: dict[SentenceKey, str] = {
         "({momentum_per_vol:+.2f}), and it has a recovery record: grit "
         "{grit_score:.0f} of 100 across {n_universe} names. Its anchor "
         "{partner} won the screen on factor independence and steadiness, but "
-        "its own tail is {tail_gap_abs:.1%} DEEPER at ES 97.5 - on this "
+        "its own tail is {tail_gap_abs_pts:.1f} points DEEPER at ES 97.5 - on this "
         "measure the pairing does not thin the tail."
     ),
     SentenceKey.FLYER_UNPAIRED: (
@@ -185,7 +185,7 @@ SENTENCES: dict[SentenceKey, str] = {
         "{anchor_score:.0f} of 100 - least tied to the dominant factor, "
         "steadiest, thinnest own tail - with grit {grit_score:.0f} of 100 "
         "across {n_universe} names. It holds {final_weight:.1%} of the book, "
-        "clears {exit_bucket}, and its tail sits {tail_gap:.1%} shallower at "
+        "clears {exit_bucket}, and its tail sits {tail_gap_pts:.1f} points shallower at "
         "ES 97.5 than the name beside it."
     ),
     SentenceKey.CUSHION_ANCHOR_DEEPER: (
@@ -194,7 +194,7 @@ SENTENCES: dict[SentenceKey, str] = {
         "{anchor_score:.0f} of 100 - least tied to the dominant factor, "
         "steadiest - with grit {grit_score:.0f} of 100 across {n_universe} "
         "names. It holds {final_weight:.1%} of the book and clears "
-        "{exit_bucket}. Its own tail is {tail_gap_abs:.1%} DEEPER at ES 97.5 "
+        "{exit_bucket}. Its own tail is {tail_gap_abs_pts:.1f} points DEEPER at ES 97.5 "
         "than the name it sits beside, so it earns its place on independence "
         "rather than on a thinner tail."
     ),
@@ -229,7 +229,7 @@ SENTENCES: dict[SentenceKey, str] = {
         "({momentum_per_vol:+.2f}), with grit {grit_score:.0f} of 100 across "
         "{n_universe} names. Nothing in the chosen universe thinned its tail, "
         "so the anchor beside it is {partner}, a defensive holding from "
-        "outside that universe, whose own tail is {tail_gap:.1%} shallower at "
+        "outside that universe, whose own tail is {tail_gap_pts:.1f} points shallower at "
         "ES 97.5."
     ),
     SentenceKey.CUSHION_ANCHOR_EXTERNAL: (
@@ -237,7 +237,7 @@ SENTENCES: dict[SentenceKey, str] = {
         "brought in as the anchor beside {partner} only because no name in "
         "that universe had a thinner tail. It scores {anchor_score:.0f} of 100 "
         "on the anchor screen, holds {final_weight:.1%} of the book, clears "
-        "{exit_bucket}, and its tail sits {tail_gap:.1%} shallower at ES 97.5 "
+        "{exit_bucket}, and its tail sits {tail_gap_pts:.1f} points shallower at ES 97.5 "
         "than the name beside it."
     ),
     SentenceKey.EXCLUDED_GRIT_FLOOR: (
@@ -338,6 +338,11 @@ class TickerDossier:
         d = {k: (v.value if isinstance(v, Enum) else v)
              for k, v in asdict(self).items()}
         d["tail_gap_abs"] = abs(self.tail_gap) if self.tail_gap is not None else None
+        # A gap between two ES figures is a difference of percentages, so it is
+        # printed in points ("2.4 points shallower"), like the map does.
+        d["tail_gap_pts"] = None if self.tail_gap is None else 100 * self.tail_gap
+        d["tail_gap_abs_pts"] = (None if self.tail_gap is None
+                                 else 100 * abs(self.tail_gap))
         return SENTENCES[self.sentence_key].format(**d)
 
 
@@ -680,6 +685,15 @@ def role_label(d: TickerDossier) -> str:
     return "NO ROLE" if d.final_weight > 0 else "LEFT OUT"
 
 
+def role_note(d: TickerDossier) -> str:
+    """What a NO ROLE card holds, so "still held" can be checked on the card.
+    A sliver under a tenth of a percent reads "<0.1%", never "0.0%"."""
+    if role_label(d) != "NO ROLE":
+        return ""
+    w = d.final_weight
+    return (f"{w:.1%}" if w >= 0.0005 else "<0.1%") + " of the book"
+
+
 def headline(book: list[TickerDossier]) -> str:
     """The one number the book leads with, per Meleona constraint 3."""
     if not book:
@@ -687,6 +701,17 @@ def headline(book: list[TickerDossier]) -> str:
     d = book[0]
     # An outside anchor is not one of the universe's names (ME-08).
     n_ok = sum(1 for x in book if x.eligible and not x.is_fallback_anchor)
-    return (f"${d.book_value:,.0f} book - {n_ok} of {d.n_universe} names hold a "
-            f"position worth keeping and leave within {d.max_exit_days:.0f} "
-            f"day(s) at {d.participation_rate:.0%} of quiet-tape volume.")
+    line = (f"${d.book_value:,.0f} book - {n_ok} of your {d.n_universe} names "
+            f"hold a position worth keeping and leave within "
+            f"{d.max_exit_days:.0f} day(s) at {d.participation_rate:.0%} of "
+            f"quiet-tape volume.")
+    # The count is of the visitor's names; an outside anchor also holds part
+    # of the same book, so it is named with its weight beside the count.
+    out = [x for x in book if x.is_fallback_anchor]
+    if out:
+        names = " and ".join(x.ticker for x in out)
+        weights = " and ".join(f"{x.final_weight:.1%}" for x in out)
+        one = len(out) == 1
+        line += (f" {names}, {'an anchor' if one else 'anchors'} from outside "
+                 f"your universe, {'holds' if one else 'hold'} {weights} of the book.")
+    return line

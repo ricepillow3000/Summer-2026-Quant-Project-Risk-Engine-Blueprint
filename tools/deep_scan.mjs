@@ -451,7 +451,7 @@ await step('every preset', async () => {
     await pick('Preset basket', p);
     const v = await newVerdict(prev);
     const errs = await page.locator('[data-testid="stAlertContentError"], [data-testid="stException"]').count();
-    const data = await page.locator('[data-testid="stCaptionContainer"]', { hasText: 'trading days · through' }).first().textContent().catch(() => '');
+    const data = await page.locator('[data-testid="stCaptionContainer"]', { hasText: 'daily returns) · through' }).first().textContent().catch(() => '');
     const through = (data.match(/through (\d{4}-\d\d-\d\d)/) || [])[1];
     const age = through ? (Date.now() - Date.parse(through)) / 864e5 : NaN;
     const warns = await page.locator('[data-testid="stAlertContentWarning"]').allTextContents();
@@ -470,12 +470,19 @@ async function bookState() {
     // A dossier card is the flex row whose first cell is its role label.
     const ROLES = ['LEADS', 'ANCHOR', 'NO ROLE', 'LEFT OUT'];
     const cards = [...document.querySelectorAll('[data-testid="stMarkdownContainer"] div')]
-      .filter(d => d.children.length === 2 && ROLES.includes(d.firstElementChild.textContent.trim()));
-    const lbl = c => c.firstElementChild?.textContent.trim();
+      .filter(d => d.children.length === 2 && ROLES.includes(
+        (d.firstElementChild.textContent || '').trim()
+          .replace(d.firstElementChild.querySelector('.role-note')?.textContent.trim() || '', '').trim()));
+    // the role cell holds the label, and on a NO ROLE card the weight it holds
+    const note = c => c.firstElementChild?.querySelector('.role-note')?.textContent.trim() || '';
+    const lbl = c => (c.firstElementChild?.textContent || '').trim().replace(note(c), '').trim();
     const head = [...document.querySelectorAll('[data-testid="stMarkdownContainer"] div')]
-      .map(d => d.textContent).find(t => /^\$[\d,]+ book - \d+ of \d+ names/.test(t)) || '';
+      .map(d => d.textContent).find(t => /^\$[\d,]+ book - \d+ of your \d+ names/.test(t)) || '';
     return { leads: cards.filter(c => lbl(c) === 'LEADS').length, anchors: cards.filter(c => lbl(c) === 'ANCHOR').length,
              held: cards.filter(c => lbl(c) === 'NO ROLE').length,
+             // every NO ROLE card states its weight, and no other card does
+             noteOk: cards.every(c => (lbl(c) === 'NO ROLE')
+               === /^(\d+\.\d%|<0\.1%) of the book$/.test(note(c))),
              out: cards.filter(c => lbl(c) === 'LEFT OUT').length, total: cards.length, head,
              outside: cards.filter(c => /outside the chosen universe/.test(c.textContent)).length };
   });
@@ -486,12 +493,13 @@ await step('the book', async () => {
   // leaders + anchors <= eligible <= N. N is the visitor's own names (ME-08):
   // an outside anchor's card is on screen but not one of them, so it counts
   // in neither N nor the anchors that must fit inside the eligible names.
-  const counts = b => (b.head.match(/(\d+) of (\d+) names/) || []).slice(1).map(Number);
+  const counts = b => (b.head.match(/(\d+) of your (\d+) names/) || []).slice(1).map(Number);
   const own = b => b.total - b.outside, ownAnchors = b => b.anchors - b.outside;
   const cards = b => `cards: ${b.leads} lead, ${b.anchors} anchor, ${b.held} held without a role, ${b.out} left out, ${b.outside} from outside`;
   const b0 = await bookState();
   const [e0, n0] = counts(b0);
   ok(b0.total > 0, 'book: dossier cards render', cards(b0));
+  ok(b0.noteOk, 'book: every card without a role states the weight it holds', cards(b0));
   ok(n0 === own(b0) && b0.leads + ownAnchors(b0) <= e0 && e0 <= n0, 'book: the headline counts agree with the cards',
      `${b0.head.slice(0, 70)} | ${cards(b0)}`);
   const size = page.locator('input[aria-label="Book size ($)"]').first();
@@ -564,7 +572,7 @@ await step('balance, every flyer', async () => {
     await pick('High-flyer (Circle 1 - the volatile conviction position)', f); await settle();
     const t = await page.evaluate(() => [...document.querySelectorAll('svg text')].map(e => e.textContent).find(s => /^GAP /.test(s)) || '');
     const line = await page.evaluate(() => [...document.querySelectorAll('div')].map(d => d.textContent)
-      .find(s => /^Over the loaded \d+ trading days/.test(s)) || '');
+      .find(s => /^Over the \d+ daily returns loaded/.test(s)) || '');
     ok(/^GAP -?\d+(\.\d+)?%$/.test(t) && /cushion/.test(line), `balance: flyer ${f} pairs and measures its cushion`,
        `${t}; ${line.slice(0, 110)}`);
   }

@@ -3373,7 +3373,8 @@ def test_a_stranger_cannot_park_files_in_server_memory():
 def test_every_pip_audit_exception_is_unreachable_and_expires():
     """2026-10-20: 8 Pillow CVEs (crafted PDF/GIF/PPM/TIFF/EPS files) made the
     Live audit's pip_audit red, and 16 more Pillow CVEs on 2026-10-22 (24 in
-    all, every one fixed only in Pillow 13.0.0). Streamlit caps Pillow below 13 in every release
+    all, every one fixed only in Pillow 13.0.0); 16 more IDs approved by John
+    on 2026-10-22. Streamlit caps Pillow below 13 in every release
     up to 1.66, so the fix (13.0) cannot be installed; John chose to skip those
     IDs rather than leave the gate red. The skip holds only while the app opens
     no image a visitor supplies, and only while the fix is out of reach - this
@@ -4308,7 +4309,7 @@ def test_the_books_grit_is_the_grit_zones_full_history_grit():
                  if g != round(float(tab[t]))}
         assert not wrong, f"Book grit vs Grit Zone grit, shelf on (book, tab): {wrong}"
         head = [m.value for m in at.markdown if " book - " in m.value and "names hold" in m.value]
-        assert head and f"of {len(loaded)} names hold" in head[0], head
+        assert head and f"of your {len(loaded)} names hold" in head[0], head
     finally:
         restore()
 
@@ -4325,10 +4326,13 @@ def test_the_book_lists_an_outside_etf_only_when_it_is_the_anchor():
         loaded = list([w for w in at.selectbox if w.label.startswith("Anchor")][0].options)
         cards = {}
         for m in at.markdown:
-            hit = re.match(r"\s*(LEADS|ANCHOR|NO ROLE|LEFT OUT)\s+([A-Z0-9.^=-]+) (.*)",
+            hit = re.match(r"\s*(LEADS|ANCHOR|NO ROLE|LEFT OUT)\s+((?:\d+\.\d%|<0\.1%) of the book\s+)?"
+                           r"([A-Z0-9.^=-]+) (.*)",
                            re.sub(r"<[^>]+>", " ", m.value)) if "border-left:3px solid" in m.value else None
             if hit:
-                cards[hit.group(2)] = (hit.group(1), hit.group(3))
+                # a NO ROLE card, and only that one, says what it holds (ME-12 review)
+                assert bool(hit.group(2)) == (hit.group(1) == "NO ROLE"), hit.group(0)[:80]
+                cards[hit.group(3)] = (hit.group(1), hit.group(4))
         assert cards, "no Book cards parsed"
         shelf = [t for t in DEFENSIVE_ANCHOR_TICKERS if t not in loaded]
         for t, (role, text) in cards.items():
@@ -4852,12 +4856,12 @@ def test_every_history_length_on_the_page_is_read_from_the_loaded_returns():
 
     text = _offline_page("young", market=young)["text"]
     page = " ".join(text)
-    rows = int(re.search(r"Data: (\d+) trading days", page).group(1))
+    rows = int(re.search(r"Data: (\d+) trading days of prices", page).group(1))
     assert rows == 120, f"fixture no longer shortens the basket: {rows} rows"
     for stale in ("2-year", "2 years", "two-year", "two years"):
         assert stale not in page, f"the page still says {stale!r} over {rows} rows"
     method = [t for t in text if t.startswith("Methodology:")]
-    assert method and f"{rows - 1} trading days" in method[0], method
+    assert method and f"{rows - 1} daily returns" in method[0], method
 
 
 def test_the_crisis_verdict_names_the_engine_that_made_it():
@@ -4897,6 +4901,7 @@ def test_a_difference_of_two_percentages_says_points_and_a_ratio_says_relative()
     cut - and the unwind delta "+0% for the unwind" beside a CVaR in percent
     was a relative change. A difference of two percentages says points; a
     ratio says relative."""
+    import re
     text = _offline_page()["text"]
     shift = [t for t in text if t.startswith(("Daily CVaR (95%) =",
                                               "Annualized vol ="))]
@@ -4905,6 +4910,12 @@ def test_a_difference_of_two_percentages_says_points_and_a_ratio_says_relative()
         assert "points vs current" in t, t
     unwind = [t for t in text if t.startswith("Liquidity-adjusted CVaR =")]
     assert unwind and "relative" in unwind[0], unwind
+    # The Book's tail gap is a difference of two ES figures: points too
+    # (Council A review, 2026-10-22: "2.4% shallower at ES 97.5").
+    gaps = [t for t in text if "shallower at ES" in t or "DEEPER at ES" in t]
+    assert gaps, "no Book tail-gap sentence on the page"
+    for t in gaps:
+        assert re.search(r"\d points (shallower|DEEPER) at ES", t), t
 
 
 def test_the_headline_unwind_names_its_book_size_and_participation():
@@ -5088,6 +5099,33 @@ def test_the_jump_calibration_uses_the_unbiased_sample_variance():
     p = calibrate_jump_diffusion(np.expm1(lr))
     assert p["n_jumps"] == 0
     assert abs(p["sigma_d"] ** 2 - lr.var(ddof=1)) < 1e-15, (p["sigma_d"] ** 2, lr.var(ddof=1))
+
+
+
+def test_a_fall_is_written_as_its_size_never_as_a_double_negative():
+    """Council A review (2026-10-22): the defensive pair read "holding META
+    alone fell -36% at its worst" - fell, minus: a reader can take it as a
+    rise. A fall is stated by its size beside the verb."""
+    import re
+    page = " ".join(_offline_page()["text"])
+    assert re.search(r"alone fell \d+% at its worst", page), "pair sentence missing"
+    assert re.search(r"the fall was \d+%", page), "pair sentence missing"
+    for bad in (r"fell -\d", r"fall was -\d"):
+        assert not re.search(bad, page), bad
+
+
+def test_the_loaded_window_is_counted_one_way_everywhere():
+    """Council A review (2026-10-22): the same window read "Data: 504 trading
+    days" in one caption and "503 trading days" in the next - 504 prices give
+    503 daily returns, but one noun with two counts reads as a contradiction.
+    Prices are counted in trading days, returns in daily returns, and the
+    window's two counts are never swapped."""
+    import re
+    page = " ".join(_offline_page()["text"])
+    rows = int(re.search(r"Data: (\d+) trading days of prices \((\d+) daily returns\)", page).group(1))
+    assert f"{rows - 1} trading days" not in page, f"{rows - 1} returns called trading days"
+    assert f"{rows} daily returns" not in page, f"{rows} prices called daily returns"
+    assert f"{rows - 1} daily returns" in page
 
 
 if __name__ == "__main__":

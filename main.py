@@ -48,7 +48,8 @@ from src.comovement import (
     defensive_shift, least_correlated_to_pair, cluster_order,
 )
 from src.factors import factor_exposures
-from src.narrative import DEFAULT_PARTICIPATION, build_book, headline, role_label, Role
+from src.narrative import (DEFAULT_PARTICIPATION, build_book, headline, role_label,
+                           role_note, Role)
 from src.strategies import risk_contributions, risk_parity_weights, vol_target
 from src.hedge import min_variance_pair, rank_hedges
 from src.pairing import (anchor_rank, backtest_pair, crisis_cushion,
@@ -1256,7 +1257,10 @@ health = data_health(prices)
 # re-pulls past CACHE_MAX_AGE_HOURS; an operator forces a pull with
 # `python -m tools.warm_cache --drill` (RUNBOOK.md).
 fresh = "live" if health["staleness_days"] <= 1 else f"{health['staleness_days']}d old"
-st.caption(f"Data: {health['rows']} trading days · through {health['end']} · {fresh}")
+# Prices are counted in trading days, returns in daily returns: 504 prices
+# give 503 returns, and one noun with two counts read as a contradiction.
+st.caption(f"Data: {health['rows']} trading days of prices ({len(returns)} daily returns)"
+           f" · through {health['end']} · {fresh}")
 prov_now = provenance(tickers)
 if prov_now:
     _freshness_ticker(prov_now["fetched_at_utc"])
@@ -1639,7 +1643,7 @@ def eigen_factor_panel(cov, weights, returns) -> None:
         "Ledoit-Wolf estimator is the production defense against inversion "
         "noise. Flip the covariance estimator to EWMA in 02 · Allocation to "
         "see the CURRENT regime's factor structure instead of the "
-        f"{len(returns)}-trading-day average.")
+        f"average over {len(returns)} daily returns.")
 
     with st.expander("Factor loadings - how each name anchors onto each factor"):
         ld = fac["loadings"]
@@ -1757,6 +1761,13 @@ with st.container():
                  Role.EXCLUDED: ("#6B6459", "#EDE9E3")}
         for _d in _the_book:
             (_col, _bg), _lbl = _CHIP[_d.role], role_label(_d)
+            # A NO ROLE card shows what it holds, so "still held" can be
+            # checked on the card; on its own line, so the 86px chip wraps
+            # rather than cuts at 360px.
+            _note = role_note(_d)
+            if _note:
+                _lbl += (f'<br><span class="role-note" style="letter-spacing:.06em;">'
+                         f'{_note}</span>')
             _flag = (' &middot; <span style="color:#6A5030;">outside the chosen '
                      'universe</span>' if _d.is_fallback_anchor else "")
             # Redundant on a card that was already excluded FOR capacity - the
@@ -2055,7 +2066,7 @@ with tab_breakdown:
         "together sit next to each other and each group reads as one block. "
         "Sample: the returns AFTER the stress-test choice above - under a "
         "crisis replay this matrix is that crisis window, not the "
-        f"{len(returns)}-trading-day history the Correlation Watch tab averages.")
+        f"{len(returns)} daily returns the Correlation Watch tab averages.")
     corr = correlation_matrix(shocked_returns)
     # Reorder BEFORE the mask and the bold text are built, so both follow the
     # new order. In input order a block of names that move together is
@@ -2243,8 +2254,8 @@ with tab_breakdown:
                 f"{_tf['threshold_quantile']:.0%} threshold "
                 f"({_tf['threshold_return']:.2%} of the book at today's volatility; "
                 f"{_tf['threshold_z']:.2f} in standardised units), drawn from "
-                f"{_tf_days} trading days "
-                f"(~{_tf_years:.1f} years - the {len(returns)}-trading-day window used elsewhere leaves too few "
+                f"{_tf_days} daily returns "
+                f"(~{_tf_years:.1f} years - the {len(returns)} daily returns used elsewhere leave too few "
                 f"exceedances to fit honestly). **ξ = {_xi:+.2f}**{_ci_txt}: {_shape}"
                 + (f" At this ξ the {', '.join(_broken)} of the loss "
                    f"distribution {'is' if len(_broken) == 1 else 'are'} "
@@ -2321,7 +2332,7 @@ with tab_breakdown:
             st.caption(f"Statistical risk factors unavailable: {safe_err('statistical-risk-factors-unavailable', exc)}")
 
 source_txt = f"the {scenario_label} window" if scenario_label else (
-    f"the {len(shocked_returns)} trading days of daily returns loaded "
+    f"the {len(shocked_returns)} daily returns loaded "
     f"({shocked_returns.index[0].date()} to {shocked_returns.index[-1].date()})")
 engine_txt = (
     "Merton jump-diffusion (Poisson jumps on Gaussian diffusion), calibrated to"
@@ -2556,13 +2567,14 @@ with tab_balance:
                 f'</div>'
                 f'<div style="flex:1 1 100%;min-width:0;max-width:980px;margin:0 auto;">'
                 f'<div style="font-family:Georgia;font-size:15px;color:#3F3B35;line-height:1.55;">'
-                f'Over the loaded {bt["n_days"]} trading days, {"shorting" if bearish else "holding"} '
-                f'<b>{flyer}</b> alone fell <b>{bt["max_dd_solo"]:.0%}</b> at its worst'
+                # A fall is its size beside the verb: "fell -36%" reads as a rise.
+                f'Over the {bt["n_days"]} daily returns loaded, {"shorting" if bearish else "holding"} '
+                f'<b>{flyer}</b> alone fell <b>{abs(bt["max_dd_solo"]):.0%}</b> at its worst'
                 f'{" (a short bleeds when the name rallies - the squeeze)" if bearish else ""}; '
                 f'tethered to {"a correlated long in " if bearish else ""}'
                 f'<b>{bv_anchor}</b> at risk-parity weights '
                 f'(<b>{pw["w_b"]:.0%}</b> anchor / <b>{pw["w_a"]:.0%}</b> flyer, '
-                f'rebalanced monthly) the fall was <b>{bt["max_dd_pair"]:.0%}</b> - '
+                f'rebalanced monthly) the fall was <b>{abs(bt["max_dd_pair"]):.0%}</b> - '
                 # a gap between two losses, in percentage points: "+17%"
                 # read as a 17% cut (John, 2026-10-19), so say the unit and
                 # the direction in words
@@ -2593,7 +2605,7 @@ with tab_balance:
                                      legend=dict(orientation="h", y=1.08))
                 st.plotly_chart(bv_fig, width="stretch", config=PLOTLY_CFG)
                 st.caption(
-                    f"Real daily returns, {bt['n_days']} trading days, monthly "
+                    f"Real daily returns, {bt['n_days']} of them, monthly "
                     f"rebalancing, no lookahead. Pair vol {bt['ann_vol_pair']:.1%} "
                     f"vs {bt['ann_vol_solo']:.1%} solo; total return "
                     f"{bt['total_return_pair']:+.0%} vs {bt['total_return_solo']:+.0%}. "

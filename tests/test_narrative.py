@@ -256,10 +256,12 @@ def test_tail_wording_follows_the_sign_of_the_gap():
     deeper = {SentenceKey.FLYER_PAIRED_DEEPER, SentenceKey.CUSHION_ANCHOR_DEEPER}
 
     # The claim each template makes, checked against the sign it is used for.
+    # A gap between two ES figures is a difference of percentages: it is in
+    # points, never "%" (ME-07's A6 rule; Council A review, 2026-10-22).
     for k in shallower:
-        assert "shallower" in SENTENCES[k] and "DEEPER" not in SENTENCES[k]
+        assert "points shallower" in SENTENCES[k] and "DEEPER" not in SENTENCES[k]
     for k in deeper:
-        assert "DEEPER" in SENTENCES[k]
+        assert "points DEEPER" in SENTENCES[k]
         assert "shallower" not in SENTENCES[k]
         # A deeper tail must be printed as a positive magnitude, never as a
         # negative number sitting next to the word DEEPER.
@@ -270,7 +272,7 @@ def test_tail_wording_follows_the_sign_of_the_gap():
         for d in build_book(prices, dv, book_value=book_value, n_flyers=2):
             if d.sentence_key in shallower:
                 assert d.tail_gap is not None and d.tail_gap > 0, d.ticker
-                assert "shallower" in d.sentence()
+                assert "points shallower" in d.sentence() and "% shallower" not in d.sentence()
             elif d.sentence_key in deeper:
                 assert d.tail_gap is not None and d.tail_gap <= 0, d.ticker
                 s_out = d.sentence()
@@ -287,7 +289,7 @@ def test_tail_wording_follows_the_sign_of_the_gap():
     external = {SentenceKey.FLYER_PAIRED_EXTERNAL,
                 SentenceKey.CUSHION_ANCHOR_EXTERNAL}
     for k in external:
-        assert "shallower" in SENTENCES[k] and "{tail_gap:" in SENTENCES[k]
+        assert "points shallower" in SENTENCES[k] and "{tail_gap_pts:" in SENTENCES[k]
     prices, dv = _deeper_everywhere_fixture()
     for d in build_book(prices, dv, book_value=1e6, fallback_anchors={"DEF"}):
         if d.sentence_key in external:
@@ -478,7 +480,7 @@ def test_headline_counts_match_the_dossiers():
     book = build_book(prices, dv, book_value=5_000_000)
     line = headline(book)
     n_ok = sum(1 for d in book if d.eligible)
-    assert f"{n_ok} of {len(_TICKERS)} names" in line
+    assert f"{n_ok} of your {len(_TICKERS)} names" in line
     assert "{" not in line
     assert headline([]) == "No names in this universe."
 
@@ -518,7 +520,7 @@ def test_the_books_counts_ranks_and_grit_cover_only_the_visitors_names():
         assert d.momentum_rank is None or d.momentum_rank <= len(user)
         assert d.grit_score is not None and abs(d.grit_score - tab[d.ticker]) < 1e-9, \
             (d.ticker, d.grit_score, float(tab[d.ticker]))
-    assert f"of {len(user)} names" in headline(book), headline(book)
+    assert f"of your {len(user)} names" in headline(book), headline(book)
 
 
 def test_an_unused_fallback_holds_nothing_and_changes_nothing():
@@ -582,6 +584,45 @@ def test_a_held_name_is_never_labelled_left_out():
             if d.role is Role.CUSHION:
                 assert label == "ANCHOR"
     assert {"NO ROLE", "LEFT OUT"} <= seen, f"fixture no longer shows both: {seen}"
+
+
+
+def test_the_headline_names_an_outside_anchor_and_what_it_holds():
+    """Council A review (2026-10-22): "12 of 12 names hold a position" sat
+    beside XLU holding 12% of the same book - read as the whole book, the
+    count left out a holding. The count is of YOUR names, and an outside
+    anchor in the book is named with its weight in the same sentence."""
+    prices, dv = _anchor_fixture()
+    book = build_book(prices, dv, book_value=2_000_000, n_flyers=1,
+                      fallback_anchors={"DEFN"})
+    line = headline(book)
+    defn = [d for d in book if d.ticker == "DEFN"][0]
+    assert "of your 3 names" in line, line
+    assert "DEFN" in line and f"{defn.final_weight:.1%}" in line, line
+    inside = build_book(prices.drop(columns=["DEFN"]), dv.drop(columns=["DEFN"]),
+                        book_value=2_000_000, n_flyers=1)
+    assert "outside" not in headline(inside), headline(inside)
+
+
+def test_a_card_without_a_role_shows_the_weight_it_holds():
+    """Council A review (2026-10-22): a NO ROLE card claimed "still held" (the
+    read-me) but never printed how much, so the claim could not be checked
+    from the card. Its note carries the weight; a sliver below a tenth of a
+    percent reads as such, never as "0.0%"."""
+    from src.narrative import role_label, role_note
+    prices, dv = _book_fixture()
+    seen = 0
+    for book_value in (1e6, 5e8):
+        for d in build_book(prices, dv, book_value=book_value):
+            note = role_note(d)
+            if role_label(d) == "NO ROLE":
+                seen += 1
+                want = (f"{d.final_weight:.1%}" if d.final_weight >= 0.0005
+                        else "<0.1%") + " of the book"
+                assert note == want, (d.ticker, d.final_weight, note)
+            else:
+                assert note == "", (d.ticker, note)
+    assert seen, "fixture shows no NO ROLE card"
 
 
 if __name__ == "__main__":
