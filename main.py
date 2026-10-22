@@ -204,6 +204,7 @@ _html("""
     if (prev.onYield) ['wheel', 'touchstart', 'keydown'].forEach(function (t) {
       P.removeEventListener(t, prev.onYield, true);
     });
+    if (prev.onScroll) P.removeEventListener('scroll', prev.onScroll, true);
   }
 
   /* Charts inside a tab or expander are rendered while their container is
@@ -285,82 +286,228 @@ _html("""
      inline value - a second flight would save the first one's 'auto'). */
   function land(scroller) {
     scroller.style.scrollBehavior = '';
+    scroller.style.overflowAnchor = '';
     quietMap(false);
     P.__meleonaStop = null;
+    P.__meleonaScroller = null;
+    P.__meleonaDir = 0;
   }
-  function glide(scroller, el, dur, settled) {
+  /* Every way a flight or a wait ends goes through its stop: a newer press
+     used to bump the flight number and leave the old flight's 'auto'
+     scrolling and the map's skipped rendering behind (Council B's leak
+     probe, 2026-10-22). */
+  function supersede() {
+    if (P.__meleonaStop) P.__meleonaStop();
+  }
+  /* Is Streamlit still writing the page? Its running icon (the one app.css
+     draws "Updating..." from) is mounted exactly while a run is in flight. */
+  const pageRunning = () => !!P.querySelector('[data-testid="stStatusWidgetRunningIcon"]');
+  function glide(scroller, el) {
     /* One flight at a time: a new press, or the reader's own wheel / touch /
        key (onYield), bumps the flight number and the old frames stop. Two
        presses used to fly two flights at once - a 59px jump and a wrong
        landing. */
+    supersede();
     const id = P.__meleonaFlight = (P.__meleonaFlight || 0) + 1;
     P.__meleonaFlightAt = performance.now();
     P.__meleonaStop = function () { land(scroller); };
+    P.__meleonaScroller = scroller;
     /* Our rAF drives every frame - the scroller's own smooth behavior would
        fight it (each scrollTo becoming its own animation). Instant while we
        fly, handed back when we land. */
     scroller.style.scrollBehavior = 'auto';
+    /* No scroll anchoring while we fly: the flight follows its target itself,
+       and an anchoring jump would read as the reader scrolling (onScroll). */
+    scroller.style.overflowAnchor = 'none';
     quietMap(true);
-    const y0 = scroller.scrollTop, t0 = performance.now();
+    /* Calm over speed: 1500ms on a slow-out curve reads as being LED
+       somewhere, where a fast jump reads as a slide change. */
+    const dur = 1500, y0 = scroller.scrollTop, t0 = performance.now();
     /* Progress advances at most 50 ms per frame. Driven by the clock, one
        frame that came late (charts mounting while the page builds) covered
        66-81% of the flight - a jump, not a glide. */
-    let aim = targetY(scroller, el), last = t0, run = 0;
+    let aim = targetY(scroller, el), last = t0, run = 0, done = 0, grew = t0;
+    let floor = scroller.scrollHeight - scroller.clientHeight;
+    const dir = Math.sign(aim - y0) || 1;
+    P.__meleonaDir = dir;
+    /* No frame moves faster than the curve's own peak (pi/2 the average
+       speed, so 2x with margin). A page still loading is shorter than the
+       flight: scrollTo clamped the eased position at its bottom and the next
+       mount released it all at once - 138-230px of a 475px flight in one
+       frame, 6 of 8 presses during load (ME-04). Now a page that grows under
+       the flight is caught up at the flight's own pace. */
+    const vmax = 2 * Math.max(Math.abs(aim - y0), 600) / dur;
     (function f(now) {
       if (id !== P.__meleonaFlight) return;   // a newer flight, or the reader took over
-      run += Math.min(now - last, 50); last = now;
+      const dt = Math.min(now - last, 50); run += dt; last = now;
       const p = Math.min(1, run / dur);
+      const tgt = targetY(scroller, el), cur = scroller.scrollTop;
+      /* Re-aim against the page's CURRENT bottom every frame. */
+      const max = scroller.scrollHeight - scroller.clientHeight;
+      if (max > floor + 1) { floor = max; grew = now; }
       /* The destination can still be moving: the showcase row rises 24px on
          its scroll-driven reveal while we fly, so a target read once at the
          click landed 8-11px past it and crawled back. Follow it - at most 2px
-         a frame, so a chart mounting mid-flight cannot yank the page. */
-      aim += Math.max(-2, Math.min(2, targetY(scroller, el) - aim));
-      scroller.scrollTo(0, y0 + (aim - y0) * ease(p));
+         a frame further away, so a chart mounting mid-flight cannot yank the
+         page; at once when it comes closer (a rerun repainting the page above
+         it), so the flight never runs past it (1 of 4 basket switches
+         overshot "Skip to the risk map" by 220px). */
+      const d = tgt - aim;
+      if (p >= 1 || Math.sign(d) !== dir) aim = tgt;
+      else aim += Math.min(2, Math.abs(d)) * dir;
+      const cap = vmax * dt + 4;
+      let step = (p < 1 ? y0 + (aim - y0) * ease(p) : aim) - cur;
+      /* Behind the curve (the page was too short) or past its end: close in
+         at no more than peak speed, softly over the last stretch - but by a
+         whole pixel at least: scrollTop snaps to device pixels, and a 0.5px
+         step was rounded away, so a flight 3px short of its target kept
+         re-asserting itself for 10 s (it dragged the page back 1 time in 10
+         when the next press moved it). */
+      if (p >= 1 || Math.abs(step) > cap)
+        step = Math.sign(aim - cur) * Math.min(cap, Math.max(1, Math.abs(aim - cur) * 0.15));
+      if (Math.sign(step) !== dir && Math.sign(tgt - cur) === dir) step = 0;   // never back away from a target still ahead
+      scroller.scrollTo(0, Math.max(0, Math.min(cur + step, max)));
+      P.__meleonaSetY = scroller.scrollTop;    // where WE put it (onScroll)
       if (p < 1) { requestAnimationFrame(f); return; }
+      /* Settle until the reader is ON the section the button promised. One
+         320 ms correction was not enough on a page still loading: the hero
+         CTA stopped 223px short at the bottom of a 1371px page, 8 of 8
+         (ME-04). While the target sits below the page's end, wait for the
+         page to grow: until its footer (the last thing the run writes) has
+         arrived, or while it still grows - at most 10 s. A quiet spell alone
+         is no sign of the end: the cold harness paused 3 s between mounts
+         and the flight landed 416px short just before the page grew. And
+         the 10 s is a floor, not a cap, while the run goes on: on a slow cold
+         start the page below a late section (#analysis) kept growing for
+         longer than that (ME-05, third review). */
+      if (!done) done = now;
+      const on = Math.abs(tgt - scroller.scrollTop) <= 2;
+      const waiting = tgt > max + 2 &&
+                      (!P.querySelector('.meleona-footer') || now - grew < 3000);
+      if (!on && (now - done < 10000 || (waiting && pageRunning())) &&
+          (waiting || Math.abs(Math.max(0, Math.min(tgt, max)) - scroller.scrollTop) > 2)) {
+        requestAnimationFrame(f); return;
+      }
       land(scroller);
-      /* landing check: if the page shifted mid-flight by more than the
-         per-frame follow could absorb (a chart mounted, a rerun repainted),
-         re-aim once with a short corrective glide - the reader always ends
-         ON the section the button promised. */
-      const drift = targetY(scroller, el) - scroller.scrollTop;
-      if (!settled && Math.abs(drift) > 4) glide(scroller, el, 320, true);
     })(t0);
   }
   /* The reader takes over: a wheel, a touch or a scroll key ends the flight
      where it is, instead of being pulled back each frame (8 reversals per
-     wheel gesture). A trackpad keeps sending momentum wheel events for a
-     moment after a click, so the first 300 ms ignore the wheel. */
+     wheel gesture). But a trackpad flick keeps sending momentum wheel events
+     for a second or two after the press, in the same direction and
+     decaying: that is the gesture the reader already finished, not a new
+     one. Forgiving only the first 300 ms cancelled 30 of 30 flights pressed
+     during a flick (ME-04). Only that tail is forgiven: the gesture running
+     at the press, in the flight's own direction, under 250 ms apart (the
+     stream paused 168 ms across the press itself in headless Chromium),
+     within 2 s, each delta no bigger than the last - and only once the
+     stream has SHRUNK at least once since the press. A steady mouse wheel
+     (100px a notch) never shrinks: forgiven as "no bigger", it dragged a
+     reader wheeling down 2.7k px UP by a footer press (Council B). Requiring
+     every delta to shrink fixed that but cancelled real tails, whose integer
+     deltas repeat (2, 2, 1, 1: momentum 0/10, Council B's second review).
+     Anything else - a reversal, a pause, a harder wheel, a wheel that has
+     never shrunk, one against the flight - yields at once. */
   const SCROLL_KEYS = ['PageUp', 'PageDown', 'ArrowUp', 'ArrowDown', 'Home', 'End', ' '];
-  function onYield(e) {
-    if (!P.__meleonaStop) return;
-    if (e.type === 'wheel' && performance.now() - P.__meleonaFlightAt < 300) return;
-    if (e.type === 'keydown' && SCROLL_KEYS.indexOf(e.key) < 0) return;
+  let wheelAt = 0, wheelDy = 0, tail = false, shrunk = false, forgivenAt = 0;
+  function yieldNow() {
+    tail = false;
     P.__meleonaFlight = (P.__meleonaFlight || 0) + 1;
     P.__meleonaStop();
   }
-  function onLink(e) {
-    const a = e.target.closest('a[href^="#"]');
-    if (!a) return;
-    const el = P.getElementById(a.getAttribute('href').slice(1));
-    if (!el) return;
+  function onYield(e) {
+    if (e.type === 'wheel') {
+      const t = performance.now();
+      const same = t - wheelAt < 250 && Math.sign(e.deltaY) === Math.sign(wheelDy);
+      const noBigger = same && Math.abs(e.deltaY) <= Math.abs(wheelDy);
+      if (same && Math.abs(e.deltaY) < Math.abs(wheelDy)) shrunk = true;   // reset at every press
+      wheelAt = t; wheelDy = e.deltaY;
+      if (!P.__meleonaStop) return;
+      if (tail && noBigger && shrunk && Math.sign(e.deltaY) === P.__meleonaDir &&
+          t - P.__meleonaPressAt < 2000) { forgivenAt = t; return; }
+    }
+    if (!P.__meleonaStop) return;
+    if (e.type === 'keydown' && SCROLL_KEYS.indexOf(e.key) < 0) return;
+    yieldNow();
+  }
+  /* A scrollbar drag sends no wheel, touch or key - only scroll events. A
+     scroll the flight did not make is the reader taking over: on a page still
+     growing the settle phase re-asserted the target for up to 10 s and pulled
+     a dragged scrollbar back (Council B). Not counted: the forgiven flick's
+     own scrolling (300 ms after its last event), and the page shrinking under
+     the flight and clamping it. */
+  function onScroll(e) {
+    const sc = P.__meleonaScroller;
+    if (!P.__meleonaStop || !sc || e.target !== sc || P.__meleonaSetY === undefined) return;
+    const y = sc.scrollTop;
+    if (Math.abs(y - P.__meleonaSetY) <= 2) return;
+    if (performance.now() - forgivenAt < 300) { P.__meleonaSetY = y; return; }
+    if (y >= sc.scrollHeight - sc.clientHeight - 2 && P.__meleonaSetY > y) return;
+    yieldNow();
+  }
+  function go(a, el) {
     const scroller = findScroller(el);
-    if (!scroller) return;               // nothing scrolls: let native run
-    e.preventDefault(); e.stopPropagation();
     /* Reduced motion: land at once, same place. A CSS media query cannot stop
        a JavaScript flight, so ask on every click (the setting can change
        while the page is open). */
     if (window.parent.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      const prevSB = scroller.style.scrollBehavior;
+      supersede();
       scroller.style.scrollBehavior = 'auto';
       scroller.scrollTo(0, targetY(scroller, el));
-      scroller.style.scrollBehavior = prevSB;
+      scroller.style.scrollBehavior = '';
       return;
     }
-    /* Calm over speed: 1500ms on a slow-out curve reads as being LED
-       somewhere, where a fast jump reads as a slide change. */
-    glide(scroller, el, 1500, false);
-    /* release the arrow so it falls ahead of the page it is pulling */
-    if (a.classList.contains('cta-btn')) {
+    glide(scroller, el);
+  }
+  /* A press can come before its section exists: #analysis is written after
+     the whole engine (and #crisis-record was, until it moved ahead of its
+     data), so during a cold load both buttons fell through to the browser's
+     hash jump, which scrolled nowhere and never followed - dead 8 of 8
+     (ME-04). Keep the press, wait for the section, then fly.
+     How long: as long as the page is still being written. A fixed 10 s was
+     not enough on a real cold start - the Live audit (run 39737935470) saw
+     "Skip to the analysis" give up and do nothing, and offline with 4 s pulls
+     the section came 12.3-15.7 s after the press, 0 of 2 landed. The wait now
+     lasts while Streamlit's running sign is up (the icon app.css draws its
+     "Updating..." from), and 10 s from the press in any case; once the run has
+     ended (no running sign for 2 s) with the section still absent, nothing is
+     left that could write it and the wait ends. The reader ends it at once:
+     a wheel, a touch or a scroll key (onYield), or a scroll they make
+     (onScroll, measured from where the page stood at the press). No anchor
+     can be written early instead: #analysis has to sit right above the tab
+     strip, which only exists once the engine has run. */
+  function waitFor(a, id) {
+    supersede();                          // a flight still running lands first
+    const w = P.__meleonaFlight = (P.__meleonaFlight || 0) + 1;
+    const scroller = findScroller(a);
+    P.__meleonaStop = function () { P.__meleonaStop = null; P.__meleonaScroller = null; };   // nothing else to restore
+    P.__meleonaScroller = scroller;       // so a scroll the reader makes while it waits ends the wait
+    P.__meleonaSetY = scroller.scrollTop;
+    const t0 = performance.now();
+    let idleSince = null;
+    (function poll() {
+      if (w !== P.__meleonaFlight) return;   // a newer press, or the reader took over
+      const el = P.getElementById(id);
+      if (el) { go(a, el); return; }
+      const now = performance.now();
+      idleSince = pageRunning() ? null : (idleSince === null ? now : idleSince);
+      if (now - t0 < 10000 || idleSince === null || now - idleSince < 2000) setTimeout(poll, 100);
+      else P.__meleonaStop();             // the run is over and the section never came
+    })();
+  }
+  function onLink(e) {
+    const a = e.target.closest('a[href^="#"]');
+    const id = a ? a.getAttribute('href').slice(1) : '';
+    if (!id) return;                     // a bare '#': nothing to fly to
+    e.preventDefault(); e.stopPropagation();
+    P.__meleonaPressAt = performance.now();
+    tail = P.__meleonaPressAt - wheelAt < 250;   // a flick still running at the press
+    shrunk = false;                              // ...that has yet to shrink since it
+    const el = P.getElementById(id);
+    if (el) go(a, el); else waitFor(a, id);
+    /* release the arrow so it falls ahead of the page it is pulling - every
+       link that carries one, the quiet skip link too */
+    if (a.querySelector('.cta-arrow')) {
       a.classList.remove('is-launching'); void a.offsetWidth;
       a.classList.add('is-launching');
       setTimeout(function () { a.classList.remove('is-launching'); }, 1250);
@@ -377,7 +524,8 @@ _html("""
   ['wheel', 'touchstart', 'keydown'].forEach(function (t) {
     P.addEventListener(t, onYield, { capture: true, passive: true });
   });
-  P.__meleonaGlide = { onTab: onTab, onLink: onLink, onYield: onYield };
+  P.addEventListener('scroll', onScroll, { capture: true, passive: true });
+  P.__meleonaGlide = { onTab: onTab, onLink: onLink, onYield: onYield, onScroll: onScroll };
 })();
 </script>
 """, height=0)
@@ -754,6 +902,16 @@ def load_conviction_data():
     """Benchmark crisis record + AI-capex recovery race, live from Yahoo."""
     return load_conviction()
 
+# Landing target for "See the crisis record" and footer 02. Zero-height marker
+# rather than a heading, so the section keeps its current typography - the
+# glide script scrolls to whatever element carries the id. Written BEFORE the
+# data loads, whatever happens to it: inside the try it existed only once the
+# record arrived, so during a slow load the press had to wait, and if the load
+# failed footer 02 waited 10 s and went nowhere (Council B, 2026-10-22). Now
+# both land on the record's place - the slabs, or the honest "unavailable".
+st.markdown('<div id="crisis-record" style="scroll-margin-top:18px;"></div>',
+            unsafe_allow_html=True)
+
 try:
     _conv = load_conviction_data()
     _s = _conv["summary"]
@@ -763,11 +921,6 @@ try:
     _rec = race_record(_conv["race"])
     _bwin, _nrace = _rec["wins"], _rec["n"]
 
-    # Landing target for the GOTHAM button above. Zero-height marker rather
-    # than a heading, so the section keeps its current typography - the glide
-    # script scrolls to whatever element carries the id.
-    st.markdown('<div id="crisis-record" style="scroll-margin-top:18px;"></div>',
-                unsafe_allow_html=True)
 
     _sl1, _sl2, _sl3, _sl4 = st.columns(4)
     with _sl1:
@@ -934,11 +1087,10 @@ st.markdown(
     f'<div class="showcase-eyebrow">The Engine</div>'
     f'<h2 class="showcase-title" style="font-size:26px;">Stress-test any '
     f'{"short book" if bearish else "portfolio"}, live</h2>'
-    f'<a href="#analysis" style="display:inline-block;margin-top:10px;'
-    f'font-family:\'Helvetica Neue\',sans-serif;font-size:11px;letter-spacing:.14em;'
-    f'text-transform:uppercase;color:#6A5030;text-decoration:none;'
-    f'border-bottom:1px solid rgba(154,123,79,.4);padding-bottom:2px;">'
-    f'Skip to the risk map<span class="cta-arrow" aria-hidden="true"><svg viewBox="0 0 16 30" fill="none" xmlns="http://www.w3.org/2000/svg"><path class="shaft" d="M8 1 V22" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path class="head" d="M2.5 16.5 L8 22.5 L13.5 16.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a>'
+    # "the analysis", not "the risk map": it lands on the analysis tab strip,
+    # whichever tab the reader left open (ME-04). Styled by .cta-link.
+    f'<a href="#analysis" class="cta-link">'
+    f'Skip to the analysis<span class="cta-arrow" aria-hidden="true"><svg viewBox="0 0 16 30" fill="none" xmlns="http://www.w3.org/2000/svg"><path class="shaft" d="M8 1 V22" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path class="head" d="M2.5 16.5 L8 22.5 L13.5 16.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a>'
     f'</div>',
     unsafe_allow_html=True)
 
@@ -1148,7 +1300,7 @@ def load_security_master(tickers_tuple: tuple[str, ...]):
 # 93% of a core doing nothing - and every new visitor queued behind them.
 # The data is end-of-day; a minute counter loses nothing a second one said.
 @st.fragment(run_every="60s")
-def _freshness_ticker(fetched_at_iso: str):
+def _freshness_ticker(fetched_at_iso: str, live: bool):
     """Live-ticking 'as of N min ago' -- reruns only this fragment, not the app."""
     fetched = pd.Timestamp(fetched_at_iso)
     now = pd.Timestamp.now(tz=fetched.tzinfo) if fetched.tzinfo else pd.Timestamp.now()
@@ -1157,8 +1309,15 @@ def _freshness_ticker(fetched_at_iso: str):
     # Nothing polls: this fragment only re-renders the counter. Yahoo is hit
     # again only once the disk copy is older than CACHE_MAX_AGE_HOURS - the old
     # "quotes cached 60s" wording described the in-memory re-read, not a pull.
-    st.caption(f"⟳ Data pulled {ago} · re-pulled from Yahoo once older "
-               f"than {CACHE_MAX_AGE_HOURS:g}h, on your next interaction - not on a timer.")
+    # The dot (ME-11) says what the stamp says, at a glance: bronze, pulsing
+    # once each time this fragment ticks, while the data is live (its last row
+    # at most a day old); still and grey once it is stale. Never a "real-time"
+    # claim - it beats with the minute counter, not with the market.
+    dot = ('<span class="fresh-dot is-live" role="img" aria-label="Data is current"></span>' if live
+           else '<span class="fresh-dot is-stale" role="img" aria-label="Data is stale"></span>')
+    st.caption(f"{dot} Data pulled {ago} · re-pulled from Yahoo once older "
+               f"than {CACHE_MAX_AGE_HOURS:g}h, on your next interaction - not on a timer.",
+               unsafe_allow_html=True)
 
 
 # ---- Audit trail: what this run actually did, in order (see Lineage tab) ----
@@ -1263,7 +1422,7 @@ st.caption(f"Data: {health['rows']} trading days of prices ({len(returns)} daily
            f" · through {health['end']} · {fresh}")
 prov_now = provenance(tickers)
 if prov_now:
-    _freshness_ticker(prov_now["fetched_at_utc"])
+    _freshness_ticker(prov_now["fetched_at_utc"], live=fresh == "live")
 else:
     st.empty()  # hold the ticker's slot: the tab strip below must not move
 
@@ -1289,12 +1448,17 @@ with deck_alloc, st.expander("02 · Allocation - how capital is weighted",
     cov, cov_info = estimate_covariance(returns, cov_method)  # annualized risk matrix
     st.caption(f"Risk matrix: {cov_info}.")
     if cov_method == "EWMA":
-        st.caption(
-            "⚠️ **Reactive lens.** EWMA spikes on one bad day (≈11-day half-life; "
+        st.markdown(
+            # the palette's warning mark in a Data Quality row, not a yellow
+            # emoji in a 60%-opacity caption (2.63:1, Council B)
+            '<div class="dq-row"><span class="dq-mark" role="img" aria-label="Warning" '
+            'style="color:#6A5030;font-weight:700;">!</span> '
+            "<b>Reactive lens.</b> EWMA spikes on one bad day (≈11-day half-life; "
             "at λ=0.94 about 73% of its weight sits in the last month, and it "
             "takes ~37 trading days to reach 90%). It embodies exactly the panic "
             "[Crisis Conviction] argues against - shown for contrast, so you can see "
-            "how twitchy risk looks, not because the engine recommends reacting."
+            "how twitchy risk looks, not because the engine recommends reacting.</div>",
+            unsafe_allow_html=True,
         )
     acol1, acol2 = st.columns(2)
     method = acol1.radio(
@@ -1511,13 +1675,61 @@ if (mc["cvar"] > 0 and lvar and np.isfinite(lvar["lvar"])
         f"<b>{lvar['lvar']:.1%}</b>."
     )
 
+# ---- Headline accents (ME-11): each one a state this run computed ----
+# The orientation promises "watch the headline number move"; a number that
+# changes in place is easy to miss. A hairline 0-100% scale (no loss to the
+# whole book) carries a tick at this CVaR and a faint one at the last
+# DIFFERENT headline this session showed, and the move is said in words.
+# Marks name the two states that change what the number means: a shock or
+# crisis replay applied above, and the short side. All inside the verdict's
+# own markdown, so nothing above the tab strip gains an element.
+def cvar_scale_html(now: float, prev: float | None) -> str:
+    """The headline's scale, its ticks and the move in words.
+
+    Everything is read from the headlines AS DISPLAYED (one decimal): the raw
+    values 22.540% and 22.480% both read "22.5%", and the page said "-0.1
+    points vs your last setting" between two equal numbers (Council B,
+    2026-10-22). Equal displays say nothing. A CVaR past 100% (a leveraged or
+    short book can lose more than it holds) sits at the scale's end, and the
+    end says so instead of clamping silently."""
+    shown = lambda v: float(f"{v:.1%}"[:-1])                 # exactly what the headline prints
+    on_scale = lambda v: min(max(shown(v), 0.0), 100.0)      # a gain sits at 0
+    beyond = shown(now) > 100
+    moved = None if prev is None else round(shown(now) - shown(prev), 1)
+    return (
+        '<div class="cvar-scale" aria-hidden="true">'
+        + (f'<span class="cvar-tick prev" style="left:{on_scale(prev):.1f}%"></span>'
+           if prev is not None else "")
+        + f'<span class="cvar-tick now{" beyond" if beyond else ""}" style="left:{on_scale(now):.1f}%;'
+          f'--from:{on_scale(now if prev is None else prev):.1f}%"></span></div>'
+        '<div class="cvar-scale-ends" aria-hidden="true"><span>0%</span>'
+        + ('<span class="beyond">beyond the whole book &#8250;</span>' if beyond
+           else '<span>the whole book</span>') + '</div>'
+        + (f'<div class="cvar-delta">{"+" if moved > 0 else chr(0x2212)}{abs(moved):.1f} '
+           f'points vs your last setting</div>' if moved else ""))
+
+
+# The last DIFFERENT headline this session displayed (compared as displayed).
+_cv = float(mc["cvar"])
+if st.session_state.get("_cvar_now") is None or f"{st.session_state['_cvar_now']:.1%}" != f"{_cv:.1%}":
+    st.session_state["_cvar_prev"] = st.session_state.get("_cvar_now")
+    st.session_state["_cvar_now"] = _cv
+_scale = cvar_scale_html(_cv, st.session_state.get("_cvar_prev"))
+_marks = "".join(
+    f' <span class="state-mark" title="{why}">{name}</span>'
+    for name, why, on in (
+        ("Stressed", "A shock or a crisis replay is applied in 03 · Stress test", is_shocked),
+        ("Short book", "The bearish side: a synthetic daily-rebalanced short", bearish))
+    if on)
+
 # ---- Verdict + the cone of simulated outcomes: one wide row ----
 v_col, f_col = st.columns([5, 7], gap="large")
 with v_col:
     st.markdown(f"""
 <div class="verdict-box">
-  <div class="verdict-label">1-Year CVaR (95% confidence)</div>
+  <div class="verdict-label">1-Year CVaR (95% confidence){_marks}</div>
   <div class="verdict-number">{mc['cvar']:.1%}</div>
+  {_scale}
   <div class="verdict-sentence">{verdict}</div>
 </div>
 """, unsafe_allow_html=True)
@@ -3017,9 +3229,19 @@ with tab_dq:
         "implausible feed, not a wrong-but-plausible number."
     )
     report = validate_prices(prices)
-    icon = {"PASS": "✅", "WARN": "⚠️", "FAIL": "❌"}
+    # Palette marks, not colour emoji - the emoji were the only bright colours
+    # on the page (ME-04). Each mark is a text tone that clears AA on beige;
+    # the glyph carries the meaning, the weight the urgency. A row, not an
+    # st.caption: Streamlit draws captions at 60% opacity, which would take
+    # the marks (and the results they mark) below AA.
+    # role/aria-label: a screen reader says "Pass", not "check mark" or
+    # "multiplication sign" (Council B).
+    mark = {"PASS": '<span class="dq-mark" role="img" aria-label="Pass" style="color:#6A5030;">&#10003;</span>',
+            "WARN": '<span class="dq-mark" role="img" aria-label="Warning" style="color:#6A5030;font-weight:700;">!</span>',
+            "FAIL": '<span class="dq-mark" role="img" aria-label="Fail" style="color:#3F3B35;font-weight:700;">&times;</span>'}
     for c in report["checks"]:
-        st.caption(f"{icon[c['status']]} **{c['check']}** - {c['message']}")
+        st.markdown(f'<div class="dq-row">{mark[c["status"]]} <b>{html.escape(c["check"])}</b>'
+                    f' - {html.escape(c["message"])}</div>', unsafe_allow_html=True)
     verdict_dq = "PASS" if report["passed"] else "FAIL"
     panel_head("Overall data-quality gate", f"This feed: {verdict_dq}")
 
@@ -3298,7 +3520,7 @@ st.markdown("""
   <div class="f-rail">
     <a class="f-box" href="#grit-showcase"><span class="f-num">01</span>The Grit Zone
       <small>Resilience ranked from real drawdowns - recovery, consistency, crisis behavior.</small></a>
-    <a class="f-box" href="#conviction"><span class="f-num">02</span>Crisis Conviction
+    <a class="f-box" href="#crisis-record"><span class="f-num">02</span>Crisis Conviction
       <small>The hardest trade, priced from the actual record of __NCRISES__ named crises.</small></a>
     <a class="f-box" href="#engine"><span class="f-num">03</span>The Engine
       <small>Stress-test any universe live - allocation, scenarios, CVaR verdict.</small></a>

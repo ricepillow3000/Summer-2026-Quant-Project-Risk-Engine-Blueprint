@@ -2689,6 +2689,62 @@ def _contrast(fg: str, bg: str) -> float:
     return (max(a, b) + 0.05) / (min(a, b) + 0.05)
 
 
+def _blend(fg: str, bg: str, opacity: float) -> str:
+    """The colour a visitor sees: fg drawn at `opacity` over bg, as #rrggbb."""
+    f = [int(fg[i:i + 2], 16) for i in (1, 3, 5)]
+    g = [int(bg[i:i + 2], 16) for i in (1, 3, 5)]
+    return "#" + "".join(f"{round(opacity * a + (1 - opacity) * b):02X}" for a, b in zip(f, g))
+
+
+# Streamlit 1.62 draws st.caption at opacity 0.6 (computed on the page,
+# 2026-10-22); app.css must override it or the blend below is what ships.
+STREAMLIT_CAPTION_OPACITY = 0.6
+
+
+def test_captions_and_small_labels_clear_aa_after_their_opacity():
+    """ME-13 (2026-10-22): the stylesheet said captions were #524E47 - 6.5:1 on
+    the panel - and test_text_colours_meet_wcag_aa agreed. The page drew them
+    at Streamlit's 60% opacity: measured from screenshot pixels, every caption
+    read 2.74-2.77:1 at 1440px and 390px (tools/caption_contrast_check.mjs).
+    The metric labels (#ABA499) read 2.14-2.17:1 on their beige tiles; the
+    older test excused them because the same colour clears 4.5:1 on charcoal,
+    a ground they never sit on. Text sizes here are body or smaller, so 4.5:1,
+    after opacity, on every beige ground."""
+    import re as _re
+    css = (pathlib.Path(__file__).resolve().parent.parent / "static" / "app.css").read_text(encoding="utf-8")
+    grounds = ("#D4CDBF", "#E9E4DB", "#EDE9E3", "#F3EFE6")   # page, panel, column, metric tile
+
+    def rules(token):
+        return [(s, b) for s, b in _re.findall(r"([^{}]+)\{([^}]*)\}", css) if token in s]
+
+    def colour(token):
+        found = [m.group(1) for _, b in rules(token)
+                 for m in [_re.search(r"(?<![-\w])color:\s*(#[0-9A-Fa-f]{6})", b)] if m]
+        assert found, f"no colour set for {token}"
+        return found[-1]
+
+    def opacity(token, default):
+        found = [float(m.group(1)) for _, b in rules(token)
+                 for m in [_re.search(r"(?<![-\w])opacity:\s*([\d.]+)", b)] if m]
+        return found[-1] if found else default
+
+    checks = {
+        "caption": (colour("stCaptionContainer"), opacity("stCaptionContainer", STREAMLIT_CAPTION_OPACITY)),
+        "metric label": (colour('[data-testid="stMetricLabel"] p'), opacity('[data-testid="stMetricLabel"]', 1.0)),
+    }
+    # any other rule that dims a coloured text with opacity is judged the same way
+    for sel, body in _re.findall(r"([^{}]+)\{([^}]*)\}", css):
+        c = _re.search(r"(?<![-\w])color:\s*(#[0-9A-Fa-f]{6})", body)
+        o = _re.search(r"(?<![-\w])opacity:\s*(0?\.\d+)", body)
+        if c and o:
+            checks[sel.strip()[-60:]] = (c.group(1), float(o.group(1)))
+    for name, (fg, op) in checks.items():
+        for g in grounds:
+            seen = _blend(fg, g, op)
+            assert _contrast(seen, g) >= 4.5, (
+                f"{name}: {fg} at opacity {op} reads {seen} on {g} - {_contrast(seen, g):.2f}:1")
+
+
 def test_text_colours_meet_wcag_aa():
     """Every colour the stylesheet uses for TEXT must clear 4.5:1 on the ground
     it sits on. Bronze #9A7B4F measured 2.50:1 and is why this test exists - it
@@ -4475,6 +4531,125 @@ def test_the_tab_strip_keeps_its_slot_whatever_the_basket():
         restore()
 
 
+def _verdict_html(at) -> str:
+    return next(m.value for m in at.markdown if 'class="verdict-box"' in m.value)
+
+
+def test_the_headline_accents_follow_real_state():
+    """ME-11 (2026-10-22), John: "make the website feel alive ... add visual
+    details and accent marks that are meaningful". Each accent is a state the
+    page already computed, drawn where the reader looks: a 0-100% hairline
+    under the CVaR with a tick at the value and a faint tick at this session's
+    last different headline, "+N points vs your last setting" in words; a
+    "Stressed" mark while a shock or crisis replay is applied; a "Short book"
+    mark on the bearish side. All inside the verdict's own markdown, so the
+    tab strip keeps its slot."""
+    import re
+    from src.scenarios import HISTORICAL_REGIMES
+    at, restore = _offline_app()
+    try:
+        slot = _tab_strip_slot(at)
+        box = _verdict_html(at)
+        shown = lambda b: float(re.search(r'class="verdict-number">(-?[\d.]+)%', b).group(1))
+        v0 = shown(box)
+        tick = re.search(r'class="cvar-tick now" style="left:([\d.]+)%', box)
+        assert tick and abs(float(tick.group(1)) - min(max(v0, 0), 100)) < 0.11, box
+        assert "vs your last setting" not in box and "cvar-tick prev" not in box, \
+            "a first headline has nothing to compare against"
+        assert "state-mark" not in box, "no stress, no short: no mark"
+
+        at.radio[[w.label for w in at.radio].index("Weighting")].set_value("Risk parity").run()
+        assert not at.exception, [e.value for e in at.exception]
+        box = _verdict_html(at)
+        v1 = shown(box)
+        assert v1 != v0, "fixture: risk parity should move the headline"
+        said = re.search(r"([+\u2212-][\d.]+) points vs your last setting", box)
+        assert said, box
+        delta = float(said.group(1).replace("\u2212", "-"))
+        assert abs(delta - (v1 - v0)) <= 0.11, (delta, v0, v1)
+        prev = re.search(r'class="cvar-tick prev" style="left:([\d.]+)%', box)
+        assert prev and abs(float(prev.group(1)) - min(max(v0, 0), 100)) < 0.11, box
+
+        at.selectbox[[w.label for w in at.selectbox].index("Scenario")].set_value(
+            list(HISTORICAL_REGIMES)[-1]).run()
+        assert not at.exception, [e.value for e in at.exception]
+        assert ">Stressed<" in _verdict_html(at), "a crisis replay must mark the headline"
+        assert _tab_strip_slot(at) == slot
+
+        at.radio(key="bv_direction").set_value("Bearish - short the book").run()
+        assert not at.exception, [e.value for e in at.exception]
+        assert ">Short book<" in _verdict_html(at), "the bearish side must mark the headline"
+        assert _tab_strip_slot(at) == slot, "an accent moved the tab strip"
+    finally:
+        restore()
+
+
+def _main_function(name):
+    """One top-level function of main.py, compiled on its own (main.py is a
+    script: importing it would run the app)."""
+    import ast
+    src = (pathlib.Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
+    node = next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == name)
+    scope = {}
+    exec(compile(ast.Module(body=[node], type_ignores=[]), "main.py", "exec"), scope)
+    return scope[name]
+
+
+def test_the_headline_move_is_read_from_the_numbers_as_displayed():
+    """Council B (2026-10-22): 22.540% then 22.480% both display "22.5%", and
+    the page said "-0.1 points vs your last setting" between two equal
+    numbers. The move is the difference of the displayed headlines; equal
+    displays say nothing. And a CVaR past 100% no longer clamps silently at
+    "the whole book": the scale's end says the loss is beyond it."""
+    scale = _main_function("cvar_scale_html")
+    same = scale(0.22540, 0.22480)
+    assert f"{0.22540:.1%}" == f"{0.22480:.1%}"
+    assert "vs your last setting" not in same, same
+    moved = scale(0.2266, 0.2254)                 # 22.7% after 22.5%
+    assert "+0.2 points vs your last setting" in moved, moved
+    down = scale(0.2049, 0.2254)                  # 20.5% after 22.5%
+    assert "\u22122.0 points vs your last setting" in down, down
+    assert "vs your last setting" not in scale(0.2254, None), "a first headline has nothing to compare"
+    over = scale(1.374, 0.9)
+    assert "beyond the whole book" in over and "cvar-tick now beyond" in over, over
+    assert 'left:100.0%' in over, "a loss past the whole book sits at the scale's end"
+    assert "beyond" not in scale(0.999, None), "100% or less is on the scale"
+
+
+def test_the_freshness_dot_and_the_reading_line_are_honest_and_still():
+    """ME-11: the freshness stamp gets a dot that pulses once per minute tick
+    only while the data is live (end-of-day, at most a day old) and sits grey
+    when stale; a 1px reading-progress line rides the page's own scroll
+    (CSS scroll-timeline, no JS listener). Both are decorative beside words
+    that already say the state, and both are still under reduced motion."""
+    import re as _re
+    root = pathlib.Path(__file__).resolve().parent.parent
+    src = (root / "main.py").read_text(encoding="utf-8")
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    tick = src[src.index("def _freshness_ticker"):]
+    tick = tick[:tick.index("\n\n\n")]
+    assert "live" in tick.split(")")[0], "the ticker must be told whether the data is live"
+    assert "fresh-dot is-live" in tick and "fresh-dot is-stale" in tick, tick
+    assert _re.search(r"_freshness_ticker\([^)]*staleness_days", src) or "live=fresh" in src.replace(" ", ""), \
+        "the dot's state must come from the measured staleness"
+    live = _re.search(r"\.fresh-dot\.is-live\s*\{([^}]*)\}", css)
+    assert live and _re.search(r"animation:[^;]*\b1\b", live.group(1)), "a live dot pulses once per tick"
+    assert "@keyframes" in css
+    assert _re.search(r'\[data-testid="stMain"\]\s*\{[^}]*scroll-timeline:\s*--page', css), \
+        "the reading line must ride the real scroller's own timeline"
+    line = _re.search(r'\[data-testid="stMain"\]::before\s*\{([^}]*)\}', css)
+    assert line and "animation-timeline: --page" in line.group(1), "no JS: a scroll-driven animation"
+    assert "scaleX(0)" in line.group(1), "with animations off (reduced motion) the line stays still"
+    sup = css.index("@supports (animation-timeline: scroll())")
+    assert sup < css.index('[data-testid="stMain"]::before {') < css.index("}\n}", sup) + 3, \
+        "the reading line must sit inside an @supports guard (no full-width bar where timelines are missing)"
+    assert _re.search(r"\.fresh-dot\.is-stale\s*\{[^}]*border:[^}]*#7E776B", css), \
+        "stale is a hollow ring, not only a missing pulse"
+    assert _contrast("#7E776B", "#EDE9E3") >= 3 and _contrast("#9A7B4F", "#EDE9E3") >= 3
+    rm = _re.search(r"@media \(prefers-reduced-motion: reduce\) \{\s*\*, \*::before, \*::after \{ animation: none", css)
+    assert rm, "the global reduced-motion rule must still stop every animation"
+
+
 def test_the_glide_is_bound_before_any_stop_and_rebinds():
     """John, 2026-10-19: "sometimes the button does not transition". The
     glide listener came from a zero-height iframe at the END of main.py,
@@ -4520,16 +4695,95 @@ def test_the_glide_respects_reduced_motion():
     script = next(n.args[0].value for n in ast.walk(tree) if isinstance(n, ast.Call)
                   and ast.unparse(n.func) == "_html" and n.args
                   and isinstance(n.args[0], ast.Constant) and "__meleonaGlide" in n.args[0].value)
-    on_link = script[script.index("function onLink"):script.index("P.addEventListener")]
+    # go() is what every press ends in - at once, or once a section still
+    # being written has mounted (onLink / waitFor) - so the question lives there.
+    on_link = script[script.index("function go("):script.index("P.addEventListener")]
+    assert "go(a, el)" in on_link[on_link.index("function onLink"):], "every press must end in go()"
     assert "prefers-reduced-motion: reduce" in on_link, \
         "the glide must ask for the visitor's motion setting on every click"
-    still = on_link[on_link.index("prefers-reduced-motion"):on_link.index("glide(scroller, el, 1500")]
+    still = on_link[on_link.index("prefers-reduced-motion"):on_link.index("glide(scroller, el)")]
     assert "preventDefault" in on_link and "scrollTo" in still and "return" in still, \
         "with reduced motion the button must land at once, before any glide starts"
     css = (root / "static" / "app.css").read_text(encoding="utf-8")
     blocks = re.findall(r"@media \(prefers-reduced-motion: reduce\) \{(.*?)\n\}", css, re.S)
     assert any(re.search(r"scroll-behavior:\s*auto\s*!important", b) for b in blocks), \
         "the CSS smooth-scroll fallback must stand down under reduced motion too"
+
+
+def test_every_button_wears_one_focus_ring_that_clears_3_to_1_on_its_ground():
+    """ME-04 (2026-10-22): the CTAs wore a square 2px bronze outline, while
+    the skip link and the footer boxes fell back to Streamlit's rounded
+    box-shadow ring. The bronze outline measured 2.82:1 on the dark band
+    ("See the crisis record"), under the 3:1 a focus indicator needs (WCAG 2.2
+    1.4.11). One rule now draws every in-page link's ring, in a tone chosen by
+    the ground: the dark text bronze on beige, the light one on the charcoal
+    bands. tools/cta_style_check.mjs measures the same thing from pixels."""
+    import re as _re
+    root = pathlib.Path(__file__).resolve().parent.parent
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    rule = next((m for m in _re.finditer(r"([^{}]*:focus-visible[^{}]*)\{([^}]*)\}", css)
+                 if "--ring" in m.group(2)), None)
+    assert rule, "no shared focus rule drawing var(--ring)"
+    sel, body = rule.group(1), rule.group(2)
+    for who in ("a.cta-btn", "a.cta-link", ".f-box"):
+        assert who in sel, f"{who} does not share the focus ring"
+    assert _re.search(r"outline:\s*2px solid var\(--ring\)", body), body
+    assert _re.search(r"box-shadow:\s*none", body), "Streamlit's box-shadow ring must stand down"
+    rings = dict((s.strip(), c) for s, c in
+                 _re.findall(r"([^{}]+)\{[^}]*--ring:\s*(#[0-9A-Fa-f]{6})", css))
+    light = next(c for s, c in rings.items() if ":root" in s)
+    dark = next(c for s, c in rings.items() if ".meleona-footer" in s and ".showcase-row" in s)
+    for ground in ("#EDE9E3", "#E9E4DB", "#D4CDBF"):
+        assert _contrast(light, ground) >= 3, f"ring {light} on {ground}: {_contrast(light, ground):.2f}:1"
+    assert _contrast(dark, "#3F3B35") >= 3, f"ring {dark} on the band: {_contrast(dark, '#3F3B35'):.2f}:1"
+    old = _re.search(r"a\.cta-btn:focus-visible,\s*\.stButton>button:focus-visible,\s*"
+                     r"\[data-baseweb=\"tab\"\]:focus-visible\s*\{([^}]*)\}", css)
+    assert not old or "#9A7B4F" not in old.group(1), "the 2.82:1 bronze outline is still drawn on CTAs"
+
+
+def test_the_outlier_links_and_marks_now_match_their_siblings():
+    """ME-04 (2026-10-22), each one a measured outlier: the skip link was
+    styled inline (no hover, an arrow that never drew, no launch), footer 01
+    and 02 landed on the same spot on a desktop (the two halves of one row),
+    the skip link promised "the risk map" while landing on whichever tab was
+    open, the Data Quality tab was the only bright colour on the page (colour
+    emoji), and Streamlit's sans-serif link icon sat on the serif headings."""
+    import re as _re
+    root = pathlib.Path(__file__).resolve().parent.parent
+    src = (root / "main.py").read_text(encoding="utf-8")
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    skip = _re.search(r"<a href=\"#analysis\"[^>]*>", src).group(0)
+    assert 'class="cta-link"' in skip and "style=" not in skip, skip
+    assert "risk map" not in src[src.index('href="#analysis"'):][:400].lower(), \
+        "the skip link lands on the analysis tabs, whichever is open - it must not promise the map"
+    for state in (".cta-link:hover", ".cta-link:hover .cta-arrow .shaft", ".cta-link.is-launching .cta-arrow"):
+        assert state in css, f"the skip link has no {state} rule"
+    assert "a.querySelector('.cta-arrow')" in src, "every link with an arrow launches it"
+    footer = src[src.index('<div class="meleona-footer">'):]
+    targets = _re.findall(r'class="f-box" href="#([\w-]+)"', footer)
+    assert len(set(targets)) == 3, targets
+    assert not {"grit-showcase", "conviction"} <= set(targets), \
+        "#grit-showcase and #conviction share one row: two footer boxes landed on one spot"
+    for emoji in ("✅", "⚠️", "❌"):
+        assert emoji not in src, f"colour emoji {emoji} on the page"
+    # Council B: each mark says its meaning to a screen reader, and none sits
+    # in a 60%-opacity caption
+    for word in ("Pass", "Warning", "Fail"):
+        assert f'role="img" aria-label="{word}"' in src, f"the {word} mark has no spoken name"
+    assert not _re.search(r"st\.caption\([^)]*dq-mark", src, _re.S), "a mark is still inside an st.caption"
+    # footer 02 and "See the crisis record" land even when the record fails to load
+    assert src.index('<div id="crisis-record"') < src.index("_conv = load_conviction_data()"), \
+        "#crisis-record must be written before (and whatever happens to) the crisis data"
+    assert _re.search(r'\[data-testid="stHeaderActionElements"\]\s*\{[^}]*visibility:\s*hidden', css), \
+        "Streamlit's sans-serif heading link icon still shows on the serif headings"
+    assert _re.search(r"\.conv-core\s*>\s*\.cta-btn\s*\{[^}]*align-self:\s*flex-start", css), \
+        "the crisis-record button still stretches across its column"
+    # one effective rule set: every .cta-btn rule that only ever lost to a
+    # later !important layer is gone
+    assert len(_re.findall(r"(?m)^\.cta-btn \{", css)) == 1, "dead .cta-btn layers remain"
+    assert len(_re.findall(r"(?m)^\.cta-btn:hover \{", css)) == 1, "dead .cta-btn:hover layers remain"
+    assert ".cta-btn::before" not in css.replace("#boot-skel .cta-btn::before", ""), \
+        "the gloss sheen layer is dead (display:none !important) and should go"
 
 
 def _top_markdown(at) -> list[tuple[int, str]]:
@@ -4696,6 +4950,119 @@ def test_the_glide_follows_a_moving_target_and_yields_to_the_reader():
     assert "contentVisibility" in script and ".st-key-risk-map" in script, \
         "the off-screen map must be skipped while the glide flies"
     assert 'st.container(key="risk-map")' in src, "the map needs its own keyed container"
+
+
+def test_a_press_waits_for_its_section_as_long_as_the_page_is_still_being_written():
+    """ME-05, third review (Live audit run 39737935470, real Yahoo, cold start):
+    "Skip to the analysis" was DEAD. #analysis is written only after the whole
+    engine has run, and the press stopped waiting after a fixed 10 s; offline
+    with 4 s pulls the section came 12.3-15.7 s after the press and 0 of 2
+    presses landed (tools/glide_load_check.mjs early, which now waits for the
+    section however long it takes). The wait now lasts while Streamlit's
+    running sign is up, ends once the run is over without the section, and a
+    scroll the reader makes ends it too."""
+    import ast
+    src = (pathlib.Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
+    script = next(n.args[0].value for n in ast.walk(ast.parse(src)) if isinstance(n, ast.Call)
+                  and ast.unparse(n.func) == "_html" and n.args
+                  and isinstance(n.args[0], ast.Constant) and "__meleonaGlide" in n.args[0].value)
+    wait = script[script.index("function waitFor"):script.index("function onLink")]
+    assert "pageRunning()" in wait and '[data-testid="stStatusWidgetRunningIcon"]' in script, \
+        "the wait must last while the page is still being written"
+    assert "now - t0 < 10000 || idleSince === null" in wait, \
+        "10 s is a floor, not a cap: the wait goes on while the run goes on"
+    assert "now - idleSince < 2000" in wait and "P.__meleonaStop()" in wait, \
+        "once the run has ended without the section, the wait ends (no leak)"
+    assert "requestAnimationFrame(poll)" not in wait, "a long wait polls gently, not every frame"
+    assert "P.__meleonaScroller = scroller" in wait and "P.__meleonaSetY = scroller.scrollTop" in wait, \
+        "a scroll the reader makes while the press waits must end the wait"
+
+
+def test_only_a_decaying_flick_is_forgiven_and_every_exit_restores_the_page():
+    """Council B's review of ME-05 (2026-10-22), each probe reproduced:
+      - steady: a reader wheeling down at a steady 100px a notch pressed footer
+        01 and was dragged UP 2.7k px - "no bigger" let a constant wheel pass
+        as a trackpad's decaying tail (glide_load_check steady: 0/16 before);
+      - leak: a newer press bumped the flight number without landing the old
+        flight, leaving the scroller on 'auto' and the map's rendering skipped;
+      - a scrollbar drag (no wheel, touch or key) was pulled back by the
+        settle phase on a page still growing.
+    tools/glide_load_check.mjs steady/momentum and the Live audit step 8c run
+    the behaviour; this pins the rules in the script."""
+    import ast
+    root = pathlib.Path(__file__).resolve().parent.parent
+    src = (root / "main.py").read_text(encoding="utf-8")
+    script = next(n.args[0].value for n in ast.walk(ast.parse(src)) if isinstance(n, ast.Call)
+                  and ast.unparse(n.func) == "_html" and n.args
+                  and isinstance(n.args[0], ast.Constant) and "__meleonaGlide" in n.args[0].value)
+    assert "function onScroll" in script, "a scrollbar drag (scroll events only) never reaches the yield"
+    yield_fn = script[script.index("function onYield"):script.index("function onScroll")]
+    # Council B's second review: real tails repeat integer deltas (2, 2, 1, 1),
+    # so "strictly smaller" cancelled them all; a steady wheel never shrinks.
+    assert "Math.abs(e.deltaY) < Math.abs(wheelDy)) shrunk = true" in yield_fn, \
+        "the stream must be seen to shrink before any of it is forgiven"
+    assert "noBigger && shrunk" in yield_fn, "a tail is forgiven only once it has shrunk"
+    assert "* 1.25" not in yield_fn, "a harder wheel must yield"
+    link = script[script.index("function onLink"):]
+    assert "shrunk = false" in link, "every press starts a tail that has not shrunk yet"
+    assert "Math.sign(e.deltaY) === P.__meleonaDir" in yield_fn, "a wheel against the flight must yield"
+    assert "P.__meleonaDir = dir" in script, "the flight must publish its direction"
+    for fn in ("function glide", "function waitFor"):
+        body = script[script.index(fn):]
+        assert body.index("supersede()") < body.index("__meleonaFlight = "), \
+            f"{fn} must land the running flight before it takes over"
+    assert "supersede();" in script[script.index("prefers-reduced-motion"):script.index("glide(scroller, el);")]
+    land = script[script.index("function land"):script.index("function supersede")]
+    for undo in ("scrollBehavior = ''", "overflowAnchor = ''", "quietMap(false)", "__meleonaStop = null"):
+        assert undo in land, f"landing must undo {undo}"
+    assert "P.addEventListener('scroll', onScroll" in script, "a scrollbar drag must reach the yield"
+    assert "prev.onScroll" in script[:script.index("function onTab")], "a new frame removes the old scroll listener"
+    assert "__meleonaSetY = scroller.scrollTop" in script, "the flight records where it put the page"
+    wf = (root / ".github" / "workflows" / "live-audit.yml").read_text(encoding="utf-8")
+    assert "glide_load_check.mjs http://127.0.0.1:8501 steady" in wf and "early 1" in wf, \
+        "the Live audit must run the glide check, steady and cold mid-load presses included"
+
+
+def test_a_button_pressed_while_the_page_is_still_loading_still_glides_all_the_way():
+    """John, 2026-10-22: "sometimes it does not do the transition". Measured on
+    the offline harness at cfceb42 (ME-04), every button glided on a settled
+    page (480/480) but not while the page was still loading:
+      - "See the crisis record" and "Skip to the risk map" were dead 8/8: their
+        target is written only after the data arrives, the click found no
+        element and fell through to the browser's hash jump, which scrolled
+        nowhere and never followed the section once it appeared;
+      - "To the engine" leapt 138-230px in one frame 6/8: the eased position
+        ran past the bottom of the still-growing page, scrollTo clamped it,
+        and the next mount released it all at once;
+      - "Explore what we do" stopped 223px short 8/8 at the bottom of a short
+        page, and a trackpad's momentum still arriving after the click
+        cancelled every flight 30/30 (only 300 ms of the wheel was forgiven).
+    A press with no target yet waits for it (bounded) and then flies; each
+    frame re-aims against the page's current bottom and moves at most a
+    peak-speed step, so a page that grows mid-flight is caught up smoothly;
+    the flight keeps settling until it is on the target; and a wheel only
+    yields when it is not the decaying tail of the gesture running at the click."""
+    import ast
+    root = pathlib.Path(__file__).resolve().parent.parent
+    src = (root / "main.py").read_text(encoding="utf-8")
+    tree = ast.parse(src)
+    script = next(n.args[0].value for n in ast.walk(tree) if isinstance(n, ast.Call)
+                  and ast.unparse(n.func) == "_html" and n.args
+                  and isinstance(n.args[0], ast.Constant) and "__meleonaGlide" in n.args[0].value)
+    link = script[script.index("function onLink"):]
+    assert "if (!el) return;" not in link, \
+        "a press before its section exists must not fall through to the browser's hash jump"
+    assert "e.preventDefault()" in link and link.index("e.preventDefault()") < link.index("getElementById"), \
+        "the press is kept (default prevented) before looking for its target"
+    assert "waitFor(" in link and "10000" in script, "a missing target is waited for, and only for a bounded time"
+    frame = script[script.index("(function f(now)"):script.index("function onLink")]
+    assert "scrollHeight - scroller.clientHeight" in frame, \
+        "each frame must re-aim against the page's current bottom (a growing page clamps scrollTo)"
+    assert "vmax" in frame, "each frame's step is capped at the flight's peak speed - no catch-up leap"
+    assert "glide(scroller, el, 320, true)" not in script, \
+        "one 320 ms correction is not enough on a growing page: the flight settles until it is on target"
+    assert "deltaY" in script and "< 300) return" not in script, \
+        "a wheel yields unless it is the decaying tail of the gesture running at the click"
 
 
 def test_every_short_form_on_the_map_is_in_its_glossary():

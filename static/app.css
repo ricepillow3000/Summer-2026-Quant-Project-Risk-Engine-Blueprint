@@ -33,10 +33,16 @@ h1, h2, h3 { color: #3F3B35; font-weight: 400; letter-spacing: -0.01em; }
 /* Sharpen the whole app - kill Streamlit's default rounded corners */
 [data-testid="stExpander"], [data-baseweb="tab"], .stButton>button,
 [data-testid="stMetric"], div[data-baseweb="select"]>div { border-radius: 0 !important; }
+/* Captions: the quiet ink at full strength. Streamlit draws st.caption at
+   60% opacity, so the #524E47 written here reached the page as 2.74-2.77:1
+   (screenshot pixels, ME-13). A lighter tone at opacity 1 keeps the quiet
+   look and clears 4.5:1 on every beige ground (4.5 page - 6.2 tile). */
 .stCaption, [data-testid="stCaptionContainer"],
 [data-testid="stCaptionContainer"] p, [data-testid="stCaptionContainer"] div {
-    font-size: 13.5px !important; color: #524E47 !important; line-height: 1.5 !important; }
-[data-testid="stMetricLabel"] p { font-size: 11px !important; color: #ABA499 !important;
+    font-size: 13.5px !important; color: #5D574D !important; line-height: 1.5 !important;
+    opacity: 1 !important; }
+/* Metric labels: #ABA499 measured 2.14-2.17:1 on their tiles (ME-13). */
+[data-testid="stMetricLabel"] p { font-size: 11px !important; color: #5D574D !important;
     letter-spacing: 0.14em !important; text-transform: uppercase !important; }
 [data-testid="stMetricValue"] { font-family: Georgia, serif !important;
     color: #3F3B35 !important; letter-spacing: -0.01em; }
@@ -217,18 +223,7 @@ html { scroll-behavior: smooth; }
 .showcase-row .showcase-section { padding: 0; }
 
 /* CTA - sharp charcoal slab, bronze on hover, alive to the touch */
-.cta-btn { display: inline-block; margin-top: 14px; padding: 15px 34px;
-    background: #3F3B35; color: #F4F1EA !important; text-decoration: none !important;
-    /* Same voice as the hero headline: Georgia serif,
-       engraved plaque - not a sans-serif game pill. */
-    border-radius: 0; font-family: Georgia, 'Times New Roman', serif; font-size: 14.5px;
-    letter-spacing: 0.11em; text-transform: uppercase;
-    transition: background .25s ease, letter-spacing .25s ease,
-                transform .25s cubic-bezier(.16,1,.3,1), box-shadow .25s ease; }
-.cta-btn:hover { background: #9A7B4F; letter-spacing: 0.14em;
-    transform: translateY(-2px);
-    box-shadow: 0 16px 30px -18px rgba(63,59,53,.6); }
-.cta-btn:active { transform: translateY(0) scale(.985); }
+/* CTA: one rule set, near the end of the file (search "CTA: matte rectangle"). */
 
 .showcase-section { padding: 56px 8px 44px; text-align: left; display: flex;
     flex-direction: column; align-items: flex-start; gap: 18px; }
@@ -270,8 +265,10 @@ html { scroll-behavior: smooth; }
 [data-testid="stDataFrame"] { border: 1px solid #D4CDBF;
     border-top: 2px solid #9A7B4F; }
 
-/* Keyboard focus carries the same bronze - prestige includes a11y */
-a.cta-btn:focus-visible, .stButton>button:focus-visible,
+/* Keyboard focus carries the same bronze - prestige includes a11y. In-page
+   links (CTAs, the skip link, the footer boxes) share their own ring: see
+   "One focus ring" near the end of the file. */
+.stButton>button:focus-visible,
 [data-baseweb="tab"]:focus-visible {
     outline: 2px solid #9A7B4F; outline-offset: 2px; }
 .engine-heading { text-align: left; padding: 4px 0 22px; }
@@ -475,7 +472,7 @@ div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
     background: linear-gradient(90deg, #E2DCD0 25%, #EFEAE0 45%, #E2DCD0 65%) !important;
     background-size: 200% 100% !important; animation: sk-sheen 1.15s linear infinite;
     border-color: transparent !important; box-shadow: none !important; color: transparent !important; }
-#boot-skel .cta-btn::before, #boot-skel .hstat::before { display: none !important; }
+#boot-skel .hstat::before { display: none !important; }
 #boot-skel .hstat { background: #E9E4DA !important; border-color: #DDD6C9 !important;
     box-shadow: none !important; animation: none !important; transform: none !important; }
 #boot-skel .hstat .n { -webkit-text-fill-color: transparent; background: none; }
@@ -560,20 +557,6 @@ div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
       -webkit-text-fill-color: transparent; }
 }
 
-/* CTA - was a matte charcoal slab; now polished bronze metal with a running
-   sheen band on hover. */
-.cta-btn { background: linear-gradient(180deg, #4A453D 0%, #3A362F 100%);
-    position: relative; overflow: hidden;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.14),
-                0 8px 20px -12px rgba(63,59,53,.55); }
-.cta-btn:hover { background: linear-gradient(180deg, #B08A55 0%, #8A6A3C 100%);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.32),
-                0 16px 32px -16px rgba(63,59,53,.65); }
-.cta-btn::before { content: ""; position: absolute; top: 0; left: -60%;
-    width: 40%; height: 100%; transform: skewX(-20deg); pointer-events: none;
-    background: linear-gradient(100deg, transparent,
-        rgba(255,255,255,.35), transparent); transition: none; }
-.cta-btn:hover::before { animation: gloss-glint 0.7s ease-out 1; }
 
 /* Streamlit metric readouts - lift the flat numbers onto small glass tiles,
    consistent with the hero deck, with a hover lift for tactility. */
@@ -611,7 +594,7 @@ div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
 
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
-    .verdict-box::after, .cta-btn::before { display: none !important; }
+    .verdict-box::after { display: none !important; }
     .section-divider { background-size: 200% 100% !important; opacity: 1 !important; } }
 .section-divider { margin: 54px 0 34px !important; }
 [data-testid="stTabs"] { margin-top: 10px; }
@@ -628,7 +611,6 @@ div[data-baseweb="select"]>div, .stNumberInput input,
 .stButton>button { border-radius: 12px !important; }
 [data-testid="stPlotlyChart"] { border-radius: 16px !important; }
 .verdict-box { border-radius: 20px; }
-.cta-btn { border-radius: 10px !important; }        /* soft plaque, not a game pill */
 .hero-crest { border-radius: 26px; }                /* squircle, not a hard square */
 
 /* Diversify: each hero tile carries a different corner profile so the deck
@@ -794,10 +776,6 @@ div[data-baseweb="select"]>div, .stNumberInput input,
 .showcase-row .pillar-label { color: #C6A26B; }
 .showcase-row .pillar-desc { color: #B4AB9B; }
 .showcase-row .engrave { opacity: .12; }
-/* Sculptor's outlined CTA, at home on the dark band */
-.showcase-row .cta-btn { background: transparent; border: 1px solid #B08A55;
-    color: #EDE9E3 !important; box-shadow: none; }
-.showcase-row .cta-btn:hover { background: #9A7B4F; border-color: #9A7B4F; }
 
 /* Full-bleed bands overflow the court by design - never let that leak into
    a horizontal scrollbar (it also seeded phantom mini-scrollers). */
@@ -869,15 +847,18 @@ div[data-baseweb="select"]>div, .stNumberInput input,
     transition: stroke-dashoffset .52s cubic-bezier(.22,.61,.36,1); }
 /* the head waits for the shaft to arrive - constructed one stroke at a time */
 .cta-arrow .head { transition-delay: 0s; }
-.cta-btn:hover .cta-arrow .shaft,
-.cta-btn:focus-visible .cta-arrow .shaft { stroke-dashoffset: 0; }
-.cta-btn:hover .cta-arrow .head,
-.cta-btn:focus-visible .cta-arrow .head { stroke-dashoffset: 0; transition-delay: .34s; }
+.cta-btn:hover .cta-arrow .shaft, .cta-link:hover .cta-arrow .shaft,
+.cta-btn:focus-visible .cta-arrow .shaft, .cta-link:focus-visible .cta-arrow .shaft { stroke-dashoffset: 0; }
+.cta-btn:hover .cta-arrow .head, .cta-link:hover .cta-arrow .head,
+.cta-btn:focus-visible .cta-arrow .head, .cta-link:focus-visible .cta-arrow .head {
+    stroke-dashoffset: 0; transition-delay: .34s; }
 
 /* Released on click: the arrow completes instantly, then flies. */
-.cta-btn.is-launching .cta-arrow .shaft,
-.cta-btn.is-launching .cta-arrow .head { stroke-dashoffset: 0; transition: none; }
-.cta-btn.is-launching .cta-arrow { animation: arrow-descend 1.15s cubic-bezier(.5,0,.75,0) both; }
+.cta-btn.is-launching .cta-arrow .shaft, .cta-link.is-launching .cta-arrow .shaft,
+.cta-btn.is-launching .cta-arrow .head, .cta-link.is-launching .cta-arrow .head {
+    stroke-dashoffset: 0; transition: none; }
+.cta-btn.is-launching .cta-arrow,
+.cta-link.is-launching .cta-arrow { animation: arrow-descend 1.15s cubic-bezier(.5,0,.75,0) both; }
 @keyframes arrow-descend {
     0%   { transform: translateY(0);    opacity: 1; }
     55%  { transform: translateY(26px); opacity: .55; }
@@ -888,7 +869,7 @@ div[data-baseweb="select"]>div, .stNumberInput input,
 @media (prefers-reduced-motion: reduce) {
     .cta-arrow .shaft, .cta-arrow .head {
         stroke-dashoffset: 0; transition: none; }
-    .cta-btn.is-launching .cta-arrow { animation: none; }
+    .cta-btn.is-launching .cta-arrow, .cta-link.is-launching .cta-arrow { animation: none; }
 }
 
 /* Streamlit's own fixed header: a 60px bar in the theme colour holding only the
@@ -979,9 +960,20 @@ body:has([data-testid="stStatusWidgetRunningIcon"])::after { content: "Updating\
      light beige field  charcoal -> bronze
      dark showcase band bronze   -> beige (a clean inversion into the page)
    Bronze always carries DARK type: cream on bronze measures about 1.8:1,
-   which fails badly, while charcoal on bronze is about 6.8:1. */
+   which fails badly, while charcoal on bronze is about 6.8:1.
+
+   ONE rule set (2026-10-22, ME-06): three earlier layers - a lifting hover,
+   a gradient with a sheen sweep, a 10px radius - lost every property to this
+   one and only made the file lie about the button. What still counted from
+   them (box, type, position/overflow) lives here now; the look is unchanged. */
 .cta-btn {
-  background-image: none !important;
+  display: inline-block; margin-top: 14px; padding: 15px 34px;
+  /* the released arrow falls inside the plaque, not across the page */
+  position: relative; overflow: hidden;
+  /* Same voice as the hero headline: Georgia serif, engraved plaque. */
+  font-family: Georgia, 'Times New Roman', serif; font-size: 14.5px;
+  letter-spacing: 0.11em; text-transform: uppercase;
+  text-decoration: none !important;
   background-color: #3F3B35 !important;
   color: #F4F1EA !important;
   border: 1px solid #3F3B35 !important;
@@ -990,28 +982,20 @@ body:has([data-testid="stStatusWidgetRunningIcon"])::after { content: "Updating\
   transition: background-color .22s ease, border-color .22s ease,
               color .22s ease !important;
 }
-/* the shine sweep - the least matte thing in the file */
-.cta-btn::before { display: none !important; }
 .cta-btn:hover {
-  background-image: none !important;
   background-color: #9A7B4F !important;
   border-color: #9A7B4F !important;
   color: #241F1A !important;
-  transform: none !important;
-  letter-spacing: 0.11em !important;
-  box-shadow: none !important;
 }
-.cta-btn:active { transform: none !important; background-color: #8A6A3C !important; }
+.cta-btn:active { background-color: #8A6A3C !important; }
 
 /* A CTA sitting ON the dark showcase band needs the inverse treatment. The
-   default .cta-btn is a charcoal gradient (#4A453D -> #3A362F) built for the
-   beige field; against the band's own #3F3B35 that is barely eleven points of
-   luminance apart - invisible, the same complaint as a transparent button on
-   beige, just mirrored. This variant inverts to solid bronze with dark type,
+   default .cta-btn is a flat charcoal slab (#3F3B35) built for the beige
+   field; on the band's own #3F3B35 it would vanish - the same complaint as a
+   transparent button on beige, just mirrored. This variant inverts to solid bronze with dark type,
    which is the highest-contrast pairing available inside the palette.
    Rule: choose the variant by the BACKGROUND the button sits on. */
 .cta-btn.on-dark {
-  background-image: none !important;
   /* the palette's LIGHTER bronze. It raises BOTH the type contrast on the
      button and its separation from the #3F3B35 band (4.1 -> ~5.3 and
      2.8 -> ~3.6); the darker #9A7B4F missed the 4.5 and 3.0 thresholds. */
@@ -1028,6 +1012,38 @@ body:has([data-testid="stStatusWidgetRunningIcon"])::after { content: "Updating\
   color: #2E2B26 !important;
 }
 .cta-btn.on-dark:active { background-color: #D4CDBF !important; }
+/* The crisis-record button sits in a flex column, whose default stretch drew
+   it 587px wide beside 221-428px siblings (ME-04): it sizes to its words. */
+.conv-core > .cta-btn { align-self: flex-start; }
+
+/* The quiet CTA - "Skip to the analysis" under the engine heading. It was
+   styled inline, with no hover, an arrow that never drew and no launch
+   (ME-04). It keeps its size (a skip must not compete with the slab buttons)
+   and takes the CTA's voice: Georgia capitals, the drawn arrow, the launch. */
+.cta-link { display: inline-block; margin-top: 10px; padding-bottom: 2px;
+    font-family: Georgia, 'Times New Roman', serif; font-size: 12px;
+    letter-spacing: 0.11em; text-transform: uppercase;
+    color: #6A5030 !important; text-decoration: none !important;
+    border-bottom: 1px solid rgba(154,123,79,.4);
+    transition: color .22s ease, border-color .22s ease; }
+.cta-link:hover { color: #3F3B35 !important; border-bottom-color: #3F3B35; }
+
+/* One focus ring for every in-page link - the CTAs, the skip link, the
+   footer boxes. The CTAs wore a 2px bronze outline that measured 2.82:1 on
+   the dark band, and the rest fell back to Streamlit's rounded box-shadow
+   ring (ME-04). Same shape everywhere; the tone follows the ground, like the
+   on-dark button: the dark text bronze on beige (4.7-6.2:1), the light one on
+   the charcoal bands (4.65:1). A focus ring needs 3:1 (WCAG 2.2 1.4.11). */
+:root { --ring: #6A5030; }
+.showcase-row, .meleona-footer { --ring: #C6A26B; }
+a.cta-btn:focus-visible, a.cta-link:focus-visible, .meleona-footer a.f-box:focus-visible {
+    outline: 2px solid var(--ring) !important; outline-offset: 3px !important;
+    box-shadow: none !important; border-radius: 0 !important; }
+
+/* Streamlit puts a sans-serif link icon on every heading; on these serif
+   headings it read as a stray control. Hidden, not removed: the hero's
+   skeleton is measured with that icon's line box in place. */
+[data-testid="stHeaderActionElements"] { visibility: hidden !important; }
 
 /* ---- The Slice: fill the width, shorten the column, free the button ----
    Measured at 1920x860: the row is 465px tall and driven ENTIRELY by the
@@ -1071,4 +1087,76 @@ body:has([data-testid="stStatusWidgetRunningIcon"])::after { content: "Updating\
   .gungnir-head .showcase-title { font-size: 23px !important; }
   .gungnir-sub { font-size: 12.5px !important; }
   .gungnir-plaque { margin-top: 12px !important; padding: 15px 18px 13px !important; }
+}
+
+/* Data Quality rows: caption size, full-strength caption ink (a caption's
+   60% opacity blends it to about 2.7:1 on the panel). */
+.dq-row { font-size: 14px; line-height: 1.5; color: #524E47; margin: 2px 0; }
+/* Palette status marks (Data Quality, the EWMA warning): a fixed-width serif
+   glyph, so a column of checks lines up like a ledger. */
+.dq-mark { display: inline-block; width: 1.1em; text-align: center;
+    font-family: Georgia, 'Times New Roman', serif; }
+
+/* ---- Accents with meaning (ME-11, 2026-10-22) ---------------------------
+   John: "make the website feel alive ... accent marks that are meaningful".
+   Each one draws a state the page already computed; none is decoration for
+   its own sake, words carry AA tones, and the global reduced-motion rule
+   (animation: none) leaves every one of them still. */
+
+/* The headline's scale: where this CVaR sits between no loss and the whole
+   book. The live tick slides in from the last headline this session showed;
+   that one stays as a faint tick, and the move is said in words below. */
+.cvar-scale { position: relative; height: 9px; max-width: 420px; margin: 12px 0 0;
+    border-bottom: 1px solid #C4BDAE; }
+.cvar-tick { position: absolute; bottom: -1px; width: 2px; height: 9px;
+    transform: translateX(-1px); }
+.cvar-tick.now { background: #3F3B35; animation: cvar-tick-in .9s cubic-bezier(.22,.61,.36,1) both; }
+.cvar-tick.prev { background: #9A7B4F; opacity: .45; height: 6px; }
+@keyframes cvar-tick-in { from { left: var(--from); } }
+.cvar-scale-ends { display: flex; justify-content: space-between; max-width: 420px;
+    margin: 4px 0 0; font-family: 'Helvetica Neue', sans-serif; font-size: 10px;
+    letter-spacing: .16em; text-transform: uppercase; color: #6A5030; }
+.cvar-delta { margin: 6px 0 2px; font-size: 13.5px; color: #6A5030; }
+/* A loss past the whole book (leverage, a short) is not clamped in silence:
+   the tick sits at the end with an outward notch and the end says "beyond". */
+.cvar-scale-ends .beyond { color: #6A5030; font-weight: 700; }
+.cvar-tick.now.beyond { width: 3px; }
+.cvar-tick.now.beyond::after { content: ""; position: absolute; left: 3px; top: 1px;
+    border: 4px solid transparent; border-left-color: #3F3B35; }
+
+/* State marks on the verdict's label: the two states that change what the
+   number means - a shock or crisis replay applied, and the short side. */
+.state-mark { display: inline-block; margin-left: 10px; padding: 2px 7px 1px;
+    border: 1px solid #9A7B4F; color: #6A5030; font-size: 10px;
+    letter-spacing: .18em; vertical-align: 1px; }
+
+/* The freshness dot beside "Data pulled N min ago": one pulse per minute tick
+   (the fragment re-renders, the animation runs once) while the data is live;
+   still and grey once it is stale. The words beside it say the same. */
+.fresh-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+    margin-right: 6px; vertical-align: 1px; }
+/* Live and stale differ in shape, not only in the pulse (a still page shows
+   no pulse): live is a filled bronze dot (3.26:1 on the column), stale a
+   hollow grey ring (3.67:1; the old filled #8E877B was 2.94:1, Council B). */
+.fresh-dot { box-sizing: border-box; }
+.fresh-dot.is-live { background: #9A7B4F; animation: fresh-pulse 1.6s ease-out 1; }
+.fresh-dot.is-stale { background: transparent; border: 1.5px solid #7E776B; }
+@keyframes fresh-pulse { 0% { box-shadow: 0 0 0 0 rgba(154,123,79,.55); }
+                         100% { box-shadow: 0 0 0 7px rgba(154,123,79,0); } }
+
+/* Reading progress: a 1px bronze line across the top, as far along as the
+   reader is down the page. Driven by the real scroller's own timeline - no
+   scroll listener, no JS - and it follows a glide too, so a button's flight
+   reads even at the edge of the eye. Decorative only (pointer-events none,
+   no words). Under reduced motion the global rule stops the animation and
+   the line rests at scaleX(0): still, and out of the way. */
+/* Only where scroll timelines exist: elsewhere the animation would run on
+   the clock and leave a full-width bar (Council B). */
+@supports (animation-timeline: scroll()) {
+[data-testid="stMain"] { scroll-timeline: --page block; }
+[data-testid="stMain"]::before { content: ""; position: fixed; top: 0; left: 0; right: 0;
+    height: 1px; z-index: 989; pointer-events: none; background: #9A7B4F;
+    transform: scaleX(0); transform-origin: 0 50%;
+    animation: read-progress linear both; animation-timeline: --page; }
+@keyframes read-progress { to { transform: scaleX(1); } }
 }
