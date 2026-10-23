@@ -53,10 +53,14 @@ function measure() {
     }
     return true;
   };
-  // the part of `r` its clipping ancestors leave on screen (null when none)
+  // the part of `r` its clipping boxes leave on screen (null when none). The
+  // element's own overflow clips its own text too: Streamlit 1.66's "Skip to
+  // main content" link is a 1px box that hides its words until it is focused
+  // (then it is fixed, left out above); counted unclipped, its hidden words
+  // read as lying over the page at every width (ME-16)
   const clipOf = (el, r) => {
     let b = { l: r.left, t: r.top, r: r.right, b: r.bottom };
-    for (let e = el.parentElement; e && e !== document.documentElement; e = e.parentElement) {
+    for (let e = el; e && e !== document.documentElement; e = e.parentElement) {
       const cs = getComputedStyle(e);
       if (cs.overflowX === 'visible' && cs.overflowY === 'visible') continue;
       const c = e.getBoundingClientRect();
@@ -86,7 +90,7 @@ function measure() {
       if (!seen) continue;                                  // scrolled out of its box
       // cut text: the line runs past a box that hides overflow and cannot scroll
       if (seen.r < glyph.right - 2 || seen.l > glyph.left + 2) {
-        let box = el.parentElement, scrolls = false;
+        let box = el, scrolls = false;
         for (; box; box = box.parentElement) { const o = getComputedStyle(box).overflowX; if (o !== 'visible') { scrolls = o === 'auto' || o === 'scroll'; break; } }
         if (!scrolls) cut.push(`"${n.textContent.trim().slice(0, 30)}" cut at ${Math.round(seen.r - seen.l)} of ${Math.round(glyph.right - glyph.left)}px`);
       }
@@ -115,9 +119,12 @@ function measure() {
     if (hit(c.b, L.b, 3)) { overText.push(`${name(c.e)} over "${L.text}"`); break; }
   }
 
-  // a label cut short with an ellipsis is also text the visitor cannot read
+  // a label cut short with an ellipsis is also text the visitor cannot read -
+  // whether the ellipsis sits on the text's own element or on a box around it
+  // (Streamlit 1.66 cuts a checkbox label on its wrapper, stMarkdownEllipsis,
+  // and the leaf-only scan missed it at 390px; ME-16)
   for (const el of document.querySelectorAll('body *')) {
-    if (el.children.length || !el.textContent.trim() || !vis(el)) continue;
+    if (!el.textContent.trim() || !vis(el)) continue;
     if (getComputedStyle(el).textOverflow === 'ellipsis' && el.scrollWidth > el.clientWidth + 1)
       cut.push(`"${el.textContent.trim().slice(0, 40)}" ends in an ellipsis`);
   }

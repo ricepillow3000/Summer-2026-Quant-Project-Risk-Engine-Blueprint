@@ -15,12 +15,17 @@ curl_cffi>=0.7.0      # yfinance's HTTP transport; src/netguard.py
 scikit-learn>=1.4.0    # yfinance lazy-imports it on some download paths; without
                        # it individual tickers fail silently (observed: IWD, the
                        # Value factor proxy in src/factors.py)
-streamlit~=1.62.0     # PINNED to the audited line. Unpinned, the host resolved
+streamlit~=1.66.1     # PINNED to the audited line. Unpinned, the host resolved
                        # 1.63.0 - a version the 692-check audit never saw - and
                        # the Risk Topology iframe collapsed to 16px on the live
                        # URL while every local test stayed green. A green audit
                        # only means something if the host runs what was audited.
                        # Bump deliberately: change the pin, re-run
                        # tests.batch_audit and tools.demo_check, then deploy.
+                       # 1.62 -> 1.66.1 on 2026-10-22 (ME-16): 1.66.1 is the first
+                       # release that lets Pillow reach 13.
+pillow>=13.0.0        # Streamlit's image library. 12.x carries 35 CVEs fixed
+                       # only in 13.0.0; pip-audit in the Live audit runs with
+                       # no exceptions (docs/security/SECURITY-LESSONS.md).
 plotly>=5.20.0
 pyarrow>=15.0.0        # parquet cache read/write
