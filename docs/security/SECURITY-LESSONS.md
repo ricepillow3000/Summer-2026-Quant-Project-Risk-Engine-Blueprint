@@ -77,7 +77,18 @@ each with 2FA (a passkey or authenticator, not SMS), signed in only on those two
 
 ## Findings log
 
-### 2026-10-20: Pillow CVEs the app cannot reach (a written exception, John's call)
+### 2026-10-22: the Pillow exception is closed (ME-16)
+Live audit run 80 on main (eb12a49) went red at step 0: pip_audit found 11 more Pillow 12.3.0 CVEs (CVE-2026-96636
+to 96644, CVE-2026-96778, GHSA-78g4-xqwv-q3g8), again fixed only in 13.0.0: 35 in all, 24 of them skipped. Streamlit
+1.66.1 is the first release that allows Pillow 13 (`pillow<14`; 1.63.0 to 1.66.0 still cap it below 13, read from
+each wheel's METADATA). John chose the upgrade over more exceptions: `requirements.txt` now pins `streamlit~=1.66.1`
+and `pillow>=13.0.0`, and every `--ignore-vuln` is gone from the Live audit, so pip_audit runs with no exception.
+The expiring test did its job (it went red on 1.66.1 while the skips were still there) and is replaced by
+`test_the_dependency_audit_skips_no_cve`: no workflow or tool skips a CVE, the requirements ask for Pillow 13, and
+the installed Streamlit allows it. Lesson: an exception that names the event that ends it, and a test that fails
+on that event, is one that actually ends.
+
+### 2026-10-20: Pillow CVEs the app cannot reach (a written exception, John's call; closed 2026-10-22, above)
 `pip_audit` went red on 8 new Pillow CVEs (crafted PDF, GIF, PPM, TIFF and EPS files; fixed in 13.0), and on
 2026-10-22 on 16 more (all Pillow 12.3.0, all fixed only in 13.0.0, per that run's pip_audit table): 24 in all.
 16 more IDs approved by John on 2026-10-22. Streamlit pulls
