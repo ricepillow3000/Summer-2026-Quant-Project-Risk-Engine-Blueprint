@@ -2547,19 +2547,35 @@ def test_kill_switch_and_support_address_are_wired():
     the support address must live in exactly one place."""
     source = (pathlib.Path(__file__).resolve().parent.parent
               / "main.py").read_text(encoding="utf-8")
-    assert 'os.getenv("MELEONA_MAINTENANCE"' in source
-    kill = source.index("MELEONA_MAINTENANCE")
+    assert 'host_setting("MAINTENANCE")' in source
+    kill = source.index('host_setting("MAINTENANCE")')
     assert "st.stop()" in source[kill:kill + 900], "maintenance mode never stops the run"
     assert kill < source.index("load_universe("), "kill switch runs after a data call"
-    assert source.count("SUPPORT_EMAIL = os.getenv(") == 1, "support address is duplicated"
+    assert source.count("SUPPORT_EMAIL = host_setting(") == 1, "support address is duplicated"
     assert "meleona.support@gmail.com" in source, "project mailbox not wired"
     assert "john4000.nguyen@gmail.com" not in source, (
         "personal address is published in the app - use the project mailbox")
-    assert "MELEONA_SUPPORT_EMAIL" in source, "address is not env-overridable"
+    assert "MELIONA_SUPPORT_EMAIL" in source, "address is not env-overridable"
     # Phased release: the beta banner is opt-in per deployment.
-    assert 'MELEONA_CHANNEL' in source and 'RELEASE_CHANNEL == "beta"' in source
+    assert 'MELIONA_CHANNEL' in source and 'RELEASE_CHANNEL == "beta"' in source
     # setup_logging() must run before anything can fail interestingly
     assert source.index("setup_logging()") < source.index("with tab_3d:")
+    # The project was spelled Meleona until 2026-10-28: a host variable set under
+    # that name must still arm the kill switch; the new name wins when both exist.
+    import os
+    from src.observability import host_setting
+    saved = {k: os.environ.pop(k, None) for k in ("MELIONA_MAINTENANCE", "MELEONA_MAINTENANCE")}
+    try:
+        assert host_setting("MAINTENANCE") == ""
+        os.environ["MELEONA_MAINTENANCE"] = "1"
+        assert host_setting("MAINTENANCE") == "1", "the old variable name no longer works"
+        os.environ["MELIONA_MAINTENANCE"] = "0"
+        assert host_setting("MAINTENANCE") == "0", "the new variable name does not win"
+    finally:
+        for k, v in saved.items():
+            os.environ.pop(k, None)
+            if v is not None:
+                os.environ[k] = v
 
 
 def test_launch_documents_exist_and_say_the_load_bearing_things():
@@ -2582,7 +2598,7 @@ def test_launch_documents_exist_and_say_the_load_bearing_things():
     assert "yahoo finance" in privacy and "business insider" in privacy
     assert "not investment advice" in terms
     assert "session reference" in support
-    for section in ("kill switch", "meleona_maintenance", "rollback",
+    for section in ("kill switch", "meliona_maintenance", "rollback",
                     "phased release", "dmarc", "spf"):
         assert section in runbook, f"runbook missing: {section}"
     # The checklist must stay honest about what does NOT apply here.
@@ -3728,13 +3744,13 @@ def test_the_deployed_page_names_the_commit_it_was_built_from(tmp_path=None):
     (d / "index.html").write_text("<html><head><title>Streamlit</title></head>"
                                   "<body><noscript></noscript></body></html>", encoding="utf-8")
     pf.install(d, "https://example.test", build="0123456789abcdef0123")
-    assert '<meta name="meleona-build" content="0123456789ab">' in (d / "index.html").read_text()
+    assert '<meta name="meliona-build" content="0123456789ab">' in (d / "index.html").read_text()
     pf.install(d, "https://example.test", build="")
     page = (d / "index.html").read_text()
-    assert '<meta name="meleona-build" content="unknown">' in page and page.count("meleona-build") == 1
+    assert '<meta name="meliona-build" content="unknown">' in page and page.count("meliona-build") == 1
     # site_check reads the tag, and on main it must match the commit under test
     check = (pathlib.Path(__file__).resolve().parent.parent / "tools" / "site_check.mjs").read_text()
-    assert "meleona-build" in check and "EXPECT_BUILD" in check
+    assert "meliona-build" in check and "EXPECT_BUILD" in check
 
 
 def test_the_web_process_keeps_every_preset_warm_before_it_expires():
@@ -4660,7 +4676,7 @@ def test_the_glide_is_bound_before_any_stop_and_rebinds():
     def line_of(pred):
         return next(n.lineno for n in top if pred(n.value))
     glide = line_of(lambda c: ast.unparse(c.func) == "_html" and c.args
-                    and isinstance(c.args[0], ast.Constant) and "__meleonaGlide" in c.args[0].value)
+                    and isinstance(c.args[0], ast.Constant) and "__melionaGlide" in c.args[0].value)
     css = line_of(lambda c: ast.unparse(c.func) == "load_css")
     hero = line_of(lambda c: ast.unparse(c.func) == "st.markdown" and "hero_html" in ast.unparse(c))
     stops = [n.lineno for n in ast.walk(tree) if isinstance(n, ast.Call)
@@ -4670,8 +4686,8 @@ def test_the_glide_is_bound_before_any_stop_and_rebinds():
         f"({hero}) and every st.stop() after it (first {min(stops)})")
     script = next(c.value.args[0].value for c in top if c.value.args
                   and isinstance(c.value.args[0], ast.Constant)
-                  and "__meleonaGlide" in c.value.args[0].value)
-    assert "__meleonaGlide) return" not in script, "a bind-once guard blocks rebinding again"
+                  and "__melionaGlide" in c.value.args[0].value)
+    assert "__melionaGlide) return" not in script, "a bind-once guard blocks rebinding again"
     assert "removeEventListener" in script, "a new glide frame must replace the old listeners"
     assert "(now - t0) / dur" not in script, "a busy frame can jump most of the flight again"
 
@@ -4688,7 +4704,7 @@ def test_the_glide_respects_reduced_motion():
     tree = ast.parse((root / "main.py").read_text(encoding="utf-8"))
     script = next(n.args[0].value for n in ast.walk(tree) if isinstance(n, ast.Call)
                   and ast.unparse(n.func) == "_html" and n.args
-                  and isinstance(n.args[0], ast.Constant) and "__meleonaGlide" in n.args[0].value)
+                  and isinstance(n.args[0], ast.Constant) and "__melionaGlide" in n.args[0].value)
     # go() is what every press ends in - at once, or once a section still
     # being written has mounted (onLink / waitFor) - so the question lives there.
     on_link = script[script.index("function go("):script.index("P.addEventListener")]
@@ -4726,7 +4742,7 @@ def test_every_button_wears_one_focus_ring_that_clears_3_to_1_on_its_ground():
     rings = dict((s.strip(), c) for s, c in
                  _re.findall(r"([^{}]+)\{[^}]*--ring:\s*(#[0-9A-Fa-f]{6})", css))
     light = next(c for s, c in rings.items() if ":root" in s)
-    dark = next(c for s, c in rings.items() if ".meleona-footer" in s and ".showcase-row" in s)
+    dark = next(c for s, c in rings.items() if ".meliona-footer" in s and ".showcase-row" in s)
     for ground in ("#EDE9E3", "#E9E4DB", "#D4CDBF"):
         assert _contrast(light, ground) >= 3, f"ring {light} on {ground}: {_contrast(light, ground):.2f}:1"
     assert _contrast(dark, "#3F3B35") >= 3, f"ring {dark} on the band: {_contrast(dark, '#3F3B35'):.2f}:1"
@@ -4753,7 +4769,7 @@ def test_the_outlier_links_and_marks_now_match_their_siblings():
     for state in (".cta-link:hover", ".cta-link:hover .cta-arrow .shaft", ".cta-link.is-launching .cta-arrow"):
         assert state in css, f"the skip link has no {state} rule"
     assert "a.querySelector('.cta-arrow')" in src, "every link with an arrow launches it"
-    footer = src[src.index('<div class="meleona-footer">'):]
+    footer = src[src.index('<div class="meliona-footer">'):]
     targets = _re.findall(r'class="f-box" href="#([\w-]+)"', footer)
     assert len(set(targets)) == 3, targets
     assert not {"grit-showcase", "conviction"} <= set(targets), \
@@ -4931,11 +4947,11 @@ def test_the_glide_follows_a_moving_target_and_yields_to_the_reader():
     tree = ast.parse(src)
     script = next(n.args[0].value for n in ast.walk(tree) if isinstance(n, ast.Call)
                   and ast.unparse(n.func) == "_html" and n.args
-                  and isinstance(n.args[0], ast.Constant) and "__meleonaGlide" in n.args[0].value)
+                  and isinstance(n.args[0], ast.Constant) and "__melionaGlide" in n.args[0].value)
     frame = script[script.index("(function f(now)"):script.index("function onLink")]
     assert "targetY(scroller, el)" in frame and "Math.min(2," in frame, \
         "the glide must follow the target each frame, a bounded step at a time"
-    assert "__meleonaFlight" in frame, "each frame must check it is still the current flight"
+    assert "__melionaFlight" in frame, "each frame must check it is still the current flight"
     for ev in ("wheel", "touchstart", "keydown"):
         assert f"'{ev}'" in script, f"the glide must yield to the reader's {ev}"
     rebind = script[:script.index("function onTab")]
@@ -4959,16 +4975,16 @@ def test_a_press_waits_for_its_section_as_long_as_the_page_is_still_being_writte
     src = (pathlib.Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
     script = next(n.args[0].value for n in ast.walk(ast.parse(src)) if isinstance(n, ast.Call)
                   and ast.unparse(n.func) == "_html" and n.args
-                  and isinstance(n.args[0], ast.Constant) and "__meleonaGlide" in n.args[0].value)
+                  and isinstance(n.args[0], ast.Constant) and "__melionaGlide" in n.args[0].value)
     wait = script[script.index("function waitFor"):script.index("function onLink")]
     assert "pageRunning()" in wait and '[data-testid="stStatusWidgetRunningIcon"]' in script, \
         "the wait must last while the page is still being written"
     assert "now - t0 < 10000 || idleSince === null" in wait, \
         "10 s is a floor, not a cap: the wait goes on while the run goes on"
-    assert "now - idleSince < 2000" in wait and "P.__meleonaStop()" in wait, \
+    assert "now - idleSince < 2000" in wait and "P.__melionaStop()" in wait, \
         "once the run has ended without the section, the wait ends (no leak)"
     assert "requestAnimationFrame(poll)" not in wait, "a long wait polls gently, not every frame"
-    assert "P.__meleonaScroller = scroller" in wait and "P.__meleonaSetY = scroller.scrollTop" in wait, \
+    assert "P.__melionaScroller = scroller" in wait and "P.__melionaSetY = scroller.scrollTop" in wait, \
         "a scroll the reader makes while the press waits must end the wait"
 
 
@@ -4988,7 +5004,7 @@ def test_only_a_decaying_flick_is_forgiven_and_every_exit_restores_the_page():
     src = (root / "main.py").read_text(encoding="utf-8")
     script = next(n.args[0].value for n in ast.walk(ast.parse(src)) if isinstance(n, ast.Call)
                   and ast.unparse(n.func) == "_html" and n.args
-                  and isinstance(n.args[0], ast.Constant) and "__meleonaGlide" in n.args[0].value)
+                  and isinstance(n.args[0], ast.Constant) and "__melionaGlide" in n.args[0].value)
     assert "function onScroll" in script, "a scrollbar drag (scroll events only) never reaches the yield"
     yield_fn = script[script.index("function onYield"):script.index("function onScroll")]
     # Council B's second review: real tails repeat integer deltas (2, 2, 1, 1),
@@ -4999,19 +5015,19 @@ def test_only_a_decaying_flick_is_forgiven_and_every_exit_restores_the_page():
     assert "* 1.25" not in yield_fn, "a harder wheel must yield"
     link = script[script.index("function onLink"):]
     assert "shrunk = false" in link, "every press starts a tail that has not shrunk yet"
-    assert "Math.sign(e.deltaY) === P.__meleonaDir" in yield_fn, "a wheel against the flight must yield"
-    assert "P.__meleonaDir = dir" in script, "the flight must publish its direction"
+    assert "Math.sign(e.deltaY) === P.__melionaDir" in yield_fn, "a wheel against the flight must yield"
+    assert "P.__melionaDir = dir" in script, "the flight must publish its direction"
     for fn in ("function glide", "function waitFor"):
         body = script[script.index(fn):]
-        assert body.index("supersede()") < body.index("__meleonaFlight = "), \
+        assert body.index("supersede()") < body.index("__melionaFlight = "), \
             f"{fn} must land the running flight before it takes over"
     assert "supersede();" in script[script.index("prefers-reduced-motion"):script.index("glide(scroller, el);")]
     land = script[script.index("function land"):script.index("function supersede")]
-    for undo in ("scrollBehavior = ''", "overflowAnchor = ''", "quietMap(false)", "__meleonaStop = null"):
+    for undo in ("scrollBehavior = ''", "overflowAnchor = ''", "quietMap(false)", "__melionaStop = null"):
         assert undo in land, f"landing must undo {undo}"
     assert "P.addEventListener('scroll', onScroll" in script, "a scrollbar drag must reach the yield"
     assert "prev.onScroll" in script[:script.index("function onTab")], "a new frame removes the old scroll listener"
-    assert "__meleonaSetY = scroller.scrollTop" in script, "the flight records where it put the page"
+    assert "__melionaSetY = scroller.scrollTop" in script, "the flight records where it put the page"
     wf = (root / ".github" / "workflows" / "live-audit.yml").read_text(encoding="utf-8")
     assert "glide_load_check.mjs http://127.0.0.1:8501 steady" in wf and "early 1" in wf, \
         "the Live audit must run the glide check, steady and cold mid-load presses included"
@@ -5042,7 +5058,7 @@ def test_a_button_pressed_while_the_page_is_still_loading_still_glides_all_the_w
     tree = ast.parse(src)
     script = next(n.args[0].value for n in ast.walk(tree) if isinstance(n, ast.Call)
                   and ast.unparse(n.func) == "_html" and n.args
-                  and isinstance(n.args[0], ast.Constant) and "__meleonaGlide" in n.args[0].value)
+                  and isinstance(n.args[0], ast.Constant) and "__melionaGlide" in n.args[0].value)
     link = script[script.index("function onLink"):]
     assert "if (!el) return;" not in link, \
         "a press before its section exists must not fall through to the browser's hash jump"

@@ -2,7 +2,7 @@
 
 _Last updated: 2026-08-26. Contact: meleona.support@gmail.com_
 
-Meleona is a public, read-only market-risk dashboard. It has **no sign-up, no
+Meliona is a public, read-only market-risk dashboard. It has **no sign-up, no
 login, no password, and no user accounts**. This note describes everything the
 app holds, which is deliberately close to nothing.
 

@@ -28,9 +28,9 @@ const LINKS = [
   ['a.cta-btn[href="#the-slice"]', 'From the record to the allocation'],
   ['a.cta-btn[href="#engine"]', 'To the engine'],
   ['a[href="#analysis"]', 'Skip to the analysis'],
-  ['.meleona-footer a[href="#grit-showcase"]', 'Footer 01'],
-  ['.meleona-footer a[href="#crisis-record"]', 'Footer 02'],
-  ['.meleona-footer a[href="#engine"]', 'Footer 03'],
+  ['.meliona-footer a[href="#grit-showcase"]', 'Footer 01'],
+  ['.meliona-footer a[href="#crisis-record"]', 'Footer 02'],
+  ['.meliona-footer a[href="#engine"]', 'Footer 03'],
 ];
 const LOADING = LINKS.slice(0, 5);     // the footer exists only once the run has ended
 
@@ -84,8 +84,8 @@ async function press(page, sel, label, mode, ms, act, until) {
 }
 async function settled(page) {
   await page.goto(url);
-  await page.waitForSelector('.meleona-footer', { timeout: 300000 });
-  await page.waitForFunction(() => !!document.__meleonaGlide, null, { timeout: 60000 });
+  await page.waitForSelector('.meliona-footer', { timeout: 300000 });
+  await page.waitForFunction(() => !!document.__melionaGlide, null, { timeout: 60000 });
   await page.waitForTimeout(1500);
 }
 
@@ -108,7 +108,7 @@ if (which === 'early' || which === 'all') {
       const t0 = Date.now();
       await page.waitForFunction((i) => !!document.getElementById(i), id, { timeout: 180000, polling: 250 }).catch(() => {});
       const waited = Math.round((Date.now() - t0) / 100) / 10;
-      await page.waitForSelector('.meleona-footer', { timeout: 180000 }).catch(() => {});
+      await page.waitForSelector('.meliona-footer', { timeout: 180000 }).catch(() => {});
       await page.waitForTimeout(5000);
       return { waited };
     };
@@ -187,7 +187,7 @@ if (which === 'steady' || which === 'all') {
       if (window.__ys.length < 240) requestAnimationFrame(f); }; requestAnimationFrame(f); }, SC);
     await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
     for (let k = 0; k < 2; k++) { await page.mouse.wheel(0, 100); await page.waitForTimeout(100); }
-    const flying = await page.evaluate(() => !!document.__meleonaStop);
+    const flying = await page.evaluate(() => !!document.__melionaStop);
     for (let k = 0; k < 10; k++) { await page.mouse.wheel(0, 100); await page.waitForTimeout(100); }
     await page.waitForTimeout(1500);
     const ys = await page.evaluate(() => window.__ys);

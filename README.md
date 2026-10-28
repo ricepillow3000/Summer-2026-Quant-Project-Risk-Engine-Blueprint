@@ -1,4 +1,4 @@
-# Meleona - Institutional-Grade Portfolio Optimization & Risk Engine
+# Meliona - Institutional-Grade Portfolio Optimization & Risk Engine
 
 A quantitative risk dashboard that lets anyone load a portfolio - equities, ETFs, FX, or futures - and stress-test it against thousands of simulated and historical market paths, live. Built by a 2nd-year Data Analytics student to recruiter-facing, quant-interview standards.
 

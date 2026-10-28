@@ -16,11 +16,11 @@ notices fastest.
 | 4 | Terms / policies | **Built** | `TERMS.md` - educational use, not investment advice, no warranty, acceptable use. Linked in the footer. |
 | 5 | Declare SDKs and what is collected | **Built** | `PRIVACY.md` tables. Verified rather than asserted: the page loads **no** third-party JavaScript, fonts or images; server-side third parties are Yahoo Finance and Business Insider (ISIN), and `src/netguard.py` enumerates every host the server may contact. |
 | 6 | SPF / DKIM / DMARC | **N/A today, recipe ready** | The app sends no email and there is no sending domain - support is a Gmail address. `RUNBOOK.md` §7 has the exact records and the `p=none` -> `quarantine` -> `reject` order for the day a custom domain exists. |
-| 7 | Test sign-up | **N/A - replaced by a beta feedback channel** | There is no sign-up to test. Instead, `MELEONA_CHANNEL=beta` marks a deployment as a beta and shows a one-click **report this session** link with the session reference already in the subject. |
+| 7 | Test sign-up | **N/A - replaced by a beta feedback channel** | There is no sign-up to test. Instead, `MELIONA_CHANNEL=beta` marks a deployment as a beta and shows a one-click **report this session** link with the session reference already in the subject. |
 | 8 | Cap API spend / caps on every API | **Built** | `src/netguard.MAX_REQUESTS_PER_DAY` (5000/day) charged at the one chokepoint every outbound call passes through. Exhaustion degrades to cached data instead of hammering the feed. `ingestion.MAX_UNIVERSE` (25) caps compute per visitor; `CACHE_MAX_FILES` (1500, a warm pass writes ~720)/`CACHE_MAX_MB` (200) cap disk. |
 | 9 | LLM credit balance | **N/A by design** | The engine makes zero LLM calls - project constraint #1 is that no market number may originate from a language model. There is no balance to monitor. If a paid feed is ever added, its key goes behind the same counter as #8. |
 | 10 | Database restore | **N/A - nothing to restore, and the drill is executable** | No database and no user data. The only durable state is git; the cache is derived. `python -m tools.warm_cache --drill` refetches every preset and prints the total, which IS the recovery time for the only regenerable state. `RUNBOOK.md` §0. |
-| 11 | Kill switch | **Built** | `MELEONA_MAINTENANCE=1` on the host serves a maintenance page and stops before any market-data call - no redeploy. `RUNBOOK.md` §1. |
+| 11 | Kill switch | **Built** | `MELIONA_MAINTENANCE=1` on the host serves a maintenance page and stops before any market-data call - no redeploy. `RUNBOOK.md` §1. |
 | 12 | OTA hotfix | **Built (web equivalent)** | No store review in the path: `git revert` + push redeploys, with a force-with-lease rollback documented. `RUNBOOK.md` §2. |
 | 13 | Support email | **Built** | `meleona.support@gmail.com` in the page footer, `SUPPORT.md`, the maintenance page and the privacy panel - all from one constant in `main.py`. Users quote the footer's session reference; §3 of the runbook turns it into a stack trace. |
 | 14 | Demo accounts | **N/A** | Nothing to log into. `RUNBOOK.md` §6 is the reviewer script instead. |
@@ -28,14 +28,14 @@ notices fastest.
 | 16 | Restore purchases | **N/A** | No payments, no in-app purchases, no entitlements. |
 | 17 | Reinstall behaviour | **N/A** | Web app - a "reinstall" is a page refresh. Nothing is installed on the device, and no state is lost. |
 | 18 | Sandbox / test keys | **N/A** | The app holds no API keys at all: Yahoo Finance needs none. Nothing to rotate, sandbox or leak. |
-| 19 | Phased release | **Built (process + flag)** | `RUNBOOK.md` §5 - local -> unlisted preview -> small beta -> public, kill switch one variable away at every stage. `MELEONA_CHANNEL=beta` puts the beta notice and feedback link on the pre-release deploys only. |
+| 19 | Phased release | **Built (process + flag)** | `RUNBOOK.md` §5 - local -> unlisted preview -> small beta -> public, kill switch one variable away at every stage. `MELIONA_CHANNEL=beta` puts the beta notice and feedback link on the pre-release deploys only. |
 | 20 | Accessibility statement | **Built** | `ACCESSIBILITY.md`, linked in the page footer alongside Privacy and Terms, with a "report a barrier" route to the support mailbox. Seven text colours were measured failing WCAG AA and corrected; the canvas map gained a screen-reader description. Two regression tests keep both true. |
 | 21 | Custom 404 page | **Built** | `public/404.html` in the house style with a way back. A single-page app answers every path with the same page, whose relative script paths broke below the root - a mistyped `/a/b` link was a blank white page. A one-line head script sends unknown paths to the 404. Honest limit: the status code stays 200 (Streamlit cannot set it), so the page is `noindex`. Checked by `tools/site_check.mjs`. |
 | 22 | CTA above the fold | **Verified** | `site_check` asserts it at 1440x900 (bottom 587px) and 390x844 (454px). |
 | 23 | Meta description | **Built** | One page, one description. `tools/public_files.py` writes it into the served HTML at start, with title and canonical URL - crawlers do not run the JavaScript that sets Streamlit's own title. |
 | 24 | Open Graph image | **Built** | `public/og-image.png` (1200x627) plus og:/twitter: tags, so a LinkedIn post of the link shows the card. Its audit figure is the latest live run's, not a stale one. |
 | 25 | Favicon set | **Built** | Crest rendered to `favicon.png` (64px, also the tab icon) and `apple-touch-icon.png` (180px). |
-| 26 | robots.txt and sitemap.xml | **Built** | Written at start for `MELEONA_SITE_URL`; served from the site root. |
+| 26 | robots.txt and sitemap.xml | **Built** | Written at start for `MELIONA_SITE_URL`; served from the site root. |
 | 27 | Alt text on every image | **Verified** | `site_check` fails on any `<img>` without alt. Photos are decorative CSS backgrounds; the crest SVG carries `role="img"` and a label. |
 | 28 | Mobile breakpoints | **Verified** | 390px: no sideways scroll, crest and CTA on screen; short-viewport tiers in `main.py`. |
 | 29 | Sticky mobile CTA | **N/A by design** | The page has one job and its CTA is above the fold on a phone; a pinned bar would cover the headline verdict on a 390px screen. Revisit if a real visitor study says otherwise. |
@@ -52,24 +52,24 @@ notices fastest.
 
 - [ ] `python -m tests.test_engine` green (includes the full-app boot test).
 - [ ] `python -m tests.batch_audit` green (live-data math audit).
-- [ ] Kill switch tested on the host: set `MELEONA_MAINTENANCE=1`, load the
+- [ ] Kill switch tested on the host: set `MELIONA_MAINTENANCE=1`, load the
       page, unset it, load again.
 - [ ] Footer shows the support address, Privacy, Terms and a session reference.
 - [ ] Trigger one deliberate error in the preview deploy and confirm the
-      reference in the footer finds it in `logs/meleona.log`.
+      reference in the footer finds it in `logs/meliona.log`.
 - [ ] Budget counter sane after a browsing session (`budget_status()`).
 - [x] **Create `meleona.support@gmail.com`** - done 2026-08-26.
 - [x] **Turn on forwarding to the personal inbox** - done 2026-08-26.
 - [x] Test mail sent to the project address and confirmed arriving in both
       mailboxes (2026-08-26).
-- [ ] Set `MELEONA_CHANNEL=beta` on the beta deploy, and unset it for public.
+- [ ] Set `MELIONA_CHANNEL=beta` on the beta deploy, and unset it for public.
 - [x] Warm cache: automatic. The Procfile runs `python -m tools.warm_cache --every 5`
       beside the app, so no preset expires before a visitor picks it - every pull
       its page makes, full histories and the security master included (RUNBOOK.md,
       *After every deploy*).
 - [ ] Read `ACCESSIBILITY.md` once before sharing the link - it is the page a
       complainant's lawyer reads first, and it must stay true of the app.
-- [ ] Deploy to Railway (`RUNBOOK.md` §6c) with `MELEONA_CHANNEL=beta`
+- [ ] Deploy to Railway (`RUNBOOK.md` §6c) with `MELIONA_CHANNEL=beta`
       and confirm `/_stcore/health` answers.
 - [ ] Walk the deployed page once end to end, then trigger one deliberate error
       and confirm the footer reference finds it in the logs.

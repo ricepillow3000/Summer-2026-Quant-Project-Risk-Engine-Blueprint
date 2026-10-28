@@ -20,8 +20,8 @@ There is no database, so there is no database restore. The recovery story is
 
 Set an environment variable on the host - no redeploy, no code change:
 
-    MELEONA_MAINTENANCE=1
-    MELEONA_MAINTENANCE_NOTE=Back shortly - fixing a data feed issue.   (optional)
+    MELIONA_MAINTENANCE=1
+    MELIONA_MAINTENANCE_NOTE=Back shortly - fixing a data feed issue.   (optional)
 
 The next page load serves the maintenance notice with the support address and
 stops before any market-data call. Unset it to bring the app back.
@@ -51,7 +51,7 @@ before pushing; the suite includes a full-app boot test.
 Every browser session gets a random reference shown in the footer. A user
 reports it; you grep for it:
 
-    grep 9F3A2B7C logs/meleona.log*
+    grep 9F3A2B7C logs/meliona.log*
 
 That returns the session-start line and any traceback logged during it. For a
 sweep of recent failures with no specific reference:
@@ -130,12 +130,12 @@ process-wide concurrency cap in the app, not a proxy.
    (108 checks) and `python -m tests.batch_audit` (live-data audit).
 2. **Preview** - deploy the branch to a preview URL. Same build, unlisted.
 3. **Beta** - share that link with a handful of people. Watch
-   `logs/meleona.log` and the budget counter; keep the kill switch one variable
+   `logs/meliona.log` and the budget counter; keep the kill switch one variable
    away.
-4. **Public** - promote to the production URL, unset `MELEONA_CHANNEL`, and
+4. **Public** - promote to the production URL, unset `MELIONA_CHANNEL`, and
    put it on the resume.
 
-Set `MELEONA_CHANNEL=beta` on the preview and beta deploys: it shows a beta
+Set `MELIONA_CHANNEL=beta` on the preview and beta deploys: it shows a beta
 notice with a one-click "report this session" link whose subject already
 carries the session reference. Unset on production. After any deploy or
 restore, run `python -m tools.warm_cache` so the first visitor is not paying
@@ -165,13 +165,17 @@ five-minute reviewer path:
 ## 6b. Support mailbox setup (do this before the link is public)
 
 Support runs on `meleona.support@gmail.com`, forwarded to the personal inbox.
-Creating a Gmail account requires phone verification, so it is a manual step -
-five minutes, once:
+The mailbox keeps the name's earlier spelling: it was created before the project
+was renamed Meliona (2026-10-28), and a Gmail address cannot be renamed. To move
+to the correct spelling, create `meliona.support` with the steps below, set
+`MELIONA_SUPPORT_EMAIL` on the host (no redeploy), then change the default in
+`main.py` and the docs. Creating a Gmail account requires phone verification,
+so it is a manual step - five minutes, once:
 
 1. **Create it.** accounts.google.com -> create account -> "for my personal
-   use" -> username `meleona.support`. If that exact username is taken, pick
-   the next best (`meleona.risk.support`, `meleona.engine`) and set
-   `MELEONA_SUPPORT_EMAIL` on the host to the one you got - the footer,
+   use" -> username `meliona.support`. If that exact username is taken, pick
+   the next best (`meliona.risk.support`, `meliona.engine`) and set
+   `MELIONA_SUPPORT_EMAIL` on the host to the one you got - the footer,
    maintenance page, feedback link and privacy panel all follow that variable.
 2. **Forward it to yourself.** In the new mailbox: Settings -> See all
    settings -> Forwarding and POP/IMAP -> Add a forwarding address -> enter the
@@ -180,14 +184,14 @@ five minutes, once:
    mail** and *keep Gmail's copy in the Inbox* (so nothing is lost if
    forwarding is ever turned off).
 3. **Label it on arrival.** In the personal inbox: Settings -> Filters ->
-   Create filter -> To: `meleona.support@gmail.com` -> Apply label "Meleona
+   Create filter -> To: `meleona.support@gmail.com` -> Apply label "Meliona
    support". Support mail then lands sorted rather than mixed in.
 4. **Verify.** Send a test message to the project address from any other
    account and confirm it arrives in the personal inbox under that label.
    Do this before the public link goes out - a support address that bounces is
    worse than none.
 
-If the address is ever retired, change `MELEONA_SUPPORT_EMAIL` on the host and
+If the address is ever retired, change `MELIONA_SUPPORT_EMAIL` on the host and
 keep forwarding for a month so nothing in flight is lost.
 
 ## 6c. First deploy (Phase VI)
@@ -239,11 +243,11 @@ For a first deploy from scratch, the dashboard needs almost nothing:
 
 1. railway.app -> New Project -> Deploy from GitHub repo -> pick
    `Summer-2026-Quant-Project-Risk-Engine-Blueprint`.
-2. Variables -> add `MELEONA_CHANNEL=beta` and
+2. Variables -> add `MELIONA_CHANNEL=beta` and
    `STREAMLIT_SERVER_FILE_WATCHER_TYPE=none` (nothing edits source on the host,
    so the watcher is pure overhead and could restart the script under a
-   visitor). Add `MELEONA_SUPPORT_EMAIL` only if the mailbox username differs
-   from `meleona.support@gmail.com`. Leave `MELEONA_MAINTENANCE` unset (it is
+   visitor). Add `MELIONA_SUPPORT_EMAIL` only if the mailbox username differs
+   from `meleona.support@gmail.com`. Leave `MELIONA_MAINTENANCE` unset (it is
    the kill switch, section 1). The watcher setting is an env var rather than a
    line in `.streamlit/config.toml` on purpose: that file is shared with local
    development, where hot reload is wanted.
@@ -261,7 +265,7 @@ For a first deploy from scratch, the dashboard needs almost nothing:
 1. render.com -> New -> Web Service -> connect the repo.
 2. Runtime **Python 3**, Build `pip install -r requirements.txt`, Start
    `streamlit run main.py --server.port=$PORT --server.address=0.0.0.0`.
-3. Environment -> `MELEONA_CHANNEL=beta` (plus `MELEONA_SUPPORT_EMAIL` if
+3. Environment -> `MELIONA_CHANNEL=beta` (plus `MELIONA_SUPPORT_EMAIL` if
    needed). Health check path: `/_stcore/health`.
 4. Free instances sleep when idle; the first hit after a sleep is slow and
    cold-fetches data. Warm it (below) before sharing the link with anyone.
@@ -278,7 +282,7 @@ run: `audit/live_audit_2026-10-15T025826Z.md`.
 
 **On `main`, the Live audit also proves the host is serving that commit.**
 `tools/public_files.py` stamps the build (Railway's `RAILWAY_GIT_COMMIT_SHA`)
-into the page as `<meta name="meleona-build">`, and step 5 fails when it is
+into the page as `<meta name="meliona-build">`, and step 5 fails when it is
 not the commit under test. Railway posts nothing back to GitHub, so this is
 the only proof a deploy happened. If the step reads `unknown`, the service is
 not deploying from GitHub: see *Rolling back a bad deploy* below for the App
@@ -322,7 +326,7 @@ To warm by hand (after a restore, or to time a cold refill):
 Then walk the page once: hero -> The Engine -> a crisis scenario -> Risk
 Topology -> Lineage & Audit, and confirm the footer shows the support address
 and a session reference. Trigger one deliberate error and confirm that
-reference finds it in `logs/meleona.log` (section 3).
+reference finds it in `logs/meliona.log` (section 3).
 
 ### Rolling back a bad deploy
 

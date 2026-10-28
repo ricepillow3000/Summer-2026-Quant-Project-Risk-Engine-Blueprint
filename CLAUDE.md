@@ -8,7 +8,7 @@ John's vault at `C:\Users\john4\Claude\Vault` is the cross-session memory for th
 
 ## What this is
 
-**Meleona** is an institutional-grade **Portfolio Optimization & Risk Engine** with a live Streamlit dashboard, built to recruiter-facing / hedge-fund-interview standards (2nd-year Data Analytics student portfolio project, targeting a public live link on a resume, ship target Aug 23, 2026).
+**Meliona** is an institutional-grade **Portfolio Optimization & Risk Engine** with a live Streamlit dashboard, built to recruiter-facing / hedge-fund-interview standards (2nd-year Data Analytics student portfolio project, targeting a public live link on a resume, ship target Aug 23, 2026).
 
 ## Commands
 
@@ -64,11 +64,11 @@ Two things are deliberately absent and should stay absent unless the app gains t
 
 ## Launch operations
 
-- **Kill switch:** `MELEONA_MAINTENANCE=1` (plus optional `MELEONA_MAINTENANCE_NOTE`) in the host environment serves a maintenance page and `st.stop()`s before any market-data call. No redeploy.
+- **Kill switch:** `MELIONA_MAINTENANCE=1` (plus optional `MELIONA_MAINTENANCE_NOTE`) in the host environment serves a maintenance page and `st.stop()`s before any market-data call. No redeploy. Host settings are read through `observability.host_setting()`, which also accepts the pre-2026-10-28 spelling `MELEONA_*` so a variable already set on Railway keeps working; the support mailbox keeps that spelling too (a Gmail address cannot be renamed - RUNBOOK §6b).
 - **Crash wire:** `src/observability.py` - rotating local log under `logs/` (gitignored), one random `session_ref` per browser session shown in the page footer, `log_incident()` for handled failures. Deliberately NOT a hosted SDK: shipping visitor data to a vendor would contradict `PRIVACY.md`.
 - **Spend caps:** `netguard.MAX_REQUESTS_PER_DAY` charged at the single outbound chokepoint; exhaustion degrades `fetch_prices` to cached data rather than hammering Yahoo. `ingestion.MAX_UNIVERSE` and the cache size caps bound compute and disk.
-- **Support:** `SUPPORT_EMAIL` in `main.py` (project mailbox `meleona.support@gmail.com`, forwarded to the maintainer; override per environment with `MELEONA_SUPPORT_EMAIL`) is the single source - footer, maintenance page and the privacy panel all read it. Users quote the session reference; `RUNBOOK.md` §3 turns it into a traceback.
-- **Phased release:** `MELEONA_CHANNEL=beta` shows the beta notice and the prefilled "report this session" link; unset on production. `python -m tools.warm_cache` warms every pull a preset's page makes (full histories, 10y, anchors, the security master - `test_the_warm_pass_covers_every_fetch_a_preset_page_makes` records the real page and fails on a miss), `--drill` times a cold refill (the app's RTO); the Procfile runs it `--every 5` hours inside the web container (the cache is that container's disk, so a separate cron service would warm nothing), and `public_files` stamps the commit into `<meta name="meleona-build">` so the Live audit on main can prove Railway serves it.
+- **Support:** `SUPPORT_EMAIL` in `main.py` (project mailbox `meleona.support@gmail.com`, forwarded to the maintainer; override per environment with `MELIONA_SUPPORT_EMAIL`) is the single source - footer, maintenance page and the privacy panel all read it. Users quote the session reference; `RUNBOOK.md` §3 turns it into a traceback.
+- **Phased release:** `MELIONA_CHANNEL=beta` shows the beta notice and the prefilled "report this session" link; unset on production. `python -m tools.warm_cache` warms every pull a preset's page makes (full histories, 10y, anchors, the security master - `test_the_warm_pass_covers_every_fetch_a_preset_page_makes` records the real page and fails on a miss), `--drill` times a cold refill (the app's RTO); the Procfile runs it `--every 5` hours inside the web container (the cache is that container's disk, so a separate cron service would warm nothing), and `public_files` stamps the commit into `<meta name="meliona-build">` so the Live audit on main can prove Railway serves it.
 - **Docs:** `PRIVACY.md`, `TERMS.md`, `SUPPORT.md`, `RUNBOOK.md` (kill switch, rollback, triage, budgets, phased release, reviewer path, SPF/DKIM/DMARC for the day a domain exists) and `LAUNCH_CHECKLIST.md` (every launch ask, built or N/A with the reason).
 
 There is no database, no account, no payment and no email sending. When a launch-checklist item assumes one of those, the honest move is to build the analogue and say plainly why the original does not apply - see the N/A column in `LAUNCH_CHECKLIST.md`. Adding an account-deletion flow with no accounts, or SPF records with no sending domain, is theatre.

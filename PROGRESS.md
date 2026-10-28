@@ -1,4 +1,4 @@
-# Meleona - Session Handoff
+# Meliona - Session Handoff
 
 Paste this into a new chat session to bring it up to speed instantly.
 
@@ -6,7 +6,7 @@ Paste this into a new chat session to bring it up to speed instantly.
 
 ## What this project is
 
-**Meleona** is an institutional-grade **Portfolio Optimization & Risk Engine**
+**Meliona** is an institutional-grade **Portfolio Optimization & Risk Engine**
 with a live Streamlit dashboard, built by a 2nd-year Data Analytics student to
 be recruiter-facing (the goal is a public live link on a resume). The name
 merges "Durand" (Old French, "enduring/built to withstand hard times") with
@@ -77,7 +77,7 @@ risk-engine/
   Percentile-ranked RELATIVE to the chosen universe (no absolute "grit" scale
   claimed). 7 deterministic unit tests; verified against live data (history
   length and regimes-survived per ticker line up with real IPO dates).
-- ✅ **Rebrand to Meleona** - page title, header wordmark, logo alt text, and
+- ✅ **Rebrand to Meliona** - page title, header wordmark, logo alt text, and
   docs updated from "Portfolio Risk Engine"
 - ✅ **Presentation-style redesign** - the app used to open as one long stack
   of controls plus five nested expanders (a wall of information before you'd
@@ -226,7 +226,7 @@ risk-engine/
   outbound email. Built: crash wire (`src/observability.py`: rotating local
   log, per-session reference in the footer, `log_incident()`; no third-party
   SDK, because one would contradict the privacy note it sits beside), kill
-  switch (`MELEONA_MAINTENANCE=1` serves a maintenance page and stops before
+  switch (`MELIONA_MAINTENANCE=1` serves a maintenance page and stops before
   any data call), outbound spend cap (`netguard.MAX_REQUESTS_PER_DAY`, charged
   at the single chokepoint, degrading to cached data on exhaustion instead of
   hammering Yahoo), a "Your data" privacy panel with a session-clear control
@@ -245,12 +245,12 @@ risk-engine/
 - ✅ **Support mailbox + beta channel + restore drill** (2026-08-26) - support
   moved off the personal address to the project mailbox
   `meleona.support@gmail.com`, forwarded to the personal inbox, overridable per
-  deployment with `MELEONA_SUPPORT_EMAIL`; a regression test now FAILS if the
+  deployment with `MELIONA_SUPPORT_EMAIL`; a regression test now FAILS if the
   personal address reappears in the app or in any public document. Creating the
   mailbox and turning on forwarding is a manual, phone-verified step, so it is
   written up in `RUNBOOK.md` §6b and is a blocking item in
   `LAUNCH_CHECKLIST.md`. Also shipped from the remaining checklist items:
-  `MELEONA_CHANNEL=beta` puts a beta notice plus a one-click "report this
+  `MELIONA_CHANNEL=beta` puts a beta notice plus a one-click "report this
   session" mailto (session reference already in the subject) on pre-release
   deploys only, and `tools/warm_cache.py` warms every preset after a deploy -
   `--drill` forces real fetches and prints the cold-refill time, which is the
@@ -641,6 +641,19 @@ risk-engine/
   | Balance: "the flyer holds most of the RISK" after an equal-risk split | fixed | wording |
   | Conviction: hand-typed "the one honest exception is the dot-com peak" | changed | read from the live table |
   | Hero/footer crisis count, path count typed in | changed | read from `HISTORICAL_REGIMES`, `N_PATHS` |
+
+- ✅ **New crest, and the name spelled Meliona (2026-10-28)** - John's logo
+  mandate, from his two sketches with the red-X'd outer triangles removed: a
+  charcoal disc, three rings fading outward, and a regular hexagon cut by an X
+  into two inward-pointing equilateral triangles and top/bottom rhombuses, plus
+  a keystone rhombus where the X crosses. Nothing touches (checked in code).
+  `tools/brand_icons.mjs` renders the favicon and touch icon from
+  `assets/logo.svg`; the share image got the crest and the new spelling in
+  place. Then every "Meleona" became "Meliona" (words, CSS classes, glide
+  globals, log file, build tag, setting names). Two deliberate leftovers: the
+  mailbox `meleona.support@gmail.com` (a Gmail address cannot be renamed -
+  RUNBOOK §6b says how to move), and `observability.host_setting()` still
+  reads `MELEONA_*` so a variable already set on Railway keeps working.
 
 ## Non-negotiable constraints (the "why")
 

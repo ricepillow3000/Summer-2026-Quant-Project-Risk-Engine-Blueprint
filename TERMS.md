@@ -4,7 +4,7 @@ _Last updated: 2026-08-26. Contact: meleona.support@gmail.com_
 
 ## What this is
 
-Meleona is an educational portfolio-risk engine built as a student portfolio
+Meliona is an educational portfolio-risk engine built as a student portfolio
 project. By using it you accept these terms.
 
 ## Not investment advice

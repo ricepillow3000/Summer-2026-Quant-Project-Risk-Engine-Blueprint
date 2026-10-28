@@ -1,4 +1,4 @@
-/* Meleona - the Tearsheet design system.
+/* Meliona - the Tearsheet design system.
    Extracted from main.py 2026-08-26: it was 778 lines of inline <style> inside
    the app script, re-sent on every rerun and impossible to read next to the
    Python. Same rules, same order, one file, loaded once by load_css().
@@ -103,9 +103,9 @@ h1, h2, h3 { color: #3F3B35; font-weight: 400; letter-spacing: -0.01em; }
 
 /* ---- Presentation flow: hero, showcase, CTAs, scroll reveal ---- */
 html { scroll-behavior: smooth; }
-@keyframes meleona-rise { from { opacity: 0; transform: translateY(24px); }
+@keyframes meliona-rise { from { opacity: 0; transform: translateY(24px); }
                           to   { opacity: 1; transform: translateY(0); } }
-.reveal { animation: meleona-rise linear both;
+.reveal { animation: meliona-rise linear both;
           animation-timeline: view(); animation-range: entry 0% cover 30%; }
 
 /* WIDE COURT - the whole page works now, capped for taste. Layout is
@@ -794,23 +794,23 @@ div[data-baseweb="select"]>div, .stNumberInput input,
    full-bleed charcoal band - a "where to next" rail of outlined link boxes,
    then a thin copyright/disclaimer bar. Our twist: the rail is numbered like
    a ledger and every claim on it stays honest. --- */
-.meleona-footer { background: #3F3B35;
+.meliona-footer { background: #3F3B35;
     margin: 84px calc(50% - 50vw) 0; padding: 56px max(7vw, calc(50vw - 744px)) 36px; }
-.meleona-footer .f-rail { display: grid; grid-template-columns: repeat(3, 1fr);
+.meliona-footer .f-rail { display: grid; grid-template-columns: repeat(3, 1fr);
     gap: 16px; margin-bottom: 44px; }
-@media (max-width: 1100px) { .meleona-footer .f-rail { grid-template-columns: 1fr; } }
-.meleona-footer .f-box { display: block; border: 1px solid rgba(196,189,174,.3);
+@media (max-width: 1100px) { .meliona-footer .f-rail { grid-template-columns: 1fr; } }
+.meliona-footer .f-box { display: block; border: 1px solid rgba(196,189,174,.3);
     padding: 20px 22px; color: #EDE9E3 !important; text-decoration: none !important;
     font-family: 'Helvetica Neue', sans-serif; font-size: 11px;
     letter-spacing: .18em; text-transform: uppercase;
     transition: border-color .25s ease, background .25s ease; }
-.meleona-footer .f-box:hover { border-color: #B08A55;
+.meliona-footer .f-box:hover { border-color: #B08A55;
     background: rgba(154,123,79,.12); }
-.meleona-footer .f-box small { display: block; margin-top: 8px; color: #B4AB9B;
+.meliona-footer .f-box small { display: block; margin-top: 8px; color: #B4AB9B;
     font-family: Georgia, serif; font-size: 13px; letter-spacing: .02em;
     text-transform: none; line-height: 1.5; }
-.meleona-footer .f-num { color: #C6A26B; margin-right: 10px; }
-.meleona-footer .f-bar { border-top: 1px solid rgba(196,189,174,.25);
+.meliona-footer .f-num { color: #C6A26B; margin-right: 10px; }
+.meliona-footer .f-bar { border-top: 1px solid rgba(196,189,174,.25);
     padding-top: 18px; display: flex; justify-content: space-between;
     flex-wrap: wrap; gap: 8px; font-family: 'Helvetica Neue', sans-serif;
     font-size: 10px; letter-spacing: .14em; text-transform: uppercase;
@@ -1040,8 +1040,8 @@ body:has([data-testid="stStatusWidgetRunningIcon"])::after { content: "Updating\
    on-dark button: the dark text bronze on beige (4.7-6.2:1), the light one on
    the charcoal bands (4.65:1). A focus ring needs 3:1 (WCAG 2.2 1.4.11). */
 :root { --ring: #6A5030; }
-.showcase-row, .meleona-footer { --ring: #C6A26B; }
-a.cta-btn:focus-visible, a.cta-link:focus-visible, .meleona-footer a.f-box:focus-visible {
+.showcase-row, .meliona-footer { --ring: #C6A26B; }
+a.cta-btn:focus-visible, a.cta-link:focus-visible, .meliona-footer a.f-box:focus-visible {
     outline: 2px solid var(--ring) !important; outline-offset: 3px !important;
     box-shadow: none !important; border-radius: 0 !important; }
 
