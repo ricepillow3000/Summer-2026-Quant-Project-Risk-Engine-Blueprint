@@ -64,7 +64,7 @@ Deterministic math-invariant tests (CVaR ≥ VaR, risk parity equalizes contribu
 ```
 risk-engine/
 ├── .streamlit/config.toml   # Institutional beige/bronze theme
-├── assets/logo.svg          # Lion-crest wordmark
+├── assets/logo.svg          # Crest: hexagon cut by an X, on a ringed charcoal disc
 ├── data/                    # Cached prices + provenance (gitignored)
 ├── src/
 │   ├── ingestion.py         # DataEngine: fetch, cache, provenance, dollar volume

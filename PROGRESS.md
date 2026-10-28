@@ -44,7 +44,7 @@ risk-engine/
 │   ├── grit.py          # Grit Zone: drawdown recovery, rolling consistency, regime resilience
 │   ├── security_master.py  # ISIN + corporate actions (dividends/splits) via yfinance
 │   └── data_quality.py  # automated schema/sanity validation gate on every price pull
-├── assets/logo.svg      # lion + scale + triangle crest (bronze, "Pride · Integrity")
+├── assets/logo.svg      # crest: hexagon cut by an X (2 triangles, 3 rhombuses) on a ringed disc
 ├── .streamlit/config.toml  # beige/bronze institutional theme
 ├── requirements.txt · Procfile · README.md · .gitignore
 ```
