@@ -5324,7 +5324,6 @@ def test_the_jump_calibration_uses_the_unbiased_sample_variance():
     assert abs(p["sigma_d"] ** 2 - lr.var(ddof=1)) < 1e-15, (p["sigma_d"] ** 2, lr.var(ddof=1))
 
 
-
 def test_a_fall_is_written_as_its_size_never_as_a_double_negative():
     """Council A review (2026-10-22): the defensive pair read "holding META
     alone fell -36% at its worst" - fell, minus: a reader can take it as a
@@ -5349,7 +5348,6 @@ def test_the_loaded_window_is_counted_one_way_everywhere():
     assert f"{rows - 1} trading days" not in page, f"{rows - 1} returns called trading days"
     assert f"{rows} daily returns" not in page, f"{rows} prices called daily returns"
     assert f"{rows - 1} daily returns" in page
-
 
 
 def test_the_pair_audit_download_retries_a_name_the_feed_dropped_and_fails_one_it_never_serves():
@@ -5485,6 +5483,39 @@ def test_the_map_draws_no_node_or_link_the_data_did_not_produce():
             assert pl["live"] and "Yahoo daily closes" in pl["provenance"]
     finally:
         tp.fetch_prices = orig
+
+
+def test_the_audits_raw_yahoo_bars_land_on_their_own_day_across_a_clock_change():
+    """Live audit run 86 (2026-10-28): Yahoo stamps a London FX day at its local midnight, 23:00 UTC the
+    evening before while Britain is on summer time. raw_chart added the meta's gmtoffset, which is only
+    TODAY's offset (0 after the clocks went back on 25 Oct), so every summer bar landed a day early:
+    EURUSD=X matched the engine on 53 days and missed by 0.8% on 19 Aug, while the engine was right."""
+    from datetime import datetime, timezone
+
+    import tools.live_provenance as lp
+
+    def stamp(iso):
+        return int(datetime.fromisoformat(iso).replace(tzinfo=timezone.utc).timestamp())
+
+    def chart(tz, offset, stamps, closes):
+        payload = {"chart": {"result": [{"meta": {"exchangeTimezoneName": tz, "gmtoffset": offset},
+                                         "timestamp": [stamp(s) for s in stamps],
+                                         "indicators": {"adjclose": [{"adjclose": closes}], "quote": [{"close": closes}]}}]}}
+        return type("Session", (), {"get": lambda self, url, timeout=None: type("R", (), {"json": lambda self: payload})()})()
+
+    real = lp.guarded_session
+    try:
+        # London, read after the clocks went back (offset 0): a summer bar and a winter bar
+        lp.guarded_session = lambda: chart("Europe/London", 0, ["2026-08-18T23:00:00", "2026-10-26T00:00:00"], [1.157943, 1.1130])
+        days = [d.date().isoformat() for d in lp.raw_chart("EURUSD=X").index]
+        assert days == ["2026-08-19", "2026-10-26"], days
+        # New York, read in summer (offset -4 h): a 13:30 UTC open stays on its own day in winter too
+        lp.guarded_session = lambda: chart("America/New_York", -14400, ["2026-08-18T13:30:00", "2026-12-01T14:30:00"], [600.0, 610.0])
+        days = [d.date().isoformat() for d in lp.raw_chart("SPY").index]
+        assert days == ["2026-08-18", "2026-12-01"], days
+    finally:
+        lp.guarded_session = real
+
 
 if __name__ == "__main__":
     import sys
