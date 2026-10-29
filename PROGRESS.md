@@ -680,6 +680,15 @@ risk-engine/
   figure copied from `audit/live_audit_2026-10-15T025826Z.md` and dated on the
   image. No fan chart, no stat tiles, no eyebrow caps, no italic subtitle.
 
+- ✅ **showcase/: the engine in ~330 lines (2026-10-29)** - John wanted a short,
+  blunt copy of the Python for hiring managers, with plain Gen Z comments, kept
+  apart from the app (his call: the live site and the interview-depth notes in
+  `src/` stay as they are). `data, risk, portfolio, stress, run` cover prices,
+  VaR/CVaR, the walk-forward Kupiec backtest, both Monte Carlo engines, risk
+  parity, vol target, days to exit, the 10 crash replays and the Grit score.
+  `showcase/test_showcase.py` proves every function equals `src/` (to 1e-12,
+  same seeds) and runs in `tools.check`, so the copy cannot drift.
+
 ## Non-negotiable constraints (the "why")
 
 1. **No LLM data, ever.** Every market number comes from Yahoo Finance via
