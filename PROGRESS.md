@@ -668,6 +668,17 @@ risk-engine/
   on a 1x laptop it matches its mirror image but for 12 edge pixels.
   `test_the_crest_is_symmetric_and_its_pieces_never_touch` (mutation-tested:
   a 0.001 shift, touching rings, touching pieces, the plate returning).
+- ✅ **No lion left, and a new link preview (2026-10-29)** - the last two pieces
+  of the old crest were faint engravings: the balance scale behind the Grit Zone
+  and the lion's tail by the fan chart. They are now the new crest's hexagon in
+  outline and a quarter of its rings. The browser tab gets the new crest both
+  ways (the page's icon link and the icon Streamlit sets at run time). The link
+  preview (`public/og-image.png`) is rebuilt from `tools/og_image.html`, rendered
+  by `tools/brand_icons.mjs`: the crest, the name, one sentence, and a ruled
+  receipt of the 15 Oct 2026 live audit (727 of 728 checks; prices identical to
+  Yahoo's raw feed; T-bill 4.085% vs Treasury 4.100%; SPY/IVV 0.9995), every
+  figure copied from `audit/live_audit_2026-10-15T025826Z.md` and dated on the
+  image. No fan chart, no stat tiles, no eyebrow caps, no italic subtitle.
 
 ## Non-negotiable constraints (the "why")
 

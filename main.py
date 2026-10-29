@@ -881,16 +881,15 @@ st.markdown(hero_html(crest=logo_svg) + _LIFT_SKELETON, unsafe_allow_html=True)
 st.markdown("""
 <div class="showcase-row reveal">
   <div class="showcase-section" id="grit-showcase" style="position:relative;">
-    <div class="engrave scale"><svg viewBox="22 36 28 26" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <g fill="none" stroke="#9A7B4F" stroke-width="1.1" stroke-linecap="round">
-        <circle cx="35" cy="46" r="9"/>
-        <line x1="30" y1="45" x2="40" y2="45"/>
-        <line x1="35" y1="42.5" x2="35" y2="50"/>
-        <path d="M28.5,46.5 Q30,49 31.5,46.5"/>
-        <path d="M38.5,46.5 Q40,49 41.5,46.5"/>
-        <line x1="28.5" y1="46.5" x2="30" y2="44.5"/><line x1="31.5" y1="46.5" x2="30" y2="44.5"/>
-        <line x1="38.5" y1="46.5" x2="40" y2="44.5"/><line x1="41.5" y1="46.5" x2="40" y2="44.5"/>
-        <circle cx="35" cy="45" r="1.1"/>
+    <div class="engrave scale"><svg viewBox="-50 -50 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <!-- the crest's hexagon and its X, cut in outline (assets/logo.svg) -->
+      <g fill="none" stroke="#9A7B4F" stroke-width="1.1" stroke-linejoin="round">
+        <circle r="44"/>
+        <polygon points="0,-35 27.358,-19.205 0,-3.409 -27.358,-19.205"/>
+        <polygon points="0,-2.309 4,0 0,2.309 -4,0"/>
+        <polygon points="0,35 27.358,19.205 0,3.409 -27.358,19.205"/>
+        <polygon points="-5.905,0 -30.311,-14.091 -30.311,14.091"/>
+        <polygon points="5.905,0 30.311,-14.091 30.311,14.091"/>
       </g>
     </svg></div>
     <div class="showcase-eyebrow">The Innovation</div>
@@ -1789,12 +1788,12 @@ with v_col:
             '</div>', unsafe_allow_html=True)
 with f_col:
     st.markdown("""
-<div class="engrave line" aria-hidden="true"><svg viewBox="28 40 66 60" xmlns="http://www.w3.org/2000/svg">
-  <g fill="none" stroke="#9A7B4F" stroke-linecap="round">
-    <path stroke-width="2.4" d="M86,83 C72,90 54,92 44,84 C37,79 34,70 35,58"/>
-    <path stroke-width="1.5" d="M35,58 C35,54 34,50 36,47"/>
-    <path stroke-width="1" d="M38,52 L33,50 L39,48"/>
-    <path stroke-width="1" d="M36,55 L31,55 L37,51"/>
+<div class="engrave line" aria-hidden="true"><svg viewBox="-60 -4 66 60" xmlns="http://www.w3.org/2000/svg">
+  <!-- a quarter of the crest's three rings, fading outward (assets/logo.svg) -->
+  <g fill="none" stroke="#9A7B4F">
+    <circle r="47.2" stroke-width="2.4"/>
+    <circle r="51.4" stroke-width="1.5" stroke-opacity=".6"/>
+    <circle r="55.6" stroke-width="1" stroke-opacity=".3"/>
   </g>
 </svg></div>
 """, unsafe_allow_html=True)

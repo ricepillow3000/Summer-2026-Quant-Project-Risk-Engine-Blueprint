@@ -1,6 +1,8 @@
-// Renders public/favicon.png (64px, transparent) and public/apple-touch-icon.png
-// (180px on the page's beige, which iOS needs opaque) from assets/logo.svg, so
-// the icons never drift from the crest. Run after editing the logo:
+// Renders public/favicon.png (64px, transparent), public/apple-touch-icon.png
+// (180px on the page's beige, which iOS needs opaque) and public/og-image.png
+// (1200x627, the link preview, from tools/og_image.html) with the crest from
+// assets/logo.svg, so none of them can drift from it. Run after editing the
+// logo or the preview (the preview's fonts load from Google Fonts):
 //   node tools/brand_icons.mjs
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 import { readFileSync } from 'node:fs';
@@ -20,4 +22,9 @@ for (const [file, size, pad, ground] of [
   await page.screenshot({ path: root + 'public/' + file, omitBackground: ground === 'transparent' });
   await page.close();
 }
+const og = await browser.newPage({ viewport: { width: 1200, height: 627 } });
+await og.setContent(readFileSync(root + 'tools/og_image.html', 'utf8').replace('<!--CREST-->', svg),
+                    { waitUntil: 'networkidle' });
+await og.evaluate(() => document.fonts.ready);
+await og.screenshot({ path: root + 'public/og-image.png' });
 await browser.close();
