@@ -3698,6 +3698,77 @@ def test_gungnir_plaque_matches_its_sketch_and_its_math():
     assert 'class="c">circle' not in src and "Circle A" not in src
 
 
+def test_the_crest_is_symmetric_and_its_pieces_never_touch():
+    """John's crest mandate (2026-10-28/29): two inward-pointing triangles and
+    three rhombuses cut from a hexagon, none touching, on a disc with three
+    rings that fade outward, all 100% symmetric. The SVG is drawn about (0,0),
+    so mirror symmetry is exact: each point's mirror is the same text with the
+    sign flipped. The rings ripple on hover and settle at rest; the frame the
+    crest used to sit in stays gone."""
+    import math
+    import re
+    import xml.etree.ElementTree as ET
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    svg = ET.fromstring((root / "assets" / "logo.svg").read_text(encoding="utf-8"))
+    ns = "{http://www.w3.org/2000/svg}"
+    assert svg.get("viewBox") == "-60 -60 120 120"
+    circles = svg.findall(f".//{ns}circle")
+    assert all(c.get("cx") in (None, "0") and c.get("cy") in (None, "0") for c in circles)
+    rings = [c for c in circles if c.get("class") == "crest-ring"]
+    disc = [c for c in circles if c.get("class") != "crest-ring"]
+    assert len(rings) == 3 and len(disc) == 1
+    bands = [(float(disc[0].get("r")), float(disc[0].get("r")))] + sorted(
+        (float(c.get("r")) - float(c.get("stroke-width")) / 2,
+         float(c.get("r")) + float(c.get("stroke-width")) / 2) for c in rings)
+    assert all(b[0] > a[1] for a, b in zip(bands, bands[1:])), "rings touch"
+    assert bands[-1][1] * 1.035 < 60, "a rippling ring leaves the frame"
+    fade = [float(c.get("stroke-opacity")) for c in sorted(rings, key=lambda c: float(c.get("r")))]
+    assert fade == sorted(fade, reverse=True) and len(set(fade)) == 3, "rings do not fade outward"
+
+    text = [tuple(p.split(",")) for poly in svg.findall(f".//{ns}polygon")
+            for p in poly.get("points").split()]
+    flip = lambda v: v[1:] if v.startswith("-") else ("0" if v == "0" else "-" + v)
+    pts = set(text)
+    assert {(flip(x), y) for x, y in pts} == pts, "not mirror symmetric left to right"
+    assert {(x, flip(y)) for x, y in pts} == pts, "not mirror symmetric top to bottom"
+
+    polys = [[tuple(map(float, p.split(","))) for p in poly.get("points").split()]
+             for poly in svg.findall(f".//{ns}polygon")]
+    sides = lambda P: [math.dist(a, b) for a, b in zip(P, P[1:] + P[:1])]
+    kinds = sorted(len(P) for P in polys)
+    assert kinds == [3, 3, 4, 4, 4], kinds
+    for P in polys:   # equilateral triangles, rhombuses: every side equal
+        assert max(sides(P)) - min(sides(P)) < 2e-3, P
+    tri = [P for P in polys if len(P) == 3]
+    assert all(abs(P[0][1]) < 1e-9 and abs(P[0][0]) < abs(P[1][0]) for P in tri), "triangles point out"
+    radius = float(disc[0].get("r"))
+    assert all(math.hypot(*v) < radius - 4 for P in polys for v in P)
+
+    def gap(P, Q):
+        def seg(p, a, b):
+            dx, dy = b[0] - a[0], b[1] - a[1]
+            t = max(0, min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (dx * dx + dy * dy)))
+            return math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy)
+        edges = lambda X: list(zip(X, X[1:] + X[:1]))
+        return min(min(seg(p, a, b) for p in P for a, b in edges(Q)),
+                   min(seg(q, a, b) for q in Q for a, b in edges(P)))
+    for i, P in enumerate(polys):
+        for Q in polys[i + 1:]:
+            assert gap(P, Q) > 1.0, "two pieces of the crest touch"
+
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    crest = re.search(r"^\.hero-crest \{([^}]*)\}", css, re.M).group(1)
+    assert not re.search(r"border|background|box-shadow|padding", crest), "the plate is back"
+    assert "border-radius: 26px; }                /* squircle" not in css
+    frames = re.search(r"@keyframes crest-ripple \{(.*?)\n\}", css, re.S).group(1)
+    assert re.search(r"0%, 100% \{ transform: scale\(1\);\s+opacity: 1; \}", frames), (
+        "a ring must start and end each pass at rest, or leaving the crest snaps it")
+    assert re.search(r"prefers-reduced-motion: reduce\) \{\s*\.hero-crest:hover \.crest-ring", css)
+    src = (root / "main.py").read_text(encoding="utf-8")
+    assert "P.__melionaRipple" in src and "updateTiming({ iterations: pass + 1 })" in src
+
+
 def test_public_files_give_crawlers_and_link_previews_a_real_head(tmp_path=None):
     """LinkedIn/Slack previews and search crawlers do not run JavaScript, so
     tools/public_files.py writes the head they read into Streamlit's static

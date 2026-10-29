@@ -654,6 +654,20 @@ risk-engine/
   mailbox `meleona.support@gmail.com` (a Gmail address cannot be renamed -
   RUNBOOK §6b says how to move), and `observability.host_setting()` still
   reads `MELEONA_*` so a variable already set on Railway keeps working.
+- ✅ **The crest, beige and unframed, ripples on hover (2026-10-29)** - John
+  chose the beige pieces, asked for the glossy square plate to go, for the
+  rings to ripple inside to outside while hovered and stop when the pointer
+  leaves, and for the mark to be perfectly symmetric. The plate (border, tint,
+  shadow, padding) is gone and the crest fills the same box, so nothing below
+  moves (62 -> 104px on a 1440x900 laptop). The SVG is drawn about (0,0): every
+  mirror pair is the same number with the sign flipped. On hover each ring
+  swells 3.5% and fades, 0.3s behind the one inside it; on leave the glide
+  script lets each finish its pass and stop at rest (re-entering mid-settle
+  wakes all three), off under reduced motion. Measured: rings end at exactly
+  scale 1 within ~1s of leaving; rendered crest centred to 0.015px alone, and
+  on a 1x laptop it matches its mirror image but for 12 edge pixels.
+  `test_the_crest_is_symmetric_and_its_pieces_never_touch` (mutation-tested:
+  a 0.001 shift, touching rings, touching pieces, the plate returning).
 
 ## Non-negotiable constraints (the "why")
 

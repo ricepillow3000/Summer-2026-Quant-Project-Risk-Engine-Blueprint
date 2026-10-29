@@ -526,6 +526,47 @@ _html("""
   P.addEventListener('scroll', onScroll, { capture: true, passive: true });
   P.__melionaGlide = { onTab: onTab, onLink: onLink, onYield: onYield, onScroll: onScroll };
 })();
+/* The crest's rings ripple while a pointer rests on it (static/app.css). On
+   leave, each ring finishes the pass it is in and stops at rest - a ripple
+   that settles rather than snapping back - and the outer rings, a beat behind,
+   carry the last wave outward. Same rebind rule as the glide above. */
+(function() {
+  const P = window.parent.document;
+  const prev = P.__melionaRipple;
+  if (prev) {
+    P.removeEventListener('pointerover', prev.enter, true);
+    P.removeEventListener('pointerout', prev.leave, true);
+  }
+  function crestOf(e) {
+    const c = e.target.closest && e.target.closest('.hero-crest');
+    return c && !c.contains(e.relatedTarget) ? c : null;   /* crossing its edge */
+  }
+  function enter(e) {
+    const c = crestOf(e); if (!c) return;
+    c.classList.add('rippling');
+    /* Back before the last wave ended: a ring that already settled is no
+       longer listed, so wake the ones kept from the leave too - each resumes
+       from rest, where its last pass ended. */
+    (c.__rings || []).concat(c.getAnimations({ subtree: true })).forEach(function(a) {
+      a.effect.updateTiming({ iterations: Infinity });
+    });
+  }
+  function leave(e) {
+    const c = crestOf(e); if (!c) return;
+    const runs = c.__rings = c.getAnimations({ subtree: true });
+    if (!runs.length) { c.classList.remove('rippling'); return; }
+    Promise.all(runs.map(function(a) {
+      const pass = a.effect.getComputedTiming().currentIteration || 0;
+      a.effect.updateTiming({ iterations: pass + 1 });
+      return a.finished;
+    })).then(function() {
+      if (!c.matches(':hover')) { c.classList.remove('rippling'); c.__rings = null; }
+    }, function() {});
+  }
+  P.addEventListener('pointerover', enter, true);
+  P.addEventListener('pointerout', leave, true);
+  P.__melionaRipple = { enter: enter, leave: leave };
+})();
 </script>
 """, height=0)
 

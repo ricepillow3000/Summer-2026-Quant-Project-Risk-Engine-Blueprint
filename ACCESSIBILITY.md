@@ -64,6 +64,8 @@ falls short**, so nobody has to discover a gap the hard way.
 - **Motion:** every animation is wrapped in `prefers-reduced-motion`, and the
   map's particle loop idles when off-screen. Nothing flashes. The buttons'
   glide is JavaScript, so it asks the same setting itself and lands at once.
+  The crest's rings ripple only while a pointer rests on it, and not at all
+  with reduced motion.
   With reduced motion the loading skeleton and the "Updating…" sign still
   show, held still: a visitor always has a sign the page is working.
 - **Structure:** one `<h1>`, section headings in order, tables with real header

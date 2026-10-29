@@ -197,11 +197,25 @@ html { scroll-behavior: smooth; }
    fully solid (John: fading them read unprofessional). The background does
    the fading; the instruments never do. */
 .hero-stats { position: relative; }
-.hero-crest { width: 132px; height: 132px; padding: 20px;
-    border: 1px solid #C4BDAE; background: rgba(154,123,79,0.05);
-    box-shadow: 0 0 0 1px rgba(154,123,79,.12),
-                0 24px 60px -34px rgba(63,59,53,.55); }
-.hero-crest svg { width: 100%; height: 100%; }
+/* The crest stands on the page itself - no plate, no frame (John, 2026-10-29):
+   the box keeps its size so nothing below it moves, and the mark fills it. */
+.hero-crest { width: 132px; height: 132px; }
+.hero-crest svg { width: 100%; height: 100%; display: block; overflow: visible; }
+/* Hover: the three rings ripple outward, inner ring first. main.py's script
+   holds .rippling after the pointer leaves until each ring ends its pass, so
+   the ripple settles instead of snapping back. Every ring starts and ends at
+   rest, scaled about its own centre, so the crest stays symmetric throughout. */
+@keyframes crest-ripple {
+    0%, 100% { transform: scale(1);     opacity: 1; }
+    50%      { transform: scale(1.035); opacity: .55; }
+}
+.hero-crest .crest-ring { transform-box: fill-box; transform-origin: center; }
+.hero-crest:hover .crest-ring, .hero-crest.rippling .crest-ring {
+    animation: crest-ripple 2.4s cubic-bezier(.37, 0, .63, 1) infinite; }
+.hero-crest .crest-ring:nth-of-type(2) { animation-delay: .3s; }
+.hero-crest .crest-ring:nth-of-type(3) { animation-delay: .6s; }
+@media (prefers-reduced-motion: reduce) {
+    .hero-crest:hover .crest-ring, .hero-crest.rippling .crest-ring { animation: none; } }
 .hero-eyebrow { font-family: 'Helvetica Neue', sans-serif; font-size: 12px;
     letter-spacing: 0.32em; text-transform: uppercase; color: #6A5030; }
 .hero-title { font-size: clamp(44px, 10.5vw, 96px) !important; color: #3F3B35;
@@ -477,6 +491,7 @@ div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
     background: linear-gradient(90deg, #E2DCD0 25%, #EFEAE0 45%, #E2DCD0 65%) !important;
     background-size: 200% 100% !important; animation: sk-sheen 1.15s linear infinite;
     border-color: transparent !important; box-shadow: none !important; color: transparent !important; }
+#boot-skel .hero-crest { border-radius: 50%; }   /* the crest is round */
 #boot-skel .hstat::before { display: none !important; }
 #boot-skel .hstat { background: #E9E4DA !important; border-color: #DDD6C9 !important;
     box-shadow: none !important; animation: none !important; transform: none !important; }
@@ -616,7 +631,6 @@ div[data-baseweb="select"]>div, .stNumberInput input,
 .stButton>button { border-radius: 12px !important; }
 [data-testid="stPlotlyChart"] { border-radius: 16px !important; }
 .verdict-box { border-radius: 20px; }
-.hero-crest { border-radius: 26px; }                /* squircle, not a hard square */
 
 /* Diversify: each hero tile carries a different corner profile so the deck
    reads as a composition, not a grid of identical boxes. */
@@ -937,8 +951,7 @@ body:has([data-testid="stStatusWidgetRunningIcon"])::after { content: "Updating\
                 line-height: 1.03 !important; margin: 0 !important; }
   .hero-sub { font-size: 15.5px !important; line-height: 1.42 !important;
               max-width: 540px !important; }
-  .hero-crest { width: 84px !important; height: 84px !important;
-                padding: 12px !important; }
+  .hero-crest { width: 84px !important; height: 84px !important; }
   .hero-stats { gap: 8px !important; }
   .hstat { padding: 10px 12px 8px !important; }
   .hstat .hnum { font-size: 26px !important; }
