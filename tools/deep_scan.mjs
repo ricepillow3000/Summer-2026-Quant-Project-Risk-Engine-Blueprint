@@ -121,6 +121,10 @@ async function openDrawer(label) {
   await s.scrollIntoViewIfNeeded();
   if (!(await s.evaluate(el => el.parentElement.open))) await s.click();
 }
+// Tabs that live in the folded "Where the numbers come from" drawer. Declared
+// here, above every step: openTab reads it, and the presets step calls openTab
+// long before the tabs step (a const below it was in its dead zone, run 98).
+const PROVENANCE = ['Data Quality', 'Lineage & Audit'];
 const metric = label => page.evaluate(l => {
   const m = [...document.querySelectorAll('[data-testid="stMetric"]')]
     .find(e => (e.querySelector('[data-testid="stMetricLabel"]')?.textContent || '').trim().startsWith(l));
@@ -534,8 +538,6 @@ await step('the book', async () => {
 // ---- 7. tabs, drawers, Balance ----------------------------------------------------
 const TABS = ['Risk Topology', 'Risk Breakdown', 'Liquidity', 'Correlation Watch', 'Balance',
               'Grit Zone', 'Crisis Conviction', 'Data Quality', 'Lineage & Audit'];
-// The last two live in the folded provenance drawer under the strip.
-const PROVENANCE = ['Data Quality', 'Lineage & Audit'];
 async function openTab(name) {
   if (PROVENANCE.includes(name)) await openDrawer('Where the numbers come from');
   const t = page.getByRole('tab', { name, exact: true }).first();
