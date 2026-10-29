@@ -16,4 +16,22 @@ jobs:
         with:
           python-version: "3.13"
       - run: python -m pip install -q -r requirements.txt
-      - run: python -m pip list 2>/dev/null | grep -iE "^(pandas|numpy|yfinance|scipy) " ; python -W ignore -m tools.live_provenance 2>&1 | grep -E "^FAIL|provenance checks" || true
+      - run: |
+          python -W ignore - <<'PY'
+          import numpy as np, pandas as pd, yfinance as yf
+          from src.netguard import guarded_session
+          from src.ingestion import fetch_prices
+          sym = "EURUSD=X"
+          res = guarded_session().get(f"https://query2.finance.yahoo.com/v8/finance/chart/{sym}?range=3mo&interval=1d&events=div%2Csplit", timeout=30).json()["chart"]["result"][0]
+          m = res["meta"]; print("meta tz", m.get("exchangeTimezoneName"), "gmtoffset", m.get("gmtoffset"))
+          ts = pd.to_datetime(np.array(res["timestamp"]), unit="s", utc=True)
+          adj = res["indicators"].get("adjclose", [{}])[0].get("adjclose") or res["indicators"]["quote"][0]["close"]
+          raw = pd.Series(adj, index=ts)
+          print("RAW bars 2026-08-14..08-24 (UTC timestamp, close):")
+          print(raw["2026-08-14":"2026-08-25"].to_string())
+          print("RAW dates with 2 bars:", raw.groupby((ts + pd.Timedelta(seconds=m.get("gmtoffset", 0))).normalize()).size().loc[lambda x: x > 1].index.date.tolist())
+          yd = yf.download(sym, period="3mo", auto_adjust=True, repair=False, progress=False, session=guarded_session())["Close"]
+          print("YF index tz:", yd.index.tz, "rows", len(yd)); print(yd.loc["2026-08-14":"2026-08-25"].to_string())
+          eng = fetch_prices([sym], period="3mo", use_cache=False, align=False)
+          print("ENGINE index tz:", getattr(eng.index, "tz", None), "rows", len(eng)); print(eng.loc["2026-08-14":"2026-08-25"].to_string())
+          PY
