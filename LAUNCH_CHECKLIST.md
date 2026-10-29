@@ -65,7 +65,7 @@ notices fastest.
 - [ ] Set `MELEONA_CHANNEL=beta` on the beta deploy, and unset it for public.
 - [x] Warm cache: automatic. The Procfile runs `python -m tools.warm_cache --every 5`
       beside the app, so no preset expires before a visitor picks it - every pull
-      its page makes, full histories and the security master included (RUNBOOK.md,
+      its page makes, full histories included (RUNBOOK.md,
       *After every deploy*).
 - [ ] Read `ACCESSIBILITY.md` once before sharing the link - it is the page a
       complainant's lawyer reads first, and it must stay true of the app.

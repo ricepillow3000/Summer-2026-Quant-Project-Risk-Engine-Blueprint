@@ -55,17 +55,7 @@ from hero import N_PATHS, hero_html
 from src.liquidity import (days_to_liquidate, liquidity_profile,
                            liquidity_adjusted_cvar)
 from src.grit import grit_scores, MIN_HISTORY_DAYS
-from src.security_master import security_master
 from src.data_quality import validate_prices
-from src.regimes import (
-    rolling_windows, wasserstein_kmeans, vol_ordered_labels,
-    regime_stats, transition_matrix,
-)
-from src.signals import (
-    IC_HORIZON, MOMENTUM_LOOKBACK, MOMENTUM_SKIP,
-    momentum_signal, forward_returns, daily_ic, ic_summary,
-    fundamental_law_ir, effective_breadth,
-)
 from src.conviction import (
     load_conviction, AI_CAPEX_BASKET, HORIZONS, RECOVERY_HORIZON_DAYS, race_days,
     race_record,
@@ -1056,6 +1046,10 @@ with _gungnir_zone:
         f'To the engine<span class="cta-arrow" aria-hidden="true"><svg viewBox="0 0 16 30" fill="none" xmlns="http://www.w3.org/2000/svg"><path class="shaft" d="M8 1 V22" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path class="head" d="M2.5 16.5 L8 22.5 L13.5 16.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a>'
         f'</div>',
         unsafe_allow_html=True)
+    # Overwhelm audit (2026-10-29): the sketch and the equation stay - they draw
+    # the flyer-and-cushion pairing, the linkage the product is built on. The
+    # dense paragraph under them (equal risk contribution, correlation
+    # cancelling, the covariance matrix) went: the engine below does that work.
     with _gg_plaque:
         st.markdown(
         f'<div class="gungnir-plaque reveal">'
@@ -1069,14 +1063,6 @@ with _gungnir_zone:
         f'</div>'
         f'<div class="gplaque-read">The steadier name carries more of the money, '
         f'so both names carry the same share of the risk.</div>'
-        f'<hr class="gplaque-rule">'
-        f'<div class="gplaque-note">Equal risk contribution, two assets: weight times '
-        f'volatility, matched. A name three times as volatile gets one third as much '
-        f'capital as its steadier partner. Correlation cancels out of the two-asset '
-        f'condition, so the split rests on measured volatility alone, not on a forecast. '
-        f'The engine below solves the same condition across a full basket (switch '
-        f'Weighting to Risk parity), where correlation no longer cancels and the '
-        f'covariance matrix takes over.</div>'
         f'</div>',
         unsafe_allow_html=True)
 
@@ -1286,12 +1272,6 @@ def load_grit(tickers_tuple: tuple[str, ...]):
     """Grit scores need each asset's FULL price history, not just the 2y window
     used for VaR - grit_scores() pulls it separately (see src.grit)."""
     return grit_scores(list(tickers_tuple))
-
-
-@st.cache_data(ttl=3600, max_entries=32, show_spinner="Building the security master…")
-def load_security_master(tickers_tuple: tuple[str, ...]):
-    """Corporate actions change rarely (not intraday) - a longer TTL is fine."""
-    return security_master(list(tickers_tuple))
 
 
 # Ticks once a MINUTE, not once a second. Stress test 2026-10-15: each tick
@@ -1575,9 +1555,9 @@ def run_monte_carlo(rets: pd.DataFrame, w: np.ndarray, jump: bool) -> dict:
 
 # The same rule for the other pure functions of (data, settings) a new visitor
 # paid for on every page view. Profiled on a warm server: a NEW session still
-# spent ~3s of CPU here (signal IC 1.6s, ES bootstrap 0.8s, map payload 0.7s),
+# spent ~3s of CPU on these (ES bootstrap 0.8s, map payload 0.7s, and a since-removed signal IC 1.6s),
 # and the process serves sessions one at a time, so 10 simultaneous visitors
-# queued ~35s for the headline. All three are deterministic (the bootstrap is
+# queued ~35s for the headline. Both are deterministic (the bootstrap is
 # seeded), so caching changes no number.
 @st.cache_data(ttl=3600, max_entries=32, show_spinner="Drawing the Risk Topology map…")
 def cached_map_payload(rets: pd.DataFrame, w: np.ndarray, names: tuple, short: bool) -> dict:
@@ -1587,11 +1567,6 @@ def cached_map_payload(rets: pd.DataFrame, w: np.ndarray, names: tuple, short: b
 @st.cache_data(ttl=3600, max_entries=64, show_spinner=False)
 def cached_es_ci(r: pd.Series) -> tuple:
     return es_confidence_interval(r)
-
-
-@st.cache_data(ttl=3600, max_entries=32, show_spinner=False)
-def cached_signal_ic(px: pd.DataFrame, horizon: int) -> pd.Series:
-    return daily_ic(momentum_signal(px), forward_returns(px, horizon=horizon))
 
 
 if bearish:
@@ -1726,7 +1701,7 @@ v_col, f_col = st.columns([5, 7], gap="large")
 with v_col:
     st.markdown(f"""
 <div class="verdict-box">
-  <div class="verdict-label">1-Year CVaR (95% confidence){_marks}</div>
+  <div class="verdict-label">Bad-year loss · 1-year CVaR (95%){_marks}</div>
   <div class="verdict-number">{mc['cvar']:.1%}</div>
   {_scale}
   <div class="verdict-sentence">{verdict}</div>
@@ -1905,7 +1880,15 @@ _book_part = _bk2.slider(
     round(DEFAULT_PARTICIPATION * 100), step=5, key="book_part",
     help="How much of a name's daily dollar volume you would be before your own "
          "trading moves the price. Risk desks use ~10-20%.") / 100
-_bk3, _bk4 = st.columns(2)
+# Overwhelm audit (2026-10-29): the book leads with its paragraph and the
+# names that carry it - the leaders (grit) and their anchors (the pairing).
+# The names with no role, a run of near-identical sentences, fold into one
+# drawer with the two finer settings - same widgets, same numbers.
+_bk_box = st.container()
+_bk_head = _bk_box.empty()
+_bk_lead = _bk_box.container()
+_bk_more = _bk_box.expander("The other names, line by line - and two finer settings")
+_bk3, _bk4 = _bk_more.columns(2)
 _bk_floor = _bk3.toggle(
     "Flyers must be in the grittiest half", value=False, key="book_floor",
     help="Off: a recovery record only has to EXIST, and momentum does the "
@@ -1922,8 +1905,8 @@ _bk_fb = _bk4.toggle(
 # One slot, whatever the basket: The Book writes one card per name, and
 # Streamlit keys elements by position, so a card count that changed with the
 # basket moved the tab strip below it and left the old map on screen, faded,
-# beside the new one (John, 2026-10-19).
-with st.container():
+# beside the new one (John, 2026-10-19). The cards live in the drawer above.
+with _bk_more:
     try:
         _bk_px = prices
         _bk_dv = load_dollar_volume(tuple(tickers)).reindex(
@@ -1953,7 +1936,7 @@ with st.container():
             load_grit(tuple(loaded)),
             load_grit(tuple(_bk_px.columns)) if _bk_anchors else None)
 
-        st.markdown(
+        _bk_head.markdown(
             f'<div style="background:#F1EDE5;border:1px solid #C4BDAE;'
             f'border-top:2px solid #9A7B4F;border-radius:12px;padding:18px 22px;'
             f'margin:6px 0 18px;font-family:Georgia,serif;font-size:17px;'
@@ -1986,7 +1969,8 @@ with st.container():
             _bind = (' &middot; <span style="color:#6A5030;">liquidity set this '
                      'size, not risk</span>'
                      if _d.liquidity_binding and _d.role is not Role.EXCLUDED else "")
-            st.markdown(
+            # leaders and anchors stay on the page; the rest is in the drawer
+            (_bk_lead if _d.role in (Role.FLYER, Role.CUSHION) else st).markdown(
                 f'<div style="display:flex;gap:14px;align-items:flex-start;'
                 f'background:{_bg};border-left:3px solid {_col};border-radius:8px;'
                 f'padding:12px 16px;margin-bottom:8px;">'
@@ -2009,33 +1993,23 @@ with st.container():
             "constraint doing real work, not a caption about it.")
     except Exception as _bk_exc:  # noqa: BLE001 - the page must never die on data
         # safe_err, not str(exc): the message can carry a server path (see safe_err).
-        st.info(
+        _bk_head.info(
             f"The Book needs price and volume history for this universe "
             f"({safe_err('the-book', _bk_exc)}). No placeholder book is shown.")
 
 st.markdown('<div id="analysis"></div>', unsafe_allow_html=True)
 panel_head("Risk & conviction", "The analysis - where the risk lives")
-(tab_3d, tab_breakdown, tab_watch, tab_balance, tab_grit,
+(tab_3d, tab_breakdown, tab_liquidity, tab_watch, tab_balance, tab_grit,
  tab_conviction) = st.tabs([
-    "Risk Topology", "Risk Breakdown", "Correlation Watch", "Balance",
-    "Grit Zone", "Crisis Conviction",
+    "Risk Topology", "Risk Breakdown", "Liquidity", "Correlation Watch",
+    "Balance", "Grit Zone", "Crisis Conviction",
 ])
-panel_head("Research & controls", "The workshop - signals, regimes, plumbing")
-# Declutter (Breez-inspired spacing pass): the workshop is for the reader who
-# wants the plumbing - fold the entire second tab strip behind one door so
-# the default scroll ends at the analysis, not a second wall of charts.
-# expanded=True since 2026-08-26: collapsed, this door hid Signal Lab and
-# Regime Atlas so completely that they read as missing features. The declutter
-# it was built for is still served by the tab strip inside - one row of tabs,
-# not a wall of charts.
-_workshop = st.expander("The workshop - signal research, regimes, liquidity, "
-                        "reference data, audit trail", expanded=True)
-with _workshop:
-    (tab_signals, tab_regimes, tab_liquidity, tab_secmaster, tab_dq,
-     tab_lineage) = st.tabs([
-        "Signal Lab", "Regime Atlas", "Liquidity", "Security Master",
-        "Data Quality", "Lineage & Audit",
-    ])
+# Overwhelm audit (2026-10-29): the research workshop (Signal Lab, Regime
+# Atlas, Security Master) asked no question a visitor has to decide on, and it
+# stood open by default. What remains here is the provenance a reader can
+# audit - folded, one click away, never in the way.
+with st.expander("Where the numbers come from - data checks and audit trail"):
+    tab_dq, tab_lineage = st.tabs(["Data Quality", "Lineage & Audit"])
 
 with tab_watch:
     # Correlation as a moving picture. A static matrix answers "are these
@@ -3192,33 +3166,6 @@ with tab_liquidity:
     except Exception as exc:  # noqa: BLE001
         st.caption(f"Liquidity data unavailable: {safe_err('liquidity-data-unavailable', exc)}")
 
-with tab_secmaster:
-    st.caption(
-        "A security master maps each ticker to stable identifiers and surfaces "
-        "the real corporate-action events (splits, dividends) already folded "
-        "into the adjusted-close prices used everywhere else in this engine - "
-        "nothing here changes a risk number, it makes the underlying events "
-        "auditable instead of silently absorbed."
-    )
-    try:
-        sm = load_security_master(tuple(loaded))
-        st.dataframe(sm, width="stretch")
-        missing_isin = sm[sm["isin"] == "unavailable"].index.tolist()
-        if missing_isin:
-            st.caption(
-                f"*ISIN unavailable on the free feed for: {', '.join(missing_isin)}. "
-                "SEDOL/CUSIP and full merger history need a paid reference-data "
-                "vendor (Bloomberg, Refinitiv) - not fabricated here.*"
-            )
-        no_ca = sm[sm["dividends_paid"].isna()].index.tolist()
-        if no_ca:
-            st.caption(
-                f"*Corporate actions could not be fetched for: {', '.join(no_ca)} "
-                "(blank = unknown, not zero). Retried within the hour.*"
-            )
-    except Exception as exc:  # noqa: BLE001
-        st.caption(f"Security master unavailable: {safe_err('security-master-unavailable', exc)}")
-
 with tab_dq:
     st.caption(
         "Every price pull runs through an automated validation gate before "
@@ -3313,205 +3260,6 @@ with tab_lineage:
         st.session_state.session_ref = keep
         st.success("Session settings cleared. Reloading with defaults.")
         st.rerun()
-
-# ---- Signal Lab: does a simple signal actually carry information? ----
-with tab_signals:
-    # Method greeting folds to one line so a cold viewer meets the three
-    # headline numbers first, not a paragraph of academic definition.
-    with st.expander("What the Information Coefficient measures"):
-        st.caption(
-            "The information coefficient (IC) is the daily cross-sectional Spearman "
-            "rank correlation between a signal's ranking of this universe and the "
-            "forward returns that actually followed. Demo signal: "
-            f"{MOMENTUM_LOOKBACK}-day momentum skipping the most recent "
-            f"{MOMENTUM_SKIP} days (to avoid short-term reversal), scored against "
-            f"{IC_HORIZON}-day forward returns - computed from the same live price "
-            "history as everything above."
-        )
-    try:
-        SIG_HORIZON = IC_HORIZON
-        ic = cached_signal_ic(prices, SIG_HORIZON)
-        summ = ic_summary(ic)
-
-        if summ["n_days"] < 30 or not np.isfinite(summ["t_stat"]):
-            st.caption(
-                "Not enough overlapping history in this universe to evaluate "
-                f"the signal ({summ['n_days']} usable days - need at least 30)."
-            )
-        else:
-            i1, i2, i3 = st.columns(3)
-            i1.metric("Mean daily IC", f"{summ['mean_ic']:+.3f}")
-            i2.metric("t-statistic", f"{summ['t_stat']:.2f}")
-            i3.metric("Hit rate (IC > 0)", f"{summ['hit_rate']:.0%}")
-
-            t = summ["t_stat"]
-            if t >= 3:
-                bar_txt = ("clears both the textbook t > 2 bar and the stricter "
-                           "t > 3 multiple-testing bar of Harvey, Liu & Zhu (2016)")
-            elif t >= 2:
-                bar_txt = ("clears the textbook t > 2 bar but NOT the t > 3 bar "
-                           "Harvey, Liu & Zhu (2016) argue for once you account "
-                           "for the thousands of signals the industry has already "
-                           "tested - by that stricter standard, unproven")
-            else:
-                bar_txt = ("clears neither the textbook t > 2 bar nor the "
-                           "stricter t > 3 multiple-testing bar of Harvey, Liu "
-                           "& Zhu (2016) - statistically indistinguishable from "
-                           "no skill on this sample")
-            st.caption(
-                f"In-sample, this momentum signal's mean IC of "
-                f"{summ['mean_ic']:+.3f} (t = {t:.2f}, scored over "
-                f"{summ['n_days']} days) **{bar_txt}**. One honest caveat on "
-                f"t itself: daily ICs against a {SIG_HORIZON}-day forward window overlap, "
-                f"so consecutive ICs are autocorrelated and this iid-style t "
-                f"is inflated (by up to roughly sqrt({SIG_HORIZON}) in the worst case) - "
-                f"treat the bars as optimistic, not exact."
-            )
-
-            roll = ic.rolling(63).mean()
-            ic_fig = go.Figure()
-            ic_fig.add_trace(go.Scatter(
-                x=ic.index, y=ic.values, mode="lines", name="daily IC",
-                line=dict(color="#CBBB94", width=1),
-                hovertemplate="%{x|%b %d, %Y}: IC %{y:+.2f}<extra>daily</extra>"))
-            ic_fig.add_trace(go.Scatter(
-                x=roll.index, y=roll.values, mode="lines", name="63-day mean",
-                line=dict(color=BRONZE_DK, width=2.2),
-                hovertemplate="%{x|%b %d, %Y}: %{y:+.3f}<extra>63-day mean</extra>"))
-            ic_fig.add_hline(y=0, line=dict(color=AXIS_LINE, width=1, dash="dot"))
-            ic_fig = _style_fig(ic_fig, height=280)
-            ic_fig.update_layout(
-                yaxis_title="Spearman IC", showlegend=True,
-                legend=dict(orientation="h", y=1.14, x=0, font=dict(size=11)))
-            st.plotly_chart(ic_fig, width="stretch", config=PLOTLY_CFG)
-            st.caption(
-                "Daily IC is noisy by nature - the 63-day rolling mean is the "
-                "signal's actual pulse. Above zero: the ranking carried "
-                "information that quarter; below: it was actively wrong."
-            )
-
-            panel_head("Grinold's fundamental law", "IR = IC × √breadth")
-            rebalances = TRADING_DAYS / SIG_HORIZON
-            raw_breadth = len(loaded) * rebalances
-            n_eff = effective_breadth(returns)
-            eff_breadth = n_eff * rebalances
-            g1, g2 = st.columns(2)
-            g1.metric(f"IR at raw breadth ({raw_breadth:.0f} bets/yr)",
-                      f"{fundamental_law_ir(summ['mean_ic'], raw_breadth):.2f}")
-            g2.metric(f"IR at effective breadth ({eff_breadth:.0f} bets/yr)",
-                      f"{fundamental_law_ir(summ['mean_ic'], eff_breadth):.2f}")
-            st.caption(
-                f"Raw breadth counts {len(loaded)} names × {rebalances:.1f} "
-                f"rebalances a year as independent bets, but average pairwise "
-                f"correlation collapses these {len(loaded)} names to about "
-                f"**{n_eff:.1f} independent bets** - correlated stocks are "
-                f"largely the same bet taken twice, so the honest IR is the "
-                f"smaller one."
-            )
-
-            st.caption(
-                "*Disclosures: everything here is IN-SAMPLE on the loaded "
-                "history - the signal is scored on the same data used to "
-                "evaluate it. Momentum is a demo signal, not a recommendation. "
-                "No transaction costs or market impact. Published signals decay "
-                "out of sample. Educational analysis, not investment advice.*"
-            )
-    except Exception as exc:  # noqa: BLE001
-        st.caption(f"Signal Lab unavailable: {safe_err('signal-lab-unavailable', exc)}")
-
-# ---- Regime Atlas: Wasserstein k-means on full return distributions ----
-with tab_regimes:
-    # Method + citation fold to one line so the current-regime verdict leads.
-    with st.expander("Method & source - Wasserstein regime clustering"):
-        st.caption(
-            "Reproduces Horvath, Issa & Muguruza (2021), *Clustering Market "
-            "Regimes using the Wasserstein Distance* (arXiv 2110.11848; Journal of "
-            "Computational Finance 28(1), 2024): every 20-day window of this "
-            "portfolio's daily returns becomes an empirical distribution, and "
-            "k-means clusters those whole distributions (via the 1-D optimal-"
-            "transport closed form) rather than summary features - so regimes "
-            "that share volatility but differ in tails or skew still separate."
-        )
-    try:
-        REG_WINDOW, REG_STEP = 20, 5
-        k_reg = st.selectbox("Number of regimes (k)", [2, 3, 4], index=1)
-        Q_reg, reg_ends = rolling_windows(port_returns,
-                                          window=REG_WINDOW, step=REG_STEP)
-        if Q_reg.shape[0] < max(30, k_reg * 5):
-            st.caption(
-                f"Not enough portfolio history to cluster regimes "
-                f"({Q_reg.shape[0]} windows - need at least {max(30, k_reg * 5)})."
-            )
-        else:
-            reg_labels = vol_ordered_labels(
-                Q_reg, wasserstein_kmeans(Q_reg, k=k_reg)[0])
-            reg_rows = regime_stats(Q_reg, reg_labels)
-            cur = reg_rows[int(reg_labels[-1])]
-            REGIME_WORDS = {2: ["calm", "turbulent"],
-                            3: ["calm", "transitional", "turbulent"],
-                            4: ["calm", "mild", "stressed", "turbulent"]}
-            word = REGIME_WORDS[k_reg][cur["label"]]
-            r1, r2, r3 = st.columns(3)
-            r1.metric("Current regime",
-                      f"{cur['label'] + 1} of {k_reg} - {word}")
-            r2.metric("Regime ann. vol", f"{cur['ann_vol']:.1%}")
-            r3.metric("Regime daily CVaR (95%)", f"{cur['cvar_95']:.2%}")
-
-            # regime timeline: one dot per window end-date, shaded by regime
-            REG_COLORS = ["#CBBB94", "#B8946A", "#8A6A3C", "#5A4526"][:k_reg]
-            reg_fig = go.Figure()
-            for j in range(k_reg):
-                mask = reg_labels == j
-                reg_fig.add_trace(go.Scatter(
-                    x=reg_ends[mask], y=reg_labels[mask] + 1, mode="markers",
-                    name=f"regime {j + 1} ({REGIME_WORDS[k_reg][j]})",
-                    marker=dict(color=REG_COLORS[j], size=7, symbol="square"),
-                    hovertemplate="%{x|%b %d, %Y}<extra>regime "
-                                  f"{j + 1}</extra>"))
-            reg_fig = _style_fig(reg_fig, height=220)
-            reg_fig.update_layout(
-                yaxis=dict(title="regime", dtick=1,
-                           range=[0.5, k_reg + 0.5]),
-                showlegend=True,
-                legend=dict(orientation="h", y=1.2, x=0, font=dict(size=11)))
-            st.plotly_chart(reg_fig, width="stretch", config=PLOTLY_CFG)
-
-            # Two dense grids fold together; the plain-English "sticky %"
-            # caption below stays visible as the actual takeaway.
-            P_reg = transition_matrix(reg_labels, k_reg)
-            with st.expander("Cluster detail - profiles & transition matrix"):
-                panel_head("Regime profiles", "Vol, skew, tail per cluster")
-                reg_table = pd.DataFrame(reg_rows).set_index("label")
-                reg_table.index = [f"regime {i + 1}" for i in reg_table.index]
-                reg_table.columns = ["windows", "ann. vol", "mean daily",
-                                     "skew", "CVaR 95%"]
-                st.dataframe(reg_table.style.format({
-                    "ann. vol": "{:.1%}", "mean daily": "{:+.4%}",
-                    "skew": "{:+.2f}", "CVaR 95%": "{:.2%}"}),
-                    width="stretch")
-
-                panel_head("Transition matrix", "Where the next window goes")
-                pt = pd.DataFrame(
-                    P_reg,
-                    index=[f"from {i + 1}" for i in range(k_reg)],
-                    columns=[f"to {i + 1}" for i in range(k_reg)])
-                st.dataframe(pt.style.format("{:.0%}"), width="stretch")
-            stay = float(np.mean(np.diag(P_reg)))
-            st.caption(
-                f"Transition matrix, estimated from consecutive windows: "
-                f"regimes are sticky - on average a {stay:.0%} chance the "
-                f"next window stays in the current regime (partly mechanical: "
-                f"consecutive {REG_WINDOW}-day windows share "
-                f"{REG_WINDOW - REG_STEP} days, which inflates the diagonal). "
-                f"Labels are "
-                f"in-sample statistical clusters over {Q_reg.shape[0]} "
-                f"windows ({REG_WINDOW}-day, step {REG_STEP}), ordered "
-                f"calm→turbulent by volatility; k is a user choice, not "
-                f"estimated. Educational reproduction of published research, "
-                f"not investment advice."
-            )
-    except Exception as exc:  # graceful, like the other tabs
-        st.caption(f"Regime Atlas unavailable for this universe: {safe_err('regime-atlas-unavailable-for-this-univer', exc)}")
 
 # ---- MCAP-style closing band: where-to-next rail + honest copyright bar ----
 st.markdown("""

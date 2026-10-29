@@ -642,6 +642,22 @@ risk-engine/
   | Conviction: hand-typed "the one honest exception is the dot-com peak" | changed | read from the live table |
   | Hero/footer crisis count, path count typed in | changed | read from `HISTORICAL_REGIMES`, `N_PATHS` |
 
+- ✅ **Risk Engine purge - the overwhelm audit** (2026-10-29). Snapshot commit
+  first ("Auto-Snapshot before Risk Engine Purge"). Non-UI: the glide script
+  left the deprecated `components.html` (a warning on every run) for a folded
+  `st.iframe`; a cold start with the feed down is tested to show guidance and
+  no number; the map is tested to draw no node or link the data did not
+  produce. UI, on John's rule - cut what the risk engine does not need, keep
+  what carries its identity (grit, the linkages between names): the research
+  workshop (Signal Lab, Regime Atlas, Security Master - and
+  `src/security_master.py` with its Yahoo calls) is gone; Liquidity joined the
+  main strip; Data Quality and Lineage fold into one "Where the numbers come
+  from" drawer; the Slice keeps its pairing sketch and equation and loses the
+  dense paragraph under them; The Book keeps its paragraph and its LEADS and
+  ANCHOR cards on the page and folds the no-role cards and two finer settings
+  into a drawer; the hero and headline speak plainly ("Bad-year loss",
+  "Simulated years"). The Risk Topology map is untouched.
+
 ## Non-negotiable constraints (the "why")
 
 1. **No LLM data, ever.** Every market number comes from Yahoo Finance via
@@ -701,8 +717,7 @@ two paid-vendor-dependent pieces remain explicit backlog items:
 1. **Phase VI deployment** to a live URL (the resume link - the whole point).
    Streamlit Community Cloud is the fastest free path; Procfile + requirements
    are already set for Railway/Render too.
-2. If a paid data vendor becomes available: SEDOL/CUSIP/merger history
-   (security master) or true tick-level streaming (Polygon.io/Alpaca/IEX) -
-   both are scoped and ready to wire in once an API key exists.
+2. If a paid data vendor becomes available: true tick-level streaming
+   (Polygon.io/Alpaca/IEX) is scoped and ready to wire in once an API key exists.
 3. Extend liquidity: per-asset liquidity-adjusted VaR, or a book-size slider
    preset that showcases a small/mid-cap basket where days-to-liquidate bites.

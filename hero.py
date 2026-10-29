@@ -12,20 +12,22 @@ Kept on one line per element - st.markdown truncates raw HTML at a blank line
 (Lessons #5).
 """
 
+from src.ingestion import MAX_UNIVERSE
 from src.scenarios import HISTORICAL_REGIMES
 
 HERO_TITLE_LINES = ("Meleona", "Portfolio Risk Engine")
-HERO_SUB = ("A hedge-fund-grade portfolio risk engine - VaR, CVaR, Monte Carlo stress "
-            "testing, and named factor exposures, computed live from real market data. "
-            "But every stock has drawdowns. What sets a name apart is what happens "
-            "after one - that's what we call <strong>grit</strong>.")
+HERO_SUB = ("See how much a portfolio could lose in a bad year, and what real market "
+            "crashes did to it - computed from live end-of-day prices. Every stock "
+            "falls sometimes. What sets a name apart is what happens after - that's "
+            "what we call <strong>grit</strong>.")
 HERO_CTA = "Explore what we do"
 # The tiles quote the engine, so they read its constants rather than restate
 # them: add a crisis to HISTORICAL_REGIMES and the hero, the footer and the
 # replay list all move together.
 N_PATHS = 10_000
-HERO_STATS = ((f"{N_PATHS:,}", "Simulated paths"), (str(len(HISTORICAL_REGIMES)), "Crises replayed"),
-              ("2", "Monte Carlo engines"), ("4", "Factor exposures"))
+# Each simulated path is one year (TRADING_DAYS), so a path is a simulated year.
+HERO_STATS = ((f"{N_PATHS:,}", "Simulated years"), (str(len(HISTORICAL_REGIMES)), "Real crises replayed"),
+              ("2", "Simulation models"), (str(MAX_UNIVERSE), "Assets per portfolio"))
 _CTA_ARROW = ('<span class="cta-arrow" aria-hidden="true"><svg viewBox="0 0 16 30" fill="none" '
               'xmlns="http://www.w3.org/2000/svg"><path class="shaft" d="M8 1 V22" '
               'stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path '

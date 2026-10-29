@@ -159,10 +159,6 @@ html { scroll-behavior: smooth; }
   letter-spacing: .2em; text-transform: uppercase; color: #5A5344; }
 .gplaque-read { font-family: Georgia, serif; font-size: 15.5px; color: #54504A;
   line-height: 1.6; max-width: 460px; }
-.gplaque-rule { border: none; height: 1px; margin: 16px 0 13px;
-  background: linear-gradient(90deg, rgba(154,123,79,.5), rgba(154,123,79,.06)); }
-.gplaque-note { font-family: Georgia, serif; font-size: 12.5px; color: #5D574D;
-  line-height: 1.65; }
 
 /* HERO - the great hall, now a two-column court: the pitch on the
    left, a 2x2 deck of engine-fact tiles on the right (reference:
