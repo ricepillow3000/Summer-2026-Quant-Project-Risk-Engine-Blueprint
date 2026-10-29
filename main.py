@@ -19,17 +19,7 @@ import os
 import numpy as np
 import pandas as pd
 import streamlit as st
-import streamlit.components.v1 as components
 from streamlit.runtime.app_session import AppSession
-
-# ponytail: components.html is deprecated - the pinned Streamlit 1.66.1 warns
-# on every run that it goes after 2026-06-01. st.iframe is the migration path:
-# it takes inline HTML with scripts and same-origin access (the Risk Topology map
-# already ships through it). The one call left here carries the glide script,
-# which moves in its own change. Until then the binding falls back to a no-op:
-# if a future Streamlit drops components.html we lose the CTA scroll glide, not
-# the whole app.
-_html = getattr(components, "html", lambda *a, **k: None)
 import plotly.graph_objects as go
 
 from src.ingestion import (
@@ -193,7 +183,16 @@ load_css()
 # sent the frame - Streamlit removed it, its listeners died, and the old
 # bind-once guard kept the next frame from binding until a reload. A new frame
 # now replaces the old listeners instead (no duplicates either way).
-_html("""
+#
+# Through st.iframe (a same-origin srcdoc frame), not the deprecated
+# components.html, which warned on every run. st.iframe refuses height 0, so
+# the frame is 1px inside a keyed container static/app.css folds to nothing.
+def _script_frame(script: str) -> None:
+    with st.container(key="glide"):
+        st.iframe(script, height=1)
+
+
+_script_frame("""
 <script>
 (function() {
   const P = window.parent.document;
@@ -528,7 +527,7 @@ _html("""
   P.__meleonaGlide = { onTab: onTab, onLink: onLink, onYield: onYield, onScroll: onScroll };
 })();
 </script>
-""", height=0)
+""")
 
 # ---- GLOSS LAYER (2026-07-09) ----
 # Institutional sheen over the matte editorial base: specular highlights,
@@ -695,7 +694,7 @@ def outcome_hist(total_returns, cvar: float):
     return _style_fig(fig, height=280)
 
 
-def hbar(series: pd.Series, color=BRONZE, pct: bool = False, title_x: str = "",
+def hbar(series: pd.Series, pct: bool = False, title_x: str = "",
          top_first: bool = False):
     """Themed horizontal bar chart. Bars deepen with magnitude - the biggest
     value wears the darkest bronze - so ranking reads at a glance.
@@ -2522,7 +2521,7 @@ with tab_breakdown:
         panel_head("Factor exposures", "What systematic bets is this book taking?")
         try:
             fx = factor_exposures(port_returns)
-            st.plotly_chart(hbar(pd.Series(fx["betas"]), color=BRONZE, title_x="beta"),
+            st.plotly_chart(hbar(pd.Series(fx["betas"]), title_x="beta"),
                             width="stretch", config=PLOTLY_CFG)
             st.caption(
                 f"Market beta {fx['betas']['Market']:+.2f} · "
@@ -2898,7 +2897,7 @@ with tab_grit:
             )
         else:
             st.plotly_chart(
-                hbar(gscores["grit_score"], color=BRONZE_DK,
+                hbar(gscores["grit_score"],
                      title_x="Grit Score (0–100)", top_first=True),
                 width="stretch", config=PLOTLY_CFG,
             )
@@ -3155,7 +3154,7 @@ with tab_liquidity:
 
         chart_days = dtl["days"].replace([np.inf, -np.inf], np.nan).dropna().sort_values()
         if not chart_days.empty:
-            st.plotly_chart(hbar(chart_days, color=BRONZE, title_x="days to liquidate"),
+            st.plotly_chart(hbar(chart_days, title_x="days to liquidate"),
                             width="stretch", config=PLOTLY_CFG)
             read_me(
                 "<b>Longer bar = harder to sell fast.</b> Each bar is how many "

@@ -4659,7 +4659,7 @@ def test_the_glide_is_bound_before_any_stop_and_rebinds():
     top = [n for n in tree.body if isinstance(n, ast.Expr) and isinstance(n.value, ast.Call)]
     def line_of(pred):
         return next(n.lineno for n in top if pred(n.value))
-    glide = line_of(lambda c: ast.unparse(c.func) == "_html" and c.args
+    glide = line_of(lambda c: ast.unparse(c.func) == "_script_frame" and c.args
                     and isinstance(c.args[0], ast.Constant) and "__meleonaGlide" in c.args[0].value)
     css = line_of(lambda c: ast.unparse(c.func) == "load_css")
     hero = line_of(lambda c: ast.unparse(c.func) == "st.markdown" and "hero_html" in ast.unparse(c))
@@ -4687,7 +4687,7 @@ def test_the_glide_respects_reduced_motion():
     root = pathlib.Path(__file__).resolve().parent.parent
     tree = ast.parse((root / "main.py").read_text(encoding="utf-8"))
     script = next(n.args[0].value for n in ast.walk(tree) if isinstance(n, ast.Call)
-                  and ast.unparse(n.func) == "_html" and n.args
+                  and ast.unparse(n.func) == "_script_frame" and n.args
                   and isinstance(n.args[0], ast.Constant) and "__meleonaGlide" in n.args[0].value)
     # go() is what every press ends in - at once, or once a section still
     # being written has mounted (onLink / waitFor) - so the question lives there.
@@ -4930,7 +4930,7 @@ def test_the_glide_follows_a_moving_target_and_yields_to_the_reader():
     src = (root / "main.py").read_text(encoding="utf-8")
     tree = ast.parse(src)
     script = next(n.args[0].value for n in ast.walk(tree) if isinstance(n, ast.Call)
-                  and ast.unparse(n.func) == "_html" and n.args
+                  and ast.unparse(n.func) == "_script_frame" and n.args
                   and isinstance(n.args[0], ast.Constant) and "__meleonaGlide" in n.args[0].value)
     frame = script[script.index("(function f(now)"):script.index("function onLink")]
     assert "targetY(scroller, el)" in frame and "Math.min(2," in frame, \
@@ -4958,7 +4958,7 @@ def test_a_press_waits_for_its_section_as_long_as_the_page_is_still_being_writte
     import ast
     src = (pathlib.Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
     script = next(n.args[0].value for n in ast.walk(ast.parse(src)) if isinstance(n, ast.Call)
-                  and ast.unparse(n.func) == "_html" and n.args
+                  and ast.unparse(n.func) == "_script_frame" and n.args
                   and isinstance(n.args[0], ast.Constant) and "__meleonaGlide" in n.args[0].value)
     wait = script[script.index("function waitFor"):script.index("function onLink")]
     assert "pageRunning()" in wait and '[data-testid="stStatusWidgetRunningIcon"]' in script, \
@@ -4987,7 +4987,7 @@ def test_only_a_decaying_flick_is_forgiven_and_every_exit_restores_the_page():
     root = pathlib.Path(__file__).resolve().parent.parent
     src = (root / "main.py").read_text(encoding="utf-8")
     script = next(n.args[0].value for n in ast.walk(ast.parse(src)) if isinstance(n, ast.Call)
-                  and ast.unparse(n.func) == "_html" and n.args
+                  and ast.unparse(n.func) == "_script_frame" and n.args
                   and isinstance(n.args[0], ast.Constant) and "__meleonaGlide" in n.args[0].value)
     assert "function onScroll" in script, "a scrollbar drag (scroll events only) never reaches the yield"
     yield_fn = script[script.index("function onYield"):script.index("function onScroll")]
@@ -5041,7 +5041,7 @@ def test_a_button_pressed_while_the_page_is_still_loading_still_glides_all_the_w
     src = (root / "main.py").read_text(encoding="utf-8")
     tree = ast.parse(src)
     script = next(n.args[0].value for n in ast.walk(tree) if isinstance(n, ast.Call)
-                  and ast.unparse(n.func) == "_html" and n.args
+                  and ast.unparse(n.func) == "_script_frame" and n.args
                   and isinstance(n.args[0], ast.Constant) and "__meleonaGlide" in n.args[0].value)
     link = script[script.index("function onLink"):]
     assert "if (!el) return;" not in link, \
@@ -5568,6 +5568,75 @@ def test_the_download_asks_again_only_for_a_dropped_name_and_only_with_budget():
         close, _ = ing._download_close_volume(["AAA", "BBB"], "2y")
         assert fy.downloads == [["AAA", "BBB"]], f"a retry spent a spent budget: {fy.downloads}"
         assert close["BBB"].isna().all()
+
+
+def test_the_app_calls_nothing_streamlit_has_deprecated():
+    """Pillar 4, zero warnings: components.html printed "Please replace
+    st.components.v1.html with st.iframe" on every run of every session. The
+    glide script now ships through st.iframe in a container app.css folds to
+    zero height, so the layout above the hero is what components.html drew."""
+    import ast
+    root = pathlib.Path(__file__).resolve().parent.parent
+    tree = ast.parse((root / "main.py").read_text(encoding="utf-8"))
+    names = {ast.unparse(n) for n in ast.walk(tree) if isinstance(n, (ast.Attribute, ast.alias))}
+    assert not any("components" in n for n in names), "main.py still reaches for st.components"
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    assert ".st-key-glide" in css and "height: 0 !important" in css, \
+        "the glide frame must fold to zero height, or the hero moves down"
+
+
+def test_a_cold_start_with_the_feed_down_shows_guidance_not_a_crash():
+    """Phase 3 cold start: a first visitor on an empty cache with Yahoo
+    unreachable. The page must not raise, must say what to do in the visitor's
+    words, and must show no number at all - no verdict, no map, no placeholder."""
+    from src.ingestion import NO_DATA_MSG, NoDataError
+
+    def feed_down(*a, **k):
+        raise NoDataError(NO_DATA_MSG)
+
+    at, restore = _offline_app(market=feed_down, dollar_volume=feed_down)
+    try:
+        assert [e.value for e in at.error] == [NO_DATA_MSG], [e.value for e in at.error]
+        page = " ".join(m.value for m in at.markdown)
+        assert '<div class="verdict-box">' not in page, "a verdict rendered with no data behind it"
+        frames = [f.proto.srcdoc for f in at.get("iframe")]
+        assert all("__meleonaGlide" in f for f in frames), "the map rendered with no data behind it"
+        assert any("Crisis record unavailable" in c.value for c in at.caption)
+    finally:
+        restore()
+
+
+def test_the_map_draws_no_node_or_link_the_data_did_not_produce():
+    """Phase 3, zero fake nodes. Every dot on the Risk Topology map is a name
+    the visitor holds (labelled Universe) or a disclosed defensive ETF from
+    DEFENSIVE_ANCHOR_TICKERS (labelled Anchor pool) - nothing else, and each
+    held name is drawn. Every link joins two drawn dots, starts at the book's
+    most volatile holding, and every number on both is finite. Long and short."""
+    import math
+    import src.topology as tp
+    from src.pairing import DEFENSIVE_ANCHOR_TICKERS
+
+    held = ["AAPL", "MSFT", "NVDA", "XOM"]
+    px = _offline_market_prices(held + DEFENSIVE_ANCHOR_TICKERS + ["SPY"], "2y")
+    rets = px[held].pct_change().dropna()
+    w = pd.Series(0.25, index=held)
+    orig = tp.fetch_prices
+    try:
+        tp.fetch_prices = lambda tickers, *a, **k: px[list(tickers)]
+        for short in (False, True):
+            pl = tp.build_map_payload(rets, w, held, short)
+            drawn = {a["t"]: a["f"] for a in pl["assets"]}
+            assert {t for t, f in drawn.items() if f == "Universe"} == set(held), drawn
+            assert {t for t, f in drawn.items() if f == "Anchor pool"} <= set(DEFENSIVE_ANCHOR_TICKERS), drawn
+            assert all(math.isfinite(a["b"]) and math.isfinite(a["v"]) for a in pl["assets"])
+            flyer = str((rets.std()).idxmax())
+            assert pl["pairs"], "the data supports linkages here; none were drawn"
+            for p in pl["pairs"]:
+                assert p["fl"] == flyer and p["fl"] in drawn and p["an"] in drawn, p
+                assert all(math.isfinite(v) for v in [p["rho"], p["wFlyer"], *p["real"].values()]), p
+            assert pl["live"] and "Yahoo daily closes" in pl["provenance"]
+    finally:
+        tp.fetch_prices = orig
 
 if __name__ == "__main__":
     import sys

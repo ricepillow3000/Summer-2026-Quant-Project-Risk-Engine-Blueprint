@@ -367,7 +367,11 @@ html { scroll-behavior: smooth; }
 [data-testid="stPlotlyChart"], [data-testid="stIFrame"] {
     animation: panel-settle .5s cubic-bezier(.16,1,.3,1) both;
     animation-delay: .06s; }
-/* The Risk Topology map (the app's only st.iframe) on a phone: inside the
+/* The glide script's frame (main.py _script_frame): st.iframe will not take
+   height 0, so its 1px frame is folded to 0 here - what components.html drew. */
+div:has(> .st-key-glide), .st-key-glide, .st-key-glide div.stElementContainer, .st-key-glide iframe {
+    height: 0 !important; min-height: 0 !important; overflow: hidden !important; }
+/* The Risk Topology map (the app's only visible st.iframe) on a phone: inside the
    56px page gutters it got 278px of a 390px iPhone and was cut off. It spans
    the screen instead, 8px from each edge; the page's text keeps its gutters. */
 @media (max-width: 640px) {

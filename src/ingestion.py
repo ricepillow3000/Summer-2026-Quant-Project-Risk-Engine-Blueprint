@@ -35,10 +35,8 @@ from src.netguard import BudgetExhausted, check_budget, guarded_session
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 
-# Default universe (used when none is supplied). Kept as TICKERS for backwards
-# compatibility with the analytics/risk modules' __main__ smoke tests.
+# Default universe (used when none is supplied).
 DEFAULT_UNIVERSE = ["QQQ", "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA"]
-TICKERS = DEFAULT_UNIVERSE
 
 # Minimum history we consider statistically usable for risk estimates.
 MIN_ROWS = 60
