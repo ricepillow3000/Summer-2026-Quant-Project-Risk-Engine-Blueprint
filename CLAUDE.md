@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 John's vault at `C:\Users\john4\Claude\Vault` is the cross-session memory for this project. **At session start:** read `90-System\Memory-Bridge.md` (~1 page, current state of everything) and the Active table in `90-System\Lessons.md` (binding rules from past collaboration) - then work; don't re-explore for context those already provide. **At session end / after milestones:** update both, and commit+push the vault (it is its own private git repo, separate from this one). Vault notes summarize; this repo's `CLAUDE.md`/`PROGRESS.md` stay authoritative for repo detail. Never copy vault content into this public repo.
 
+**Every prompt runs the vault's `90-System/Pod-Workflow.md`** (owner rule, 2026-10-28): read it at session start with the Memory-Bridge. The main session is the Orchestrator of one pod; a read-only Researcher subagent and a Builder subagent do the reading and building; a failed check is written as anatomy / unmet criteria / resolution path; 2 fix rounds, then John. This repo's gates below (`python -m tools.check`, the Live audit) still decide when work is done.
+
 ## What this is
 
 **Meleona** is an institutional-grade **Portfolio Optimization & Risk Engine** with a live Streamlit dashboard, built to recruiter-facing / hedge-fund-interview standards (2nd-year Data Analytics student portfolio project, targeting a public live link on a resume, ship target Aug 23, 2026).
