@@ -41,8 +41,11 @@ def raw_chart(symbol: str) -> pd.Series:
     url = (f"https://query2.finance.yahoo.com/v8/finance/chart/{symbol}"
            "?range=3mo&interval=1d&events=div%2Csplit")
     res = guarded_session().get(url, timeout=30).json()["chart"]["result"][0]
-    off = res["meta"].get("gmtoffset", 0)
-    days = pd.to_datetime(np.array(res["timestamp"]) + off, unit="s").normalize()
+    # Each bar's day in the exchange's own time zone, summer time included. The meta's gmtoffset is
+    # only today's offset: added to every bar, it moved every London summer bar (23:00 UTC = midnight
+    # BST) back a day once the clocks went back (live audit run 86, 2026-10-28: EURUSD=X 0.8% "gap").
+    tz = res["meta"].get("exchangeTimezoneName") or "UTC"
+    days = pd.to_datetime(np.array(res["timestamp"]), unit="s", utc=True).tz_convert(tz).tz_localize(None).normalize()
     adj = res["indicators"].get("adjclose", [{}])[0].get("adjclose") \
         or res["indicators"]["quote"][0]["close"]
     raw = pd.Series(adj, index=days, dtype=float).dropna()
