@@ -16,4 +16,4 @@ jobs:
         with:
           python-version: "3.13"
       - run: python -m pip install -q -r requirements.txt
-      - run: python -m tools.live_provenance 2>&1 | grep -v "^PASS" || true
+      - run: python -m pip list 2>/dev/null | grep -iE "^(pandas|numpy|yfinance|scipy) " ; python -W ignore -m tools.live_provenance 2>&1 | grep -E "^FAIL|provenance checks" || true
