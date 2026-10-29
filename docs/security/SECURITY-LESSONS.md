@@ -59,14 +59,14 @@ the same PR as the fix.
 
 ## In this repo: where admin power actually lives
 
-Meleona is public and anonymous: **no accounts, no roles, no login, no admin panel, no LLM, no secrets.** Every
+Meliona is public and anonymous: **no accounts, no roles, no login, no admin panel, no LLM, no secrets.** Every
 visitor gets the same page, and nothing a visitor types or sends selects a different one. The only operator powers
 sit outside the app, in accounts John holds:
 
 | Power | Where | Who can use it |
 |---|---|---|
 | Change what is deployed | GitHub push to `main` (Railway deploys `main`) | Anyone with write access to the repo: keep it to John, with 2FA and branch protection on `main` |
-| Kill switch, beta channel, support address | Railway environment variables (`MELEONA_MAINTENANCE`, `MELEONA_CHANNEL`, `MELEONA_SUPPORT_EMAIL`, `MELEONA_SITE_URL`) | John's Railway login |
+| Kill switch, beta channel, support address | Railway environment variables (`MELIONA_MAINTENANCE`, `MELIONA_CHANNEL`, `MELIONA_SUPPORT_EMAIL`, `MELIONA_SITE_URL`) | John's Railway login |
 | Warm or clear caches | A shell on the Railway service (`python -m tools.warm_cache`), or a restart | John's Railway login |
 
 So "only my laptop and desktop are admin" is enforced by **account security**, not by the app: GitHub and Railway

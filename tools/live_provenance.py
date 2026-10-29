@@ -102,7 +102,7 @@ def main() -> int:
 
     irx = fetch_risk_free_rate(use_cache=False)
     req = urllib.request.Request("https://fred.stlouisfed.org/graph/fredgraph.csv?id=DTB3",
-                                 headers={"User-Agent": "meleona-audit"})
+                                 headers={"User-Agent": "meliona-audit"})
     # Second source: FRED's DTB3, else the US Treasury's own daily bill rates
     # (the original publisher FRED copies; FRED times out from some runners).
     ref = None
@@ -116,7 +116,7 @@ def main() -> int:
             "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/"
             f"daily-treasury-rates.csv/{year}/all?type=daily_treasury_bill_rates"
             f"&field_tdr_date_value={year}&page&_format=csv",
-            headers={"User-Agent": "meleona-audit"}), timeout=60))
+            headers={"User-Agent": "meliona-audit"}), timeout=60))
         col = next(c for c in tsy.columns if "13" in c and "BANK DISCOUNT" in c.upper())
         tsy["Date"] = pd.to_datetime(tsy["Date"])
         row = tsy.sort_values("Date").dropna(subset=[col]).iloc[-1]

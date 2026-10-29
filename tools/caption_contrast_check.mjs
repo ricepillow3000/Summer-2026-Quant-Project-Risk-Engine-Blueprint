@@ -19,7 +19,7 @@ const b = await chromium.launch(process.env.CHROMIUM ? { executablePath: process
 const page = await (await b.newContext({ viewport: { width: W, height: 900 },
   ...(W < 600 ? { isMobile: true, hasTouch: true, deviceScaleFactor: 2 } : {}) })).newPage();
 await page.goto(url);
-await page.waitForSelector('.meleona-footer', { timeout: 300000 });
+await page.waitForSelector('.meliona-footer', { timeout: 300000 });
 await page.waitForTimeout(2500);
 await page.evaluate(() => { document.querySelector('[data-testid="stMain"]').style.scrollBehavior = 'auto'; });
 

@@ -1,4 +1,4 @@
-# Meleona - Session Handoff
+# Meliona - Session Handoff
 
 Paste this into a new chat session to bring it up to speed instantly.
 
@@ -6,7 +6,7 @@ Paste this into a new chat session to bring it up to speed instantly.
 
 ## What this project is
 
-**Meleona** is an institutional-grade **Portfolio Optimization & Risk Engine**
+**Meliona** is an institutional-grade **Portfolio Optimization & Risk Engine**
 with a live Streamlit dashboard, built by a 2nd-year Data Analytics student to
 be recruiter-facing (the goal is a public live link on a resume). The name
 merges "Durand" (Old French, "enduring/built to withstand hard times") with
@@ -44,7 +44,7 @@ risk-engine/
 │   ├── grit.py          # Grit Zone: drawdown recovery, rolling consistency, regime resilience
 │   ├── security_master.py  # ISIN + corporate actions (dividends/splits) via yfinance
 │   └── data_quality.py  # automated schema/sanity validation gate on every price pull
-├── assets/logo.svg      # lion + scale + triangle crest (bronze, "Pride · Integrity")
+├── assets/logo.svg      # crest: hexagon cut by an X (2 triangles, 3 rhombuses) on a ringed disc
 ├── .streamlit/config.toml  # beige/bronze institutional theme
 ├── requirements.txt · Procfile · README.md · .gitignore
 ```
@@ -77,7 +77,7 @@ risk-engine/
   Percentile-ranked RELATIVE to the chosen universe (no absolute "grit" scale
   claimed). 7 deterministic unit tests; verified against live data (history
   length and regimes-survived per ticker line up with real IPO dates).
-- ✅ **Rebrand to Meleona** - page title, header wordmark, logo alt text, and
+- ✅ **Rebrand to Meliona** - page title, header wordmark, logo alt text, and
   docs updated from "Portfolio Risk Engine"
 - ✅ **Presentation-style redesign** - the app used to open as one long stack
   of controls plus five nested expanders (a wall of information before you'd
@@ -226,7 +226,7 @@ risk-engine/
   outbound email. Built: crash wire (`src/observability.py`: rotating local
   log, per-session reference in the footer, `log_incident()`; no third-party
   SDK, because one would contradict the privacy note it sits beside), kill
-  switch (`MELEONA_MAINTENANCE=1` serves a maintenance page and stops before
+  switch (`MELIONA_MAINTENANCE=1` serves a maintenance page and stops before
   any data call), outbound spend cap (`netguard.MAX_REQUESTS_PER_DAY`, charged
   at the single chokepoint, degrading to cached data on exhaustion instead of
   hammering Yahoo), a "Your data" privacy panel with a session-clear control
@@ -245,12 +245,12 @@ risk-engine/
 - ✅ **Support mailbox + beta channel + restore drill** (2026-08-26) - support
   moved off the personal address to the project mailbox
   `meleona.support@gmail.com`, forwarded to the personal inbox, overridable per
-  deployment with `MELEONA_SUPPORT_EMAIL`; a regression test now FAILS if the
+  deployment with `MELIONA_SUPPORT_EMAIL`; a regression test now FAILS if the
   personal address reappears in the app or in any public document. Creating the
   mailbox and turning on forwarding is a manual, phone-verified step, so it is
   written up in `RUNBOOK.md` §6b and is a blocking item in
   `LAUNCH_CHECKLIST.md`. Also shipped from the remaining checklist items:
-  `MELEONA_CHANNEL=beta` puts a beta notice plus a one-click "report this
+  `MELIONA_CHANNEL=beta` puts a beta notice plus a one-click "report this
   session" mailto (session reference already in the subject) on pre-release
   deploys only, and `tools/warm_cache.py` warms every preset after a deploy -
   `--drill` forces real fetches and prints the cold-refill time, which is the
@@ -642,6 +642,52 @@ risk-engine/
   | Conviction: hand-typed "the one honest exception is the dot-com peak" | changed | read from the live table |
   | Hero/footer crisis count, path count typed in | changed | read from `HISTORICAL_REGIMES`, `N_PATHS` |
 
+- ✅ **New crest, and the name spelled Meliona (2026-10-28)** - John's logo
+  mandate, from his two sketches with the red-X'd outer triangles removed: a
+  charcoal disc, three rings fading outward, and a regular hexagon cut by an X
+  into two inward-pointing equilateral triangles and top/bottom rhombuses, plus
+  a keystone rhombus where the X crosses. Nothing touches (checked in code).
+  `tools/brand_icons.mjs` renders the favicon and touch icon from
+  `assets/logo.svg`; the share image got the crest and the new spelling in
+  place. Then every "Meleona" became "Meliona" (words, CSS classes, glide
+  globals, log file, build tag, setting names). Two deliberate leftovers: the
+  mailbox `meleona.support@gmail.com` (a Gmail address cannot be renamed -
+  RUNBOOK §6b says how to move), and `observability.host_setting()` still
+  reads `MELEONA_*` so a variable already set on Railway keeps working.
+- ✅ **The crest, beige and unframed, ripples on hover (2026-10-29)** - John
+  chose the beige pieces, asked for the glossy square plate to go, for the
+  rings to ripple inside to outside while hovered and stop when the pointer
+  leaves, and for the mark to be perfectly symmetric. The plate (border, tint,
+  shadow, padding) is gone and the crest fills the same box, so nothing below
+  moves (62 -> 104px on a 1440x900 laptop). The SVG is drawn about (0,0): every
+  mirror pair is the same number with the sign flipped. On hover each ring
+  swells 3.5% and fades, 0.3s behind the one inside it; on leave the glide
+  script lets each finish its pass and stop at rest (re-entering mid-settle
+  wakes all three), off under reduced motion. Measured: rings end at exactly
+  scale 1 within ~1s of leaving; rendered crest centred to 0.015px alone, and
+  on a 1x laptop it matches its mirror image but for 12 edge pixels.
+  `test_the_crest_is_symmetric_and_its_pieces_never_touch` (mutation-tested:
+  a 0.001 shift, touching rings, touching pieces, the plate returning).
+- ✅ **No lion left, and a new link preview (2026-10-29)** - the last two pieces
+  of the old crest were faint engravings: the balance scale behind the Grit Zone
+  and the lion's tail by the fan chart. They are now the new crest's hexagon in
+  outline and a quarter of its rings. The browser tab gets the new crest both
+  ways (the page's icon link and the icon Streamlit sets at run time). The link
+  preview (`public/og-image.png`) is rebuilt from `tools/og_image.html`, rendered
+  by `tools/brand_icons.mjs`: the crest, the name, one sentence, and a ruled
+  receipt of the 15 Oct 2026 live audit (727 of 728 checks; prices identical to
+  Yahoo's raw feed; T-bill 4.085% vs Treasury 4.100%; SPY/IVV 0.9995), every
+  figure copied from `audit/live_audit_2026-10-15T025826Z.md` and dated on the
+  image. No fan chart, no stat tiles, no eyebrow caps, no italic subtitle.
+
+- ✅ **showcase/: the engine in ~330 lines (2026-10-29)** - John wanted a short,
+  blunt copy of the Python for hiring managers, with plain Gen Z comments, kept
+  apart from the app (his call: the live site and the interview-depth notes in
+  `src/` stay as they are). `data, risk, portfolio, stress, run` cover prices,
+  VaR/CVaR, the walk-forward Kupiec backtest, both Monte Carlo engines, risk
+  parity, vol target, days to exit, the 10 crash replays and the Grit score.
+  `showcase/test_showcase.py` proves every function equals `src/` (to 1e-12,
+  same seeds) and runs in `tools.check`, so the copy cannot drift.
 - ✅ **Risk Engine purge - the overwhelm audit** (2026-10-29). Snapshot commit
   first ("Auto-Snapshot before Risk Engine Purge"). Non-UI: the glide script
   left the deprecated `components.html` (a warning on every run) for a folded

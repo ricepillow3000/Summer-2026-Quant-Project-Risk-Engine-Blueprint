@@ -46,7 +46,9 @@ jobs:
           python -m pip_audit -r requirements.txt
       - name: 1. Provenance - engine prices vs raw Yahoo API, ^IRX vs the Treasury
         if: always()
-        run: python -m tools.live_provenance
+        run: |
+          set -o pipefail
+          python -m tools.live_provenance | tee provenance.log
       - name: 3. Batch audit - every preset on live data, each check cites its source
         if: always()
         run: python -m tests.batch_audit
@@ -137,11 +139,20 @@ jobs:
           export SCAN_SCENARIOS="$(python -c 'import json; from src.scenarios import HISTORICAL_REGIMES as H; print(json.dumps(list(H)))')"
           node tools/deep_scan.mjs "$SITE_URL" scan/deployed
 
+      # Provenance runs first, so its verdicts sit thousands of lines above the
+      # end of the log - past the 5,000-line tail the logs API returns (on
+      # 2026-10-28 it went red on every branch and its FAIL lines could not be
+      # read). Repeat them where the log ends.
+      - name: 12. Provenance verdicts, repeated at the end of the log
+        if: always()
+        run: grep -E "^FAIL|provenance checks pass" provenance.log || echo "provenance did not run"
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: live-audit
           path: |
+            provenance.log
             audit/batch_audit_*
             site-shots/
             walk/

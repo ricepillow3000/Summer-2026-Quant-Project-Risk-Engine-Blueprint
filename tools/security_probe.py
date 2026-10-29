@@ -32,7 +32,7 @@ def check(name: str, ok: bool, detail: str = "") -> None:
 
 
 def get(url: str, headers: dict | None = None) -> tuple[int, dict, bytes]:
-    req = urllib.request.Request(url, headers={"User-Agent": "meleona-security-probe",
+    req = urllib.request.Request(url, headers={"User-Agent": "meliona-security-probe",
                                                **(headers or {})})
     try:
         with urllib.request.urlopen(req, timeout=30) as r:  # nosec B310 - probe target
@@ -49,7 +49,7 @@ def main() -> int:
     # unknown paths with its own index.html, so compare against the home page.
     private = {
         "/.env": b"=", "/.git/config": b"[core]", "/.git/HEAD": b"ref:",
-        "/logs/meleona.log": b"session", "/main.py": b"import streamlit",
+        "/logs/meliona.log": b"session", "/main.py": b"import streamlit",
         "/src/ingestion.py": b"def fetch_prices", "/requirements.txt": b"streamlit",
         "/.streamlit/secrets.toml": b"=", "/.streamlit/config.toml": b"[server]",
         "/data/": b"parquet", "/Procfile": b"web:",

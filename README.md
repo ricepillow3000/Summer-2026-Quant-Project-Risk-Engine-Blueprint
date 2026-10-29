@@ -1,4 +1,4 @@
-# Meleona - Institutional-Grade Portfolio Optimization & Risk Engine
+# Meliona - Institutional-Grade Portfolio Optimization & Risk Engine
 
 A quantitative risk dashboard that lets anyone load a portfolio - equities, ETFs, FX, or futures - and stress-test it against thousands of simulated and historical market paths, live. Built by a 2nd-year Data Analytics student to recruiter-facing, quant-interview standards.
 
@@ -64,7 +64,7 @@ Deterministic math-invariant tests (CVaR ≥ VaR, risk parity equalizes contribu
 ```
 risk-engine/
 ├── .streamlit/config.toml   # Institutional beige/bronze theme
-├── assets/logo.svg          # Lion-crest wordmark
+├── assets/logo.svg          # Crest: hexagon cut by an X, on a ringed charcoal disc
 ├── data/                    # Cached prices + provenance (gitignored)
 ├── src/
 │   ├── ingestion.py         # DataEngine: fetch, cache, provenance, dollar volume

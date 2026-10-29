@@ -15,7 +15,7 @@ Kept on one line per element - st.markdown truncates raw HTML at a blank line
 from src.ingestion import MAX_UNIVERSE
 from src.scenarios import HISTORICAL_REGIMES
 
-HERO_TITLE_LINES = ("Meleona", "Portfolio Risk Engine")
+HERO_TITLE_LINES = ("Meliona", "Portfolio Risk Engine")
 HERO_SUB = ("See how much a portfolio could lose in a bad year, and what real market "
             "crashes did to it - computed from live end-of-day prices. Every stock "
             "falls sometimes. What sets a name apart is what happens after - that's "
@@ -61,4 +61,4 @@ def hero_html(skeleton: bool = False, crest: str = "") -> str:
 def boot_skeleton_html() -> str:
     """The veil index.html paints first; the real hero lifts it (main.py)."""
     return ('<div id="boot-skel" aria-hidden="true">' + hero_html(skeleton=True)
-            + '<div class="sk-band"></div><div class="sk-load">Loading Meleona</div></div>')
+            + '<div class="sk-band"></div><div class="sk-load">Loading Meliona</div></div>')

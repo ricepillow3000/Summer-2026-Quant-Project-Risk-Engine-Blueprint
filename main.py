@@ -1,5 +1,5 @@
 """
-Meleona - Streamlit entry point.
+Meliona - Streamlit entry point.
 
 Design philosophy:
 A risk desk doesn't hand a PM eight charts and say "figure it out." It leads
@@ -14,7 +14,6 @@ so the engine speaks to any audience - not just one watchlist.
 import base64
 from pathlib import Path
 import html
-import os
 
 import numpy as np
 import pandas as pd
@@ -47,7 +46,7 @@ from src.pairing import (anchor_rank, backtest_pair, crisis_cushion,
                          tail_gap, DEFENSIVE_ANCHOR_TICKERS)
 from src.covariance import estimate_covariance, RISKMETRICS_LAMBDA, TRADING_DAYS
 from src.topology import anchor_frame, build_map_payload, war_room_html
-from src.observability import (log_incident, log_session_start,
+from src.observability import (host_setting, log_incident, log_session_start,
                                new_session_ref, setup_logging)
 from src.eigenrisk import eigen_factors, marcenko_pastur_bounds, pc1_exposure
 from src.scenarios import HISTORICAL_REGIMES, replay_returns
@@ -63,7 +62,7 @@ from src.conviction import (
 
 # Title and icon match the <head> tools/public_files.py serves to crawlers and
 # link previews, so a shared link and the browser tab say the same thing.
-st.set_page_config(page_title="Meleona - Portfolio Risk Engine",
+st.set_page_config(page_title="Meliona - Portfolio Risk Engine",
                    page_icon=str(Path(__file__).parent / "public" / "favicon.png"),
                    layout="wide")
 
@@ -90,21 +89,21 @@ AppSession._handle_clear_cache_request = _ignore_clear_cache_request
 # here. A project mailbox rather than a personal one: it is published on a
 # public page, so it will attract spam, and a dedicated address can be
 # forwarded, filtered or handed on without touching a personal inbox.
-# MELEONA_SUPPORT_EMAIL overrides it per environment without a redeploy.
-SUPPORT_EMAIL = os.getenv("MELEONA_SUPPORT_EMAIL", "meleona.support@gmail.com")
+# MELIONA_SUPPORT_EMAIL overrides it per environment without a redeploy.
+SUPPORT_EMAIL = host_setting("SUPPORT_EMAIL", "meleona.support@gmail.com")
 
 # Release channel, for the phased rollout in RUNBOOK.md section 5. Setting
-# MELEONA_CHANNEL=beta on the preview/beta deploy marks the page as a beta and
+# MELIONA_CHANNEL=beta on the preview/beta deploy marks the page as a beta and
 # invites feedback; production leaves it unset and shows nothing.
-RELEASE_CHANNEL = os.getenv("MELEONA_CHANNEL", "").strip().lower()
+RELEASE_CHANNEL = host_setting("CHANNEL").strip().lower()
 
-# Kill switch. Set MELEONA_MAINTENANCE=1 in the host's environment and the next
+# Kill switch. Set MELIONA_MAINTENANCE=1 in the host's environment and the next
 # page load serves this notice instead of the engine - no redeploy, no code
-# change, and it takes effect for everyone at once. MELEONA_MAINTENANCE_NOTE
+# change, and it takes effect for everyone at once. MELIONA_MAINTENANCE_NOTE
 # optionally carries a one-line reason for visitors.
-if os.getenv("MELEONA_MAINTENANCE", "").strip().lower() in {"1", "true", "yes", "on"}:
-    st.title("Meleona is briefly offline")
-    st.write(os.getenv("MELEONA_MAINTENANCE_NOTE")
+if host_setting("MAINTENANCE").strip().lower() in {"1", "true", "yes", "on"}:
+    st.title("Meliona is briefly offline")
+    st.write(host_setting("MAINTENANCE_NOTE")
              or "The engine is paused for maintenance. Please check back shortly.")
     st.caption(f"Questions: {SUPPORT_EMAIL}")
     st.stop()
@@ -137,7 +136,7 @@ def safe_err(where: str, exc: BaseException) -> str:
 # One prefilled mailto, reused by the beta banner and the privacy panel: the
 # subject already carries the session reference, so a report arrives with the
 # one thing that makes it diagnosable (see RUNBOOK.md section 3).
-FEEDBACK_LINK = (f"mailto:{SUPPORT_EMAIL}?subject=Meleona%20feedback%20"
+FEEDBACK_LINK = (f"mailto:{SUPPORT_EMAIL}?subject=Meliona%20feedback%20"
                  f"%E2%80%93%20session%20{SESSION_REF}")
 
 if RELEASE_CHANNEL == "beta":
@@ -186,7 +185,7 @@ _script_frame("""
 <script>
 (function() {
   const P = window.parent.document;
-  const prev = P.__meleonaGlide;         // a frame from an earlier run, maybe dead
+  const prev = P.__melionaGlide;         // a frame from an earlier run, maybe dead
   if (prev && prev.onTab) {
     P.removeEventListener('click', prev.onTab, true);
     P.removeEventListener('click', prev.onLink, true);
@@ -277,16 +276,16 @@ _script_frame("""
     scroller.style.scrollBehavior = '';
     scroller.style.overflowAnchor = '';
     quietMap(false);
-    P.__meleonaStop = null;
-    P.__meleonaScroller = null;
-    P.__meleonaDir = 0;
+    P.__melionaStop = null;
+    P.__melionaScroller = null;
+    P.__melionaDir = 0;
   }
   /* Every way a flight or a wait ends goes through its stop: a newer press
      used to bump the flight number and leave the old flight's 'auto'
      scrolling and the map's skipped rendering behind (Council B's leak
      probe, 2026-10-22). */
   function supersede() {
-    if (P.__meleonaStop) P.__meleonaStop();
+    if (P.__melionaStop) P.__melionaStop();
   }
   /* Is Streamlit still writing the page? Its running icon (the one app.css
      draws "Updating..." from) is mounted exactly while a run is in flight. */
@@ -297,10 +296,10 @@ _script_frame("""
        presses used to fly two flights at once - a 59px jump and a wrong
        landing. */
     supersede();
-    const id = P.__meleonaFlight = (P.__meleonaFlight || 0) + 1;
-    P.__meleonaFlightAt = performance.now();
-    P.__meleonaStop = function () { land(scroller); };
-    P.__meleonaScroller = scroller;
+    const id = P.__melionaFlight = (P.__melionaFlight || 0) + 1;
+    P.__melionaFlightAt = performance.now();
+    P.__melionaStop = function () { land(scroller); };
+    P.__melionaScroller = scroller;
     /* Our rAF drives every frame - the scroller's own smooth behavior would
        fight it (each scrollTo becoming its own animation). Instant while we
        fly, handed back when we land. */
@@ -318,7 +317,7 @@ _script_frame("""
     let aim = targetY(scroller, el), last = t0, run = 0, done = 0, grew = t0;
     let floor = scroller.scrollHeight - scroller.clientHeight;
     const dir = Math.sign(aim - y0) || 1;
-    P.__meleonaDir = dir;
+    P.__melionaDir = dir;
     /* No frame moves faster than the curve's own peak (pi/2 the average
        speed, so 2x with margin). A page still loading is shorter than the
        flight: scrollTo clamped the eased position at its bottom and the next
@@ -327,7 +326,7 @@ _script_frame("""
        the flight is caught up at the flight's own pace. */
     const vmax = 2 * Math.max(Math.abs(aim - y0), 600) / dur;
     (function f(now) {
-      if (id !== P.__meleonaFlight) return;   // a newer flight, or the reader took over
+      if (id !== P.__melionaFlight) return;   // a newer flight, or the reader took over
       const dt = Math.min(now - last, 50); run += dt; last = now;
       const p = Math.min(1, run / dur);
       const tgt = targetY(scroller, el), cur = scroller.scrollTop;
@@ -356,7 +355,7 @@ _script_frame("""
         step = Math.sign(aim - cur) * Math.min(cap, Math.max(1, Math.abs(aim - cur) * 0.15));
       if (Math.sign(step) !== dir && Math.sign(tgt - cur) === dir) step = 0;   // never back away from a target still ahead
       scroller.scrollTo(0, Math.max(0, Math.min(cur + step, max)));
-      P.__meleonaSetY = scroller.scrollTop;    // where WE put it (onScroll)
+      P.__melionaSetY = scroller.scrollTop;    // where WE put it (onScroll)
       if (p < 1) { requestAnimationFrame(f); return; }
       /* Settle until the reader is ON the section the button promised. One
          320 ms correction was not enough on a page still loading: the hero
@@ -372,7 +371,7 @@ _script_frame("""
       if (!done) done = now;
       const on = Math.abs(tgt - scroller.scrollTop) <= 2;
       const waiting = tgt > max + 2 &&
-                      (!P.querySelector('.meleona-footer') || now - grew < 3000);
+                      (!P.querySelector('.meliona-footer') || now - grew < 3000);
       if (!on && (now - done < 10000 || (waiting && pageRunning())) &&
           (waiting || Math.abs(Math.max(0, Math.min(tgt, max)) - scroller.scrollTop) > 2)) {
         requestAnimationFrame(f); return;
@@ -401,8 +400,8 @@ _script_frame("""
   let wheelAt = 0, wheelDy = 0, tail = false, shrunk = false, forgivenAt = 0;
   function yieldNow() {
     tail = false;
-    P.__meleonaFlight = (P.__meleonaFlight || 0) + 1;
-    P.__meleonaStop();
+    P.__melionaFlight = (P.__melionaFlight || 0) + 1;
+    P.__melionaStop();
   }
   function onYield(e) {
     if (e.type === 'wheel') {
@@ -411,11 +410,11 @@ _script_frame("""
       const noBigger = same && Math.abs(e.deltaY) <= Math.abs(wheelDy);
       if (same && Math.abs(e.deltaY) < Math.abs(wheelDy)) shrunk = true;   // reset at every press
       wheelAt = t; wheelDy = e.deltaY;
-      if (!P.__meleonaStop) return;
-      if (tail && noBigger && shrunk && Math.sign(e.deltaY) === P.__meleonaDir &&
-          t - P.__meleonaPressAt < 2000) { forgivenAt = t; return; }
+      if (!P.__melionaStop) return;
+      if (tail && noBigger && shrunk && Math.sign(e.deltaY) === P.__melionaDir &&
+          t - P.__melionaPressAt < 2000) { forgivenAt = t; return; }
     }
-    if (!P.__meleonaStop) return;
+    if (!P.__melionaStop) return;
     if (e.type === 'keydown' && SCROLL_KEYS.indexOf(e.key) < 0) return;
     yieldNow();
   }
@@ -426,12 +425,12 @@ _script_frame("""
      own scrolling (300 ms after its last event), and the page shrinking under
      the flight and clamping it. */
   function onScroll(e) {
-    const sc = P.__meleonaScroller;
-    if (!P.__meleonaStop || !sc || e.target !== sc || P.__meleonaSetY === undefined) return;
+    const sc = P.__melionaScroller;
+    if (!P.__melionaStop || !sc || e.target !== sc || P.__melionaSetY === undefined) return;
     const y = sc.scrollTop;
-    if (Math.abs(y - P.__meleonaSetY) <= 2) return;
-    if (performance.now() - forgivenAt < 300) { P.__meleonaSetY = y; return; }
-    if (y >= sc.scrollHeight - sc.clientHeight - 2 && P.__meleonaSetY > y) return;
+    if (Math.abs(y - P.__melionaSetY) <= 2) return;
+    if (performance.now() - forgivenAt < 300) { P.__melionaSetY = y; return; }
+    if (y >= sc.scrollHeight - sc.clientHeight - 2 && P.__melionaSetY > y) return;
     yieldNow();
   }
   function go(a, el) {
@@ -467,21 +466,21 @@ _script_frame("""
      strip, which only exists once the engine has run. */
   function waitFor(a, id) {
     supersede();                          // a flight still running lands first
-    const w = P.__meleonaFlight = (P.__meleonaFlight || 0) + 1;
+    const w = P.__melionaFlight = (P.__melionaFlight || 0) + 1;
     const scroller = findScroller(a);
-    P.__meleonaStop = function () { P.__meleonaStop = null; P.__meleonaScroller = null; };   // nothing else to restore
-    P.__meleonaScroller = scroller;       // so a scroll the reader makes while it waits ends the wait
-    P.__meleonaSetY = scroller.scrollTop;
+    P.__melionaStop = function () { P.__melionaStop = null; P.__melionaScroller = null; };   // nothing else to restore
+    P.__melionaScroller = scroller;       // so a scroll the reader makes while it waits ends the wait
+    P.__melionaSetY = scroller.scrollTop;
     const t0 = performance.now();
     let idleSince = null;
     (function poll() {
-      if (w !== P.__meleonaFlight) return;   // a newer press, or the reader took over
+      if (w !== P.__melionaFlight) return;   // a newer press, or the reader took over
       const el = P.getElementById(id);
       if (el) { go(a, el); return; }
       const now = performance.now();
       idleSince = pageRunning() ? null : (idleSince === null ? now : idleSince);
       if (now - t0 < 10000 || idleSince === null || now - idleSince < 2000) setTimeout(poll, 100);
-      else P.__meleonaStop();             // the run is over and the section never came
+      else P.__melionaStop();             // the run is over and the section never came
     })();
   }
   function onLink(e) {
@@ -489,8 +488,8 @@ _script_frame("""
     const id = a ? a.getAttribute('href').slice(1) : '';
     if (!id) return;                     // a bare '#': nothing to fly to
     e.preventDefault(); e.stopPropagation();
-    P.__meleonaPressAt = performance.now();
-    tail = P.__meleonaPressAt - wheelAt < 250;   // a flick still running at the press
+    P.__melionaPressAt = performance.now();
+    tail = P.__melionaPressAt - wheelAt < 250;   // a flick still running at the press
     shrunk = false;                              // ...that has yet to shrink since it
     const el = P.getElementById(id);
     if (el) go(a, el); else waitFor(a, id);
@@ -514,7 +513,48 @@ _script_frame("""
     P.addEventListener(t, onYield, { capture: true, passive: true });
   });
   P.addEventListener('scroll', onScroll, { capture: true, passive: true });
-  P.__meleonaGlide = { onTab: onTab, onLink: onLink, onYield: onYield, onScroll: onScroll };
+  P.__melionaGlide = { onTab: onTab, onLink: onLink, onYield: onYield, onScroll: onScroll };
+})();
+/* The crest's rings ripple while a pointer rests on it (static/app.css). On
+   leave, each ring finishes the pass it is in and stops at rest - a ripple
+   that settles rather than snapping back - and the outer rings, a beat behind,
+   carry the last wave outward. Same rebind rule as the glide above. */
+(function() {
+  const P = window.parent.document;
+  const prev = P.__melionaRipple;
+  if (prev) {
+    P.removeEventListener('pointerover', prev.enter, true);
+    P.removeEventListener('pointerout', prev.leave, true);
+  }
+  function crestOf(e) {
+    const c = e.target.closest && e.target.closest('.hero-crest');
+    return c && !c.contains(e.relatedTarget) ? c : null;   /* crossing its edge */
+  }
+  function enter(e) {
+    const c = crestOf(e); if (!c) return;
+    c.classList.add('rippling');
+    /* Back before the last wave ended: a ring that already settled is no
+       longer listed, so wake the ones kept from the leave too - each resumes
+       from rest, where its last pass ended. */
+    (c.__rings || []).concat(c.getAnimations({ subtree: true })).forEach(function(a) {
+      a.effect.updateTiming({ iterations: Infinity });
+    });
+  }
+  function leave(e) {
+    const c = crestOf(e); if (!c) return;
+    const runs = c.__rings = c.getAnimations({ subtree: true });
+    if (!runs.length) { c.classList.remove('rippling'); return; }
+    Promise.all(runs.map(function(a) {
+      const pass = a.effect.getComputedTiming().currentIteration || 0;
+      a.effect.updateTiming({ iterations: pass + 1 });
+      return a.finished;
+    })).then(function() {
+      if (!c.matches(':hover')) { c.classList.remove('rippling'); c.__rings = null; }
+    }, function() {});
+  }
+  P.addEventListener('pointerover', enter, true);
+  P.addEventListener('pointerout', leave, true);
+  P.__melionaRipple = { enter: enter, leave: leave };
 })();
 </script>
 """)
@@ -830,16 +870,15 @@ st.markdown(hero_html(crest=logo_svg) + _LIFT_SKELETON, unsafe_allow_html=True)
 st.markdown("""
 <div class="showcase-row reveal">
   <div class="showcase-section" id="grit-showcase" style="position:relative;">
-    <div class="engrave scale"><svg viewBox="22 36 28 26" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <g fill="none" stroke="#9A7B4F" stroke-width="1.1" stroke-linecap="round">
-        <circle cx="35" cy="46" r="9"/>
-        <line x1="30" y1="45" x2="40" y2="45"/>
-        <line x1="35" y1="42.5" x2="35" y2="50"/>
-        <path d="M28.5,46.5 Q30,49 31.5,46.5"/>
-        <path d="M38.5,46.5 Q40,49 41.5,46.5"/>
-        <line x1="28.5" y1="46.5" x2="30" y2="44.5"/><line x1="31.5" y1="46.5" x2="30" y2="44.5"/>
-        <line x1="38.5" y1="46.5" x2="40" y2="44.5"/><line x1="41.5" y1="46.5" x2="40" y2="44.5"/>
-        <circle cx="35" cy="45" r="1.1"/>
+    <div class="engrave scale"><svg viewBox="-50 -50 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <!-- the crest's hexagon and its X, cut in outline (assets/logo.svg) -->
+      <g fill="none" stroke="#9A7B4F" stroke-width="1.1" stroke-linejoin="round">
+        <circle r="44"/>
+        <polygon points="0,-35 27.358,-19.205 0,-3.409 -27.358,-19.205"/>
+        <polygon points="0,-2.309 4,0 0,2.309 -4,0"/>
+        <polygon points="0,35 27.358,19.205 0,3.409 -27.358,19.205"/>
+        <polygon points="-5.905,0 -30.311,-14.091 -30.311,14.091"/>
+        <polygon points="5.905,0 30.311,-14.091 30.311,14.091"/>
       </g>
     </svg></div>
     <div class="showcase-eyebrow">The Innovation</div>
@@ -1723,12 +1762,12 @@ with v_col:
             '</div>', unsafe_allow_html=True)
 with f_col:
     st.markdown("""
-<div class="engrave line" aria-hidden="true"><svg viewBox="28 40 66 60" xmlns="http://www.w3.org/2000/svg">
-  <g fill="none" stroke="#9A7B4F" stroke-linecap="round">
-    <path stroke-width="2.4" d="M86,83 C72,90 54,92 44,84 C37,79 34,70 35,58"/>
-    <path stroke-width="1.5" d="M35,58 C35,54 34,50 36,47"/>
-    <path stroke-width="1" d="M38,52 L33,50 L39,48"/>
-    <path stroke-width="1" d="M36,55 L31,55 L37,51"/>
+<div class="engrave line" aria-hidden="true"><svg viewBox="-60 -4 66 60" xmlns="http://www.w3.org/2000/svg">
+  <!-- a quarter of the crest's three rings, fading outward (assets/logo.svg) -->
+  <g fill="none" stroke="#9A7B4F">
+    <circle r="47.2" stroke-width="2.4"/>
+    <circle r="51.4" stroke-width="1.5" stroke-opacity=".6"/>
+    <circle r="55.6" stroke-width="1" stroke-opacity=".3"/>
   </g>
 </svg></div>
 """, unsafe_allow_html=True)
@@ -3231,7 +3270,7 @@ with tab_lineage:
     panel_head("Your data", "What this app holds about you, and how to clear it")
     st.markdown(
         "**There is no account to delete, because there is no account.** "
-        "Meleona has no sign-up, no login, no password, no cookie beyond the "
+        "Meliona has no sign-up, no login, no password, no cookie beyond the "
         "one Streamlit uses to keep this browser tab connected, and no "
         "analytics or advertising SDK of any kind.\n\n"
         f"- **Held in this session (memory only, gone when you close the tab):** "
@@ -3263,7 +3302,7 @@ with tab_lineage:
 
 # ---- MCAP-style closing band: where-to-next rail + honest copyright bar ----
 st.markdown("""
-<div class="meleona-footer">
+<div class="meliona-footer">
   <div class="f-rail">
     <a class="f-box" href="#grit-showcase"><span class="f-num">01</span>The Grit Zone
       <small>Resilience ranked from real drawdowns - recovery, consistency, crisis behavior.</small></a>
@@ -3273,11 +3312,11 @@ st.markdown("""
       <small>Stress-test any universe live - allocation, scenarios, CVaR verdict.</small></a>
   </div>
   <div class="f-bar">
-    <div>Meleona &middot; Portfolio Risk Engine &middot; &copy; 2026 John Nguyen</div>
+    <div>Meliona &middot; Portfolio Risk Engine &middot; &copy; 2026 John Nguyen</div>
     <div>Live end-of-day data: Yahoo Finance &middot; Educational analysis, not investment advice</div>
   </div>
   <div class="f-bar">
-    <div>Support: <a href="mailto:__SUPPORT__?subject=Meleona%20%E2%80%93%20session%20__REF__">__SUPPORT__</a>
+    <div>Support: <a href="mailto:__SUPPORT__?subject=Meliona%20%E2%80%93%20session%20__REF__">__SUPPORT__</a>
       &middot; <a href="https://github.com/ricepillow3000/Summer-2026-Quant-Project-Risk-Engine-Blueprint/blob/main/PRIVACY.md">Privacy</a>
       &middot; <a href="https://github.com/ricepillow3000/Summer-2026-Quant-Project-Risk-Engine-Blueprint/blob/main/TERMS.md">Terms</a>
       &middot; <a href="https://github.com/ricepillow3000/Summer-2026-Quant-Project-Risk-Engine-Blueprint/blob/main/ACCESSIBILITY.md">Accessibility</a></div>
@@ -3287,7 +3326,7 @@ st.markdown("""
     <div>Built for WCAG 2.2 AA. The Risk Topology map is drawn on canvas and carries a
       text description; charts are accompanied by their numbers in text. Known gaps are
       listed in the accessibility statement.</div>
-    <div>Hit a barrier? Email <a href="mailto:__SUPPORT__?subject=Meleona%20accessibility%20%E2%80%93%20session%20__REF__">__SUPPORT__</a>
+    <div>Hit a barrier? Email <a href="mailto:__SUPPORT__?subject=Meliona%20accessibility%20%E2%80%93%20session%20__REF__">__SUPPORT__</a>
       with the reference above - barriers are treated as defects, not feature requests.</div>
   </div>
 </div>

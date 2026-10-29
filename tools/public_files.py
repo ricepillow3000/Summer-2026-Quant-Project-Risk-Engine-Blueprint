@@ -18,7 +18,7 @@ things to Streamlit's static root:
 It never blocks startup: any failure prints a warning and exits 0, and the app
 runs exactly as before.
 
-    python -m tools.public_files            # MELEONA_SITE_URL overrides the URL
+    python -m tools.public_files            # MELIONA_SITE_URL overrides the URL
 """
 
 import datetime
@@ -28,15 +28,16 @@ import pathlib
 import shutil
 import sys
 
-SITE_URL = os.environ.get(
-    "MELEONA_SITE_URL",
-    "https://summer-2026-quant-project-risk-engine-blueprint-production.up.railway.app",
+# MELEONA_SITE_URL is the name's spelling before 2026-10-28; a host variable
+# set under it still counts.
+SITE_URL = (os.environ.get("MELIONA_SITE_URL") or os.environ.get("MELEONA_SITE_URL") or
+    "https://summer-2026-quant-project-risk-engine-blueprint-production.up.railway.app"
 ).rstrip("/")
-TITLE = "Meleona - Portfolio Risk Engine"
+TITLE = "Meliona - Portfolio Risk Engine"
 DESCRIPTION = ("VaR, CVaR, Monte Carlo stress testing and factor exposures, computed "
                "live from Yahoo Finance data - every number traceable to its source.")
-MARK, END = "<!-- meleona-head -->", "<!-- /meleona-head -->"
-BOOT_MARK, BOOT_END = "<!-- meleona-boot -->", "<!-- /meleona-boot -->"
+MARK, END = "<!-- meliona-head -->", "<!-- /meliona-head -->"
+BOOT_MARK, BOOT_END = "<!-- meliona-boot -->", "<!-- /meliona-boot -->"
 # The commit this process was built from. Railway sets RAILWAY_GIT_COMMIT_SHA
 # on a GitHub deploy and posts nothing back to GitHub, so "is the fix live?"
 # was guesswork (2026-09-03, 2026-09-09) until the page said so itself.
@@ -52,7 +53,7 @@ OLD_PRE_BOOT = (
     '<style>@keyframes pre-boot-off{to{opacity:0;visibility:hidden}}</style>'
     '<div style="position:absolute;bottom:28px;left:max(7vw,calc(50vw - 744px));'
     "font:11px 'Helvetica Neue',Arial,sans-serif;letter-spacing:.24em;"
-    'text-transform:uppercase;color:#6A5030">Loading Meleona</div></div>\n'
+    'text-transform:uppercase;color:#6A5030">Loading Meliona</div></div>\n'
 )
 
 
@@ -83,7 +84,7 @@ def head_tags(site_url: str, build: str = "") -> str:
     b = html.escape(build[:12] or "unknown")
     return (
         f'{MARK}\n<title>{t}</title>\n'
-        f'<meta name="meleona-build" content="{b}">\n'
+        f'<meta name="meliona-build" content="{b}">\n'
         f'<meta name="description" content="{d}">\n'
         f'<link rel="canonical" href="{u}/">\n'
         f'<link rel="icon" type="image/png" href="/favicon.png">\n'
@@ -99,8 +100,9 @@ def head_tags(site_url: str, build: str = "") -> str:
         f'<meta property="og:image" content="{u}/og-image.png">\n'
         f'<meta property="og:image:width" content="1200">\n'
         f'<meta property="og:image:height" content="627">\n'
-        f'<meta property="og:image:alt" content="Meleona Portfolio Risk Engine: '
-        f'Monte Carlo fan chart, simulated paths and live-data audit result">\n'
+        f'<meta property="og:image:alt" content="The Meliona crest and name beside '
+        f'its live audit of 15 October 2026: 727 of 728 checks passed on Yahoo '
+        f'Finance data">\n'
         f'<meta name="twitter:card" content="summary_large_image">\n'
         # Single-page app: every unknown path is served this same index.html,
         # whose relative script paths break below the root - a mistyped
