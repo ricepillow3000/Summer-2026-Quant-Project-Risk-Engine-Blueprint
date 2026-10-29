@@ -1,52 +1,18 @@
-<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Meleona - heraldic rampant lion, tail encircling a balance scale, triangle crest">
-  <defs>
-    <linearGradient id="triFill" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#F8F5EF"/>
-      <stop offset="1" stop-color="#ECE5D8"/>
-    </linearGradient>
-    <linearGradient id="triStroke" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#B08A55"/>
-      <stop offset="1" stop-color="#8A6A3C"/>
-    </linearGradient>
-  </defs>
-  <!-- Triangle crest: gradient stone, twin inner hairlines, corner marks -->
-  <polygon points="60,6 113,111 7,111" fill="url(#triFill)" stroke="url(#triStroke)" stroke-width="2.8" stroke-linejoin="round"/>
-  <polygon points="60,15 106,106 14,106" fill="none" stroke="#9A7B4F" stroke-width="0.6" opacity="0.45"/>
-  <polygon points="60,24 99,101 21,101" fill="none" stroke="#9A7B4F" stroke-width="0.4" opacity="0.22"/>
-  <path d="M60,2 L62.5,6 L60,10 L57.5,6 Z" fill="#9A7B4F"/>
-  <path d="M4,111 h8 M7,108 v6" stroke="#9A7B4F" stroke-width="0.9" fill="none"/>
-  <path d="M108,111 h8 M113,108 v6" stroke="#9A7B4F" stroke-width="0.9" fill="none"/>
-  <!-- RAMPANT LION: one continuous silhouette - ear, crown, muzzle, open jaw,
-       beard, chest, two raised clawed forelegs, belly, raised hind leg,
-       standing hind leg, rump, flame-jagged mane climbing back to the ear -->
-  <path fill="#8A6A3C" d="M74,16 L79,23 C82,21 86,22 88,25 L96,29 L95,32 L88,33 L94,38 L87,41 L84,45 C86,49 87,52 87,55 L93,49 L99,41 C100,38 102,34 103,30 L104,21 L107,26 L110,23 L111,29 L114,28 L112,34 C110,38 107,42 104,45 L98,51 L94,55 L100,52 L106,50 L111,45 L113,50 L116,49 L114,55 L117,57 L112,60 C108,62 103,63 99,63 L94,63 C92,68 90,74 88,79 L96,82 L102,86 L108,83 L110,88 L114,88 L111,93 L114,97 L108,97 C104,97 100,95 97,93 L90,89 L86,96 L82,103 L88,104 L92,107 L86,109 L80,108 L74,109 L70,106 L74,102 L77,95 L79,88 C74,90 68,90 63,88 L58,84 C56,80 55,75 56,70 L58,62 L52,64 L57,57 L60,50 L54,52 L59,45 L62,39 L56,40 L62,33 L65,27 L60,27 L66,21 L70,17 Z"/>
-  <!-- Eye + nostril cut in cream; tongue in the open jaw -->
-  <path d="M84,26.5 L88,27.5 L85,29.5 Z" fill="#F5F1E9"/>
-  <circle cx="93.6" cy="30.6" r="0.8" fill="#F5F1E9"/>
-  <path d="M89,35 C91,35.4 92.2,36.6 91,38 C89.8,38.2 88.6,36.6 89,35 Z" fill="#A8634C"/>
-  <!-- Muscle engravings, low relief -->
-  <g stroke="#6B5026" stroke-width="0.7" fill="none" opacity="0.5" stroke-linecap="round">
-    <path d="M83,52 C81,58 80,64 81,70"/>
-    <path d="M83,76 C81,82 80,88 78,93"/>
-    <path d="M88,58 C90,60 92,60 94,59"/>
+<svg viewBox="-60 -60 120 120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Meliona crest - a hexagon cut by an X into two triangles and three rhombuses, on a charcoal disc with three fading rings">
+  <!-- Drawn about the centre (0,0): every left/right and top/bottom pair is the
+       same number with the sign flipped. Regular hexagon, circumradius 35, cut
+       along the diagonals joining opposite side vertices; pieces never touch
+       (1.1 to the keystone, 5.9 across the X). The rings fade outward and
+       ripple on hover (static/app.css, main.py). -->
+  <circle class="crest-ring" r="47.2" fill="none" stroke="#2E2A25" stroke-width="1.8" stroke-opacity="0.85"/>
+  <circle class="crest-ring" r="51.4" fill="none" stroke="#2E2A25" stroke-width="1.3" stroke-opacity="0.5"/>
+  <circle class="crest-ring" r="55.6" fill="none" stroke="#2E2A25" stroke-width="0.9" stroke-opacity="0.22"/>
+  <circle r="44" fill="#2E2A25"/>
+  <g fill="#EDE9E3">
+    <polygon points="0,-35 27.358,-19.205 0,-3.409 -27.358,-19.205"/>
+    <polygon points="0,-2.309 4,0 0,2.309 -4,0"/>
+    <polygon points="0,35 27.358,19.205 0,3.409 -27.358,19.205"/>
+    <polygon points="-5.905,0 -30.311,-14.091 -30.311,14.091"/>
+    <polygon points="5.905,0 30.311,-14.091 30.311,14.091"/>
   </g>
-  <!-- TAIL: thick sweep off the rump, arcing left and up, ENCIRCLING the
-       balance scale; brush tuft flicks out where the loop closes -->
-  <path d="M57,86 C46,94 34,94 27,86 C21,79 20,68 24,58" fill="none" stroke="#8A6A3C" stroke-width="5" stroke-linecap="round"/>
-  <circle cx="31" cy="42" r="13.5" fill="none" stroke="#8A6A3C" stroke-width="4.5" stroke-dasharray="70 15" stroke-dashoffset="-38" transform="rotate(118 31 42)"/>
-  <polygon points="21,55 14,56 20,50" fill="#8A6A3C"/>
-  <polygon points="23,58 16,61 21,53" fill="#8A6A3C"/>
-  <polygon points="25,53 19,50 26,49" fill="#8A6A3C"/>
-  <!-- BALANCE SCALE, held inside the tail loop -->
-  <g stroke="#3F3B35" stroke-width="1" fill="none" stroke-linecap="round">
-    <line x1="25" y1="41" x2="37" y2="41"/>
-    <line x1="31" y1="38" x2="31" y2="47"/>
-    <path d="M23.5,42.5 Q25,45.5 26.5,42.5"/>
-    <path d="M35.5,42.5 Q37,45.5 38.5,42.5"/>
-  </g>
-  <g stroke="#3F3B35" stroke-width="0.8">
-    <line x1="23.5" y1="42.5" x2="25" y2="40.5"/><line x1="26.5" y1="42.5" x2="25" y2="40.5"/>
-    <line x1="35.5" y1="42.5" x2="37" y2="40.5"/><line x1="38.5" y1="42.5" x2="37" y2="40.5"/>
-  </g>
-  <circle cx="31" cy="41" r="1.1" fill="#9A7B4F"/>
 </svg>

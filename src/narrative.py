@@ -695,7 +695,7 @@ def role_note(d: TickerDossier) -> str:
 
 
 def headline(book: list[TickerDossier]) -> str:
-    """The one number the book leads with, per Meleona constraint 3."""
+    """The one number the book leads with, per Meliona constraint 3."""
     if not book:
         return "No names in this universe."
     d = book[0]

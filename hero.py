@@ -14,7 +14,7 @@ Kept on one line per element - st.markdown truncates raw HTML at a blank line
 
 from src.scenarios import HISTORICAL_REGIMES
 
-HERO_TITLE_LINES = ("Meleona", "Portfolio Risk Engine")
+HERO_TITLE_LINES = ("Meliona", "Portfolio Risk Engine")
 HERO_SUB = ("A hedge-fund-grade portfolio risk engine - VaR, CVaR, Monte Carlo stress "
             "testing, and named factor exposures, computed live from real market data. "
             "But every stock has drawdowns. What sets a name apart is what happens "
@@ -59,4 +59,4 @@ def hero_html(skeleton: bool = False, crest: str = "") -> str:
 def boot_skeleton_html() -> str:
     """The veil index.html paints first; the real hero lifts it (main.py)."""
     return ('<div id="boot-skel" aria-hidden="true">' + hero_html(skeleton=True)
-            + '<div class="sk-band"></div><div class="sk-load">Loading Meleona</div></div>')
+            + '<div class="sk-band"></div><div class="sk-load">Loading Meliona</div></div>')

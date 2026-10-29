@@ -10,6 +10,7 @@ Runs, in order, and stops nothing early so you see every problem at once:
 3. tests     tests.test_engine - math invariants, security controls, the
              layering rule (src/ never imports the UI), design rules
 4. narrative tests.test_narrative
+5. showcase  showcase/test_showcase.py - the short engine copy still equals src/
 
 Live Yahoo checks skip themselves offline; for the live answer run the
 "Live audit" GitHub workflow (RUNBOOK.md, "After every deploy").
@@ -22,10 +23,11 @@ import sys
 PY = sys.executable
 STEPS = [
     ("lint", [PY, "-m", "ruff", "check", "--select", "F,E9,PLE", "--ignore", "F541",
-              "main.py", "hero.py", "src", "tests", "tools"]),
+              "main.py", "hero.py", "src", "tests", "tools", "showcase"]),
     ("security", [PY, "-m", "bandit", "-q", "-r", "src", "main.py", "hero.py", "tools", "-ll"]),
     ("tests", [PY, "-m", "tests.test_engine"]),
     ("narrative", [PY, "-m", "tests.test_narrative"]),
+    ("showcase", [PY, "showcase/test_showcase.py"]),
 ]
 
 

@@ -1,6 +1,6 @@
 import { defineRailway, github, project, service } from "railway/iac";
 
-// Railway Infrastructure as Code for the live Meleona service. Replaces the
+// Railway Infrastructure as Code for the live Meliona service. Replaces the
 // deprecated railway.json (Config as Code stops being read 2026-12-01).
 //
 // Generated from `railway config pull` on 2026-09-14, i.e. from what the

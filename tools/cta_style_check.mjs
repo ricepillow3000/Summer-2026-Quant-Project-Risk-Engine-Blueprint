@@ -27,16 +27,16 @@ const LINKS = [
   ['a.cta-btn[href="#the-slice"]', 'From the record to the allocation', 'cta'],
   ['a.cta-btn[href="#engine"]', 'To the engine', 'cta'],
   ['.engine-heading a[href="#analysis"]', 'Skip link', 'cta'],
-  ['.meleona-footer a.f-box >> nth=0', 'Footer 01', 'box'],
-  ['.meleona-footer a.f-box >> nth=1', 'Footer 02', 'box'],
-  ['.meleona-footer a.f-box >> nth=2', 'Footer 03', 'box'],
+  ['.meliona-footer a.f-box >> nth=0', 'Footer 01', 'box'],
+  ['.meliona-footer a.f-box >> nth=1', 'Footer 02', 'box'],
+  ['.meliona-footer a.f-box >> nth=2', 'Footer 03', 'box'],
 ];
 const W = +width, touch = W < 600;
 const b = await chromium.launch(process.env.CHROMIUM ? { executablePath: process.env.CHROMIUM } : {});
 const page = await (await b.newContext({ viewport: { width: W, height: 900 },
   ...(touch ? { isMobile: true, hasTouch: true, deviceScaleFactor: 2 } : {}) })).newPage();
 await page.goto(url);
-await page.waitForSelector('.meleona-footer', { timeout: 300000 });
+await page.waitForSelector('.meliona-footer', { timeout: 300000 });
 await page.waitForTimeout(2500);
 
 const PROPS = ['fontFamily', 'textTransform', 'borderTopLeftRadius', 'backgroundColor', 'color',

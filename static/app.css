@@ -1,4 +1,4 @@
-/* Meleona - the Tearsheet design system.
+/* Meliona - the Tearsheet design system.
    Extracted from main.py 2026-08-26: it was 778 lines of inline <style> inside
    the app script, re-sent on every rerun and impossible to read next to the
    Python. Same rules, same order, one file, loaded once by load_css().
@@ -103,9 +103,9 @@ h1, h2, h3 { color: #3F3B35; font-weight: 400; letter-spacing: -0.01em; }
 
 /* ---- Presentation flow: hero, showcase, CTAs, scroll reveal ---- */
 html { scroll-behavior: smooth; }
-@keyframes meleona-rise { from { opacity: 0; transform: translateY(24px); }
+@keyframes meliona-rise { from { opacity: 0; transform: translateY(24px); }
                           to   { opacity: 1; transform: translateY(0); } }
-.reveal { animation: meleona-rise linear both;
+.reveal { animation: meliona-rise linear both;
           animation-timeline: view(); animation-range: entry 0% cover 30%; }
 
 /* WIDE COURT - the whole page works now, capped for taste. Layout is
@@ -197,11 +197,25 @@ html { scroll-behavior: smooth; }
    fully solid (John: fading them read unprofessional). The background does
    the fading; the instruments never do. */
 .hero-stats { position: relative; }
-.hero-crest { width: 132px; height: 132px; padding: 20px;
-    border: 1px solid #C4BDAE; background: rgba(154,123,79,0.05);
-    box-shadow: 0 0 0 1px rgba(154,123,79,.12),
-                0 24px 60px -34px rgba(63,59,53,.55); }
-.hero-crest svg { width: 100%; height: 100%; }
+/* The crest stands on the page itself - no plate, no frame (John, 2026-10-29):
+   the box keeps its size so nothing below it moves, and the mark fills it. */
+.hero-crest { width: 132px; height: 132px; }
+.hero-crest svg { width: 100%; height: 100%; display: block; overflow: visible; }
+/* Hover: the three rings ripple outward, inner ring first. main.py's script
+   holds .rippling after the pointer leaves until each ring ends its pass, so
+   the ripple settles instead of snapping back. Every ring starts and ends at
+   rest, scaled about its own centre, so the crest stays symmetric throughout. */
+@keyframes crest-ripple {
+    0%, 100% { transform: scale(1);     opacity: 1; }
+    50%      { transform: scale(1.035); opacity: .55; }
+}
+.hero-crest .crest-ring { transform-box: fill-box; transform-origin: center; }
+.hero-crest:hover .crest-ring, .hero-crest.rippling .crest-ring {
+    animation: crest-ripple 2.4s cubic-bezier(.37, 0, .63, 1) infinite; }
+.hero-crest .crest-ring:nth-of-type(2) { animation-delay: .3s; }
+.hero-crest .crest-ring:nth-of-type(3) { animation-delay: .6s; }
+@media (prefers-reduced-motion: reduce) {
+    .hero-crest:hover .crest-ring, .hero-crest.rippling .crest-ring { animation: none; } }
 .hero-eyebrow { font-family: 'Helvetica Neue', sans-serif; font-size: 12px;
     letter-spacing: 0.32em; text-transform: uppercase; color: #6A5030; }
 .hero-title { font-size: clamp(44px, 10.5vw, 96px) !important; color: #3F3B35;
@@ -477,6 +491,7 @@ div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
     background: linear-gradient(90deg, #E2DCD0 25%, #EFEAE0 45%, #E2DCD0 65%) !important;
     background-size: 200% 100% !important; animation: sk-sheen 1.15s linear infinite;
     border-color: transparent !important; box-shadow: none !important; color: transparent !important; }
+#boot-skel .hero-crest { border-radius: 50%; }   /* the crest is round */
 #boot-skel .hstat::before { display: none !important; }
 #boot-skel .hstat { background: #E9E4DA !important; border-color: #DDD6C9 !important;
     box-shadow: none !important; animation: none !important; transform: none !important; }
@@ -616,7 +631,6 @@ div[data-baseweb="select"]>div, .stNumberInput input,
 .stButton>button { border-radius: 12px !important; }
 [data-testid="stPlotlyChart"] { border-radius: 16px !important; }
 .verdict-box { border-radius: 20px; }
-.hero-crest { border-radius: 26px; }                /* squircle, not a hard square */
 
 /* Diversify: each hero tile carries a different corner profile so the deck
    reads as a composition, not a grid of identical boxes. */
@@ -794,23 +808,23 @@ div[data-baseweb="select"]>div, .stNumberInput input,
    full-bleed charcoal band - a "where to next" rail of outlined link boxes,
    then a thin copyright/disclaimer bar. Our twist: the rail is numbered like
    a ledger and every claim on it stays honest. --- */
-.meleona-footer { background: #3F3B35;
+.meliona-footer { background: #3F3B35;
     margin: 84px calc(50% - 50vw) 0; padding: 56px max(7vw, calc(50vw - 744px)) 36px; }
-.meleona-footer .f-rail { display: grid; grid-template-columns: repeat(3, 1fr);
+.meliona-footer .f-rail { display: grid; grid-template-columns: repeat(3, 1fr);
     gap: 16px; margin-bottom: 44px; }
-@media (max-width: 1100px) { .meleona-footer .f-rail { grid-template-columns: 1fr; } }
-.meleona-footer .f-box { display: block; border: 1px solid rgba(196,189,174,.3);
+@media (max-width: 1100px) { .meliona-footer .f-rail { grid-template-columns: 1fr; } }
+.meliona-footer .f-box { display: block; border: 1px solid rgba(196,189,174,.3);
     padding: 20px 22px; color: #EDE9E3 !important; text-decoration: none !important;
     font-family: 'Helvetica Neue', sans-serif; font-size: 11px;
     letter-spacing: .18em; text-transform: uppercase;
     transition: border-color .25s ease, background .25s ease; }
-.meleona-footer .f-box:hover { border-color: #B08A55;
+.meliona-footer .f-box:hover { border-color: #B08A55;
     background: rgba(154,123,79,.12); }
-.meleona-footer .f-box small { display: block; margin-top: 8px; color: #B4AB9B;
+.meliona-footer .f-box small { display: block; margin-top: 8px; color: #B4AB9B;
     font-family: Georgia, serif; font-size: 13px; letter-spacing: .02em;
     text-transform: none; line-height: 1.5; }
-.meleona-footer .f-num { color: #C6A26B; margin-right: 10px; }
-.meleona-footer .f-bar { border-top: 1px solid rgba(196,189,174,.25);
+.meliona-footer .f-num { color: #C6A26B; margin-right: 10px; }
+.meliona-footer .f-bar { border-top: 1px solid rgba(196,189,174,.25);
     padding-top: 18px; display: flex; justify-content: space-between;
     flex-wrap: wrap; gap: 8px; font-family: 'Helvetica Neue', sans-serif;
     font-size: 10px; letter-spacing: .14em; text-transform: uppercase;
@@ -937,8 +951,7 @@ body:has([data-testid="stStatusWidgetRunningIcon"])::after { content: "Updating\
                 line-height: 1.03 !important; margin: 0 !important; }
   .hero-sub { font-size: 15.5px !important; line-height: 1.42 !important;
               max-width: 540px !important; }
-  .hero-crest { width: 84px !important; height: 84px !important;
-                padding: 12px !important; }
+  .hero-crest { width: 84px !important; height: 84px !important; }
   .hero-stats { gap: 8px !important; }
   .hstat { padding: 10px 12px 8px !important; }
   .hstat .hnum { font-size: 26px !important; }
@@ -1040,8 +1053,8 @@ body:has([data-testid="stStatusWidgetRunningIcon"])::after { content: "Updating\
    on-dark button: the dark text bronze on beige (4.7-6.2:1), the light one on
    the charcoal bands (4.65:1). A focus ring needs 3:1 (WCAG 2.2 1.4.11). */
 :root { --ring: #6A5030; }
-.showcase-row, .meleona-footer { --ring: #C6A26B; }
-a.cta-btn:focus-visible, a.cta-link:focus-visible, .meleona-footer a.f-box:focus-visible {
+.showcase-row, .meliona-footer { --ring: #C6A26B; }
+a.cta-btn:focus-visible, a.cta-link:focus-visible, .meliona-footer a.f-box:focus-visible {
     outline: 2px solid var(--ring) !important; outline-offset: 3px !important;
     box-shadow: none !important; border-radius: 0 !important; }
 
