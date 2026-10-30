@@ -3698,6 +3698,26 @@ def test_gungnir_plaque_matches_its_sketch_and_its_math():
     assert 'class="c">circle' not in src and "Circle A" not in src
 
 
+def test_corners_are_square_and_the_maps_rings_stay_in_the_plot():
+    """John, 2026-10-30: no curved boxes, no watermark logo, and the map's
+    rings were "expanding outwards on the graph" - the 99.7% ellipse ran past
+    the plot frame, over the axis labels and under 0% volatility. A radius
+    block once re-rounded every input and chart after the base squared them."""
+    root = pathlib.Path(__file__).resolve().parent.parent
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    page = (root / "prototypes" / "war_room.html").read_text(encoding="utf-8")
+    main = (root / "main.py").read_text(encoding="utf-8")
+    import re as _re
+    # only the round things stay round: dots, and the skeleton's crest and ink
+    rounded = [r for r in _re.findall(r"border-radius:\s*([^;}!]+)", css)
+               if r.strip() not in ("0", "50%", "6px")]
+    assert not rounded, rounded
+    assert "border-radius" not in page
+    assert 'class="engrave' not in main
+    fog = page[page.index("function drawFog()"):page.index("/* ---------- intel")]
+    assert "g.clip()" in fog and "g.restore()" in fog, "rings must be clipped to the plot"
+
+
 def test_the_crest_is_symmetric_and_its_pieces_never_touch():
     """John's crest mandate (2026-10-28/29): two inward-pointing triangles and
     three rhombuses cut from a hexagon, none touching, on a disc with three

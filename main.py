@@ -537,6 +537,13 @@ _html("""
     P.removeEventListener('pointerover', prev.enter, true);
     P.removeEventListener('pointerout', prev.leave, true);
   }
+  /* the rings' own waves only: the crest's first-load lift is an animation
+     in the same subtree, and must never be made to loop */
+  function waves(c) {
+    return c.getAnimations({ subtree: true }).filter(function(a) {
+      return a.animationName === 'crest-ripple';
+    });
+  }
   function crestOf(e) {
     const c = e.target.closest && e.target.closest('.hero-crest');
     return c && !c.contains(e.relatedTarget) ? c : null;   /* crossing its edge */
@@ -547,13 +554,13 @@ _html("""
     /* Back before the last wave ended: a ring that already settled is no
        longer listed, so wake the ones kept from the leave too - each resumes
        from rest, where its last pass ended. */
-    (c.__rings || []).concat(c.getAnimations({ subtree: true })).forEach(function(a) {
+    (c.__rings || []).concat(waves(c)).forEach(function(a) {
       a.effect.updateTiming({ iterations: Infinity });
     });
   }
   function leave(e) {
     const c = crestOf(e); if (!c) return;
-    const runs = c.__rings = c.getAnimations({ subtree: true });
+    const runs = c.__rings = waves(c);
     if (!runs.length) { c.classList.remove('rippling'); return; }
     Promise.all(runs.map(function(a) {
       const pass = a.effect.getComputedTiming().currentIteration || 0;
@@ -813,15 +820,25 @@ if not st.session_state.get("_booted"):
     st.session_state["_booted"] = True
     st.markdown(
         """<style>
-  /* First-load only: the intro tiles fly in top-to-down (UFO settle). This
-     style block renders solely on the un-booted first pass, so Streamlit
-     reruns never replay the arrival. Scoped to #hero so the skeleton's own
-     tiles hold still. */
-  #hero .hero-stats .hstat { animation: ufo-drop .6s cubic-bezier(.2,.9,.25,1) both; }
-  #hero .hero-stats .hstat:nth-child(1) { animation-delay: .05s; }
-  #hero .hero-stats .hstat:nth-child(2) { animation-delay: .13s; }
-  #hero .hero-stats .hstat:nth-child(3) { animation-delay: .21s; }
-  #hero .hero-stats .hstat:nth-child(4) { animation-delay: .29s; }
+  /* First-load only (keyframes in app.css, "ARRIVAL"): the crest and the
+     four tiles lift from face-down to face-forward, the headline and its
+     line slide in from the left, one after another. This style block
+     renders solely on the un-booted first pass, so Streamlit reruns never
+     replay the arrival. It starts .55s in, as the boot veil (which holds .3s
+     and fades over .55s) is half gone - earlier, it played behind the veil.
+     Scoped to #hero so the skeleton's copies hold still;
+     fill "backwards", so once landed the hover states own the transform. */
+  #hero .hero-crest { animation: lift-face .9s cubic-bezier(.2,.8,.2,1) .6s backwards; }
+  #hero .hline { animation: from-left .95s cubic-bezier(.16,1,.3,1) backwards; }
+  #hero .hline:nth-child(1) { animation-delay: .73s; }
+  #hero .hline:nth-child(2) { animation-delay: .85s; }
+  #hero .hero-sub { animation: from-left .95s cubic-bezier(.16,1,.3,1) 1.01s backwards; }
+  #hero .cta-btn { animation: from-left .95s cubic-bezier(.16,1,.3,1) 1.15s backwards; }
+  #hero .hstat { animation: lift-face .85s cubic-bezier(.2,.8,.2,1) backwards; }
+  #hero .hstat:nth-child(1) { animation-delay: .89s; }
+  #hero .hstat:nth-child(2) { animation-delay: .99s; }
+  #hero .hstat:nth-child(3) { animation-delay: 1.09s; }
+  #hero .hstat:nth-child(4) { animation-delay: 1.19s; }
 </style>""", unsafe_allow_html=True)
 else:
     # Hold the veil's slot. Streamlit keys every element by its position, so
@@ -881,17 +898,6 @@ st.markdown(hero_html(crest=logo_svg) + _LIFT_SKELETON, unsafe_allow_html=True)
 st.markdown("""
 <div class="showcase-row reveal">
   <div class="showcase-section" id="grit-showcase" style="position:relative;">
-    <div class="engrave scale"><svg viewBox="-50 -50 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <!-- the crest's hexagon and its X, cut in outline (assets/logo.svg) -->
-      <g fill="none" stroke="#9A7B4F" stroke-width="1.1" stroke-linejoin="round">
-        <circle r="44"/>
-        <polygon points="0,-35 27.358,-19.205 0,-3.409 -27.358,-19.205"/>
-        <polygon points="0,-2.309 4,0 0,2.309 -4,0"/>
-        <polygon points="0,35 27.358,19.205 0,3.409 -27.358,19.205"/>
-        <polygon points="-5.905,0 -30.311,-14.091 -30.311,14.091"/>
-        <polygon points="5.905,0 30.311,-14.091 30.311,14.091"/>
-      </g>
-    </svg></div>
     <div class="showcase-eyebrow">The Innovation</div>
     <h2 class="showcase-title">The Grit Zone</h2>
     <div class="showcase-body">
@@ -1787,16 +1793,6 @@ with v_col:
             'Change any setting and watch the cone breathe.'
             '</div>', unsafe_allow_html=True)
 with f_col:
-    st.markdown("""
-<div class="engrave line" aria-hidden="true"><svg viewBox="-60 -4 66 60" xmlns="http://www.w3.org/2000/svg">
-  <!-- a quarter of the crest's three rings, fading outward (assets/logo.svg) -->
-  <g fill="none" stroke="#9A7B4F">
-    <circle r="47.2" stroke-width="2.4"/>
-    <circle r="51.4" stroke-width="1.5" stroke-opacity=".6"/>
-    <circle r="55.6" stroke-width="1" stroke-opacity=".3"/>
-  </g>
-</svg></div>
-""", unsafe_allow_html=True)
     st.plotly_chart(fan_chart(mc["path_bands"]), width="stretch", config=PLOTLY_CFG)
     # Jump-diffusion resamples nothing, and a replay under 30 days falls back to
     # i.i.d. (block_days=1): both used to claim "crash weeks stay intact".

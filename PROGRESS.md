@@ -688,6 +688,21 @@ risk-engine/
   parity, vol target, days to exit, the 10 crash replays and the Grit score.
   `showcase/test_showcase.py` proves every function equals `src/` (to 1e-12,
   same seeds) and runs in `tools.check`, so the copy cannot drift.
+- ✅ **Square, matte, and alive on arrival (2026-10-30)** - John: no watermark
+  logo, no curved boxes, a Swiss-grid map, Citadel-style motion. The crest
+  fragments behind the Grit Zone and the fan chart are gone; the four hero
+  tiles are matte rectangles in the buttons' grammar (a bronze foot rule on
+  hover, no glass, no sheen, no mixed corners), and the radius block that
+  re-rounded inputs, tables, charts and the verdict is deleted. The map:
+  square panels with bronze crop marks and a faint grain, a framed and ticked
+  plot, rhombus marks for names and the pairing diagram, square toggles, and
+  the probability rings clipped to the plot (the 99.7% ring ran past the frame,
+  over the axis labels and below 0% vol). Motion: on first load the crest and
+  tiles lift from face-down, the headline and its line slide in from the left
+  as the boot veil lifts; on scroll, headings slide in, the Grit pillars stand
+  up in turn and the band's photo settles - all on view timelines (scroll
+  position, not a clock), desktop only. citadel.com itself was unreachable
+  from the sandbox; built from John's description.
 
 ## Non-negotiable constraints (the "why")
 
