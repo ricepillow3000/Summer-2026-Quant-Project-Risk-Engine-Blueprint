@@ -5015,6 +5015,9 @@ def test_the_glide_follows_a_moving_target_and_yields_to_the_reader():
     assert "targetY(scroller, el)" in frame and "Math.min(2," in frame, \
         "the glide must follow the target each frame, a bounded step at a time"
     assert "__melionaFlight" in frame, "each frame must check it is still the current flight"
+    land_at = frame.index("land(scroller);\n    })(t0);")
+    assert "now - forgivenAt < 250" in frame[:land_at], \
+        "the landing must hold while a forgiven flick still arrives (it ran 73px past, step 8c)"
     for ev in ("wheel", "touchstart", "keydown"):
         assert f"'{ev}'" in script, f"the glide must yield to the reader's {ev}"
     rebind = script[:script.index("function onTab")]

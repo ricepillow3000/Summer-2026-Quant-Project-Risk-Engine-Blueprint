@@ -376,6 +376,12 @@ _script_frame("""
           (waiting || Math.abs(Math.max(0, Math.min(tgt, max)) - scroller.scrollTop) > 2)) {
         requestAnimationFrame(f); return;
       }
+      /* Hold the landing while a forgiven flick is still arriving (onYield
+         forgives its tail for 2 s from the press). The flight lasts 1.5 s; a
+         tail that outlived it scrolled the page on past the section once the
+         flight let go - "Explore what we do" ended 73px past it, 1 of 2
+         presses on a loaded CI runner (Live audit 41015789077, step 8c). */
+      if (now - forgivenAt < 250) { requestAnimationFrame(f); return; }
       land(scroller);
     })(t0);
   }
