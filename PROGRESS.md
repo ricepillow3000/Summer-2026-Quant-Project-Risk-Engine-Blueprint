@@ -688,6 +688,58 @@ risk-engine/
   parity, vol target, days to exit, the 10 crash replays and the Grit score.
   `showcase/test_showcase.py` proves every function equals `src/` (to 1e-12,
   same seeds) and runs in `tools.check`, so the copy cannot drift.
+- ✅ **Risk Engine purge - the overwhelm audit** (2026-10-29). Snapshot commit
+  first ("Auto-Snapshot before Risk Engine Purge"). Non-UI: the glide script
+  left the deprecated `components.html` (a warning on every run) for a folded
+  `st.iframe`; a cold start with the feed down is tested to show guidance and
+  no number; the map is tested to draw no node or link the data did not
+  produce. UI, on John's rule - cut what the risk engine does not need, keep
+  what carries its identity (grit, the linkages between names): the research
+  workshop (Signal Lab, Regime Atlas, Security Master - and
+  `src/security_master.py` with its Yahoo calls) is gone; Liquidity joined the
+  main strip; Data Quality and Lineage fold into one "Where the numbers come
+  from" drawer; the Slice keeps its pairing sketch and equation and loses the
+  dense paragraph under them; The Book keeps its paragraph and its LEADS and
+  ANCHOR cards on the page and folds the no-role cards and two finer settings
+  into a drawer; the hero and headline speak plainly ("Bad-year loss",
+  "Simulated years"). The Risk Topology map is untouched.
+- ✅ **Options audit - every setting, mixed and matched, on live data**
+  (2026-10-30). John: every asset with every allocation, target vol 5-30%,
+  every estimator, both return models, every crisis, book size and
+  participation, "until no pairs are left untested", nothing hallucinated.
+  `tests/options_audit.py` + the **Options audit** workflow. ENGINE: all 20
+  presets and every suggested symbol paired with SPY, through the app's own
+  functions, each answer re-derived by the file's own numpy (the three
+  covariance estimators from their papers, risk parity's equal risk shares,
+  leverage = target / book vol at every target, both Monte Carlo engines' tail
+  and cone from their own paths plus the history's mean year, every crisis
+  replay from raw closes, days to exit for 6 book sizes x 10 participations,
+  and the map - every dot, the hazard line, every defensive link, and its web
+  of simulated futures held to closed-form OU theory under node). PAGE: the
+  real `main.py` under AppTest on 1,906 runs where every pair of widget values
+  meets (an all-pairs covering array over 20 widgets; 20 presets and 12
+  typed-in baskets); each run's headline CVaR, cone, Liquidity bars, Book
+  sentence, Correlation Watch line and map must equal the engine for exactly
+  those settings. Planted wiring bugs (a VT slider ignored, a wrong rolling
+  window, a book size ignored) fail it. The four crisis-record boxes are now
+  worked out a second time from Yahoo's raw chart API in the provenance step
+  (`crisis_boxes`, checked offline against `src.conviction`), and every in-page
+  button must sit on both glide scans' lists. The Workshop stays removed (John,
+  2026-10-30): Yahoo carries no ISIN (yfinance scrapes Business Insider,
+  "experimental"; a real one needs a CUSIP licence), so that column could
+  never be filled honestly.
+  First live run (499059a): 340 of 340 books and 1,906 of 1,906 page runs
+  reported; about 410,000 checks passed, and the 384 failures had three causes,
+  all fixed in d7ed26f. (1) A real crash: a short book, EWMA risk parity at
+  26-27% target vol, a 230-260% vol shock - April 2025's rally day became one
+  day losing more than the whole book, and the jump model took its log. The
+  page now says so and stops (no year compounds past a wipe-out). (2) ADV was
+  two numbers for a crypto + stock basket depending on which fetch ran first
+  (weekends counted as sessions on one path); one calendar now. (3) The audit
+  reached for widgets on pages that had correctly stopped (FX, rates and
+  commodity baskets at the Dot-com replay). The second run also showed my
+  absolute 1e-12 tolerance was too tight for a 7x-levered short FX book whose
+  numbers reach the thousands; it is relative now.
 
 ## Non-negotiable constraints (the "why")
 
@@ -748,8 +800,7 @@ two paid-vendor-dependent pieces remain explicit backlog items:
 1. **Phase VI deployment** to a live URL (the resume link - the whole point).
    Streamlit Community Cloud is the fastest free path; Procfile + requirements
    are already set for Railway/Render too.
-2. If a paid data vendor becomes available: SEDOL/CUSIP/merger history
-   (security master) or true tick-level streaming (Polygon.io/Alpaca/IEX) -
-   both are scoped and ready to wire in once an API key exists.
+2. If a paid data vendor becomes available: true tick-level streaming
+   (Polygon.io/Alpaca/IEX) is scoped and ready to wire in once an API key exists.
 3. Extend liquidity: per-asset liquidity-adjusted VaR, or a book-size slider
    preset that showcases a small/mid-cap basket where days-to-liquidate bites.

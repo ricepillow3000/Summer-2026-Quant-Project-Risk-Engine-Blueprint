@@ -1,0 +1,104 @@
+# Options audit: every option on the control deck, on LIVE Yahoo data
+# (tests/options_audit.py). ENGINE: every preset and every suggested symbol
+# (paired with SPY) through every estimator, weighting, target vol 5..30%,
+# both return models, every crisis, both sides, book size x participation and
+# the map - each answer re-derived independently. PAGE: the real main.py under
+# AppTest, on a covering array in which every pair of widget values meets.
+# Yahoo is asked once: the download job fetches every period the page reads.
+name: Options audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["claude/**"]
+
+permissions:
+  contents: read
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pip install -r requirements.txt
+      - name: Every symbol the page can read, every period, from Yahoo once
+        run: python -m tests.options_audit download audit/options
+      - uses: actions/upload-artifact@v4
+        with:
+          name: options-prices
+          path: audit/options
+
+  engine:
+    needs: download
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pip install -r requirements.txt
+      - uses: actions/download-artifact@v4
+        with:
+          name: options-prices
+          path: audit/options
+      - name: Engine shard ${{ matrix.shard }} of 16
+        run: python -m tests.options_audit engine audit/options --shard ${{ matrix.shard }}/16
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: options-engine-${{ matrix.shard }}
+          path: audit/options/options_engine_${{ matrix.shard }}.json
+
+  page:
+    needs: download
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:   # one basket per shard: 20 presets and 12 typed-in mixes
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+                16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pip install -r requirements.txt
+      - uses: actions/download-artifact@v4
+        with:
+          name: options-prices
+          path: audit/options
+      - name: Page shard ${{ matrix.shard }} of 32 - the real page, every pair of settings
+        run: python -m tests.options_audit page audit/options --shard ${{ matrix.shard }}/32
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: options-page-${{ matrix.shard }}
+          path: audit/options/options_page_${{ matrix.shard }}.json
+
+  summary:
+    needs: [engine, page]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pip install -r requirements.txt
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: options-*-*
+          merge-multiple: true
+          path: audit
+      - name: Every book and every page run accounted for, and every check's tally
+        run: python -m tests.options_audit summary audit

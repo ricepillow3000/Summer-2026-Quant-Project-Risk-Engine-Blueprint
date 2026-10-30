@@ -513,105 +513,6 @@ def _yahoo_unreachable() -> str | None:
         return type(exc).__name__
 
 
-def test_security_master_survives_a_failed_fetch():
-    """yfinance 1.7 returns None for .dividends/.splits when the history
-    fetch fails. One such name used to raise len(None) and blank the whole
-    Security Master tab; now that row reads unknown (None), never zero."""
-    import src.security_master as sm_mod
-
-    class _Failed:
-        isin = "-"
-        dividends = None
-        splits = None
-
-    class _Ok:
-        isin = "US0000000001"
-        dividends = pd.Series([0.5, 0.5], index=pd.to_datetime(
-            ["2025-01-02", "2025-07-01"]).tz_localize("UTC"))
-        splits = pd.Series(dtype=float)
-
-    real = sm_mod.yf.Ticker
-    sm_mod.yf.Ticker = lambda t, session=None: _Failed() if t == "BAD" else _Ok()
-    try:
-        sm = sm_mod.security_master(["GOOD", "BAD"], use_cache=False)
-    finally:
-        sm_mod.yf.Ticker = real
-    assert sm.loc["GOOD", "dividends_paid"] == 2
-    assert sm.loc["GOOD", "total_dividends"] == 1.0
-    assert pd.isna(sm.loc["BAD", "dividends_paid"]), "failed fetch reported as a count"
-    assert pd.isna(sm.loc["BAD", "total_dividends"]), "failed fetch reported as 0.0"
-    assert pd.isna(sm.loc["BAD", "splits"]), "failed fetch reported as 0 splits"
-    assert sm.loc["BAD", "isin"] == "unavailable"
-
-
-def test_security_master_reads_its_disk_cache_and_never_keeps_a_failure():
-    """John, 2026-10-20: the slow first basket switch. The security master
-    made two Yahoo calls per name, one name after another, on every new basket
-    (20 of the 44.8s an offline switch took) and kept nothing on disk.
-    Identifiers and corporate actions change rarely: a complete row is now
-    kept a day, under DATA_DIR, in one capped file. A row with a failed or
-    missing lookup is kept an hour only, so the page's "Retried within the
-    hour" stays true and an outage cannot blank a name for a day."""
-    import json
-    import tempfile
-    import time as _time
-    import src.ingestion as ing
-    import src.security_master as sm_mod
-
-    class _Failed:
-        isin = "-"
-        dividends = None
-        splits = None
-
-    class _Ok:
-        isin = "US0000000001"
-        dividends = pd.Series([0.5, 0.5], index=pd.to_datetime(
-            ["2025-01-02", "2025-07-01"]).tz_localize("UTC"))
-        splits = pd.Series(dtype=float)
-
-    calls = []
-
-    def fake_ticker(t, session=None):
-        calls.append(t)
-        return _Failed() if t == "BAD" else _Ok()
-
-    real_ticker, real_dir = sm_mod.yf.Ticker, ing.DATA_DIR
-    with tempfile.TemporaryDirectory() as tmp:
-        sm_mod.yf.Ticker, ing.DATA_DIR = fake_ticker, tmp
-        try:
-            fresh = sm_mod.security_master(["GOOD", "BAD"])
-            assert sorted(set(calls)) == ["BAD", "GOOD"]
-            calls.clear()
-            again = sm_mod.security_master(["GOOD", "BAD"])
-            assert calls == [], f"a second look within the hour went to Yahoo: {calls}"
-            assert again.equals(fresh), "a cached row differs from the fetched one"
-            path = pathlib.Path(tmp) / "security_master.json"
-            assert path.is_file() and [f.name for f in pathlib.Path(tmp).iterdir()] == [path.name]
-
-            def age_all(hours):
-                store = json.loads(path.read_text())
-                for row in store.values():
-                    row["fetched_at"] = _time.time() - hours * 3600
-                path.write_text(json.dumps(store))
-
-            age_all(2)                       # a failure is retried after an hour...
-            sm_mod.security_master(["GOOD", "BAD"])
-            assert set(calls) == {"BAD"}, calls
-            calls.clear()
-            age_all(25)                      # ...a complete row after a day
-            sm_mod.security_master(["GOOD"])
-            assert set(calls) == {"GOOD"}, calls
-            calls.clear()
-            sm_mod.security_master(["GOOD"], use_cache=False)
-            assert set(calls) == {"GOOD"}, "use_cache=False still read the disk"
-
-            many = [f"T{i}" for i in range(sm_mod.SM_MAX_ENTRIES + 25)]
-            sm_mod.security_master(many)
-            assert len(json.loads(path.read_text())) <= sm_mod.SM_MAX_ENTRIES
-        finally:
-            sm_mod.yf.Ticker, ing.DATA_DIR = real_ticker, real_dir
-
-
 def _fake_history(t, years=2.0):
     """One name's daily history the way yfinance's Ticker.history hands it
     over: tz-aware, on that name's own calendar. Offline and deterministic."""
@@ -816,31 +717,24 @@ def test_a_warm_pass_fits_inside_the_cache_budget():
     presets; the per-name files add ~450 more. A full pass, on fake data, must
     leave room to spare and evict nothing."""
     import src.ingestion as ing
-    import src.security_master as sm_mod
     import tools.warm_cache as wc
 
-    class _Ref:
-        isin = "US0000000001"
-        dividends = pd.Series(dtype=float)
-        splits = pd.Series(dtype=float)
-
     dropped = []
-    real = (ing._prune_cache, sm_mod.yf.Ticker, wc.PAUSE_SECONDS)
+    real = (ing._prune_cache, wc.PAUSE_SECONDS)
 
     def counting_prune(*a, **k):
         dropped.append(real[0](*a, **k))
         return dropped[-1]
 
     with _FakeYahoo(years=3.0) as fy:
-        ing._prune_cache, sm_mod.yf.Ticker, wc.PAUSE_SECONDS = (
-            counting_prune, (lambda t, session=None: _Ref()), 0)
+        ing._prune_cache, wc.PAUSE_SECONDS = counting_prune, 0
         try:
             import contextlib
             import io
             with contextlib.redirect_stdout(io.StringIO()):
                 wc.run_pass()
         finally:
-            ing._prune_cache, sm_mod.yf.Ticker, wc.PAUSE_SECONDS = real
+            ing._prune_cache, wc.PAUSE_SECONDS = real
         files = len([p for p in fy.dir.iterdir()
                      if p.suffix == ".parquet" or p.name.endswith(".meta.json")])
     assert sum(dropped) == 0, f"a warm pass evicted {sum(dropped)} of its own files"
@@ -899,25 +793,6 @@ def test_unknown_symbols_get_a_readable_error():
             assert "/" not in msg and "\\" not in msg, "a path reached the page"
     finally:
         ing.yf.download = real
-
-
-def test_security_master_live():
-    """Integration: real yfinance identifiers + corporate actions. Self-skips offline."""
-    why = _yahoo_unreachable()
-    if why:
-        print(f"[skip] security_master live check: Yahoo unreachable ({why})")
-        return
-    try:
-        from src.security_master import security_master
-        sm = security_master(["AAPL", "MSFT"], use_cache=False)   # the feed, not the disk
-    except Exception as exc:  # noqa: BLE001 - network hiccup, don't fail the suite
-        print(f"[skip] security_master live check: {exc}")
-        return
-    assert set(sm.index) == {"AAPL", "MSFT"}
-    assert {"isin", "dividends_paid", "total_dividends", "splits"}.issubset(sm.columns)
-    # AAPL's ISIN is stable and well-known on the free feed; a good canary that
-    # the free-tier lookup still works if it ever silently breaks upstream.
-    assert sm.loc["AAPL", "isin"] == "US0378331005"
 
 
 def test_full_app_boots():
@@ -3682,11 +3557,11 @@ def test_freshness_ticker_does_not_tick_every_second():
 
 
 def test_gungnir_plaque_matches_its_sketch_and_its_math():
-    """The plaque states two-asset equal risk contribution as w1*s1 = w2*s2
-    and says correlation cancels: a name 3x as volatile gets 1/3 the capital.
-    Check that claim against the solver at several correlations, and that the
-    plaque names the sketch's blocks (it said "circle" after the circles were
-    redrawn as equal-area blocks)."""
+    """The plaque states two-asset equal risk contribution as w1*s1 = w2*s2,
+    and the sketch draws it as a 3:1 pair: a name 3x as volatile gets 1/3 the
+    capital, whatever the correlation. Check that against the solver at several
+    correlations, and that the plaque names the sketch's blocks (it said
+    "circle" after the circles were redrawn as equal-area blocks)."""
     s1, s2 = 0.30, 0.10
     for rho in (-0.6, 0.0, 0.3, 0.9):
         cov = pd.DataFrame([[s1 * s1, rho * s1 * s2], [rho * s1 * s2, s2 * s2]])
@@ -3859,7 +3734,6 @@ def test_the_warm_pass_covers_every_fetch_a_preset_page_makes():
     next"): the page replays its default flyer and anchor through every named
     crisis, and the warm pass now picks that same pair by the same rule."""
     import sys
-    import src.security_master as sm_mod
     import tools.warm_cache as wc
     from src.ingestion import PRESETS
 
@@ -3870,36 +3744,23 @@ def test_the_warm_pass_covers_every_fetch_a_preset_page_makes():
             return _offline_market_prices(tickers, period)
         return fetch
 
-    page, page_sm = set(), set()
-
-    def page_security_master(tickers, *a, **k):
-        page_sm.update(tickers)
-        return pd.DataFrame({"isin": "unavailable", "dividends_paid": 0, "total_dividends": 0.0,
-                             "splits": 0, "last_split_date": None, "last_split_ratio": None},
-                            index=list(tickers))
-
-    real_sm = sm_mod.security_master
-    sm_mod.security_master = page_security_master
+    page = set()
+    at, restore = _offline_app(market=recorder(page))
     try:
-        at, restore = _offline_app(market=recorder(page))
-        try:
-            pick = [w.label for w in at.selectbox].index("Preset basket")
-            semis = next(n for n in PRESETS if n.startswith("Semiconductors"))
-            at.selectbox[pick].set_value(semis).run()
-            assert not at.exception, [e.value for e in at.exception]
-        finally:
-            restore()
+        pick = [w.label for w in at.selectbox].index("Preset basket")
+        semis = next(n for n in PRESETS if n.startswith("Semiconductors"))
+        at.selectbox[pick].set_value(semis).run()
+        assert not at.exception, [e.value for e in at.exception]
     finally:
-        sm_mod.security_master = real_sm
+        restore()
 
-    warm, warm_sm = set(), set()
+    warm = set()
     saved = []
     mods = [m for n, m in sys.modules.items() if n.startswith("src.") or n == "tools.warm_cache"]
     fakes = {"fetch_prices": recorder(warm),
              "fetch_dollar_volume": lambda tickers=None, period="2y", **k: (
                  recorder(warm)(tickers, period)),
-             "fetch_risk_free_rate": lambda *a, **k: 0.045,
-             "security_master": lambda tickers, *a, **k: warm_sm.update(tickers)}
+             "fetch_risk_free_rate": lambda *a, **k: 0.045}
     for mod in mods:
         for attr, fake in fakes.items():
             if hasattr(mod, attr):
@@ -3918,7 +3779,6 @@ def test_the_warm_pass_covers_every_fetch_a_preset_page_makes():
     assert len(pairs) >= 2, f"the page replayed no crisis pair for each basket: {pairs}"
     missing = sorted(page - warm)
     assert not missing, f"fetches the page makes that no warm pass covers: {missing}"
-    assert page_sm <= warm_sm, f"security master not warmed for: {sorted(page_sm - warm_sm)}"
 
 
 def test_a_cache_file_is_never_seen_half_written():
@@ -4116,6 +3976,68 @@ def test_futures_contract_volume_is_not_reported_as_dollar_volume():
     assert adv["SI=F"] == 0.0, f"contracts x price shown as dollars: {adv['SI=F']}"
     prof = liquidity_profile(days_to_liquidate([0.5, 0.5], adv, book_value=5e9))
     assert prof["no_volume"] == ["SI=F"], prof
+
+
+def test_average_dollar_volume_is_one_number_whichever_fetch_ran_first():
+    """Options audit, 2026-10-30: fetch_prices caches dollar volume on its
+    aligned weekday calendar, but fetch_dollar_volume called on its own used
+    the raw calendar, where a crypto name's weekends counted as sessions -
+    BTC-USD + SPY read SPY's 63-session ADV 3% apart depending on which ran
+    first. Offline: the downloader is replaced, volume rises day by day so
+    any change of window moves the mean."""
+    import tempfile
+    import src.ingestion as ing
+
+    days = pd.date_range("2025-01-01", periods=200, freq="D")
+    close = pd.DataFrame({"BTC-USD": 60_000.0, "SPY": 600.0}, index=days)
+    close.loc[close.index.dayofweek >= 5, "SPY"] = np.nan
+    volume = pd.DataFrame({"BTC-USD": np.arange(200.0) + 1, "SPY": np.arange(200.0) * 1e3 + 1},
+                          index=days)
+    real = (ing._download_close_volume, ing.DATA_DIR)
+    try:
+        ing._download_close_volume = lambda *a, **k: (close.copy(), volume.copy())
+        ing.DATA_DIR = tempfile.mkdtemp(prefix="adv_order_")
+        alone = ing.average_dollar_volume(["BTC-USD", "SPY"], use_cache=False)
+        ing.fetch_prices(["BTC-USD", "SPY"], period="2y")          # writes the volume cache
+        cached = ing.average_dollar_volume(["BTC-USD", "SPY"])
+    finally:
+        ing._download_close_volume, ing.DATA_DIR = real
+    assert np.allclose(alone.sort_index(), cached.sort_index(), rtol=1e-12), (alone, cached)
+    spy = (volume["SPY"] * 600.0)[days.dayofweek < 5].tail(63).mean()
+    assert abs(alone["SPY"] - spy) <= 1e-9 * spy, (alone["SPY"], spy)
+
+
+def test_a_setting_that_loses_more_than_the_book_in_a_day_is_refused_in_words():
+    """Options audit, 2026-10-30, live data: a short S&P-sector book, EWMA risk
+    parity at 26% target vol and a 260% volatility shock crashed the page -
+    April 2025's rally day became one day losing more than 100% of the book,
+    which no year can be compounded past (the bootstrap's value went negative,
+    the jump model took its log). Offline: every name rallies 25% one day; the
+    short side, 30% target vol and a 300% shock must stop with a sentence and
+    no number, and easing the shock must bring the verdict back."""
+    def market(tickers=None, period="2y", **kw):
+        px = _offline_market_prices(tickers, period, **kw)
+        px.loc[px.index[-100]:] *= 1.25
+        return px
+
+    at, restore = _offline_app(market=market)
+    try:
+        next(r for r in at.radio if r.label.startswith("Which side")).set_value(
+            "Bearish - short the book")
+        next(c for c in at.checkbox if c.label == "Target volatility").check()
+        at.run()
+        next(s for s in at.slider if s.label == "Target annual vol (%)").set_value(30)
+        next(s for s in at.slider if s.label == "Volatility shock").set_value(300)
+        at.run()
+        assert not at.exception, [e.message for e in at.exception]
+        warns = " ".join(w.value for w in at.warning)
+        assert "more than everything it holds" in warns, warns
+        assert not any('class="verdict-box"' in m.value for m in at.markdown)
+        next(s for s in at.slider if s.label == "Volatility shock").set_value(0)
+        at.run()
+        assert not at.exception and any('class="verdict-box"' in m.value for m in at.markdown)
+    finally:
+        restore()
 
 
 def test_liquidity_adjustment_never_turns_a_tail_gain_into_a_bigger_gain():
@@ -4746,7 +4668,7 @@ def test_the_glide_is_bound_before_any_stop_and_rebinds():
     top = [n for n in tree.body if isinstance(n, ast.Expr) and isinstance(n.value, ast.Call)]
     def line_of(pred):
         return next(n.lineno for n in top if pred(n.value))
-    glide = line_of(lambda c: ast.unparse(c.func) == "_html" and c.args
+    glide = line_of(lambda c: ast.unparse(c.func) == "_script_frame" and c.args
                     and isinstance(c.args[0], ast.Constant) and "__melionaGlide" in c.args[0].value)
     css = line_of(lambda c: ast.unparse(c.func) == "load_css")
     hero = line_of(lambda c: ast.unparse(c.func) == "st.markdown" and "hero_html" in ast.unparse(c))
@@ -4774,7 +4696,7 @@ def test_the_glide_respects_reduced_motion():
     root = pathlib.Path(__file__).resolve().parent.parent
     tree = ast.parse((root / "main.py").read_text(encoding="utf-8"))
     script = next(n.args[0].value for n in ast.walk(tree) if isinstance(n, ast.Call)
-                  and ast.unparse(n.func) == "_html" and n.args
+                  and ast.unparse(n.func) == "_script_frame" and n.args
                   and isinstance(n.args[0], ast.Constant) and "__melionaGlide" in n.args[0].value)
     # go() is what every press ends in - at once, or once a section still
     # being written has mounted (onLink / waitFor) - so the question lives there.
@@ -4979,7 +4901,7 @@ def test_every_cached_yahoo_pull_says_what_it_is_doing():
     src = (pathlib.Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
     feed = {"fetch_prices", "fetch_dollar_volume", "average_dollar_volume",
             "fetch_risk_free_rate", "grit_scores", "crisis_cushion", "replay_returns",
-            "anchor_frame", "build_map_payload", "load_conviction", "security_master"}
+            "anchor_frame", "build_map_payload", "load_conviction"}
     silent = []
     for fn in ast.walk(ast.parse(src)):
         if not isinstance(fn, ast.FunctionDef):
@@ -5017,7 +4939,7 @@ def test_the_glide_follows_a_moving_target_and_yields_to_the_reader():
     src = (root / "main.py").read_text(encoding="utf-8")
     tree = ast.parse(src)
     script = next(n.args[0].value for n in ast.walk(tree) if isinstance(n, ast.Call)
-                  and ast.unparse(n.func) == "_html" and n.args
+                  and ast.unparse(n.func) == "_script_frame" and n.args
                   and isinstance(n.args[0], ast.Constant) and "__melionaGlide" in n.args[0].value)
     frame = script[script.index("(function f(now)"):script.index("function onLink")]
     assert "targetY(scroller, el)" in frame and "Math.min(2," in frame, \
@@ -5045,7 +4967,7 @@ def test_a_press_waits_for_its_section_as_long_as_the_page_is_still_being_writte
     import ast
     src = (pathlib.Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
     script = next(n.args[0].value for n in ast.walk(ast.parse(src)) if isinstance(n, ast.Call)
-                  and ast.unparse(n.func) == "_html" and n.args
+                  and ast.unparse(n.func) == "_script_frame" and n.args
                   and isinstance(n.args[0], ast.Constant) and "__melionaGlide" in n.args[0].value)
     wait = script[script.index("function waitFor"):script.index("function onLink")]
     assert "pageRunning()" in wait and '[data-testid="stStatusWidgetRunningIcon"]' in script, \
@@ -5074,7 +4996,7 @@ def test_only_a_decaying_flick_is_forgiven_and_every_exit_restores_the_page():
     root = pathlib.Path(__file__).resolve().parent.parent
     src = (root / "main.py").read_text(encoding="utf-8")
     script = next(n.args[0].value for n in ast.walk(ast.parse(src)) if isinstance(n, ast.Call)
-                  and ast.unparse(n.func) == "_html" and n.args
+                  and ast.unparse(n.func) == "_script_frame" and n.args
                   and isinstance(n.args[0], ast.Constant) and "__melionaGlide" in n.args[0].value)
     assert "function onScroll" in script, "a scrollbar drag (scroll events only) never reaches the yield"
     yield_fn = script[script.index("function onYield"):script.index("function onScroll")]
@@ -5128,7 +5050,7 @@ def test_a_button_pressed_while_the_page_is_still_loading_still_glides_all_the_w
     src = (root / "main.py").read_text(encoding="utf-8")
     tree = ast.parse(src)
     script = next(n.args[0].value for n in ast.walk(tree) if isinstance(n, ast.Call)
-                  and ast.unparse(n.func) == "_html" and n.args
+                  and ast.unparse(n.func) == "_script_frame" and n.args
                   and isinstance(n.args[0], ast.Constant) and "__melionaGlide" in n.args[0].value)
     link = script[script.index("function onLink"):]
     assert "if (!el) return;" not in link, \
@@ -5297,7 +5219,7 @@ def _crisis_pages():
 
 
 def _verdict(text):
-    hits = [t for t in text if "1-Year CVaR (95% confidence)" in t]
+    hits = [t for t in text if "1-year CVaR (95%)" in t]
     assert len(hits) == 1, hits
     return hits[0]
 
@@ -5404,18 +5326,6 @@ def test_a_median_that_can_be_negative_is_called_a_return_not_a_gain():
         "fixture no longer shows a negative median"
     for word in ("median gain", "Median 1y gain", "even a buyer"):
         assert word not in page, f"{word!r} on the page"
-
-
-def test_the_breadth_label_and_its_caption_quote_the_same_numbers():
-    """ME-03 (2026-10-22): "IR at raw breadth (605 bets/yr)" over a caption
-    "12 names x 50 rebalances a year" - 252/5 = 50.4 was rounded only in the
-    caption, so the two printed products disagreed."""
-    import re
-    page = " ".join(_offline_page()["text"])
-    label = int(re.search(r"IR at raw breadth \((\d+) bets/yr\)", page).group(1))
-    names, reb = re.search(r"Raw breadth counts (\d+) names × ([\d.]+) rebalances",
-                           page).groups()
-    assert round(int(names) * float(reb)) == label, (names, reb, label)
 
 
 def test_the_page_points_only_to_controls_that_exist():
@@ -5563,7 +5473,6 @@ def test_the_jump_calibration_uses_the_unbiased_sample_variance():
     assert abs(p["sigma_d"] ** 2 - lr.var(ddof=1)) < 1e-15, (p["sigma_d"] ** 2, lr.var(ddof=1))
 
 
-
 def test_a_fall_is_written_as_its_size_never_as_a_double_negative():
     """Council A review (2026-10-22): the defensive pair read "holding META
     alone fell -36% at its worst" - fell, minus: a reader can take it as a
@@ -5588,7 +5497,6 @@ def test_the_loaded_window_is_counted_one_way_everywhere():
     assert f"{rows - 1} trading days" not in page, f"{rows - 1} returns called trading days"
     assert f"{rows} daily returns" not in page, f"{rows} prices called daily returns"
     assert f"{rows - 1} daily returns" in page
-
 
 
 def test_the_pair_audit_download_retries_a_name_the_feed_dropped_and_fails_one_it_never_serves():
@@ -5657,6 +5565,75 @@ def test_the_download_asks_again_only_for_a_dropped_name_and_only_with_budget():
         assert close["BBB"].isna().all()
 
 
+def test_the_app_calls_nothing_streamlit_has_deprecated():
+    """Pillar 4, zero warnings: components.html printed "Please replace
+    st.components.v1.html with st.iframe" on every run of every session. The
+    glide script now ships through st.iframe in a container app.css folds to
+    zero height, so the layout above the hero is what components.html drew."""
+    import ast
+    root = pathlib.Path(__file__).resolve().parent.parent
+    tree = ast.parse((root / "main.py").read_text(encoding="utf-8"))
+    names = {ast.unparse(n) for n in ast.walk(tree) if isinstance(n, (ast.Attribute, ast.alias))}
+    assert not any("components" in n for n in names), "main.py still reaches for st.components"
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    assert ".st-key-glide" in css and "height: 0 !important" in css, \
+        "the glide frame must fold to zero height, or the hero moves down"
+
+
+def test_a_cold_start_with_the_feed_down_shows_guidance_not_a_crash():
+    """Phase 3 cold start: a first visitor on an empty cache with Yahoo
+    unreachable. The page must not raise, must say what to do in the visitor's
+    words, and must show no number at all - no verdict, no map, no placeholder."""
+    from src.ingestion import NO_DATA_MSG, NoDataError
+
+    def feed_down(*a, **k):
+        raise NoDataError(NO_DATA_MSG)
+
+    at, restore = _offline_app(market=feed_down, dollar_volume=feed_down)
+    try:
+        assert [e.value for e in at.error] == [NO_DATA_MSG], [e.value for e in at.error]
+        page = " ".join(m.value for m in at.markdown)
+        assert '<div class="verdict-box">' not in page, "a verdict rendered with no data behind it"
+        frames = [f.proto.srcdoc for f in at.get("iframe")]
+        assert all("__melionaGlide" in f for f in frames), "the map rendered with no data behind it"
+        assert any("Crisis record unavailable" in c.value for c in at.caption)
+    finally:
+        restore()
+
+
+def test_the_map_draws_no_node_or_link_the_data_did_not_produce():
+    """Phase 3, zero fake nodes. Every dot on the Risk Topology map is a name
+    the visitor holds (labelled Universe) or a disclosed defensive ETF from
+    DEFENSIVE_ANCHOR_TICKERS (labelled Anchor pool) - nothing else, and each
+    held name is drawn. Every link joins two drawn dots, starts at the book's
+    most volatile holding, and every number on both is finite. Long and short."""
+    import math
+    import src.topology as tp
+    from src.pairing import DEFENSIVE_ANCHOR_TICKERS
+
+    held = ["AAPL", "MSFT", "NVDA", "XOM"]
+    px = _offline_market_prices(held + DEFENSIVE_ANCHOR_TICKERS + ["SPY"], "2y")
+    rets = px[held].pct_change().dropna()
+    w = pd.Series(0.25, index=held)
+    orig = tp.fetch_prices
+    try:
+        tp.fetch_prices = lambda tickers, *a, **k: px[list(tickers)]
+        for short in (False, True):
+            pl = tp.build_map_payload(rets, w, held, short)
+            drawn = {a["t"]: a["f"] for a in pl["assets"]}
+            assert {t for t, f in drawn.items() if f == "Universe"} == set(held), drawn
+            assert {t for t, f in drawn.items() if f == "Anchor pool"} <= set(DEFENSIVE_ANCHOR_TICKERS), drawn
+            assert all(math.isfinite(a["b"]) and math.isfinite(a["v"]) for a in pl["assets"])
+            flyer = str((rets.std()).idxmax())
+            assert pl["pairs"], "the data supports linkages here; none were drawn"
+            for p in pl["pairs"]:
+                assert p["fl"] == flyer and p["fl"] in drawn and p["an"] in drawn, p
+                assert all(math.isfinite(v) for v in [p["rho"], p["wFlyer"], *p["real"].values()]), p
+            assert pl["live"] and "Yahoo daily closes" in pl["provenance"]
+    finally:
+        tp.fetch_prices = orig
+
+
 def test_the_audits_raw_yahoo_bars_land_on_their_own_day_across_a_clock_change():
     """Live audit run 86 (2026-10-28): Yahoo stamps a London FX day at its local midnight, 23:00 UTC the
     evening before while Britain is on summer time. raw_chart added the meta's gmtoffset, which is only
@@ -5687,6 +5664,79 @@ def test_the_audits_raw_yahoo_bars_land_on_their_own_day_across_a_clock_change()
         assert days == ["2026-08-18", "2026-12-01"], days
     finally:
         lp.guarded_session = real
+
+
+def test_the_audits_full_history_asks_yahoo_for_daily_bars_by_date():
+    """Live audit run 105 (2026-10-30): Yahoo answers range=max with MONTHLY
+    bars whatever the interval, so the crisis-box check read "252 trading
+    days on" as 21 years (+475%, 1 of 1 crisis) against the page's correct
+    10 of 10. Full history is asked for by dates, which keeps daily bars."""
+    import tools.live_provenance as lp
+
+    asked = []
+    payload = {"chart": {"result": [{"meta": {"exchangeTimezoneName": "America/New_York"},
+                                     "timestamp": [1_700_000_000], "indicators": {"adjclose": [{"adjclose": [1.0]}]}}]}}
+
+    class Session:
+        def get(self, url, timeout=None):
+            asked.append(url)
+            return type("R", (), {"json": lambda self: payload})()
+
+    real = lp.guarded_session
+    try:
+        lp.guarded_session = Session
+        lp.raw_chart("SPY", "max")
+        lp.raw_chart("SPY")
+    finally:
+        lp.guarded_session = real
+    assert "range=max" not in asked[0] and "period1=0&period2=" in asked[0] and "interval=1d" in asked[0], asked
+    assert "range=3mo" in asked[1], asked
+
+
+def test_every_in_page_button_is_flown_by_both_glide_scans():
+    """John, 2026-10-30: every button must glide the reader down, never jump.
+    tools/deep_scan.mjs and tools/glide_load_check.mjs measure each flight
+    frame by frame on live data (Live audit steps 8c and 10) - but only for
+    the buttons on their lists. A new in-page link missing from a list would
+    ship unmeasured, so the page's links and both lists must be the same set."""
+    import re
+    from collections import Counter
+    root = pathlib.Path(__file__).resolve().parent.parent
+    page = (root / "main.py").read_text(encoding="utf-8") + (root / "hero.py").read_text(encoding="utf-8")
+    links = Counter(re.findall(r'href="#([a-z][a-z-]*)"', page))
+    assert sum(links.values()) >= 8, links
+    for tool in ("tools/deep_scan.mjs", "tools/glide_load_check.mjs"):
+        js = (root / tool).read_text(encoding="utf-8")
+        flown = Counter("grit-showcase" if sel == "#hero .cta-btn" else re.search(r'href="#([a-z-]+)"', sel).group(1)
+                        for sel in re.findall(r"\[\s*'([^']*(?:href=\"#[a-z-]+\"|#hero \.cta-btn)[^']*)',\s*'[^']+'\s*\]", js))
+        assert flown == links, f"{tool} flies {dict(flown)}; the page links {dict(links)}"
+
+
+def test_the_crisis_record_audit_reaches_the_boxes_its_own_way():
+    """John, 2026-10-30: the four boxes under the hero must trace to a source,
+    not be hallucinated. Live audit step 1 works them out a second time from
+    Yahoo's raw chart API with its own loop (tools.live_provenance.crisis_boxes,
+    no src.conviction); that only proves anything if the loop agrees with the
+    engine on the same closes - checked here offline, a late-listing member
+    and a gap in a window's first week included, so the "trading at the window
+start" rule is exercised."""
+    import src.conviction as conv
+    from tools import live_provenance as lp
+    names = [conv.BENCHMARK, *conv.AI_CAPEX_BASKET]
+    px = _offline_market_prices(names, "max")
+    px.loc[:"2019-06-30", conv.AI_CAPEX_BASKET[-1]] = np.nan
+    px.loc["2020-02-21", conv.AI_CAPEX_BASKET[0]] = np.nan    # a gap in COVID's first week
+    real = conv.fetch_prices
+    conv.fetch_prices = lambda tickers, period="2y", align=True, **_: px[list(tickers)]
+    try:
+        page = lp.page_boxes(conv.load_conviction())
+    finally:
+        conv.fetch_prices = real
+    mine = lp.crisis_boxes(px[conv.BENCHMARK], px[conv.AI_CAPEX_BASKET])
+    assert page.keys() == mine.keys()
+    for k, v in page.items():
+        assert (v == mine[k]) if isinstance(v, (str, list)) else abs(v - mine[k]) < 1e-12, (k, v, mine[k])
+    assert int(page["t1"].split(" of ")[1]) >= 3 and int(page["race"].split(" of ")[1]) >= 3, page
 
 
 if __name__ == "__main__":
