@@ -5666,6 +5666,33 @@ def test_the_audits_raw_yahoo_bars_land_on_their_own_day_across_a_clock_change()
         lp.guarded_session = real
 
 
+def test_the_audits_full_history_asks_yahoo_for_daily_bars_by_date():
+    """Live audit run 105 (2026-10-30): Yahoo answers range=max with MONTHLY
+    bars whatever the interval, so the crisis-box check read "252 trading
+    days on" as 21 years (+475%, 1 of 1 crisis) against the page's correct
+    10 of 10. Full history is asked for by dates, which keeps daily bars."""
+    import tools.live_provenance as lp
+
+    asked = []
+    payload = {"chart": {"result": [{"meta": {"exchangeTimezoneName": "America/New_York"},
+                                     "timestamp": [1_700_000_000], "indicators": {"adjclose": [{"adjclose": [1.0]}]}}]}}
+
+    class Session:
+        def get(self, url, timeout=None):
+            asked.append(url)
+            return type("R", (), {"json": lambda self: payload})()
+
+    real = lp.guarded_session
+    try:
+        lp.guarded_session = Session
+        lp.raw_chart("SPY", "max")
+        lp.raw_chart("SPY")
+    finally:
+        lp.guarded_session = real
+    assert "range=max" not in asked[0] and "period1=0&period2=" in asked[0] and "interval=1d" in asked[0], asked
+    assert "range=3mo" in asked[1], asked
+
+
 def test_every_in_page_button_is_flown_by_both_glide_scans():
     """John, 2026-10-30: every button must glide the reader down, never jump.
     tools/deep_scan.mjs and tools/glide_load_check.mjs measure each flight

@@ -44,9 +44,15 @@ def check(name: str, ok: bool, detail: str) -> None:
 
 
 def raw_chart(symbol: str, span: str = "3mo") -> pd.Series:
-    """Adjusted closes straight from Yahoo's chart endpoint, keyed by date."""
+    """Adjusted closes straight from Yahoo's chart endpoint, keyed by date.
+
+    span="max" asks for every day since 1970 by dates: Yahoo answers
+    range=max with MONTHLY bars whatever the interval (Live audit run 105,
+    2026-10-30: the crisis boxes read 252 "days" on as 21 years, +475%)."""
+    span_q = (f"period1=0&period2={int(datetime.now(timezone.utc).timestamp())}"
+              if span == "max" else f"range={span}")
     url = (f"https://query2.finance.yahoo.com/v8/finance/chart/{symbol}"
-           f"?range={span}&interval=1d&events=div%2Csplit")
+           f"?{span_q}&interval=1d&events=div%2Csplit")
     res = guarded_session().get(url, timeout=30).json()["chart"]["result"][0]
     # Each bar's day in the exchange's own time zone, summer time included. The meta's gmtoffset is
     # only today's offset: added to every bar, it moved every London summer bar (23:00 UTC = midnight
@@ -225,6 +231,10 @@ def main() -> int:
 
     # 5. The crisis-record boxes, a second time from the raw chart API.
     raw = {t: raw_chart(t, "max") for t in [BENCHMARK, *AI_CAPEX_BASKET]}
+    gap = int(np.median(np.diff(raw[BENCHMARK].index.values).astype("timedelta64[D]").astype(int)))
+    check("crisis record source is daily bars", gap <= 3 and len(raw[BENCHMARK]) > 252 * 20,
+          f"{len(raw[BENCHMARK])} {BENCHMARK} bars, median gap {gap} days, "
+          f"from {raw[BENCHMARK].index[0].date()}")
     mine = crisis_boxes(raw[BENCHMARK], pd.DataFrame({t: raw[t] for t in AI_CAPEX_BASKET}))
     page = page_boxes(load_conviction())
     for key, label in (("t1", "Bought the scariest day: crises positive a year on"),
@@ -238,9 +248,9 @@ def main() -> int:
         a, b = page[key], mine[key]
         ok = (a == b) if isinstance(a, (str, list)) else (
             a is not None and b is not None and f"{a:+.0%}" == f"{b:+.0%}" and abs(a - b) < 1e-4)
-        check(f"crisis record box - {label}", ok,
-              f"page {a if isinstance(a, (str, list)) else f'{a:+.4%}'} vs raw Yahoo "
-              f"{b if isinstance(b, (str, list)) else f'{b:+.4%}'}")
+        def shown(v):
+            return v if isinstance(v, (str, list)) or v is None else f"{v:+.4%}"
+        check(f"crisis record box - {label}", ok, f"page {shown(a)} vs raw Yahoo {shown(b)}")
 
     bad = [n for n, ok, _ in results if not ok]
     print(f"\n{len(results) - len(bad)}/{len(results)} provenance checks pass")
