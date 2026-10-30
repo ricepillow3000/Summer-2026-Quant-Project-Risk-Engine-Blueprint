@@ -105,12 +105,8 @@ h1, h2, h3 { color: #3F3B35; font-weight: 400; letter-spacing: -0.01em; }
 [data-testid="stExpander"] { border: 1px solid #C4BDAE !important;
     background: #ECE7DD !important; }
 
-/* ---- Presentation flow: hero, showcase, CTAs, scroll reveal ---- */
+/* ---- Presentation flow: hero, showcase, CTAs (reveals: search "REVEAL") ---- */
 html { scroll-behavior: smooth; }
-@keyframes meliona-rise { from { opacity: 0; transform: translateY(24px); }
-                          to   { opacity: 1; transform: translateY(0); } }
-.reveal { animation: meliona-rise linear both;
-          animation-timeline: view(); animation-range: entry 0% cover 30%; }
 
 /* WIDE COURT - the whole page works now, capped for taste. Layout is
    `wide`; this rules the court width and the gutter rhythm. */
@@ -352,9 +348,10 @@ html { scroll-behavior: smooth; }
     border-top: 1px solid #C4BDAE; padding-top: 13px; margin: 34px 0 14px;
     position: relative; }
 /* A bronze accent draws itself across the lintel as the section scrolls
-   into view - one pass, scroll-driven. Where view-timeline is unsupported
-   or motion is reduced it stays scaleX(0) (invisible) and the 1px border
-   above is the base, so there is no regression. */
+   into view - scroll-linked: its length IS how far the lintel has come up the
+   screen. Scroll timelines where the browser has them; elsewhere static/
+   reveal.js feeds the same position as --scrub, only while it is on screen.
+   Under reduced motion it stays scaleX(0) and the 1px border is the base. */
 .panel-head::before { content: ''; position: absolute; top: -1px; left: 0;
     height: 2px; width: 100%; transform: scaleX(0); transform-origin: left;
     background: linear-gradient(90deg, #9A7B4F, #C8A86E 55%, transparent); }
@@ -362,6 +359,9 @@ html { scroll-behavior: smooth; }
   .panel-head::before { animation: lintel-draw linear both;
       animation-timeline: view(); animation-range: entry 0% cover 20%; }
   @keyframes lintel-draw { to { transform: scaleX(1); } }
+}
+@supports not (animation-timeline: view()) {
+  .reveal-on .panel-head::before { transform: scaleX(min(1, calc(var(--scrub, 0) * 4))); }
 }
 /* Wraps rather than nowrap: on a 375px phone 5 of 25 titles ran out of their
    box and one was cut off (device_check, 2026-10-17). The lintel is
@@ -496,18 +496,6 @@ div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
 #boot-skel .sk-band { flex: 1; margin-top: 12px; border-top: 2px solid #B8A995;
     background: linear-gradient(180deg, #99958E 0, #8D8983 70px); }
 
-@supports (animation-timeline: view()) {
-  [data-testid="stPlotlyChart"] { position: relative; }
-  [data-testid="stPlotlyChart"]::before { content: ''; position: absolute;
-      inset: 0; z-index: 2; pointer-events: none; opacity: 0;
-      background: linear-gradient(90deg, #E2DCD0 25%, #EFEAE0 45%, #E2DCD0 65%);
-      background-size: 200% 100%;
-      animation: sk-sheen 1.15s linear infinite, sk-dissolve linear both;
-      animation-timeline: auto, view();
-      animation-range: normal, entry 0% cover 40%; }
-  @keyframes sk-dissolve { from { opacity: 1; } 80% { opacity: 1; }
-                           to { opacity: 0; visibility: hidden; } }
-}
 
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
@@ -625,29 +613,65 @@ div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
 @keyframes from-left {
     from { opacity: 0; transform: translateX(-44px); }
     to   { opacity: 1; transform: none; } }
-@keyframes plate-settle { from { transform: scale(1.1); } to { transform: none; } }
-.hero-crest, .hstat, .pillar-card { transform-origin: 50% 100%; }
-/* As you scroll: tied to the scroll position itself (view timelines), never to
-   a clock - an element is exactly as far in as it is on screen, scrolling
-   back reverses it, and a section a button flies to is fully in by the time
-   it lands (deep_scan checks the destination never fades). Headings and
-   their lines come in from the left, the Grit pillars stand up one after
-   another, the band's photo settles from a slow zoom. Where view timelines
-   do not exist, or motion is reduced, all of it simply stands still. Not on
-   a phone: a 16px gutter has no room to slide in from. */
-@supports (animation-timeline: view()) { @media (min-width: 761px) {
-  .showcase-eyebrow, .showcase-title, .showcase-body, .sec-mark, .panel-head .t {
-      animation: from-left linear both; animation-timeline: view();
-      animation-range: entry 5% entry 100%; }
-  .showcase-body { animation-range: entry 25% cover 25%; }
-  .pillar-card { animation: lift-face linear both; animation-timeline: view();
-      animation-range: entry 20% cover 30%; }
-  .pillar-card:nth-child(2) { animation-range: entry 35% cover 35%; }
-  .pillar-card:nth-child(3) { animation-range: entry 50% cover 40%; }
+.hero-crest, .hstat { transform-origin: 50% 100%; }
+
+/* ============================================================
+   REVEAL - how each block arrives (static/reveal.js does the timing).
+   Hidden state: only under html.reveal-on, which <head> sets before the
+   first paint - so no block flashes in finished and then hides - and which
+   is never set without JavaScript or under reduced motion, so the page is
+   simply there. Only opacity and transform move: the GPU animates both, and
+   neither touches layout, so nothing below a block shifts while it arrives.
+   will-change asks for the GPU layer up front (no first-frame stutter);
+   reveal.js removes the class when the block lands, releasing the layer.
+   Tune here:
+     --reveal-y    slide-up distance (20-30px reads as weight, not travel)
+     --reveal-x    slide-in distance for headings (from the left)
+     --reveal-dur  how long the settle takes
+     --ease-out    fast start, long soft landing (an expo-out curve)
+   The stagger between blocks is STAGGER_MS in reveal.js.
+   ============================================================ */
+:root { --reveal-y: 24px; --reveal-x: -32px; --reveal-dur: 1s;
+        --ease-out: cubic-bezier(0.16, 1, 0.3, 1); }
+.reveal-on .reveal-item {
+    opacity: 0; transform: translate3d(0, var(--reveal-y), 0);
+    will-change: transform, opacity; }
+.reveal-on .reveal-item--left { transform: translate3d(var(--reveal-x), 0, 0); }
+.reveal-on .reveal-item--lift { transform: perspective(900px) rotateX(-55deg);
+    transform-origin: 50% 100%; }
+.reveal-on .reveal-item.is-visible {
+    opacity: 1; transform: translate3d(0, 0, 0);
+    /* !important: the CTA's own colour transitions are !important too */
+    transition: opacity calc(var(--reveal-dur) * .8) var(--ease-out),
+                transform var(--reveal-dur) var(--ease-out) !important;
+    transition-delay: var(--reveal-delay, 0ms) !important; }
+@media (prefers-reduced-motion: reduce) {
+    .reveal-on .reveal-item { opacity: 1 !important; transform: none !important; } }
+
+/* SCRUB - the band's photo drifts slower than the page (parallax), its
+   position tied to how far the band has crossed the screen. The 12% zoom
+   keeps its edges outside the band at both ends of the drift. */
+@keyframes plate-drift {
+    from { transform: translate3d(0, -4%, 0) scale(1.12); }
+    to   { transform: translate3d(0, 4%, 0) scale(1.12); } }
+@supports (animation-timeline: view()) {
   .showcase-row { view-timeline: --band block; }
-  .showcase-row::before { animation: plate-settle linear both;
-      animation-timeline: --band; animation-range: entry 0% cover 50%; }
-} }
+  .showcase-row::before { animation: plate-drift linear both;
+      animation-timeline: --band; animation-range: cover 0% cover 100%; }
+}
+@supports not (animation-timeline: view()) {
+  .showcase-row::before {
+      transform: translate3d(0, calc((var(--scrub, .5) - .5) * 8%), 0) scale(1.12); }
+}
+
+/* PLATES - a band's photo is attached (main.py) only once reveal.js has seen
+   the band come within 600px, then fades up over the charcoal; the words on
+   the band are there first. Without reveal-on (no script, reduced motion)
+   main.py's rule attaches it at once. */
+.showcase-row::before, .st-key-gungnir_zone::before {
+    transition: opacity 1.2s var(--ease-out); }
+.reveal-on:not(.has-band) .showcase-row::before,
+.reveal-on:not(.has-gungnir) .st-key-gungnir_zone::before { opacity: 0; }
 
 /* Skeleton status line - sits on the band, in the hero's left gutter */
 #boot-skel .sk-load { position: absolute; bottom: 28px;
@@ -715,16 +739,10 @@ div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
 
 /* --- ROUND 5: precision numerals + one-pass ignite ---
    Tabular figures on every metric so columns of numbers align like a
-   ledger - precision feel, serif untouched. Charts arrive with a single
-   ignite bloom (their one good easing token, cubic-bezier(.25,1,.5,1)) -
-   one pass, never looping, killed under reduced-motion by the global guard. */
+   ledger - precision feel, serif untouched. (Charts used to bloom in on
+   mount, off screen as often as not; they reveal on arrival now - REVEAL.) */
 [data-testid="stMetricValue"], .verdict-number, .hstat .n {
     font-variant-numeric: tabular-nums; }
-@keyframes heat-bloom { from { opacity: 0; transform: scale(.985);
-                               filter: saturate(.55) brightness(.92); }
-                        to   { opacity: 1; transform: none; filter: none; } }
-[data-testid="stPlotlyChart"] {
-    animation: heat-bloom .9s cubic-bezier(.25,1,.5,1) both; }
 
 /* --- ROUND 6: reference-layout lifts (Sculptor / RiverNorth), our palette ---
    Sculptor: the hero display element is a stack of period-terminated serif

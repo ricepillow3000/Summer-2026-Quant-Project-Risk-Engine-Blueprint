@@ -3698,6 +3698,55 @@ def test_gungnir_plaque_matches_its_sketch_and_its_math():
     assert 'class="c">circle' not in src and "Circle A" not in src
 
 
+def test_blocks_reveal_on_arrival_on_the_gpu_and_never_hide_without_script():
+    """John, 2026-10-30: Citadel-grade motion - trigger-based reveals through an
+    IntersectionObserver (no listener on every scrolled pixel), opacity and
+    transform only, an expo-out curve, staggered arrivals, no flash of the
+    finished page before the script runs, and a page that is simply there
+    without JavaScript. static/tools-side proof: the browser run measured 0
+    flashes, CLS 0.0000 while revealing and 0ms/60ms/120ms cascades."""
+    import re
+    import tools.public_files as pf
+    root = pathlib.Path(__file__).resolve().parent.parent
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    js = (root / "static" / "reveal.js").read_text(encoding="utf-8")
+    main = (root / "main.py").read_text(encoding="utf-8")
+    hero = (root / "hero.py").read_text(encoding="utf-8")
+    # hidden only under html.reveal-on, which nothing sets without script
+    hidden = [r for r in re.findall(r"([^{}]*\.reveal-item[^{}]*)\{([^}]*)\}", css)]
+    assert hidden and all(".reveal-on" in sel for sel, _ in hidden), \
+        "a reveal rule hides blocks without html.reveal-on - no-JS visitors would see nothing"
+    moving = " ".join(body for _, body in hidden)
+    for prop in re.findall(r"transition:\s*([^;]+);", moving):
+        names = {t.strip().split()[0] for t in prop.split(",") if t.strip()}
+        assert names <= {"opacity", "transform"}, f"a reveal animates layout: {names}"
+    assert "will-change: transform, opacity" in moving
+    assert "cubic-bezier(0.16, 1, 0.3, 1)" in css, "the reveal curve is generic again"
+    assert re.search(r"prefers-reduced-motion: reduce\)\s*\{\s*\.reveal-on \.reveal-item", css)
+    # trigger-based: an observer reports arrivals; a scroll listener exists only
+    # in the scrub fallback, attached while a scrub layer is on screen
+    assert "new IntersectionObserver" in js and "new MutationObserver" in js
+    assert js.count("addEventListener('scroll'") == 1 and "if (live.length)" in js
+    assert re.search(r"var STAGGER_MS = \d+;", js) and "Math.min(i, MAX_STEPS) * STAGGER_MS" in js
+    # a section a button flies to never fades as the glide lands on it
+    dest = re.search(r"var DEST = '([^']+)'", js).group(1)
+    for target in set(re.findall(r'href="(#[a-z-]+)"', main + hero)):
+        assert target in dest, f"{target} is a glide destination but reveal.js could fade it"
+    # the head sets the hidden state before the first paint, and takes it off
+    # if the script has not run by DOMContentLoaded
+    head = pf.head_tags("https://example.test")
+    assert head.index("classList.add('reveal-on')") < head.index('src="./app/static/reveal.js"')
+    assert "IntersectionObserver' in window" in head and "prefers-reduced-motion" in head
+    assert "DOMContentLoaded" in head and "!window.__melionaReveal" in head
+    # heavy pictures are files, AVIF first, the bands' attached on approach
+    assert ";base64," not in main, "an image is inlined into the websocket again"
+    for name, fallback in (("facade", "jpg"), ("band", "jpg"), ("gungnir", "webp")):
+        small, big = root / "static" / f"{name}.avif", root / "static" / f"{name}.{fallback}"
+        assert small.stat().st_size < big.stat().st_size, f"{name}.avif is not the light copy"
+        assert f"url(app/static/{name}.avif)" in main
+    assert "html.has-band .showcase-row::before" in main and "html.has-gungnir" in main
+
+
 def test_corners_are_square_and_the_maps_rings_stay_in_the_plot():
     """John, 2026-10-30: no curved boxes, no watermark logo, and the map's
     rings were "expanding outwards on the graph" - the 99.7% ellipse ran past
@@ -4952,7 +5001,8 @@ def test_the_skeleton_paints_first_and_the_hero_lifts_it():
     cfg = tomllib.loads((root / ".streamlit" / "config.toml").read_text(encoding="utf-8"))
     assert cfg["server"].get("enableStaticServing") is True
     served = sorted(p.name for p in (root / "static").iterdir())
-    assert served == ["app.css", "band.jpg", "facade.jpg"], \
+    assert served == ["app.css", "band.avif", "band.jpg", "facade.avif", "facade.jpg",
+                      "gungnir.avif", "gungnir.webp", "reveal.js"], \
         f"static/ is served to the public; keep it to public files: {served}"
 
 

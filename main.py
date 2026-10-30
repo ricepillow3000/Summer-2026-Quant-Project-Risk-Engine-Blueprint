@@ -11,7 +11,6 @@ preset basket (equities, sector ETFs, FX, futures) or type their own symbols,
 so the engine speaks to any audience - not just one watchlist.
 """
 
-import base64
 from pathlib import Path
 import html
 
@@ -344,9 +343,10 @@ _html("""
       /* Re-aim against the page's CURRENT bottom every frame. */
       const max = scroller.scrollHeight - scroller.clientHeight;
       if (max > floor + 1) { floor = max; grew = now; }
-      /* The destination can still be moving: the showcase row rises 24px on
-         its scroll-driven reveal while we fly, so a target read once at the
-         click landed 8-11px past it and crawled back. Follow it - at most 2px
+      /* The destination can still be moving: a block above it can grow or
+         shift while we fly (it rose 24px on a scroll-driven reveal until
+         2026-10-30), so a target read once at the click landed 8-11px past it
+         and crawled back. Follow it - at most 2px
          a frame further away, so a chart mounting mid-flight cannot yank the
          page; at once when it comes closer (a rerun repainting the page above
          it), so the flight never runs past it (1 of 4 basket switches
@@ -525,6 +525,17 @@ _html("""
   });
   P.addEventListener('scroll', onScroll, { capture: true, passive: true });
   P.__melionaGlide = { onTab: onTab, onLink: onLink, onYield: onYield, onScroll: onScroll };
+})();
+/* Page motion lives in static/reveal.js, which <head> loads before the first
+   paint on the deployed page (tools/public_files.py). Where the head was not
+   patched (a local run), load it from here: it leaves what is already on
+   screen as drawn and reveals only what is below. */
+(function() {
+  const W = window.parent;
+  if (W.__melionaReveal || W.document.getElementById('meliona-reveal')) return;
+  const s = W.document.createElement('script');
+  s.id = 'meliona-reveal'; s.src = 'app/static/reveal.js';
+  W.document.head.appendChild(s);
 })();
 /* The crest's rings ripple while a pointer rests on it (static/app.css). On
    leave, each ring finishes the pass it is in and stops at rest - a ripple
@@ -869,7 +880,14 @@ if (STATIC / "facade.jpg").is_file():
         "rgba(237,233,227,.22) 100%), url(app/static/facade.jpg); "
         "background-size: auto, cover; "
         "background-position: left, right 78%; "
-        "background-blend-mode: normal, luminosity; }</style>",
+        "background-blend-mode: normal, luminosity; } "
+        # Same layers, AVIF first: 164 KB against the JPEG's 757 KB. A browser
+        # without image-set() type() keeps the declaration above.
+        "@supports (background-image: image-set(url(x.avif) type('image/avif'))) { "
+        ".hero-section { background-image: linear-gradient(90deg, "
+        "#EDE9E3 0%, rgba(237,233,227,.96) 40%, rgba(237,233,227,.62) 66%, "
+        "rgba(237,233,227,.22) 100%), image-set(url(app/static/facade.avif) "
+        "type('image/avif'), url(app/static/facade.jpg) type('image/jpeg')); } }</style>",
         unsafe_allow_html=True)
 else:
     st.markdown("", unsafe_allow_html=True)
@@ -880,9 +898,16 @@ else:
 # text stays the loudest thing on the band. A file, not base64 (see above).
 if (STATIC / "band.jpg").is_file():
     st.markdown(
-        "<style>.showcase-row::before { background-image: "
+        # html.has-band: reveal.js sets it once the band is within 600px of
+        # the screen (lazy); without reveal-on (no script, reduced motion) the
+        # photo is attached at once. AVIF 80 KB, the JPEG fallback 315 KB.
+        "<style>html:not(.reveal-on) .showcase-row::before, "
+        "html.has-band .showcase-row::before { background-image: "
         "linear-gradient(165deg, rgba(59,50,40,.42), rgba(45,39,32,.68)), "
-        "url(app/static/band.jpg); }</style>",
+        "url(app/static/band.jpg); background-image: "
+        "linear-gradient(165deg, rgba(59,50,40,.42), rgba(45,39,32,.68)), "
+        "image-set(url(app/static/band.avif) type('image/avif'), "
+        "url(app/static/band.jpg) type('image/jpeg')); }</style>",
         unsafe_allow_html=True)
 else:
     st.markdown("", unsafe_allow_html=True)  # band stays plain charcoal
@@ -896,7 +921,7 @@ st.markdown(hero_html(crest=logo_svg) + _LIFT_SKELETON, unsafe_allow_html=True)
 
 # ---- Showcase: the Grit Zone innovation, explained before you touch a slider ----
 st.markdown("""
-<div class="showcase-row reveal">
+<div class="showcase-row">
   <div class="showcase-section" id="grit-showcase" style="position:relative;">
     <div class="showcase-eyebrow">The Innovation</div>
     <h2 class="showcase-title">The Grit Zone</h2>
@@ -1012,21 +1037,21 @@ except Exception as _exc:  # noqa: BLE001 - landing page must never crash on dat
                "The Crisis Conviction tab retries on load.")
 
 # ---- Gungnir - the slice: reading ends, allocation begins ----
-# assets/gungnir.png is generated in-repo (procedural topographic contours
-# from a single scalar field + the bound-rune engraving) - born at 3200px,
-# no upscaling involved, so it can never look like a stretched photo.
-try:
-    with open(ASSETS / "gungnir.png", "rb") as _gf:
-        _gungnir_b64 = base64.b64encode(_gf.read()).decode()
-    _gungnir_bg = (
-        "background-image:linear-gradient(90deg, rgba(244,241,234,0) 0%, "
-        "rgba(244,241,234,.22) 36%, rgba(244,241,234,.9) 64%, #F4F1EA 82%), "
-        f"url(data:image/png;base64,{_gungnir_b64});")
-except Exception:  # noqa: BLE001 - asset missing: plain band, honest fallback
-    _gungnir_bg = ""
+# static/gungnir.webp (+ .avif) is generated in-repo (procedural topographic
+# contours from a single scalar field + the bound-rune engraving), 3200px wide.
+# A served file attached when the zone comes near (reveal.js sets
+# html.has-gungnir), no longer 750 KB of base64 PNG on every first websocket.
+_gungnir_fade = ("linear-gradient(90deg, rgba(244,241,234,0) 0%, rgba(244,241,234,.22) 36%, "
+                 "rgba(244,241,234,.9) 64%, #F4F1EA 82%)")
+_gungnir_bg = (
+    f"background-image:{_gungnir_fade}, url(app/static/gungnir.webp);"
+    f"background-image:{_gungnir_fade}, image-set(url(app/static/gungnir.avif) "
+    "type('image/avif'), url(app/static/gungnir.webp) type('image/webp'));"
+) if (STATIC / "gungnir.webp").is_file() else ""  # missing: plain band, honest fallback
 st.markdown(
     f'<div id="the-slice"></div>'
-    f'<style>.st-key-gungnir_zone::before {{ {_gungnir_bg} }}</style>',
+    f'<style>html:not(.reveal-on) .st-key-gungnir_zone::before, '
+    f'html.has-gungnir .st-key-gungnir_zone::before {{ {_gungnir_bg} }}</style>',
     unsafe_allow_html=True)
 _gungnir_zone = st.container(key="gungnir_zone")
 with _gungnir_zone:
@@ -1071,7 +1096,7 @@ with _gungnir_zone:
     _gg_sketch, _gg_plaque = st.columns([1.05, 1], gap="large")
     with _gg_sketch:
         st.markdown(
-        f'<div class="showcase-section reveal" style="padding-top:2px;text-align:center;">'
+        f'<div class="showcase-section" style="padding-top:2px;text-align:center;">'
         # The pairing drawn as the equation it actually is. w1*s1 = w2*s2 says
         # two blocks of (capital x volatility) have EQUAL AREA, so that is the
         # picture: one wide-and-short, one narrow-and-tall, same area, sharing
@@ -1104,7 +1129,7 @@ with _gungnir_zone:
         unsafe_allow_html=True)
     with _gg_plaque:
         st.markdown(
-        f'<div class="gungnir-plaque reveal">'
+        f'<div class="gungnir-plaque">'
         f'<div class="gplaque-eyebrow">The math behind the sketch</div>'
         f'<div class="gplaque-eq">'
         f'<span class="gplaque-term"><span class="t">w<sub>1</sub>&sigma;<sub>1</sub></span>'
@@ -1128,7 +1153,7 @@ with _gungnir_zone:
 
 st.markdown(
     f'<hr class="section-divider">'
-    f'<div class="engine-heading reveal" id="engine">'
+    f'<div class="engine-heading" id="engine">'
     f'<div class="showcase-eyebrow">The Engine</div>'
     f'<h2 class="showcase-title" style="font-size:26px;">Stress-test any '
     f'{"short book" if bearish else "portfolio"}, live</h2>'
@@ -1143,7 +1168,7 @@ st.markdown(
 # A walkthrough as a non-specialist found the controls arrive before any
 # statement of what the page is FOR. Three sentences, then the engine.
 st.markdown(
-    '<div class="orient reveal">'
+    '<div class="orient">'
     '<div class="orient-t">New here? Read this first</div>'
     '<ol class="orient-l">'
     '<li><b>Pick what you own.</b> Choose a starter basket below, or type any '

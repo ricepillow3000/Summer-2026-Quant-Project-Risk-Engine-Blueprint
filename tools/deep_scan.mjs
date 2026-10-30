@@ -265,6 +265,9 @@ await step('glide', async () => {
 
 // ---- 3. surface: every word, image and chart on the page ---------------------
 async function surface(tag) {
+  // Measure every block in the state it lands in (static/reveal.js), not the
+  // ones still waiting below the screen at opacity 0 - see device_check.mjs.
+  await page.evaluate(() => window.__melionaReveal?.revealAll());
   const f = await page.evaluate(() => {
     const main = document.querySelector('[data-testid="stMain"]');
     const heads = [...main.querySelectorAll('h1, h2, .panel-head .t, summary, .showcase-eyebrow, [data-testid="stMetricLabel"]')];

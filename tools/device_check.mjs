@@ -219,6 +219,11 @@ for (const dev of names) {
       if (ti === 0 || ti % 4 === 0) await page.screenshot({ path: `${outdir}/${dev}-tab-${ti + 1}.png`, fullPage: false }).catch(() => {});
       void label;
     }
+    // Blocks reveal as they reach the screen (static/reveal.js): measure the
+    // state each one lands in. A reveal moves only opacity and transform, never
+    // layout, so this is the page the visitor sees once scrolled to each block -
+    // and a block still waiting below the screen (opacity 0) is not skipped.
+    await page.evaluate(() => window.__melionaReveal?.revealAll());
     const m = await page.evaluate(measure);
     sideways = Math.max(sideways, m.sideways);
     m.words.forEach(x => found.words.add(x));
