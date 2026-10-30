@@ -17,7 +17,7 @@
 //                  hits its target; every crisis replay names itself; the cone, the
 //                  histogram and the headline agree; the same settings give the same number
 //   6. book      - names leave as the book grows; the headline counts match the cards
-//   7. tabs      - all twelve render; every drawer opens; Balance for every flyer
+//   7. tabs      - all nine render; every drawer opens; Balance for every flyer
 //   8. map       - Risk Topology: Run x3 under each calibration, long and short; ES >= VaR,
 //                  finite, breach a probability; overlays, explain mode, hover, pairings;
 //                  no demo wording on a live payload
@@ -121,6 +121,10 @@ async function openDrawer(label) {
   await s.scrollIntoViewIfNeeded();
   if (!(await s.evaluate(el => el.parentElement.open))) await s.click();
 }
+// Tabs that live in the folded "Where the numbers come from" drawer. Declared
+// here, above every step: openTab reads it, and the presets step calls openTab
+// long before the tabs step (a const below it was in its dead zone, run 98).
+const PROVENANCE = ['Data Quality', 'Lineage & Audit'];
 const metric = label => page.evaluate(l => {
   const m = [...document.querySelectorAll('[data-testid="stMetric"]')]
     .find(e => (e.querySelector('[data-testid="stMetricLabel"]')?.textContent || '').trim().startsWith(l));
@@ -499,6 +503,9 @@ await step('the book', async () => {
   const counts = b => (b.head.match(/(\d+) of your (\d+) names/) || []).slice(1).map(Number);
   const own = b => b.total - b.outside, ownAnchors = b => b.anchors - b.outside;
   const cards = b => `cards: ${b.leads} lead, ${b.anchors} anchor, ${b.held} held without a role, ${b.out} left out, ${b.outside} from outside`;
+  // Leaders and anchors sit under the headline; the other cards and the two
+  // finer settings sit in one drawer below them.
+  await openDrawer('The other names, line by line');
   const b0 = await bookState();
   const [e0, n0] = counts(b0);
   ok(b0.total > 0, 'book: dossier cards render', cards(b0));
@@ -532,10 +539,10 @@ await step('the book', async () => {
 });
 
 // ---- 7. tabs, drawers, Balance ----------------------------------------------------
-const TABS = ['Risk Topology', 'Risk Breakdown', 'Correlation Watch', 'Balance', 'Grit Zone',
-              'Crisis Conviction', 'Signal Lab', 'Regime Atlas', 'Liquidity', 'Security Master',
-              'Data Quality', 'Lineage & Audit'];
+const TABS = ['Risk Topology', 'Risk Breakdown', 'Liquidity', 'Correlation Watch', 'Balance',
+              'Grit Zone', 'Crisis Conviction', 'Data Quality', 'Lineage & Audit'];
 async function openTab(name) {
+  if (PROVENANCE.includes(name)) await openDrawer('Where the numbers come from');
   const t = page.getByRole('tab', { name, exact: true }).first();
   await t.scrollIntoViewIfNeeded(); await t.click(); await page.waitForTimeout(900);
 }

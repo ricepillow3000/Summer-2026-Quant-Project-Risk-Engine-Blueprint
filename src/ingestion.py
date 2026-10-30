@@ -35,10 +35,8 @@ from src.netguard import BudgetExhausted, check_budget, guarded_session
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 
-# Default universe (used when none is supplied). Kept as TICKERS for backwards
-# compatibility with the analytics/risk modules' __main__ smoke tests.
+# Default universe (used when none is supplied).
 DEFAULT_UNIVERSE = ["QQQ", "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA"]
-TICKERS = DEFAULT_UNIVERSE
 
 # Minimum history we consider statistically usable for risk estimates.
 MIN_ROWS = 60
@@ -627,7 +625,16 @@ def fetch_dollar_volume(tickers: list[str] | None = None, period: str = "2y",
         return pd.read_parquet(cache_path)
 
     close, volume = _download_close_volume(tickers, period, max_age_hours, use_cache)
-    dollar_vol = _dollar_volume(close, volume).dropna(axis=1, how="all")
+    # On the trading days fetch_prices caches volume on (aligned, weekdays), so
+    # the 63-session ADV is one number whichever of the two ran first. Left on
+    # the raw calendar, a crypto name's weekends counted as sessions: BTC-USD +
+    # SPY read SPY's ADV over 45 sessions here and 63 there, 3% apart (Options
+    # audit, 2026-10-30).
+    days = _clean_price_frame(close, align=True)
+    dollar_vol = _dollar_volume(close, volume)
+    if not days.empty:
+        dollar_vol = dollar_vol.reindex(index=days.index)[days.columns]
+    dollar_vol = dollar_vol.dropna(axis=1, how="all")
     if dollar_vol.empty:
         raise RuntimeError("No volume history for that universe.")
     if use_cache:

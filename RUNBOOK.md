@@ -299,7 +299,7 @@ app never reads. Its passes print to the deploy log, one line per preset.
 
 A pass warms every pull the page makes for a preset, not only its 2y prices:
 the full histories behind The Book and the Grit tab, the 10 years behind the
-tail fit, the anchor pool, the security master, and the page-wide pulls
+tail fit, the anchor pool, and the page-wide pulls
 (benchmark, recovery race, factor proxies, defensive shelf, T-bill). After a
 deploy the first switch to Semiconductors took 93.1s with only the 2y pull
 warm (John, 2026-10-20); offline, warming everything took that switch from

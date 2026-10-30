@@ -148,10 +148,14 @@ await step('flip to the short side', async () => {
   return `CVaR ${await verdict()}`;
 });
 
-for (const name of ['Risk Topology', 'Risk Breakdown', 'Correlation Watch', 'Balance', 'Grit Zone',
-                    'Crisis Conviction', 'Signal Lab', 'Regime Atlas', 'Liquidity', 'Security Master',
-                    'Data Quality', 'Lineage & Audit']) {
+for (const name of ['Risk Topology', 'Risk Breakdown', 'Liquidity', 'Correlation Watch', 'Balance',
+                    'Grit Zone', 'Crisis Conviction', 'Data Quality', 'Lineage & Audit']) {
   await step(`open tab: ${name}`, async () => {
+    if (['Data Quality', 'Lineage & Audit'].includes(name)) {     // the folded provenance drawer
+      const s = page.locator('summary', { hasText: 'Where the numbers come from' }).first();
+      await s.scrollIntoViewIfNeeded();
+      if (!(await s.evaluate(el => el.parentElement.open))) await s.click();
+    }
     await tab(name).scrollIntoViewIfNeeded(); await tab(name).click(); await page.waitForTimeout(1200);
   }, async () => {
     const len = await page.evaluate(n => {
