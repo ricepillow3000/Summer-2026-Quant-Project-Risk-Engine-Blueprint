@@ -688,6 +688,54 @@ risk-engine/
   parity, vol target, days to exit, the 10 crash replays and the Grit score.
   `showcase/test_showcase.py` proves every function equals `src/` (to 1e-12,
   same seeds) and runs in `tools.check`, so the copy cannot drift.
+- ✅ **Square, matte, and alive on arrival (2026-10-30)** - John: no watermark
+  logo, no curved boxes, a Swiss-grid map, Citadel-style motion. The crest
+  fragments behind the Grit Zone and the fan chart are gone; the four hero
+  tiles are matte rectangles in the buttons' grammar (a bronze foot rule on
+  hover, no glass, no sheen, no mixed corners), and the radius block that
+  re-rounded inputs, tables, charts and the verdict is deleted. The map:
+  square panels with bronze crop marks and a faint grain, a framed and ticked
+  plot, rhombus marks for names and the pairing diagram, square toggles, and
+  the probability rings clipped to the plot (the 99.7% ring ran past the frame,
+  over the axis labels and below 0% vol). Motion: on first load the crest and
+  tiles lift from face-down, the headline and its line slide in from the left
+  as the boot veil lifts; on scroll, headings slide in, the Grit pillars stand
+  up in turn and the band's photo settles - all on view timelines (scroll
+  position, not a clock), desktop only. citadel.com itself was unreachable
+  from the sandbox; built from John's description.
+- ✅ **Arrival motion on an IntersectionObserver, and the photos cut 93% (2026-10-30)**
+  - John asked for Citadel-grade transitions: trigger-based, GPU-only, custom
+    easing, staggered, no flash of content, and working without JavaScript.
+  - `static/reveal.js` tags each block as Streamlit adds it, in the same task,
+    so it is hidden before its first paint. Our blocks and Streamlit's metrics,
+    charts and tables are covered.
+  - An IntersectionObserver reveals each block once: it fades in and slides up
+    24px, and headings slide in from the left. Blocks that arrive together
+    cascade 60ms apart, in document order.
+  - Only opacity and transform move. The curve is cubic-bezier(0.16, 1, 0.3, 1).
+    will-change is released when a block lands.
+  - The hidden state lives under `html.reveal-on`, which `<head>` sets before
+    the first paint (`tools/public_files.py`). It is never set without
+    JavaScript or under reduced motion. It comes off at DOMContentLoaded if the
+    script did not run.
+  - The hero and the sections a button flies to never animate.
+  - Decorative layers are scroll-linked: the band photo drifts as parallax and
+    the panel lintels draw themselves. Both use CSS scroll timelines; without
+    them, an IO-gated rAF fallback feeds `--scrub`.
+  - Photos are AVIF first, with JPEG/WebP fallbacks. The band and Gungnir plates
+    attach only within 600px of the screen. The Gungnir topography is a served
+    file now, not 750 KB of base64 on the websocket.
+  - Image weight: 4.4 MB -> 0.3 MB.
+  - Browser proof (offline synthetic market):
+    - 0 flashes
+    - layout shift 0.0000 while revealing
+    - reveal transitions: opacity and transform only
+    - 0 scroll listeners added by reveal.js
+    - 0/60/120ms cascades
+    - nothing hidden under reduced motion, with reveal.js blocked, or with
+      JavaScript off
+  - `device_check`/`deep_scan` now measure each block's landed state
+    (`__melionaReveal.revealAll()`).
 - ✅ **Risk Engine purge - the overwhelm audit** (2026-10-29). Snapshot commit
   first ("Auto-Snapshot before Risk Engine Purge"). Non-UI: the glide script
   left the deprecated `components.html` (a warning on every run) for a folded

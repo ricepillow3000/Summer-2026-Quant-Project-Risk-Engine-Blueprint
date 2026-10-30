@@ -32,7 +32,11 @@ html, body, [class*="css"] { font-family: Georgia, 'Times New Roman', serif; }
 h1, h2, h3 { color: #3F3B35; font-weight: 400; letter-spacing: -0.01em; }
 /* Sharpen the whole app - kill Streamlit's default rounded corners */
 [data-testid="stExpander"], [data-baseweb="tab"], .stButton>button,
-[data-testid="stMetric"], div[data-baseweb="select"]>div { border-radius: 0 !important; }
+[data-testid="stMetric"], div[data-baseweb="select"]>div,
+[data-baseweb="input"], [data-baseweb="base-input"], .stNumberInput input,
+[data-testid="stTextInput"] input, [data-testid="stDataFrame"],
+[data-testid="stPlotlyChart"], [data-baseweb="popover"] [data-baseweb="menu"] {
+    border-radius: 0 !important; }
 /* Captions: the quiet ink at full strength. Streamlit draws st.caption at
    60% opacity, so the #524E47 written here reached the page as 2.74-2.77:1
    (screenshot pixels, ME-13). A lighter tone at opacity 1 keeps the quiet
@@ -101,12 +105,8 @@ h1, h2, h3 { color: #3F3B35; font-weight: 400; letter-spacing: -0.01em; }
 [data-testid="stExpander"] { border: 1px solid #C4BDAE !important;
     background: #ECE7DD !important; }
 
-/* ---- Presentation flow: hero, showcase, CTAs, scroll reveal ---- */
+/* ---- Presentation flow: hero, showcase, CTAs (reveals: search "REVEAL") ---- */
 html { scroll-behavior: smooth; }
-@keyframes meliona-rise { from { opacity: 0; transform: translateY(24px); }
-                          to   { opacity: 1; transform: translateY(0); } }
-.reveal { animation: meliona-rise linear both;
-          animation-timeline: view(); animation-range: entry 0% cover 30%; }
 
 /* WIDE COURT - the whole page works now, capped for taste. Layout is
    `wide`; this rules the court width and the gutter rhythm. */
@@ -162,7 +162,7 @@ html { scroll-behavior: smooth; }
 
 /* HERO - the great hall, now a two-column court: the pitch on the
    left, a 2x2 deck of engine-fact tiles on the right (reference:
-   dashboard stat cards), watermark crest behind. 58vh, not 88. */
+   dashboard stat cards). 58vh, not 88. */
 .hero-section { min-height: 58vh; display: grid;
     grid-template-columns: minmax(0, 1.45fr) minmax(300px, 1fr);
     gap: 56px; align-items: center; text-align: left;
@@ -219,13 +219,12 @@ html { scroll-behavior: smooth; }
 .hero-sub { font-size: 21px; color: #54504A; max-width: 640px; line-height: 1.6; }
 .hero-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
     position: relative; z-index: 1; }
-.hstat { border: 1px solid #C4BDAE; border-top: 2px solid #9A7B4F;
-    background: #F1EDE5; padding: 20px 22px 16px;
-    box-shadow: 0 1px 2px rgba(63,59,53,.05), 0 8px 24px -18px rgba(63,59,53,.35);
-    transition: transform .3s cubic-bezier(.16,1,.3,1), border-color .3s ease,
-                box-shadow .3s ease; }
-.hstat:hover { transform: translateY(-2px); border-color: #9A7B4F;
-    box-shadow: 0 2px 4px rgba(63,59,53,.06), 0 16px 34px -20px rgba(63,59,53,.45); }
+.hstat { border: 1px solid rgba(63,59,53,.22); background: #F1EDE5;
+    padding: 20px 22px 16px;
+    /* The buttons' grammar: a matte rectangle, square corners, no glass, no
+       shadow. Hover draws a 2px bronze rule along the foot, nothing moves. */
+    transition: border-color .3s ease, box-shadow .3s cubic-bezier(.16,1,.3,1); }
+.hstat:hover { border-color: #3F3B35; box-shadow: inset 0 -2px 0 #9A7B4F; }
 .hstat .n { font-size: 38px; color: #3F3B35; line-height: 1.05;
     letter-spacing: -0.02em; }
 .hstat .l { font-family: 'Helvetica Neue', sans-serif; font-size: 10px;
@@ -265,16 +264,6 @@ html { scroll-behavior: smooth; }
     background: linear-gradient(90deg, transparent,
         rgba(154,123,79,.55) 18%, rgba(154,123,79,.55) 82%, transparent); }
 
-/* ENGRAVINGS - crest fragments carved into the stone at low relief.
-   Pure ornament: pointer-events none, behind everything. */
-[data-testid="stColumn"] { position: relative; }   /* engrave anchor */
-.engrave { position: absolute; pointer-events: none; z-index: 0;
-    opacity: .075; }
-.engrave svg { width: 100%; height: 100%; }
-.engrave.scale { left: -70px; top: 34px; width: 340px; height: 340px;
-    transform: rotate(-6deg); }
-.engrave.line { right: -46px; bottom: -34px; width: 460px; height: 400px;
-    transform: rotate(-8deg); }
 
 /* Tables read as cut slabs too */
 [data-testid="stDataFrame"] { border: 1px solid #D4CDBF;
@@ -355,9 +344,10 @@ html { scroll-behavior: smooth; }
     border-top: 1px solid #C4BDAE; padding-top: 13px; margin: 34px 0 14px;
     position: relative; }
 /* A bronze accent draws itself across the lintel as the section scrolls
-   into view - one pass, scroll-driven. Where view-timeline is unsupported
-   or motion is reduced it stays scaleX(0) (invisible) and the 1px border
-   above is the base, so there is no regression. */
+   into view - scroll-linked: its length IS how far the lintel has come up the
+   screen. Scroll timelines where the browser has them; elsewhere static/
+   reveal.js feeds the same position as --scrub, only while it is on screen.
+   Under reduced motion it stays scaleX(0) and the 1px border is the base. */
 .panel-head::before { content: ''; position: absolute; top: -1px; left: 0;
     height: 2px; width: 100%; transform: scaleX(0); transform-origin: left;
     background: linear-gradient(90deg, #9A7B4F, #C8A86E 55%, transparent); }
@@ -365,6 +355,9 @@ html { scroll-behavior: smooth; }
   .panel-head::before { animation: lintel-draw linear both;
       animation-timeline: view(); animation-range: entry 0% cover 20%; }
   @keyframes lintel-draw { to { transform: scaleX(1); } }
+}
+@supports not (animation-timeline: view()) {
+  .reveal-on .panel-head::before { transform: scaleX(min(1, calc(var(--scrub, 0) * 4))); }
 }
 /* Wraps rather than nowrap: on a 375px phone 5 of 25 titles ran out of their
    box and one was cut off (device_check, 2026-10-17). The lintel is
@@ -492,7 +485,6 @@ div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
     background-size: 200% 100% !important; animation: sk-sheen 1.15s linear infinite;
     border-color: transparent !important; box-shadow: none !important; color: transparent !important; }
 #boot-skel .hero-crest { border-radius: 50%; }   /* the crest is round */
-#boot-skel .hstat::before { display: none !important; }
 #boot-skel .hstat { background: #E9E4DA !important; border-color: #DDD6C9 !important;
     box-shadow: none !important; animation: none !important; transform: none !important; }
 #boot-skel .hstat .n { -webkit-text-fill-color: transparent; background: none; }
@@ -504,18 +496,6 @@ div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
 #boot-skel .sk-band { flex: 1; margin-top: 12px; border-top: 2px solid #B8A995;
     background: linear-gradient(180deg, #99958E 0, #8D8983 70px); }
 
-@supports (animation-timeline: view()) {
-  [data-testid="stPlotlyChart"] { position: relative; }
-  [data-testid="stPlotlyChart"]::before { content: ''; position: absolute;
-      inset: 0; z-index: 2; pointer-events: none; opacity: 0;
-      background: linear-gradient(90deg, #E2DCD0 25%, #EFEAE0 45%, #E2DCD0 65%);
-      background-size: 200% 100%;
-      animation: sk-sheen 1.15s linear infinite, sk-dissolve linear both;
-      animation-timeline: auto, view();
-      animation-range: normal, entry 0% cover 40%; }
-  @keyframes sk-dissolve { from { opacity: 1; } 80% { opacity: 1; }
-                           to { opacity: 0; visibility: hidden; } }
-}
 
 @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
@@ -552,30 +532,6 @@ div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
     transform: skewX(-18deg); animation: gloss-glint 2.4s ease-out .2s 1 both; }
 @keyframes gloss-glint { from { left: -45%; } to { left: 150%; } }
 
-/* Hero stat tiles - frosted glass with an inner top highlight; the lift on
-   hover already exists, now it reads as a pane of glass catching light. */
-.hstat { background: linear-gradient(157deg, #F6F2EA 0%, #ECE6DA 100%);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.7),
-        0 1px 2px rgba(63,59,53,.05), 0 8px 24px -18px rgba(63,59,53,.35); }
-.hstat:hover { box-shadow: inset 0 1px 0 rgba(255,255,255,.85),
-        0 2px 4px rgba(63,59,53,.06), 0 18px 38px -20px rgba(63,59,53,.5); }
-/* Specular sheen sweeps the hero tiles on hover - same trophy finish as
-   the metric slabs, so the brand's front door feels alive. Children sit
-   above the sweep (z-index 1) so the gradient numbers stay crisp. */
-.hstat { position: relative; overflow: hidden; }
-.hstat > div { position: relative; z-index: 1; }
-.hstat::before { content: ''; position: absolute; top: 0; left: -70%;
-    width: 45%; height: 100%; pointer-events: none; z-index: 0;
-    background: linear-gradient(100deg, transparent,
-        rgba(200,168,110,.25), transparent);
-    transform: skewX(-18deg);
-    transition: left .6s cubic-bezier(.16,1,.3,1); }
-.hstat:hover::before { left: 125%; }
-@supports ((-webkit-background-clip: text) or (background-clip: text)) {
-  .hstat .n { background: linear-gradient(120deg, #3F3B35, #6E5B41);
-      -webkit-background-clip: text; background-clip: text;
-      -webkit-text-fill-color: transparent; }
-}
 
 
 /* Streamlit metric readouts - lift the flat numbers onto small glass tiles,
@@ -623,22 +579,7 @@ div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
 .panel-head, .lintel { margin-top: 26px; }
 .verdict-box { margin-top: 8px; }
 [data-testid="stMainBlockContainer"] { padding-bottom: 96px; }
-/* --- Radius scale: unblock the corners the base pinned to 0 --- */
-[data-testid="stExpander"], [data-testid="stMetric"],
-div[data-baseweb="select"]>div, .stNumberInput input,
-[data-testid="stTextInput"] input, .stMultiSelect [data-baseweb="select"]>div,
-[data-testid="stDataFrame"], [data-baseweb="tab"] { border-radius: 14px !important; }
-.stButton>button { border-radius: 12px !important; }
-[data-testid="stPlotlyChart"] { border-radius: 16px !important; }
-.verdict-box { border-radius: 20px; }
 
-/* Diversify: each hero tile carries a different corner profile so the deck
-   reads as a composition, not a grid of identical boxes. */
-.hstat { border-radius: 16px; }
-.hstat:nth-child(1) { border-radius: 22px 22px 22px 6px; }
-.hstat:nth-child(2) { border-radius: 22px 6px 22px 22px; }
-.hstat:nth-child(3) { border-radius: 6px 22px 22px 22px; }
-.hstat:nth-child(4) { border-radius: 22px 22px 6px 22px; }
 
 /* Organic bronze light - soft radial glows behind the hero. Not flat blobs:
    low-opacity, no hard edge, palette-only. */
@@ -662,12 +603,75 @@ div[data-baseweb="select"]>div, .stNumberInput input,
 [data-testid="stPlotlyChart"] g.bars path {
     filter: drop-shadow(0 0 5px rgba(154,123,79,.55)); }
 
-/* --- UFO ARRIVAL: intro tiles drop from above with a light settle. Trigger
-   is injected only on first load (boot block), so reruns never replay it. --- */
-@keyframes ufo-drop {
-    0%   { opacity:0; transform: translateY(-52px) scale(.96); }
-    60%  { opacity:1; transform: translateY(6px)  scale(1.005); }
-    100% { opacity:1; transform: translateY(0)    scale(1); } }
+/* --- ARRIVAL (after citadel.com, John 2026-10-30) ---
+   lift-face: an element laid face-down on its bottom edge stands up to face
+   the reader - the crest and the stat tiles, first load only (main.py's boot
+   block). from-left: a headline or its line slides in from the left. */
+@keyframes lift-face {
+    from { opacity: 0; transform: perspective(900px) rotateX(-78deg); }
+    to   { opacity: 1; transform: none; } }
+@keyframes from-left {
+    from { opacity: 0; transform: translateX(-44px); }
+    to   { opacity: 1; transform: none; } }
+.hero-crest, .hstat { transform-origin: 50% 100%; }
+
+/* ============================================================
+   REVEAL - how each block arrives (static/reveal.js does the timing).
+   Hidden state: only under html.reveal-on, which <head> sets before the
+   first paint - so no block flashes in finished and then hides - and which
+   is never set without JavaScript or under reduced motion, so the page is
+   simply there. Only opacity and transform move: the GPU animates both, and
+   neither touches layout, so nothing below a block shifts while it arrives.
+   will-change asks for the GPU layer up front (no first-frame stutter);
+   reveal.js removes the class when the block lands, releasing the layer.
+   Tune here:
+     --reveal-y    slide-up distance (20-30px reads as weight, not travel)
+     --reveal-x    slide-in distance for headings (from the left)
+     --reveal-dur  how long the settle takes
+     --ease-out    fast start, long soft landing (an expo-out curve)
+   The stagger between blocks is STAGGER_MS in reveal.js.
+   ============================================================ */
+:root { --reveal-y: 24px; --reveal-x: -32px; --reveal-dur: 1s;
+        --ease-out: cubic-bezier(0.16, 1, 0.3, 1); }
+.reveal-on .reveal-item {
+    opacity: 0; transform: translate3d(0, var(--reveal-y), 0);
+    will-change: transform, opacity; }
+.reveal-on .reveal-item--left { transform: translate3d(var(--reveal-x), 0, 0); }
+.reveal-on .reveal-item--lift { transform: perspective(900px) rotateX(-55deg);
+    transform-origin: 50% 100%; }
+.reveal-on .reveal-item.is-visible {
+    opacity: 1; transform: translate3d(0, 0, 0);
+    /* !important: the CTA's own colour transitions are !important too */
+    transition: opacity calc(var(--reveal-dur) * .8) var(--ease-out),
+                transform var(--reveal-dur) var(--ease-out) !important;
+    transition-delay: var(--reveal-delay, 0ms) !important; }
+@media (prefers-reduced-motion: reduce) {
+    .reveal-on .reveal-item { opacity: 1 !important; transform: none !important; } }
+
+/* SCRUB - the band's photo drifts slower than the page (parallax), its
+   position tied to how far the band has crossed the screen. The 12% zoom
+   keeps its edges outside the band at both ends of the drift. */
+@keyframes plate-drift {
+    from { transform: translate3d(0, -4%, 0) scale(1.12); }
+    to   { transform: translate3d(0, 4%, 0) scale(1.12); } }
+@supports (animation-timeline: view()) {
+  .showcase-row { view-timeline: --band block; }
+  .showcase-row::before { animation: plate-drift linear both;
+      animation-timeline: --band; animation-range: cover 0% cover 100%; }
+}
+@supports not (animation-timeline: view()) {
+  .showcase-row::before {
+      transform: translate3d(0, calc((var(--scrub, .5) - .5) * 8%), 0) scale(1.12); }
+}
+
+/* PLATES - a band's photo is attached (main.py) only once reveal.js has seen
+   the band come within 600px, then fades up over the charcoal; the words on
+   the band are there first. Without reveal-on (no script, reduced motion)
+   main.py's rule attaches it at once. */
+.showcase-row::before, .st-key-gungnir_zone::before {
+    transition: opacity 1.2s var(--ease-out); }
+.reveal-on:not(.has-band) .showcase-row::before,
+.reveal-on:not(.has-gungnir) .st-key-gungnir_zone::before { opacity: 0; }
 
 /* Skeleton status line - sits on the band, in the hero's left gutter */
 #boot-skel .sk-load { position: absolute; bottom: 28px;
@@ -715,7 +719,7 @@ div[data-baseweb="select"]>div, .stNumberInput input,
       background: rgba(244,240,232,.72) !important;
       -webkit-backdrop-filter: blur(20px) saturate(1.3);
       backdrop-filter: blur(20px) saturate(1.3);
-      border: 1px solid rgba(154,123,79,.35); border-radius: 14px;
+      border: 1px solid rgba(154,123,79,.35);
       box-shadow: inset 0 1px 0 rgba(255,255,255,.6),
                   0 24px 52px -22px rgba(63,59,53,.5); overflow: hidden; }
   [data-baseweb="menu"] li[role="option"]:hover,
@@ -724,27 +728,21 @@ div[data-baseweb="select"]>div, .stNumberInput input,
   .read-me { background: rgba(246,242,234,.5) !important;
       -webkit-backdrop-filter: blur(16px) saturate(1.15);
       backdrop-filter: blur(16px) saturate(1.15);
-      border: 1px solid rgba(154,123,79,.3) !important; border-radius: 14px;
+      border: 1px solid rgba(154,123,79,.3) !important;
       box-shadow: inset 0 1px 0 rgba(255,255,255,.55),
                   0 12px 30px -24px rgba(63,59,53,.4); }
 }
 
-/* (Nordic rune engravings removed 2026-07-09 at John's call - read as
-   ornament noise against the institutional register. Crest-fragment
-   engravings stay; they are the brand.) */
+/* (Engravings: the Nordic runes went 2026-07-09, the crest fragments behind
+   the Grit Zone and the fan chart 2026-10-30 - John: a watermark logo reads
+   tacky. The crest lives in the hero, once.) */
 
 /* --- ROUND 5: precision numerals + one-pass ignite ---
    Tabular figures on every metric so columns of numbers align like a
-   ledger - precision feel, serif untouched. Charts arrive with a single
-   ignite bloom (their one good easing token, cubic-bezier(.25,1,.5,1)) -
-   one pass, never looping, killed under reduced-motion by the global guard. */
+   ledger - precision feel, serif untouched. (Charts used to bloom in on
+   mount, off screen as often as not; they reveal on arrival now - REVEAL.) */
 [data-testid="stMetricValue"], .verdict-number, .hstat .n {
     font-variant-numeric: tabular-nums; }
-@keyframes heat-bloom { from { opacity: 0; transform: scale(.985);
-                               filter: saturate(.55) brightness(.92); }
-                        to   { opacity: 1; transform: none; filter: none; } }
-[data-testid="stPlotlyChart"] {
-    animation: heat-bloom .9s cubic-bezier(.25,1,.5,1) both; }
 
 /* --- ROUND 6: reference-layout lifts (Sculptor / RiverNorth), our palette ---
    Sculptor: the hero display element is a stack of period-terminated serif
@@ -794,7 +792,6 @@ div[data-baseweb="select"]>div, .stNumberInput input,
 .showcase-row .pillar-card:hover { border-left-color: #B08A55; }
 .showcase-row .pillar-label { color: #C6A26B; }
 .showcase-row .pillar-desc { color: #B4AB9B; }
-.showcase-row .engrave { opacity: .12; }
 
 /* Full-bleed bands overflow the court by design - never let that leak into
    a horizontal scrollbar (it also seeded phantom mini-scrollers). */
@@ -911,7 +908,7 @@ body:has([data-testid="stStatusWidgetRunningIcon"])::before { content: "";
     background-size: 250% 100%; animation: run-rail 1.4s linear infinite; }
 body:has([data-testid="stStatusWidgetRunningIcon"])::after { content: "Updating\2026";
     position: fixed; top: 10px; right: 12px; z-index: 990; pointer-events: none;
-    padding: 6px 10px; border-radius: 6px; background: #3F3B35; color: #EDE9E3;
+    padding: 6px 10px; background: #3F3B35; color: #EDE9E3;
     font: 11px/1 'Helvetica Neue', Arial, sans-serif; letter-spacing: .2em;
     text-transform: uppercase; }
 /* Reduced motion stops the rail (global rule); it stays, as a still line. */

@@ -24,7 +24,7 @@ enableXsrfProtection = true
 # budget sized for it - the test that pins this also forbids one.
 maxUploadSize = 1
 # Serves ./static/ at /app/static/ (path-traversal safe, nosniff) - locally and
-# on Railway. The two hero/band photos live there as files: inlined as base64
+# on Railway. The photos (and reveal.js) live there as files: inlined as base64
 # they were ~5 MB on the websocket AHEAD of the boot skeleton, which then
 # arrived with the hero it should stand in for (2026-10-19). static/ holds
 # public files only (test_the_skeleton_paints_first_and_the_hero_lifts_it).

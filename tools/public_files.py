@@ -109,6 +109,18 @@ def head_tags(site_url: str, build: str = "") -> str:
         # /a/b link was a blank white page. Send it to the branded 404 instead.
         "<script>if(!/^\\/(index\\.html)?$/.test(location.pathname))"
         "location.replace('/404.html')</script>\n"
+        # Motion (static/reveal.js). The blocks' hidden state switches on HERE,
+        # before the first paint, so no block shows finished and then hides.
+        # Never without IntersectionObserver or under reduced motion. The
+        # script is deferred, so it has run by DOMContentLoaded: if it has not
+        # (blocked, failed), the class comes off and the page shows as drawn.
+        # No JavaScript at all: the class is never set (the .no-js fallback).
+        "<script>(function(h){if(!('IntersectionObserver' in window)||"
+        "matchMedia('(prefers-reduced-motion: reduce)').matches)return;"
+        "h.classList.add('reveal-on');document.addEventListener('DOMContentLoaded',"
+        "function(){if(!window.__melionaReveal)h.classList.remove('reveal-on')})"
+        "})(document.documentElement)</script>\n"
+        '<script id="meliona-reveal" defer src="./app/static/reveal.js"></script>\n'
         f"{END}\n"
     )
 

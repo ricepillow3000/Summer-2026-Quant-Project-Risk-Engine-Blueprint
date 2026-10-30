@@ -11,7 +11,6 @@ preset basket (equities, sector ETFs, FX, futures) or type their own symbols,
 so the engine speaks to any audience - not just one watchlist.
 """
 
-import base64
 from pathlib import Path
 import html
 
@@ -333,9 +332,10 @@ _script_frame("""
       /* Re-aim against the page's CURRENT bottom every frame. */
       const max = scroller.scrollHeight - scroller.clientHeight;
       if (max > floor + 1) { floor = max; grew = now; }
-      /* The destination can still be moving: the showcase row rises 24px on
-         its scroll-driven reveal while we fly, so a target read once at the
-         click landed 8-11px past it and crawled back. Follow it - at most 2px
+      /* The destination can still be moving: a block above it can grow or
+         shift while we fly (it rose 24px on a scroll-driven reveal until
+         2026-10-30), so a target read once at the click landed 8-11px past it
+         and crawled back. Follow it - at most 2px
          a frame further away, so a chart mounting mid-flight cannot yank the
          page; at once when it comes closer (a rerun repainting the page above
          it), so the flight never runs past it (1 of 4 basket switches
@@ -376,6 +376,12 @@ _script_frame("""
           (waiting || Math.abs(Math.max(0, Math.min(tgt, max)) - scroller.scrollTop) > 2)) {
         requestAnimationFrame(f); return;
       }
+      /* Hold the landing while a forgiven flick is still arriving (onYield
+         forgives its tail for 2 s from the press). The flight lasts 1.5 s; a
+         tail that outlived it scrolled the page on past the section once the
+         flight let go - "Explore what we do" ended 73px past it, 1 of 2
+         presses on a loaded CI runner (Live audit 41015789077, step 8c). */
+      if (now - forgivenAt < 250) { requestAnimationFrame(f); return; }
       land(scroller);
     })(t0);
   }
@@ -515,6 +521,17 @@ _script_frame("""
   P.addEventListener('scroll', onScroll, { capture: true, passive: true });
   P.__melionaGlide = { onTab: onTab, onLink: onLink, onYield: onYield, onScroll: onScroll };
 })();
+/* Page motion lives in static/reveal.js, which <head> loads before the first
+   paint on the deployed page (tools/public_files.py). Where the head was not
+   patched (a local run), load it from here: it leaves what is already on
+   screen as drawn and reveals only what is below. */
+(function() {
+  const W = window.parent;
+  if (W.__melionaReveal || W.document.getElementById('meliona-reveal')) return;
+  const s = W.document.createElement('script');
+  s.id = 'meliona-reveal'; s.src = 'app/static/reveal.js';
+  W.document.head.appendChild(s);
+})();
 /* The crest's rings ripple while a pointer rests on it (static/app.css). On
    leave, each ring finishes the pass it is in and stops at rest - a ripple
    that settles rather than snapping back - and the outer rings, a beat behind,
@@ -526,6 +543,13 @@ _script_frame("""
     P.removeEventListener('pointerover', prev.enter, true);
     P.removeEventListener('pointerout', prev.leave, true);
   }
+  /* the rings' own waves only: the crest's first-load lift is an animation
+     in the same subtree, and must never be made to loop */
+  function waves(c) {
+    return c.getAnimations({ subtree: true }).filter(function(a) {
+      return a.animationName === 'crest-ripple';
+    });
+  }
   function crestOf(e) {
     const c = e.target.closest && e.target.closest('.hero-crest');
     return c && !c.contains(e.relatedTarget) ? c : null;   /* crossing its edge */
@@ -536,13 +560,13 @@ _script_frame("""
     /* Back before the last wave ended: a ring that already settled is no
        longer listed, so wake the ones kept from the leave too - each resumes
        from rest, where its last pass ended. */
-    (c.__rings || []).concat(c.getAnimations({ subtree: true })).forEach(function(a) {
+    (c.__rings || []).concat(waves(c)).forEach(function(a) {
       a.effect.updateTiming({ iterations: Infinity });
     });
   }
   function leave(e) {
     const c = crestOf(e); if (!c) return;
-    const runs = c.__rings = c.getAnimations({ subtree: true });
+    const runs = c.__rings = waves(c);
     if (!runs.length) { c.classList.remove('rippling'); return; }
     Promise.all(runs.map(function(a) {
       const pass = a.effect.getComputedTiming().currentIteration || 0;
@@ -802,15 +826,25 @@ if not st.session_state.get("_booted"):
     st.session_state["_booted"] = True
     st.markdown(
         """<style>
-  /* First-load only: the intro tiles fly in top-to-down (UFO settle). This
-     style block renders solely on the un-booted first pass, so Streamlit
-     reruns never replay the arrival. Scoped to #hero so the skeleton's own
-     tiles hold still. */
-  #hero .hero-stats .hstat { animation: ufo-drop .6s cubic-bezier(.2,.9,.25,1) both; }
-  #hero .hero-stats .hstat:nth-child(1) { animation-delay: .05s; }
-  #hero .hero-stats .hstat:nth-child(2) { animation-delay: .13s; }
-  #hero .hero-stats .hstat:nth-child(3) { animation-delay: .21s; }
-  #hero .hero-stats .hstat:nth-child(4) { animation-delay: .29s; }
+  /* First-load only (keyframes in app.css, "ARRIVAL"): the crest and the
+     four tiles lift from face-down to face-forward, the headline and its
+     line slide in from the left, one after another. This style block
+     renders solely on the un-booted first pass, so Streamlit reruns never
+     replay the arrival. It starts .55s in, as the boot veil (which holds .3s
+     and fades over .55s) is half gone - earlier, it played behind the veil.
+     Scoped to #hero so the skeleton's copies hold still;
+     fill "backwards", so once landed the hover states own the transform. */
+  #hero .hero-crest { animation: lift-face .9s cubic-bezier(.2,.8,.2,1) .6s backwards; }
+  #hero .hline { animation: from-left .95s cubic-bezier(.16,1,.3,1) backwards; }
+  #hero .hline:nth-child(1) { animation-delay: .73s; }
+  #hero .hline:nth-child(2) { animation-delay: .85s; }
+  #hero .hero-sub { animation: from-left .95s cubic-bezier(.16,1,.3,1) 1.01s backwards; }
+  #hero .cta-btn { animation: from-left .95s cubic-bezier(.16,1,.3,1) 1.15s backwards; }
+  #hero .hstat { animation: lift-face .85s cubic-bezier(.2,.8,.2,1) backwards; }
+  #hero .hstat:nth-child(1) { animation-delay: .89s; }
+  #hero .hstat:nth-child(2) { animation-delay: .99s; }
+  #hero .hstat:nth-child(3) { animation-delay: 1.09s; }
+  #hero .hstat:nth-child(4) { animation-delay: 1.19s; }
 </style>""", unsafe_allow_html=True)
 else:
     # Hold the veil's slot. Streamlit keys every element by its position, so
@@ -841,7 +875,14 @@ if (STATIC / "facade.jpg").is_file():
         "rgba(237,233,227,.22) 100%), url(app/static/facade.jpg); "
         "background-size: auto, cover; "
         "background-position: left, right 78%; "
-        "background-blend-mode: normal, luminosity; }</style>",
+        "background-blend-mode: normal, luminosity; } "
+        # Same layers, AVIF first: 164 KB against the JPEG's 757 KB. A browser
+        # without image-set() type() keeps the declaration above.
+        "@supports (background-image: image-set(url(x.avif) type('image/avif'))) { "
+        ".hero-section { background-image: linear-gradient(90deg, "
+        "#EDE9E3 0%, rgba(237,233,227,.96) 40%, rgba(237,233,227,.62) 66%, "
+        "rgba(237,233,227,.22) 100%), image-set(url(app/static/facade.avif) "
+        "type('image/avif'), url(app/static/facade.jpg) type('image/jpeg')); } }</style>",
         unsafe_allow_html=True)
 else:
     st.markdown("", unsafe_allow_html=True)
@@ -852,9 +893,16 @@ else:
 # text stays the loudest thing on the band. A file, not base64 (see above).
 if (STATIC / "band.jpg").is_file():
     st.markdown(
-        "<style>.showcase-row::before { background-image: "
+        # html.has-band: reveal.js sets it once the band is within 600px of
+        # the screen (lazy); without reveal-on (no script, reduced motion) the
+        # photo is attached at once. AVIF 80 KB, the JPEG fallback 315 KB.
+        "<style>html:not(.reveal-on) .showcase-row::before, "
+        "html.has-band .showcase-row::before { background-image: "
         "linear-gradient(165deg, rgba(59,50,40,.42), rgba(45,39,32,.68)), "
-        "url(app/static/band.jpg); }</style>",
+        "url(app/static/band.jpg); background-image: "
+        "linear-gradient(165deg, rgba(59,50,40,.42), rgba(45,39,32,.68)), "
+        "image-set(url(app/static/band.avif) type('image/avif'), "
+        "url(app/static/band.jpg) type('image/jpeg')); }</style>",
         unsafe_allow_html=True)
 else:
     st.markdown("", unsafe_allow_html=True)  # band stays plain charcoal
@@ -868,19 +916,8 @@ st.markdown(hero_html(crest=logo_svg) + _LIFT_SKELETON, unsafe_allow_html=True)
 
 # ---- Showcase: the Grit Zone innovation, explained before you touch a slider ----
 st.markdown("""
-<div class="showcase-row reveal">
+<div class="showcase-row">
   <div class="showcase-section" id="grit-showcase" style="position:relative;">
-    <div class="engrave scale"><svg viewBox="-50 -50 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <!-- the crest's hexagon and its X, cut in outline (assets/logo.svg) -->
-      <g fill="none" stroke="#9A7B4F" stroke-width="1.1" stroke-linejoin="round">
-        <circle r="44"/>
-        <polygon points="0,-35 27.358,-19.205 0,-3.409 -27.358,-19.205"/>
-        <polygon points="0,-2.309 4,0 0,2.309 -4,0"/>
-        <polygon points="0,35 27.358,19.205 0,3.409 -27.358,19.205"/>
-        <polygon points="-5.905,0 -30.311,-14.091 -30.311,14.091"/>
-        <polygon points="5.905,0 30.311,-14.091 30.311,14.091"/>
-      </g>
-    </svg></div>
     <div class="showcase-eyebrow">The Innovation</div>
     <h2 class="showcase-title">The Grit Zone</h2>
     <div class="showcase-body">
@@ -995,21 +1032,21 @@ except Exception as _exc:  # noqa: BLE001 - landing page must never crash on dat
                "The Crisis Conviction tab retries on load.")
 
 # ---- Gungnir - the slice: reading ends, allocation begins ----
-# assets/gungnir.png is generated in-repo (procedural topographic contours
-# from a single scalar field + the bound-rune engraving) - born at 3200px,
-# no upscaling involved, so it can never look like a stretched photo.
-try:
-    with open(ASSETS / "gungnir.png", "rb") as _gf:
-        _gungnir_b64 = base64.b64encode(_gf.read()).decode()
-    _gungnir_bg = (
-        "background-image:linear-gradient(90deg, rgba(244,241,234,0) 0%, "
-        "rgba(244,241,234,.22) 36%, rgba(244,241,234,.9) 64%, #F4F1EA 82%), "
-        f"url(data:image/png;base64,{_gungnir_b64});")
-except Exception:  # noqa: BLE001 - asset missing: plain band, honest fallback
-    _gungnir_bg = ""
+# static/gungnir.webp (+ .avif) is generated in-repo (procedural topographic
+# contours from a single scalar field + the bound-rune engraving), 3200px wide.
+# A served file attached when the zone comes near (reveal.js sets
+# html.has-gungnir), no longer 750 KB of base64 PNG on every first websocket.
+_gungnir_fade = ("linear-gradient(90deg, rgba(244,241,234,0) 0%, rgba(244,241,234,.22) 36%, "
+                 "rgba(244,241,234,.9) 64%, #F4F1EA 82%)")
+_gungnir_bg = (
+    f"background-image:{_gungnir_fade}, url(app/static/gungnir.webp);"
+    f"background-image:{_gungnir_fade}, image-set(url(app/static/gungnir.avif) "
+    "type('image/avif'), url(app/static/gungnir.webp) type('image/webp'));"
+) if (STATIC / "gungnir.webp").is_file() else ""  # missing: plain band, honest fallback
 st.markdown(
     f'<div id="the-slice"></div>'
-    f'<style>.st-key-gungnir_zone::before {{ {_gungnir_bg} }}</style>',
+    f'<style>html:not(.reveal-on) .st-key-gungnir_zone::before, '
+    f'html.has-gungnir .st-key-gungnir_zone::before {{ {_gungnir_bg} }}</style>',
     unsafe_allow_html=True)
 _gungnir_zone = st.container(key="gungnir_zone")
 with _gungnir_zone:
@@ -1054,7 +1091,7 @@ with _gungnir_zone:
     _gg_sketch, _gg_plaque = st.columns([1.05, 1], gap="large")
     with _gg_sketch:
         st.markdown(
-        f'<div class="showcase-section reveal" style="padding-top:2px;text-align:center;">'
+        f'<div class="showcase-section" style="padding-top:2px;text-align:center;">'
         # The pairing drawn as the equation it actually is. w1*s1 = w2*s2 says
         # two blocks of (capital x volatility) have EQUAL AREA, so that is the
         # picture: one wide-and-short, one narrow-and-tall, same area, sharing
@@ -1091,7 +1128,7 @@ with _gungnir_zone:
     # cancelling, the covariance matrix) went: the engine below does that work.
     with _gg_plaque:
         st.markdown(
-        f'<div class="gungnir-plaque reveal">'
+        f'<div class="gungnir-plaque">'
         f'<div class="gplaque-eyebrow">The math behind the sketch</div>'
         f'<div class="gplaque-eq">'
         f'<span class="gplaque-term"><span class="t">w<sub>1</sub>&sigma;<sub>1</sub></span>'
@@ -1107,7 +1144,7 @@ with _gungnir_zone:
 
 st.markdown(
     f'<hr class="section-divider">'
-    f'<div class="engine-heading reveal" id="engine">'
+    f'<div class="engine-heading" id="engine">'
     f'<div class="showcase-eyebrow">The Engine</div>'
     f'<h2 class="showcase-title" style="font-size:26px;">Stress-test any '
     f'{"short book" if bearish else "portfolio"}, live</h2>'
@@ -1122,7 +1159,7 @@ st.markdown(
 # A walkthrough as a non-specialist found the controls arrive before any
 # statement of what the page is FOR. Three sentences, then the engine.
 st.markdown(
-    '<div class="orient reveal">'
+    '<div class="orient">'
     '<div class="orient-t">New here? Read this first</div>'
     '<ol class="orient-l">'
     '<li><b>Pick what you own.</b> Choose a starter basket below, or type any '
@@ -1774,16 +1811,6 @@ with v_col:
             'Change any setting and watch the cone breathe.'
             '</div>', unsafe_allow_html=True)
 with f_col:
-    st.markdown("""
-<div class="engrave line" aria-hidden="true"><svg viewBox="-60 -4 66 60" xmlns="http://www.w3.org/2000/svg">
-  <!-- a quarter of the crest's three rings, fading outward (assets/logo.svg) -->
-  <g fill="none" stroke="#9A7B4F">
-    <circle r="47.2" stroke-width="2.4"/>
-    <circle r="51.4" stroke-width="1.5" stroke-opacity=".6"/>
-    <circle r="55.6" stroke-width="1" stroke-opacity=".3"/>
-  </g>
-</svg></div>
-""", unsafe_allow_html=True)
     st.plotly_chart(fan_chart(mc["path_bands"]), width="stretch", config=PLOTLY_CFG)
     # Jump-diffusion resamples nothing, and a replay under 30 days falls back to
     # i.i.d. (block_days=1): both used to claim "crash weeks stay intact".

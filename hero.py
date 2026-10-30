@@ -50,7 +50,7 @@ def hero_html(skeleton: bool = False, crest: str = "") -> str:
         head, crest = '<div class="hero-section">', ""
         cta = f'<span class="cta-btn">{HERO_CTA}{_CTA_ARROW}</span>'
     else:
-        head = '<div class="hero-section reveal" id="hero">'
+        head = '<div class="hero-section" id="hero">'
         cta = f'<a href="#grit-showcase" class="cta-btn">{HERO_CTA}{_CTA_ARROW}</a>'
     return (f'{head}<div class="hero-left"><div class="hero-crest">{crest}</div>'
             f'<h1 class="hero-title">{title}</h1>'
