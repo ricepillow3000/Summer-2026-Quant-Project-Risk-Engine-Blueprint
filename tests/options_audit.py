@@ -231,12 +231,15 @@ def mc_checks(mc: dict, sim: pd.DataFrame, w: np.ndarray, jd: bool) -> list:
     tail = tr[tr <= thr]
     b = mc["path_bands"]
     p = np.vstack([b[k] for k in ("p5", "p25", "p50", "p75", "p95")])
+    def same(a, b):                      # relative: a 7x-levered short FX book reaches 1e4
+        return abs(a - b) <= 1e-12 * max(1.0, abs(a), abs(b))
+
     ok = (len(tr) == N_PATHS and mc["horizon_days"] == TRADING_DAYS and np.isfinite(tr).all()
-          and abs(mc["var"] + thr) < 1e-12 and abs(mc["cvar"] + tail.mean()) < 1e-12
-          and mc["cvar"] >= mc["var"] - 1e-12
+          and same(mc["var"], -thr) and same(mc["cvar"], -tail.mean())
+          and mc["cvar"] >= mc["var"] - 1e-12 * max(1.0, abs(mc["var"]))
           and list(b["days"]) == list(range(1, TRADING_DAYS + 1))
-          and (np.diff(p, axis=0) >= -1e-12).all()
-          and abs(b["p50"][-1] - np.median(tr)) < 1e-12 and abs(b["p5"][-1] - thr) < 1e-12)
+          and (np.diff(p, axis=0) >= -1e-12 * np.maximum(1.0, np.abs(p[1:]))).all()
+          and same(b["p50"][-1], np.median(tr)) and same(b["p5"][-1], thr))
     out.append(("OPT-04", ok, f"paths {len(tr)}, VaR {mc['var']:.6f} vs {-thr:.6f}, "
                 f"CVaR {mc['cvar']:.6f} vs {-tail.mean():.6f}, cone ordered "
                 f"{(np.diff(p, axis=0) >= -1e-12).all()}, cone end {b['p50'][-1]:.6f} vs "

@@ -728,6 +728,18 @@ risk-engine/
   2026-10-30): Yahoo carries no ISIN (yfinance scrapes Business Insider,
   "experimental"; a real one needs a CUSIP licence), so that column could
   never be filled honestly.
+  First live run (499059a): 340 of 340 books and 1,906 of 1,906 page runs
+  reported; about 410,000 checks passed, and the 384 failures had three causes,
+  all fixed in d7ed26f. (1) A real crash: a short book, EWMA risk parity at
+  26-27% target vol, a 230-260% vol shock - April 2025's rally day became one
+  day losing more than the whole book, and the jump model took its log. The
+  page now says so and stops (no year compounds past a wipe-out). (2) ADV was
+  two numbers for a crypto + stock basket depending on which fetch ran first
+  (weekends counted as sessions on one path); one calendar now. (3) The audit
+  reached for widgets on pages that had correctly stopped (FX, rates and
+  commodity baskets at the Dot-com replay). The second run also showed my
+  absolute 1e-12 tolerance was too tight for a 7x-levered short FX book whose
+  numbers reach the thousands; it is relative now.
 
 ## Non-negotiable constraints (the "why")
 
