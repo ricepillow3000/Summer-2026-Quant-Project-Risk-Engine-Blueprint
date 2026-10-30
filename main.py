@@ -1612,6 +1612,19 @@ if bearish:
     # Negate BEFORE calibration/resampling so jump-diffusion calibrates its
     # jumps on the short's own tail (an asset's melt-UP is the short's crash).
     shocked_returns = -shocked_returns
+# A day that loses the whole book or more. A volatility shock on a levered book
+# can make one (Options audit, 2026-10-30: a short S&P-sector book, EWMA risk
+# parity at 26% target vol, a 260% vol shock - April 2025's rally day became a
+# loss past 100%). A year cannot be compounded past a wipe-out: the bootstrap
+# turned the book's value negative and the jump model took the log of it. Said,
+# then stopped, like a crisis too few names traded through.
+_worst_day = float((shocked_returns.to_numpy() @ np.asarray(sim_weights, dtype=float)).min())
+if _worst_day <= -1:
+    st.warning(
+        f"At these settings one day of this book loses {-_worst_day:.0%} - more than "
+        "everything it holds - so there is no year to simulate past it. Lower the "
+        "volatility shock or the target volatility.")
+    st.stop()
 mc = run_monte_carlo(shocked_returns, np.asarray(sim_weights, dtype=float), use_jd)
 _audit("Stress scenario", scenario_label or
       (f"Custom shock (drawdown {drawdown_shock:+d}%, vol {vol_shock:+d}%)"

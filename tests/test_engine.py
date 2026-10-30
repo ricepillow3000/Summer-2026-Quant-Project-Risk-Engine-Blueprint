@@ -3978,6 +3978,68 @@ def test_futures_contract_volume_is_not_reported_as_dollar_volume():
     assert prof["no_volume"] == ["SI=F"], prof
 
 
+def test_average_dollar_volume_is_one_number_whichever_fetch_ran_first():
+    """Options audit, 2026-10-30: fetch_prices caches dollar volume on its
+    aligned weekday calendar, but fetch_dollar_volume called on its own used
+    the raw calendar, where a crypto name's weekends counted as sessions -
+    BTC-USD + SPY read SPY's 63-session ADV 3% apart depending on which ran
+    first. Offline: the downloader is replaced, volume rises day by day so
+    any change of window moves the mean."""
+    import tempfile
+    import src.ingestion as ing
+
+    days = pd.date_range("2025-01-01", periods=200, freq="D")
+    close = pd.DataFrame({"BTC-USD": 60_000.0, "SPY": 600.0}, index=days)
+    close.loc[close.index.dayofweek >= 5, "SPY"] = np.nan
+    volume = pd.DataFrame({"BTC-USD": np.arange(200.0) + 1, "SPY": np.arange(200.0) * 1e3 + 1},
+                          index=days)
+    real = (ing._download_close_volume, ing.DATA_DIR)
+    try:
+        ing._download_close_volume = lambda *a, **k: (close.copy(), volume.copy())
+        ing.DATA_DIR = tempfile.mkdtemp(prefix="adv_order_")
+        alone = ing.average_dollar_volume(["BTC-USD", "SPY"], use_cache=False)
+        ing.fetch_prices(["BTC-USD", "SPY"], period="2y")          # writes the volume cache
+        cached = ing.average_dollar_volume(["BTC-USD", "SPY"])
+    finally:
+        ing._download_close_volume, ing.DATA_DIR = real
+    assert np.allclose(alone.sort_index(), cached.sort_index(), rtol=1e-12), (alone, cached)
+    spy = (volume["SPY"] * 600.0)[days.dayofweek < 5].tail(63).mean()
+    assert abs(alone["SPY"] - spy) <= 1e-9 * spy, (alone["SPY"], spy)
+
+
+def test_a_setting_that_loses_more_than_the_book_in_a_day_is_refused_in_words():
+    """Options audit, 2026-10-30, live data: a short S&P-sector book, EWMA risk
+    parity at 26% target vol and a 260% volatility shock crashed the page -
+    April 2025's rally day became one day losing more than 100% of the book,
+    which no year can be compounded past (the bootstrap's value went negative,
+    the jump model took its log). Offline: every name rallies 25% one day; the
+    short side, 30% target vol and a 300% shock must stop with a sentence and
+    no number, and easing the shock must bring the verdict back."""
+    def market(tickers=None, period="2y", **kw):
+        px = _offline_market_prices(tickers, period, **kw)
+        px.loc[px.index[-100]:] *= 1.25
+        return px
+
+    at, restore = _offline_app(market=market)
+    try:
+        next(r for r in at.radio if r.label.startswith("Which side")).set_value(
+            "Bearish - short the book")
+        next(c for c in at.checkbox if c.label == "Target volatility").check()
+        at.run()
+        next(s for s in at.slider if s.label == "Target annual vol (%)").set_value(30)
+        next(s for s in at.slider if s.label == "Volatility shock").set_value(300)
+        at.run()
+        assert not at.exception, [e.message for e in at.exception]
+        warns = " ".join(w.value for w in at.warning)
+        assert "more than everything it holds" in warns, warns
+        assert not any('class="verdict-box"' in m.value for m in at.markdown)
+        next(s for s in at.slider if s.label == "Volatility shock").set_value(0)
+        at.run()
+        assert not at.exception and any('class="verdict-box"' in m.value for m in at.markdown)
+    finally:
+        restore()
+
+
 def test_liquidity_adjustment_never_turns_a_tail_gain_into_a_bigger_gain():
     """CVaR <= 0 means the worst 5% of years still gain: there is no tail loss
     for an unwind to widen. Scaling it anyway reported -5.3% against a -5.0%

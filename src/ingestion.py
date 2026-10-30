@@ -625,7 +625,16 @@ def fetch_dollar_volume(tickers: list[str] | None = None, period: str = "2y",
         return pd.read_parquet(cache_path)
 
     close, volume = _download_close_volume(tickers, period, max_age_hours, use_cache)
-    dollar_vol = _dollar_volume(close, volume).dropna(axis=1, how="all")
+    # On the trading days fetch_prices caches volume on (aligned, weekdays), so
+    # the 63-session ADV is one number whichever of the two ran first. Left on
+    # the raw calendar, a crypto name's weekends counted as sessions: BTC-USD +
+    # SPY read SPY's ADV over 45 sessions here and 63 there, 3% apart (Options
+    # audit, 2026-10-30).
+    days = _clean_price_frame(close, align=True)
+    dollar_vol = _dollar_volume(close, volume)
+    if not days.empty:
+        dollar_vol = dollar_vol.reindex(index=days.index)[days.columns]
+    dollar_vol = dollar_vol.dropna(axis=1, how="all")
     if dollar_vol.empty:
         raise RuntimeError("No volume history for that universe.")
     if use_cache:

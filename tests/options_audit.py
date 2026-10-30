@@ -19,7 +19,8 @@ file's own numpy from the raw Yahoo closes:
           is the paths' own percentiles, and the mean simulated year is the
           history's mean year (Politis-Romano marginal; Merton mean identity)
   OPT-05  jump-diffusion parameters re-fitted from the book's own returns
-  OPT-06  no simulated day takes more than the whole book (1 + r > 0)
+  OPT-06  a setting where one day takes more than the whole book is not
+          simulated: the page refuses it in words (counted as INFO here)
   OPT-07  every crisis replay is the raw closes' change inside the window
   OPT-08  days to liquidate for every book size x participation
   MAP-*   the Risk Topology map for every allocation (pair_audit.map_checks):
@@ -209,14 +210,16 @@ def own_jump_params(port: np.ndarray, k: float = 3.0) -> dict:
 
 
 def own_adv(cols: list) -> pd.Series:
-    """Mean daily dollar volume over the last 63 sessions, straight from the
-    download. Futures volume counts contracts, so it is no dollar figure:
-    excluded (0), as the page discloses."""
+    """Mean daily dollar volume over the basket's last 63 shared trading days
+    (weekdays every name priced, holiday gaps of up to 3 days carried), straight
+    from the download. Futures volume counts contracts, so it is no dollar
+    figure: excluded (0), as the page discloses."""
     close, vol = _M["2y"]
-    c = close.reindex(columns=cols).dropna(how="all")
-    dv = c * vol.reindex(index=c.index, columns=cols)
-    dv[[x for x in cols if x.endswith("=F")]] = 0.0
-    return dv.tail(63).mean().fillna(0.0)
+    c = close.reindex(columns=cols).dropna(how="all").dropna(axis=1, how="all")
+    days = c[c.index.dayofweek < 5].ffill(limit=3).dropna().index
+    dv = (c * vol.reindex(index=c.index, columns=c.columns)).reindex(days)
+    dv[[x for x in dv.columns if x.endswith("=F")]] = 0.0
+    return dv.tail(63).mean().reindex(cols).fillna(0.0)
 
 
 def mc_checks(mc: dict, sim: pd.DataFrame, w: np.ndarray, jd: bool) -> list:
@@ -251,9 +254,6 @@ def mc_checks(mc: dict, sim: pd.DataFrame, w: np.ndarray, jd: bool) -> list:
             out.append(("OPT-05", all(abs(got[k] - v) <= 1e-12 * max(1, abs(v))
                                       for k, v in own.items()),
                         f"engine {({k: got[k] for k in own})} vs own {own}"))
-    out.append(("OPT-06", bool((1 + port > 0).all()),
-                f"{int((1 + port <= 0).sum())} days of the simulated book lose 100% or "
-                f"more (worst {port.min():+.1%}): compounding them is meaningless"))
     return out
 
 
@@ -362,7 +362,15 @@ def audit_book(job) -> list:
                                + [(-50, 300), (-25, 150), (-5, 10)]):
                     runs.append((f"{side} {eng} equal weight shock {dd:+d}%/{vs:+d}%",
                                  sgn * shocked(rets, dd, vs), ew, jd))
+                lev30 = 0.30 / float(np.sqrt(rp @ covs["EWMA"].to_numpy() @ rp))
+                for dd, vs in ((-50, 300), (0, 300), (-5, 260)):
+                    runs.append((f"{side} {eng} EWMA-scaled vol-target 30% shock {dd:+d}%/{vs:+d}%",
+                                 sgn * shocked(rets, dd, vs), rp * lev30, jd))
     for label, sim, w, jd in runs:
+        worst = float((sim.to_numpy() @ np.asarray(w, dtype=float)).min())
+        if worst <= -1:                  # main.py refuses it in words (a day past 100%)
+            rec("OPT-06", True, status="INFO")
+            continue
         fn = jump_diffusion_mc if jd else monte_carlo
         try:
             mc = fn(sim, np.asarray(w, dtype=float), n_simulations=N_PATHS,
@@ -512,17 +520,24 @@ def _pick(widget, idx):
 
 def apply_row(at, row, mix_names):
     """Set every widget the way a visitor would, universe first (it re-draws
-    every universe-dependent list), then the rest in one run."""
+    every universe-dependent list), then the rest. Stops setting as soon as
+    the page stops or raises: check_page reads what it said."""
+    def go():
+        at.run()
+        return bool(at.exception)
+
     u = row["universe"]
     preset = u if u in ing.PRESETS else list(ing.PRESETS)[0]
     if _widget(at.selectbox, "Preset basket").value != preset:
         _widget(at.selectbox, "Preset basket").set_value(preset)
-        at.run()
+        if go():
+            return
     if u in mix_names:
         box = at.multiselect(key=f"tickers__{preset}")
         if list(box.value) != mix_names[u]:
             box.set_value(mix_names[u])
-            at.run()
+            if go():
+                return
     _widget(at.radio, "Which side of the trade are you on?").set_value(
         "Bearish - short the book" if row["side"] else "Bullish - long the book")
     _widget(at.selectbox, "Covariance estimator").set_value(row["estimator"])
@@ -532,24 +547,39 @@ def apply_row(at, row, mix_names):
         vt.uncheck()
     else:
         vt.check()
-        at.run()                         # the slider is disabled until the box is ticked
+        if go():                         # the slider is disabled until the box is ticked
+            return
         _widget(at.slider, "Target annual vol (%)").set_value(row["target"])
     _widget(at.radio, "Return model").set_value(row["engine"])
     _widget(at.selectbox, "Scenario").set_value(row["scenario"])
-    at.run()
+    if go():
+        return
     if row["scenario"].startswith("Custom"):
         _widget(at.slider, "Market drawdown shock").set_value(row["drawdown"])
         _widget(at.slider, "Volatility shock").set_value(row["vol"])
+        if go():
+            return
+    if "book_size" not in {w.key for w in at.number_input}:
+        return                           # the page stopped above The Book, in words
     at.number_input(key="book_size").set_value(row["book"])
     at.slider(key="book_part").set_value(row["book_part"])
     at.toggle(key="book_floor").set_value(row["grit_floor"])
     at.toggle(key="book_fallback").set_value(row["outside_anchor"])
-    _widget(at.number_input, "Portfolio size ($)").set_value(row["liq_book"])
-    _widget(at.slider, "Max daily participation (% of ADV)").set_value(row["liq_part"])
+    if go():
+        return
+    for w in at.number_input:
+        if w.label == "Portfolio size ($)":
+            w.set_value(row["liq_book"])
+    for w in at.slider:
+        if w.label == "Max daily participation (% of ADV)":
+            w.set_value(row["liq_part"])
+    keys = {w.key for w in at.selectbox} | {w.key for w in at.slider}
     for key, idx in (("watch_a", row["watch_a"]), ("watch_b", row["watch_b"])):
-        _pick(at.selectbox(key=key), idx)
-    at.slider(key="watch_w").set_value(row["window"])
-    at.slider(key="watch_t").set_value(row["threshold"])
+        if key in keys:
+            _pick(at.selectbox(key=key), idx)
+    if "watch_w" in keys:
+        at.slider(key="watch_w").set_value(row["window"])
+        at.slider(key="watch_t").set_value(row["threshold"])
     for label, idx in (("Anchor (the position you want to balance)", row["anchor"]),
                        ("High-flyer (Circle 1 - the volatile conviction position)", row["flyer"])):
         hits = [w for w in at.selectbox if w.label == label]
@@ -589,11 +619,13 @@ def expected(row, loaded):
         s, e = HISTORICAL_REGIMES[row["scenario"]]
         sim = replay_returns(cols, s, e)
         if sim.shape[1] < 2:
-            return {"stops": True, "px": px, "rets": rets, "w": w}
+            return {"stops": True, "why": "traded during", "px": px, "rets": rets, "w": w}
         idx = [cols.index(x) for x in sim.columns]
         sw = w[idx] / w[idx].sum() * w.sum()
     if row["side"]:
         sim = -sim
+    if float((sim.to_numpy() @ np.asarray(sw, dtype=float)).min()) <= -1:
+        return {"stops": True, "why": "loses", "px": px, "rets": rets, "w": w}
     fn = jump_diffusion_mc if row["engine"].startswith("Jump") else monte_carlo
     mc = fn(sim, np.asarray(sw, dtype=float), n_simulations=N_PATHS, horizon_days=TRADING_DAYS)
     return {"stops": False, "px": px, "rets": rets, "w": w, "mc": mc, "sim": sim, "sw": sw}
@@ -607,7 +639,8 @@ def check_page(at, row, mix_names) -> list:
 
     errors = [e.value for e in at.error]
     rec("PAGE-00", not at.exception and not errors,
-        f"exception {[e.value for e in at.exception][:1]}; error {errors[:1]}")
+        f"exception {[e.message for e in at.exception][:1]} at "
+        f"{' | '.join(at.exception[0].stack_trace[-6:]) if at.exception else ''}; error {errors[:1]}")
     if at.exception:
         return out
     trail = {}
@@ -617,15 +650,19 @@ def check_page(at, row, mix_names) -> list:
             trail = dict(zip(v["step"], v["detail"], strict=True))
     hit = re.match(r"\d+ tickers loaded from .*?: ([^(]+?)(?: \(missing|$)", trail.get("Data fetch", ""))
     loaded = [t.strip() for t in hit.group(1).split(",")] if hit else None
-    if not loaded:
-        rec("PAGE-00", bool(errors), f"no loaded basket in the audit trail {trail}",
-            "INFO" if errors else None)
-        return out
+    if not loaded:                       # a page that stopped draws no audit trail
+        chosen = sorted(mix_names.get(row["universe"]) or ing.PRESETS[row["universe"]])
+        px = ing.fetch_prices(chosen, period="2y")
+        loaded = [c for c in px.columns if c not in ing.flat_columns(ing.get_returns(px))]
     exp = expected(row, loaded)
     warns = " ".join(w.value for w in at.warning)
+    if not hit and not exp["stops"]:
+        rec("PAGE-00", False, f"no audit trail on a page that should not stop {trail}")
+        return out
     if exp["stops"]:
-        rec("PAGE-01", "traded during" in warns, f"engine: too few names traded in "
-            f"{row['scenario']}; page warnings: {warns[:200]}")
+        rec("PAGE-01", exp["why"] in warns and not any('class="verdict-box"' in m.value for m in at.markdown),
+            f"engine: the page should stop ({exp['why']!r}) for {row['scenario']}; "
+            f"page warnings: {warns[:200]}")
         return out
     mc = exp["mc"]
     verdict = next((m.value for m in at.markdown if 'class="verdict-box"' in m.value), "")
@@ -665,7 +702,9 @@ def check_page(at, row, mix_names) -> list:
         title = spec.get("layout", {}).get("xaxis", {}).get("title", {})
         if (title.get("text") if isinstance(title, dict) else title) == "days to liquidate":
             bars = dict(zip(spec["data"][0]["y"], _arr(spec["data"][0]["x"]), strict=True))
-    if "Full-exit horizon" in metric:
+    if "Full-exit horizon" not in metric:
+        rec("PAGE-03", False, "the Liquidity tab drew no exit horizon")
+    else:
         want = {c: d for c, d in zip(cols, days, strict=True) if np.isfinite(d)}
         rec("PAGE-03", metric["Full-exit horizon"] == _fmt_days(fin.max() if fin.size else np.inf)
             and (bars or {}).keys() == want.keys()
@@ -716,7 +755,9 @@ def _row_label(row) -> str:
 
 
 def run_page(folder: str, shard: str) -> int:
+    from streamlit import config
     from streamlit.testing.v1 import AppTest
+    config.set_option("client.showErrorDetails", "full")   # tracebacks in the report
     i, n = (int(x) for x in shard.split("/"))
     _init(folder)
     for m in list(sys.modules.values()):          # names imported before the patch
@@ -763,7 +804,7 @@ def _print(meta: dict, counts: dict, notes: list) -> int:
     for cid in sorted(counts):
         print(f"  {cid}: " + ", ".join(f"{k} {v}" for k, v in sorted(counts[cid].items())))
     for x in notes[:80]:
-        print(f"  FAIL {x['id']} [{x['scope']}] {x['detail'][:400]}")
+        print(f"  FAIL {x['id']} [{x['scope']}] {x['detail'][:1500]}")
     print(f"\n{'FAILED: ' + str(len(notes)) if notes else 'every check passes'}")
     return 1 if notes else 0
 
