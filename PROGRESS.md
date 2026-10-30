@@ -703,6 +703,31 @@ risk-engine/
   ANCHOR cards on the page and folds the no-role cards and two finer settings
   into a drawer; the hero and headline speak plainly ("Bad-year loss",
   "Simulated years"). The Risk Topology map is untouched.
+- ✅ **Options audit - every setting, mixed and matched, on live data**
+  (2026-10-30). John: every asset with every allocation, target vol 5-30%,
+  every estimator, both return models, every crisis, book size and
+  participation, "until no pairs are left untested", nothing hallucinated.
+  `tests/options_audit.py` + the **Options audit** workflow. ENGINE: all 20
+  presets and every suggested symbol paired with SPY, through the app's own
+  functions, each answer re-derived by the file's own numpy (the three
+  covariance estimators from their papers, risk parity's equal risk shares,
+  leverage = target / book vol at every target, both Monte Carlo engines' tail
+  and cone from their own paths plus the history's mean year, every crisis
+  replay from raw closes, days to exit for 6 book sizes x 10 participations,
+  and the map - every dot, the hazard line, every defensive link, and its web
+  of simulated futures held to closed-form OU theory under node). PAGE: the
+  real `main.py` under AppTest on 1,906 runs where every pair of widget values
+  meets (an all-pairs covering array over 20 widgets; 20 presets and 12
+  typed-in baskets); each run's headline CVaR, cone, Liquidity bars, Book
+  sentence, Correlation Watch line and map must equal the engine for exactly
+  those settings. Planted wiring bugs (a VT slider ignored, a wrong rolling
+  window, a book size ignored) fail it. The four crisis-record boxes are now
+  worked out a second time from Yahoo's raw chart API in the provenance step
+  (`crisis_boxes`, checked offline against `src.conviction`), and every in-page
+  button must sit on both glide scans' lists. The Workshop stays removed (John,
+  2026-10-30): Yahoo carries no ISIN (yfinance scrapes Business Insider,
+  "experimental"; a real one needs a CUSIP licence), so that column could
+  never be filled honestly.
 
 ## Non-negotiable constraints (the "why")
 

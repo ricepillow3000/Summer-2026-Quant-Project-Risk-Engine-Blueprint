@@ -5604,6 +5604,52 @@ def test_the_audits_raw_yahoo_bars_land_on_their_own_day_across_a_clock_change()
         lp.guarded_session = real
 
 
+def test_every_in_page_button_is_flown_by_both_glide_scans():
+    """John, 2026-10-30: every button must glide the reader down, never jump.
+    tools/deep_scan.mjs and tools/glide_load_check.mjs measure each flight
+    frame by frame on live data (Live audit steps 8c and 10) - but only for
+    the buttons on their lists. A new in-page link missing from a list would
+    ship unmeasured, so the page's links and both lists must be the same set."""
+    import re
+    from collections import Counter
+    root = pathlib.Path(__file__).resolve().parent.parent
+    page = (root / "main.py").read_text(encoding="utf-8") + (root / "hero.py").read_text(encoding="utf-8")
+    links = Counter(re.findall(r'href="#([a-z][a-z-]*)"', page))
+    assert sum(links.values()) >= 8, links
+    for tool in ("tools/deep_scan.mjs", "tools/glide_load_check.mjs"):
+        js = (root / tool).read_text(encoding="utf-8")
+        flown = Counter("grit-showcase" if sel == "#hero .cta-btn" else re.search(r'href="#([a-z-]+)"', sel).group(1)
+                        for sel in re.findall(r"\[\s*'([^']*(?:href=\"#[a-z-]+\"|#hero \.cta-btn)[^']*)',\s*'[^']+'\s*\]", js))
+        assert flown == links, f"{tool} flies {dict(flown)}; the page links {dict(links)}"
+
+
+def test_the_crisis_record_audit_reaches_the_boxes_its_own_way():
+    """John, 2026-10-30: the four boxes under the hero must trace to a source,
+    not be hallucinated. Live audit step 1 works them out a second time from
+    Yahoo's raw chart API with its own loop (tools.live_provenance.crisis_boxes,
+    no src.conviction); that only proves anything if the loop agrees with the
+    engine on the same closes - checked here offline, a late-listing member
+    and a gap in a window's first week included, so the "trading at the window
+start" rule is exercised."""
+    import src.conviction as conv
+    from tools import live_provenance as lp
+    names = [conv.BENCHMARK, *conv.AI_CAPEX_BASKET]
+    px = _offline_market_prices(names, "max")
+    px.loc[:"2019-06-30", conv.AI_CAPEX_BASKET[-1]] = np.nan
+    px.loc["2020-02-21", conv.AI_CAPEX_BASKET[0]] = np.nan    # a gap in COVID's first week
+    real = conv.fetch_prices
+    conv.fetch_prices = lambda tickers, period="2y", align=True, **_: px[list(tickers)]
+    try:
+        page = lp.page_boxes(conv.load_conviction())
+    finally:
+        conv.fetch_prices = real
+    mine = lp.crisis_boxes(px[conv.BENCHMARK], px[conv.AI_CAPEX_BASKET])
+    assert page.keys() == mine.keys()
+    for k, v in page.items():
+        assert (v == mine[k]) if isinstance(v, (str, list)) else abs(v - mine[k]) < 1e-12, (k, v, mine[k])
+    assert int(page["t1"].split(" of ")[1]) >= 3 and int(page["race"].split(" of ")[1]) >= 3, page
+
+
 if __name__ == "__main__":
     import sys
 
