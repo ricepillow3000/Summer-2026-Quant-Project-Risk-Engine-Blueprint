@@ -577,9 +577,12 @@ def apply_row(at, row, mix_names):
         if w.label == "Max daily participation (% of ADV)":
             w.set_value(row["liq_part"])
     keys = {w.key for w in at.selectbox} | {w.key for w in at.slider}
-    for key, idx in (("watch_a", row["watch_a"]), ("watch_b", row["watch_b"])):
-        if key in keys:
-            _pick(at.selectbox(key=key), idx)
+    # The pair boxes are keyed on the basket (watch_a__<tickers>), so they are
+    # found by their labels.
+    for label, idx in (("Asset A", row["watch_a"]), ("Asset B", row["watch_b"])):
+        hits = [w for w in at.selectbox if w.label == label]
+        if hits:
+            _pick(hits[0], idx)
     if "watch_w" in keys:
         at.slider(key="watch_w").set_value(row["window"])
         at.slider(key="watch_t").set_value(row["threshold"])
@@ -722,7 +725,7 @@ def check_page(at, row, mix_names) -> list:
         and int(bh.group(4)) == row["book_part"] and int(bh.group(3)) == len(cols),
         f"book headline {re.sub('<[^>]+>', '', book)[:160]!r} for ${row['book']:,} at {row['book_part']}%")
 
-    pa, pb = at.selectbox(key="watch_a").value, at.selectbox(key="watch_b").value
+    pa, pb = _widget(at.selectbox, "Asset A").value, _widget(at.selectbox, "Asset B").value
     if pa == pb:
         rec("PAGE-05", "correlated with itself" in warns, f"{pa} against itself: no notice")
     else:
