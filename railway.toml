@@ -1,0 +1,12 @@
+# Railway, as code. Only [deploy]: the build is left to Railway's own builder
+# and the Procfile, exactly as before this file existed.
+#
+# The free half of what Kubernetes sells (RUNBOOK §4, "Docker, not
+# Kubernetes"): a new deploy only takes traffic once Streamlit's health check
+# answers, so a broken build never replaces a working site; and a crashed
+# process is restarted instead of staying down.
+[deploy]
+healthcheckPath = "/_stcore/health"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10

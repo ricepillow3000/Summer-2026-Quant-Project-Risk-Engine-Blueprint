@@ -820,6 +820,39 @@ risk-engine/
   absolute 1e-12 tolerance was too tight for a 7x-levered short FX book whose
   numbers reach the thousands; it is relative now.
 
+- ✅ **The 60-item sweep: performance, legal, security (2026-11-02)** - John
+  sent a generic launch list; each item was checked against this app and
+  recorded in `LAUNCH_CHECKLIST.md` #38-95 (built, or N/A with the reason).
+  - Fixed:
+    - the egress allowlist and the privacy texts still named Business Insider,
+      gone with the Security Master;
+    - outbound requests get an explicit 30 s timeout (yfinance's handshake
+      passed none);
+    - websocket compression is on (107 KB -> ~44 KB a page load);
+    - the map's pairing rows answer the keyboard;
+    - the served HTML carries the security meta Streamlit cannot send
+      (`object-src`, `base-uri`, `form-action`, referrer);
+    - `PRIVACY.md` has a cookie and storage table measured in a browser, the
+      operator and a Children section;
+    - `TERMS.md` gained Price (free, nothing to refund) and Images;
+    - the README lost "Institutional-Grade" and "coming August 2026".
+  - Verified: no secret anywhere in git history, every dependency used, no
+    third-party host contacted by the browser.
+  - Open for John: record the two photos' Unsplash page links.
+
+- ✅ **Docker, not Kubernetes (2026-11-02)** - John wanted the app to run the
+  same on any machine, and Kubernetes' auto-healing, scaling and load
+  balancing, as long as it stays free. Built:
+  - `docker/Dockerfile`: what the Procfile runs, non-root, with a health
+    check; kept equal to the Procfile by a test.
+  - The `Container` workflow: builds the image, starts it and checks it on
+    every push; publishes `ghcr.io/ricepillow3000/meliona` (amd64 and arm64)
+    from main.
+  - `railway.toml`: deploys gated on `/_stcore/health`, and crashes restarted.
+
+  Scaling and load balancing are N/A by design: one process, a disk cache, and
+  sessions in memory. RUNBOOK §4 has the decision.
+
 ## Non-negotiable constraints (the "why")
 
 1. **No LLM data, ever.** Every market number comes from Yahoo Finance via

@@ -254,6 +254,7 @@ select {
 }
 .standings .srow:hover { background: rgba(154,123,79,0.08); }
 .standings .srow.sel { background: rgba(154,123,79,0.12); border-left-color: var(--bronze); }
+.standings .srow:focus-visible { outline: 2px solid var(--bronze); outline-offset: -2px; }
 .srow .rk { font-size: 11px; color: var(--dimtext); width: 16px; }
 .srow .pair { font-size: 14px; color: var(--beige); flex: 1; }
 .srow .pair span { color: var(--dimtext); font-size: 11px; }
@@ -1518,7 +1519,9 @@ function renderStandings() {
     .sort((a, b) => b.cu - a.cu);
   const maxCu = Math.max.apply(null, rows.map(r => Math.abs(r.cu))) || 1;
   el.innerHTML = rows.map((r, rank) =>
-    '<div class="srow' + (r.i === S.selPair ? ' sel' : '') + '" data-i="' + r.i + '">' +
+    // a button to the keyboard and to a screen reader, not only to a mouse
+    '<div class="srow' + (r.i === S.selPair ? ' sel' : '') + '" data-i="' + r.i +
+      '" role="button" tabindex="0" aria-pressed="' + (r.i === S.selPair) + '">' +
     '<span class="rk">0' + (rank + 1) + '</span>' +
     '<span class="pair">' + esc(r.pr.fl) + ' - ' + esc(r.pr.an) + '</span>' +
     '<span class="cu">' + cushText(r.cu, !!r.pr.real) + '</span>' +
@@ -1527,10 +1530,17 @@ function renderStandings() {
       // bar identical to one that helped. Sign has to survive into the mark.
       (r.cu < 0 ? ';background:#C25B3A' : '') + '"></i></span>' +
     '</div>').join('');
+  const pick = row => {
+    S.selPair = +row.dataset.i;
+    renderStandings(); renderDetail(); drawIntel();
+  };
   el.querySelectorAll('.srow').forEach(row => {
-    row.addEventListener('click', () => {
-      S.selPair = +row.dataset.i;
-      renderStandings(); renderDetail(); drawIntel();
+    row.addEventListener('click', () => pick(row));
+    row.addEventListener('keydown', e => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      e.preventDefault();                   // Space would scroll the panel
+      pick(row);
+      el.querySelector('.srow.sel').focus();  // the rows were redrawn: keep focus on the choice
     });
   });
 }

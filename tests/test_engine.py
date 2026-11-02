@@ -2210,12 +2210,14 @@ def test_egress_allowlist_blocks_everything_but_the_market_feed():
     assert not host_allowed("file:///etc/passwd")
     assert not host_allowed("https://evil.com/?u=query1.finance.yahoo.com")
     # Every allowlisted host is a deliberate, named market-data dependency:
-    # Yahoo for prices, Business Insider for the ISIN lookup yfinance performs.
-    assert all(h.endswith("yahoo.com") or h == "markets.businessinsider.com"
-               for h in ALLOWED_HOSTS)
+    # Yahoo, and only Yahoo, since the Security Master (Business Insider's
+    # ISIN search) left on 2026-10-29 - an entry nothing calls is an open door.
+    assert all(h.endswith(".yahoo.com") for h in ALLOWED_HOSTS)
 
     # The guard refuses BEFORE any socket is opened, so this needs no network.
     session = guarded_session()
+    # and no request waits forever: yfinance's handshake passes no timeout
+    assert session.timeout == 30
     for blocked in ("https://169.254.169.254/latest/meta-data/",
                     "http://query1.finance.yahoo.com/x"):
         try:
@@ -2470,7 +2472,10 @@ def test_launch_documents_exist_and_say_the_load_bearing_things():
     # The mailbox is a manual, pre-launch step - the runbook must carry it.
     assert "forwarding" in runbook and "meleona.support@gmail.com" in runbook
     assert "no sign-up" in privacy and "session reference" in privacy
-    assert "yahoo finance" in privacy and "business insider" in privacy
+    # the outside services it names are the allowlist's (Yahoo only since the
+    # Security Master left), and the cookie table names what a browser gets
+    assert "yahoo finance" in privacy and "business insider" not in privacy
+    assert "_streamlit_xsrf" in privacy and "stactivetheme" in privacy
     assert "not investment advice" in terms
     assert "session reference" in support
     for section in ("kill switch", "meliona_maintenance", "rollback",
@@ -3311,6 +3316,85 @@ def test_no_exception_text_is_rendered_to_visitors():
             if names & caught or any("exc" in n for n in names):
                 offenders.append(f"main.py:{field.lineno}: {{{ast.unparse(v)}}}")
     assert not offenders, "raw exception text reaches the page: " + str(offenders)
+
+
+def test_the_served_page_carries_the_security_meta_streamlit_cannot_send():
+    """2026-11-02 sweep: Streamlit sets no security headers on the page. The
+    served HTML carries the ones a browser honours as meta tags - only
+    directives that touch no script, so Streamlit, its srcdoc frames and the
+    map run unchanged (a browser run on the demo market logged 0 violations).
+    A script-src here would need 'unsafe-inline' and 'unsafe-eval' and guard
+    nothing; frame-ancestors is header-only."""
+    import tools.public_files as pf
+    head = pf.head_tags("https://example.test")
+    csp = head[head.index('http-equiv="Content-Security-Policy"'):].split(">", 1)[0]
+    for directive in ("object-src 'none'", "base-uri 'self'", "form-action 'self'"):
+        assert directive in csp, f"the page lost {directive}"
+    assert "script-src" not in csp and "default-src" not in csp, \
+        "a script policy here breaks Streamlit or guards nothing"
+    assert head.index("Content-Security-Policy") < head.index("<script"), \
+        "a policy only governs what comes after it"
+    assert '<meta name="referrer" content="strict-origin-when-cross-origin">' in head
+
+
+def test_the_container_runs_what_the_procfile_runs():
+    """John, 2026-11-02: package the app so it runs the same on any machine -
+    Docker, free, rather than Kubernetes (RUNBOOK §4). The box must run what
+    the live site runs, or "works in Docker" proves nothing about the site:
+    every Procfile process is in docker/Dockerfile, on the same Python, as a
+    user other than root, with Streamlit's health check. It stays out of the
+    repo root (Railway would build a root Dockerfile instead of its own
+    builder), and its ignore file keeps everything the app reads at runtime."""
+    import re
+    import tomllib
+    root = pathlib.Path(__file__).resolve().parent.parent
+    assert not (root / "Dockerfile").exists() and not (root / ".dockerignore").exists(), \
+        "a root Dockerfile or .dockerignore changes how Railway builds the live site"
+    docker = (root / "docker" / "Dockerfile").read_text(encoding="utf-8")
+    procfile = (root / "Procfile").read_text(encoding="utf-8")
+    for cmd in ("python -m tools.public_files", "python -m tools.warm_cache --every 5",
+                "streamlit run main.py"):
+        assert cmd in procfile and cmd in docker, f"the box and the site disagree on: {cmd}"
+    py = re.search(r"python-(\d+\.\d+)", (root / "runtime.txt").read_text()).group(1)
+    assert re.search(rf"^FROM python:{re.escape(py)}-slim", docker, re.M), \
+        f"the box is not on the site's Python {py}"
+    users = re.findall(r"^USER (\S+)", docker, re.M)
+    assert users and users[-1] not in ("root", "0"), "the app in the box runs as root"
+    assert re.search(r"^HEALTHCHECK .*\n?.*_stcore/health", docker, re.M)
+    ignored = {ln.strip().rstrip("/") for ln in (root / "docker" / "Dockerfile.dockerignore")
+               .read_text(encoding="utf-8").splitlines() if ln.strip() and not ln.startswith("#")}
+    needed = {"src", "static", "assets", "prototypes", "public", "tools", ".streamlit",
+              "main.py", "hero.py", "requirements.txt"}
+    assert not ignored & needed, f"the box leaves out what the app reads: {ignored & needed}"
+    deploy = tomllib.loads((root / "railway.toml").read_text(encoding="utf-8"))
+    assert deploy["deploy"]["healthcheckPath"] == "/_stcore/health"
+    assert "build" not in deploy, "railway.toml must not change how Railway builds"
+
+
+def test_the_websocket_is_compressed():
+    """2026-11-02 sweep: every chart, table and the Risk Topology page reach the
+    browser as websocket messages, and Streamlit sends them uncompressed by
+    default (server.enableWebsocketCompression = false). Measured on a page
+    load: 107 KB of messages deflate to ~44 KB."""
+    import tomllib
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    cfg = tomllib.loads((root / ".streamlit" / "config.toml").read_text(encoding="utf-8"))
+    assert cfg.get("server", {}).get("enableWebsocketCompression") is True
+
+
+def test_the_pairing_rows_answer_the_keyboard():
+    """2026-11-02 sweep: the map's four pairing rows were click-only divs - a
+    keyboard could not reach them and a screen reader did not call them
+    buttons. Each is a focusable button now, Enter and Space pick it, focus
+    follows the choice through the redraw, and the focus ring is visible."""
+    root = pathlib.Path(__file__).resolve().parent.parent
+    page = (root / "prototypes" / "war_room.html").read_text(encoding="utf-8")
+    rows = page[page.index("function renderStandings"):page.index("/* ---------- run ----------")]
+    assert 'role="button" tabindex="0" aria-pressed="' in rows
+    assert "addEventListener('keydown'" in rows and "'Enter'" in rows and "' '" in rows
+    assert ".srow.sel').focus()" in rows, "focus is lost when the rows are redrawn"
+    assert ".srow:focus-visible" in page
 
 
 def test_a_stranger_cannot_park_files_in_server_memory():

@@ -29,6 +29,11 @@ maxUploadSize = 1
 # arrived with the hero it should stand in for (2026-10-19). static/ holds
 # public files only (test_the_skeleton_paints_first_and_the_hero_lifts_it).
 enableStaticServing = true
+# Compress the websocket (permessage-deflate). Every chart, table and the
+# Risk Topology page travel over it as one message each - the map page alone
+# is ~0.3 MB of HTML and JSON - and Streamlit ships it uncompressed by default.
+# Text compresses several times over; the cost is a little CPU per message.
+enableWebsocketCompression = true
 
 [browser]
 # Streamlit's usage telemetry defaults to ON and phones home on every run.
