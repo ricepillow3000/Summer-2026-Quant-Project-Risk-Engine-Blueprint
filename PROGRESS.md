@@ -852,6 +852,16 @@ risk-engine/
 
   Scaling and load balancing are N/A by design: one process, a disk cache, and
   sessions in memory. RUNBOOK §4 has the decision.
+- ✅ **Correlation Watch pair follows the final basket (PR #21, opened
+  2026-10-20, merged 2026-11-02)**. The pair selectboxes had fixed keys, so
+  the pair a rerun picked on a half-typed basket stuck: typing F, GM, DAL,
+  UAL, GILD, VZ fast showed F x UAL, slowly F x GM. They are now keyed on the
+  loaded basket (`watch_a__<sorted tickers>`); a visitor's own pick lasts
+  while the basket does
+  (`test_the_watch_pair_follows_the_basket_not_how_fast_it_was_typed`). The
+  Options audit, written after #21 was opened, looked the boxes up by the old
+  keys and failed every page run (`KeyError: 'watch_a'`); it now finds them
+  by their labels, Asset A and Asset B.
 
 ## Non-negotiable constraints (the "why")
 
