@@ -83,7 +83,17 @@ def head_tags(site_url: str, build: str = "") -> str:
     t, d, u = html.escape(TITLE), html.escape(DESCRIPTION), html.escape(site_url)
     b = html.escape(build[:12] or "unknown")
     return (
-        f'{MARK}\n<title>{t}</title>\n'
+        f'{MARK}\n'
+        # Security headers Streamlit cannot send, as the meta tags a browser
+        # honours. Only directives that touch no script: no plugin embeds, no
+        # <base> hijack of relative URLs, no form posting off-site. A script
+        # policy would need 'unsafe-inline' and 'unsafe-eval' for Streamlit and
+        # its srcdoc frames, and so would guard nothing; frame-ancestors and
+        # X-Frame-Options are header-only (LAUNCH_CHECKLIST #89).
+        '<meta http-equiv="Content-Security-Policy" '
+        "content=\"object-src 'none'; base-uri 'self'; form-action 'self'\">\n"
+        '<meta name="referrer" content="strict-origin-when-cross-origin">\n'
+        f'<title>{t}</title>\n'
         f'<meta name="meliona-build" content="{b}">\n'
         f'<meta name="description" content="{d}">\n'
         f'<link rel="canonical" href="{u}/">\n'

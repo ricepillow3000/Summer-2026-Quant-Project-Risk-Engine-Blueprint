@@ -3310,9 +3310,10 @@ with tab_lineage:
     panel_head("Your data", "What this app holds about you, and how to clear it")
     st.markdown(
         "**There is no account to delete, because there is no account.** "
-        "Meliona has no sign-up, no login, no password, no cookie beyond the "
-        "one Streamlit uses to keep this browser tab connected, and no "
-        "analytics or advertising SDK of any kind.\n\n"
+        "Meliona has no sign-up, no login, no password, and no "
+        "analytics or advertising SDK of any kind. It stores two things in "
+        "your browser, both Streamlit's own: an anti-forgery cookie and your "
+        "light/dark theme (details in the privacy note).\n\n"
         f"- **Held in this session (memory only, gone when you close the tab):** "
         f"the tickers you chose, the widget settings above, and the reference "
         f"`{SESSION_REF}`, which is random and is not linked to you.\n"
@@ -3323,7 +3324,7 @@ with tab_lineage:
         "above so a support email can be matched to a stack trace. They rotate "
         "away on size and carry no personal data.\n"
         "- **Sent to third parties:** nothing about you. The server fetches "
-        "prices from Yahoo Finance and, for ISIN lookups, Business Insider - "
+        "prices from Yahoo Finance, and only Yahoo Finance - "
         "your browser talks only to this app.\n\n"
         f"Questions, or want the logs for your reference purged early? Email "
         f"[{SUPPORT_EMAIL}](mailto:{SUPPORT_EMAIL}) and quote `{SESSION_REF}` "

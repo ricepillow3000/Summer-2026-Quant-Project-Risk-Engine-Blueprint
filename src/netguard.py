@@ -38,17 +38,19 @@ ALLOWED_HOSTS = frozenset({
     "fc.yahoo.com",
     "guce.yahoo.com",
     "login.yahoo.com",
-    # yfinance's `Ticker.isin` does NOT use Yahoo - it queries Business
-    # Insider's symbol search. Found by this allowlist blocking it: every ISIN
-    # silently came back "unavailable" (2026-08-26). Enumerated deliberately,
-    # which is the point of an allowlist: the second host this app talks to is
-    # now a reviewed decision instead of an unnoticed dependency.
-    "markets.businessinsider.com",
+    # markets.businessinsider.com left with the Security Master (2026-10-29):
+    # yfinance's `Ticker.isin` was its only caller. An allowlist entry nothing
+    # uses is a door left open for nothing - reopen it on purpose if ISINs
+    # come back.
 })
 
 # Browser fingerprint yfinance itself impersonates. Kept here so the guarded
 # session behaves exactly like the unguarded one it replaces.
 IMPERSONATE = "chrome"
+# Seconds any one request may take, stated here rather than inherited: the
+# download calls pass their own, but yfinance's cookie/crumb handshake does
+# not, and an unanswered connect would hold a visitor's page open forever.
+TIMEOUT_S = 30
 
 
 # --- outbound budget --------------------------------------------------------
@@ -141,7 +143,7 @@ class _GuardedSession(_curl.Session):
 
 def guarded_session() -> _GuardedSession:
     """The session every market-data call in this engine goes through."""
-    return _GuardedSession(impersonate=IMPERSONATE)
+    return _GuardedSession(impersonate=IMPERSONATE, timeout=TIMEOUT_S)
 
 
 if __name__ == "__main__":
