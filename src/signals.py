@@ -34,8 +34,18 @@ Quant Deep Dive:
 import numpy as np
 import pandas as pd
 
+from src.covariance import TRADING_DAYS
 
-def momentum_signal(prices: pd.DataFrame, lookback: int = 60, skip: int = 5) -> pd.DataFrame:
+
+# The demo signal's window, read by the Signal Lab's words and The Book's
+# sentences rather than restated in them.
+MOMENTUM_LOOKBACK = 60   # formation window, trading days
+MOMENTUM_SKIP = 5        # most recent days left out: dodges short-term reversal
+IC_HORIZON = 5           # forward-return window the IC is scored against
+
+
+def momentum_signal(prices: pd.DataFrame, lookback: int = MOMENTUM_LOOKBACK,
+                    skip: int = MOMENTUM_SKIP) -> pd.DataFrame:
     """
     Cross-sectional momentum: the return over `lookback` days ending `skip`
     days ago. Skipping the most recent days avoids contamination from the
@@ -53,7 +63,7 @@ def momentum_signal(prices: pd.DataFrame, lookback: int = 60, skip: int = 5) -> 
     return prices.shift(skip) / prices.shift(skip + lookback) - 1.0
 
 
-def forward_returns(prices: pd.DataFrame, horizon: int = 5) -> pd.DataFrame:
+def forward_returns(prices: pd.DataFrame, horizon: int = IC_HORIZON) -> pd.DataFrame:
     """
     Next-`horizon`-day return, aligned so row t holds the return from t to
     t + horizon (i.e. what a signal observed at t is trying to predict).
@@ -158,7 +168,7 @@ if __name__ == "__main__":
         print(f"  {k}: {v:.4f}" if isinstance(v, float) else f"  {k}: {v}")
 
     n_eff = effective_breadth(returns)
-    rebalances = 252 / 5
+    rebalances = TRADING_DAYS / IC_HORIZON
     raw_b = len(prices.columns) * rebalances
     eff_b = n_eff * rebalances
     print(f"\n--- Grinold fundamental law ---")

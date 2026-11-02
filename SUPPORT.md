@@ -53,5 +53,5 @@ Mail sent to it is **forwarded to the maintainer's personal inbox**, so there
 is one place to watch.
 
 The address lives in a single constant (`SUPPORT_EMAIL` in `main.py`) and can
-be overridden per deployment with the `MELEONA_SUPPORT_EMAIL` environment
+be overridden per deployment with the `MELIONA_SUPPORT_EMAIL` environment
 variable - no redeploy needed to change where support mail goes.

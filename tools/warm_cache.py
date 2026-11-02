@@ -25,8 +25,8 @@ first Semiconductors pick on Railway take 101.6s).
 A pass warms EVERY pull the page makes for a preset, not only its 2y prices
 (John, 2026-10-20: the first switch to Semiconductors after a deploy still
 took 93.1s - the 2y pull was warm, but the full histories behind the Book and
-the Grit tab, the ten years behind the tail fit, the page-wide pulls and the
-security master were all cold, and Railway's disk is wiped on every deploy).
+the Grit tab, the ten years behind the tail fit and the page-wide pulls were
+all cold, and Railway's disk is wiped on every deploy).
 Each pull goes through the same function with the same arguments main.py
 uses, so the cache keys match exactly and no number can differ from a cold
 pull; `test_the_warm_pass_covers_every_fetch_a_preset_page_makes` records the
@@ -37,7 +37,7 @@ covered: baskets a visitor types in themselves.
 Budget: src/ingestion keeps each name's download per period, so a pass
 downloads each name once per period however many presets share it - about
 450 name-downloads (2y, full history and 10y of ~150 names) plus the page-wide
-pulls and the security master's lookups when they are due - inside the
+pulls - inside the
 5,000-a-day netguard cap this process keeps for itself (the cap is per
 process). The same files serve a basket a visitor types: only its names the
 pass never saw are downloaded. A 1s pause between pulls keeps it from
@@ -55,7 +55,6 @@ from src.ingestion import (CACHE_MAX_AGE_HOURS, PRESETS, fetch_dollar_volume,
                            get_returns)
 from src.netguard import BudgetExhausted, budget_status
 from src.pairing import DEFENSIVE_ANCHOR_TICKERS, anchor_rank
-from src.security_master import SM_MAX_AGE_HOURS, security_master
 from src.topology import anchor_frame
 
 PAUSE_SECONDS = 1.0     # between pulls, so a pass never bursts at Yahoo
@@ -88,11 +87,6 @@ def preset_pulls(tickers: list[str]) -> list[tuple[str, object]]:
     pulls.append(("crisis pair", lambda age: fetch_prices(
         default_crisis_pair(tickers, age), period="max", align=False,
         max_age_hours=age)))
-    # Reference data keeps its own (longer) freshness; a repeating pass renews
-    # it the same interval early, and a drill (age 0) forces it too.
-    pulls.append(("security master", lambda age: security_master(
-        tickers, max_age_hours=0 if age == 0 else
-        SM_MAX_AGE_HOURS - (CACHE_MAX_AGE_HOURS - age))))
     return pulls
 
 

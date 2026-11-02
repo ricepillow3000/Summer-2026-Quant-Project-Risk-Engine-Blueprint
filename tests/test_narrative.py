@@ -256,10 +256,12 @@ def test_tail_wording_follows_the_sign_of_the_gap():
     deeper = {SentenceKey.FLYER_PAIRED_DEEPER, SentenceKey.CUSHION_ANCHOR_DEEPER}
 
     # The claim each template makes, checked against the sign it is used for.
+    # A gap between two ES figures is a difference of percentages: it is in
+    # points, never "%" (ME-07's A6 rule; Council A review, 2026-10-22).
     for k in shallower:
-        assert "shallower" in SENTENCES[k] and "DEEPER" not in SENTENCES[k]
+        assert "points shallower" in SENTENCES[k] and "DEEPER" not in SENTENCES[k]
     for k in deeper:
-        assert "DEEPER" in SENTENCES[k]
+        assert "points DEEPER" in SENTENCES[k]
         assert "shallower" not in SENTENCES[k]
         # A deeper tail must be printed as a positive magnitude, never as a
         # negative number sitting next to the word DEEPER.
@@ -270,7 +272,7 @@ def test_tail_wording_follows_the_sign_of_the_gap():
         for d in build_book(prices, dv, book_value=book_value, n_flyers=2):
             if d.sentence_key in shallower:
                 assert d.tail_gap is not None and d.tail_gap > 0, d.ticker
-                assert "shallower" in d.sentence()
+                assert "points shallower" in d.sentence() and "% shallower" not in d.sentence()
             elif d.sentence_key in deeper:
                 assert d.tail_gap is not None and d.tail_gap <= 0, d.ticker
                 s_out = d.sentence()
@@ -279,6 +281,58 @@ def test_tail_wording_follows_the_sign_of_the_gap():
             # A partner is only ever narrated when the gap was measurable.
             if d.partner is not None:
                 assert d.tail_gap is not None, d.ticker
+
+    # The outside-the-universe templates say "shallower" too, so an outside
+    # anchor may only be brought in when it really is thinner. ME-03
+    # (2026-10-22): one was accepted for merely being LESS deep than the
+    # inside pick and printed "whose own tail is -1.4% shallower".
+    external = {SentenceKey.FLYER_PAIRED_EXTERNAL,
+                SentenceKey.CUSHION_ANCHOR_EXTERNAL}
+    for k in external:
+        assert "points shallower" in SENTENCES[k] and "{tail_gap_pts:" in SENTENCES[k]
+    prices, dv = _deeper_everywhere_fixture()
+    for d in build_book(prices, dv, book_value=1e6, fallback_anchors={"DEF"}):
+        if d.sentence_key in external:
+            assert d.tail_gap is not None and d.tail_gap > 0, (
+                f"{d.ticker}: outside anchor with a deeper tail - {d.sentence()}")
+        if d.sentence_key in shallower | external:
+            assert "-" not in d.sentence().split("shallower")[0].split("tail")[-1], \
+                d.sentence()
+
+
+def _deeper_everywhere_fixture():
+    """A calm riser, two wild names and a medium-vol outside holding: every
+    anchor on offer has a DEEPER tail than the calm leader, the outside one
+    only less so."""
+    rng = np.random.default_rng(1)
+    n = 1600
+    idx = pd.bdate_range("2019-01-01", periods=n)
+
+    def path(mu, sig):
+        return 100 * np.exp(np.cumsum(rng.normal(mu, sig, n)))
+    prices = pd.DataFrame({"CALM": path(0.0012, 0.006),
+                           "WILD": path(-0.0005, 0.04),
+                           "WILD2": path(-0.0005, 0.035),
+                           "DEF": path(0.0002, 0.012)}, index=idx)
+    return prices, pd.DataFrame(5e9, index=idx, columns=prices.columns)
+
+
+def test_the_momentum_sentence_names_the_days_it_skips():
+    """momentum_signal measures the 60 days ending 5 days ago, but every
+    sentence said "60-day return", which is a different window (ME-03,
+    2026-10-22). The skip is a constant of the engine, so the sentence reads
+    it from the dossier rather than restating it."""
+    from src.narrative import MOMENTUM_LOOKBACK, MOMENTUM_SKIP
+    for key, tpl in SENTENCES.items():
+        if "{momentum_lookback}-day return" in tpl:
+            assert "{momentum_skip}" in tpl, f"{key.value} hides the skipped days"
+    prices, dv = _book_fixture()
+    said = [d.sentence() for d in build_book(prices, dv, book_value=1e6)
+            if "-day return" in d.sentence()]
+    assert said, "no momentum sentence rendered"
+    for s in said:
+        assert (f"{MOMENTUM_LOOKBACK}-day return to {MOMENTUM_SKIP} days ago"
+                in s), s
 
 
 def test_exit_bucket_boundaries_and_no_collapsed_zero():
@@ -426,9 +480,149 @@ def test_headline_counts_match_the_dossiers():
     book = build_book(prices, dv, book_value=5_000_000)
     line = headline(book)
     n_ok = sum(1 for d in book if d.eligible)
-    assert f"{n_ok} of {len(_TICKERS)} names" in line
+    assert f"{n_ok} of your {len(_TICKERS)} names" in line
     assert "{" not in line
     assert headline([]) == "No names in this universe."
+
+
+# --- ME-08 (2026-10-22): the Book counts only the visitor's names ---
+
+def _with_shelf(prices, dv, shelf):
+    """Add outside-the-universe columns: {name: (drift, daily vol)}."""
+    rng = np.random.default_rng(11)
+    px, vol = prices.copy(), dv.copy()
+    for t, (mu, sd) in shelf.items():
+        r = rng.normal(mu, sd, len(px))
+        r[120:150] -= 0.008
+        px[t] = 100.0 * np.exp(np.cumsum(r))
+        vol[t] = 8.0e8
+    return px, vol
+
+
+def test_the_books_counts_ranks_and_grit_cover_only_the_visitors_names():
+    """ME-03 (2026-10-22): with the defensive shelf on, a 12-name basket
+    printed "17 of 17 names", "ranks 1 of 17 eligible" and grit ranked across
+    17 - V 67 in the Book against 61 in the Grit Zone tab - because the five
+    ETFs offered as fallbacks were counted as the visitor's universe."""
+    from src.grit import grit_scores
+    prices, dv = _anchor_fixture()
+    user = ["FLY", "WILD1", "WILD2"]
+    prices, dv = _with_shelf(prices, dv, {"DEFX": (0.0, 0.03)})
+    book = build_book(prices, dv, book_value=2_000_000, n_flyers=1,
+                      fallback_anchors={"DEFN", "DEFX"})
+    tab = grit_scores(user, prices=prices[user])["scores"]["grit_score"]
+    for d in book:
+        if d.is_fallback_anchor:
+            continue
+        assert d.ticker in user, d.ticker
+        assert d.n_universe == len(user), (d.ticker, d.n_universe)
+        assert d.n_eligible <= len(user), (d.ticker, d.n_eligible)
+        assert d.momentum_rank is None or d.momentum_rank <= len(user)
+        assert d.grit_score is not None and abs(d.grit_score - tab[d.ticker]) < 1e-9, \
+            (d.ticker, d.grit_score, float(tab[d.ticker]))
+    assert f"of your {len(user)} names" in headline(book), headline(book)
+
+
+def test_an_unused_fallback_holds_nothing_and_changes_nothing():
+    """ME-03 (2026-10-22): the five defensive ETFs held 21.5% of the default
+    book while printed as "LEFT OUT ... simply did not rank in the top 3" -
+    they can never be flyers - and switching the shelf on moved V from 7.9% to
+    5.5% of the book although no ETF was used. A fallback nobody chose gets no
+    dossier and no weight, so the toggle changes nothing."""
+    prices, dv = _book_fixture()
+    # A wild outside holding: it can never thin anyone's tail.
+    px, vol = _with_shelf(prices, dv, {"SHELF": (0.0, 0.05)})
+    off = build_book(prices, dv, book_value=5_000_000)
+    on = build_book(px, vol, book_value=5_000_000, fallback_anchors={"SHELF"})
+    assert "SHELF" not in {d.ticker for d in on}, "an unused fallback is listed"
+    assert not any(d.is_fallback_anchor for d in on)
+    assert [d.ticker for d in on] == [d.ticker for d in off]
+    for a, b in zip(on, off):
+        assert (a.sentence(), a.final_weight) == (b.sentence(), b.final_weight), a.ticker
+
+
+def test_a_fallback_anchor_that_is_used_is_named_and_sized_with_the_book():
+    """The anchor that IS chosen still appears, outside the universe, with a
+    risk-parity share solved over the visitor's names plus that anchor - and
+    no weight goes to a second fallback that was not chosen."""
+    from src.analytics import covariance_matrix
+    from src.strategies import risk_parity_weights
+    prices, dv = _anchor_fixture()
+    prices, dv = _with_shelf(prices, dv, {"DEFX": (0.0, 0.03)})
+    book = _by_ticker(build_book(prices, dv, book_value=2_000_000, n_flyers=1,
+                                 fallback_anchors={"DEFN", "DEFX"}))
+    assert "DEFX" not in book, "the unused fallback is in the book"
+    defn = book["DEFN"]
+    assert defn.role is Role.CUSHION and defn.is_fallback_anchor
+    assert defn.partner == "FLY" and defn.final_weight > 0
+    names = ["FLY", "WILD1", "WILD2", "DEFN"]
+    rets = prices[names].pct_change().dropna()
+    want = pd.Series(risk_parity_weights(covariance_matrix(rets)), index=names)
+    for t in names:
+        assert abs(book[t].target_weight - want[t]) < 1e-9, (t, book[t].target_weight, want[t])
+
+
+def test_a_held_name_is_never_labelled_left_out():
+    """ME-12 (2026-10-22): every card without a role wore "LEFT OUT", yet
+    most of them still hold capital - on the default page META held 4.1% of
+    the book under that chip. A name with weight is held without a role; only
+    a name that holds nothing is left out."""
+    from src.narrative import role_label
+    prices, dv = _book_fixture()
+    seen = set()
+    for book_value in (1e6, 5e8):
+        for d in build_book(prices, dv, book_value=book_value):
+            label = role_label(d)
+            seen.add(label)
+            if d.final_weight > 0:
+                for word in ("LEFT OUT", "EXCLUDED"):
+                    assert word not in label.upper(), (d.ticker, d.final_weight, label)
+            else:
+                assert label == "LEFT OUT", (d.ticker, label)
+            if d.role is Role.FLYER:
+                assert label == "LEADS"
+            if d.role is Role.CUSHION:
+                assert label == "ANCHOR"
+    assert {"NO ROLE", "LEFT OUT"} <= seen, f"fixture no longer shows both: {seen}"
+
+
+
+def test_the_headline_names_an_outside_anchor_and_what_it_holds():
+    """Council A review (2026-10-22): "12 of 12 names hold a position" sat
+    beside XLU holding 12% of the same book - read as the whole book, the
+    count left out a holding. The count is of YOUR names, and an outside
+    anchor in the book is named with its weight in the same sentence."""
+    prices, dv = _anchor_fixture()
+    book = build_book(prices, dv, book_value=2_000_000, n_flyers=1,
+                      fallback_anchors={"DEFN"})
+    line = headline(book)
+    defn = [d for d in book if d.ticker == "DEFN"][0]
+    assert "of your 3 names" in line, line
+    assert "DEFN" in line and f"{defn.final_weight:.1%}" in line, line
+    inside = build_book(prices.drop(columns=["DEFN"]), dv.drop(columns=["DEFN"]),
+                        book_value=2_000_000, n_flyers=1)
+    assert "outside" not in headline(inside), headline(inside)
+
+
+def test_a_card_without_a_role_shows_the_weight_it_holds():
+    """Council A review (2026-10-22): a NO ROLE card claimed "still held" (the
+    read-me) but never printed how much, so the claim could not be checked
+    from the card. Its note carries the weight; a sliver below a tenth of a
+    percent reads as such, never as "0.0%"."""
+    from src.narrative import role_label, role_note
+    prices, dv = _book_fixture()
+    seen = 0
+    for book_value in (1e6, 5e8):
+        for d in build_book(prices, dv, book_value=book_value):
+            note = role_note(d)
+            if role_label(d) == "NO ROLE":
+                seen += 1
+                want = (f"{d.final_weight:.1%}" if d.final_weight >= 0.0005
+                        else "<0.1%") + " of the book"
+                assert note == want, (d.ticker, d.final_weight, note)
+            else:
+                assert note == "", (d.ticker, note)
+    assert seen, "fixture shows no NO ROLE card"
 
 
 if __name__ == "__main__":

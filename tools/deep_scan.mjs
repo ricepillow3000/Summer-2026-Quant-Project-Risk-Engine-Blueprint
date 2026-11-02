@@ -17,7 +17,7 @@
 //                  hits its target; every crisis replay names itself; the cone, the
 //                  histogram and the headline agree; the same settings give the same number
 //   6. book      - names leave as the book grows; the headline counts match the cards
-//   7. tabs      - all twelve render; every drawer opens; Balance for every flyer
+//   7. tabs      - all nine render; every drawer opens; Balance for every flyer
 //   8. map       - Risk Topology: Run x3 under each calibration, long and short; ES >= VaR,
 //                  finite, breach a probability; overlays, explain mode, hover, pairings;
 //                  no demo wording on a live payload
@@ -121,6 +121,10 @@ async function openDrawer(label) {
   await s.scrollIntoViewIfNeeded();
   if (!(await s.evaluate(el => el.parentElement.open))) await s.click();
 }
+// Tabs that live in the folded "Where the numbers come from" drawer. Declared
+// here, above every step: openTab reads it, and the presets step calls openTab
+// long before the tabs step (a const below it was in its dead zone, run 98).
+const PROVENANCE = ['Data Quality', 'Lineage & Audit'];
 const metric = label => page.evaluate(l => {
   const m = [...document.querySelectorAll('[data-testid="stMetric"]')]
     .find(e => (e.querySelector('[data-testid="stMetricLabel"]')?.textContent || '').trim().startsWith(l));
@@ -189,6 +193,14 @@ async function glideCheck(linkSel, label) {
     sc.style.scrollBehavior = prev;
   }, scrollerSel);
   await page.waitForTimeout(700);
+  // ...and the button itself arrived: a reader presses what they can see, but
+  // Playwright's click waits for a moving element to settle, and a footer box
+  // still turning over (1.45 s, static/reveal.js) ate 1.5 s of the window the
+  // flight is measured in - "565px short" on a flight that landed (2026-11-02).
+  await link.evaluate(a => new Promise(r => {
+    const t0 = performance.now();
+    (function f() { if (!a.closest('.reveal-item') || performance.now() - t0 > 4000) r(); else requestAnimationFrame(f); })();
+  }));
   await page.evaluate(([s, id]) => {
     const sc = document.querySelector(s), dest = document.getElementById(id);
     window.__glide = [];
@@ -252,19 +264,22 @@ async function glideCheck(linkSel, label) {
 }
 await step('glide', async () => {
   for (const [sel, label] of [
-    ['#hero .cta-btn', 'Explore what we do'],
+    ['#hero .cta-btn', 'Start with the Grit Zone'],
     ['a.cta-btn[href="#crisis-record"]', 'See the crisis record'],
     ['a.cta-btn[href="#the-slice"]', 'From the record to the allocation'],
     ['a.cta-btn[href="#engine"]', 'To the engine'],
-    ['a[href="#analysis"]', 'Skip to the risk map'],
-    ['.meleona-footer a[href="#grit-showcase"]', 'Footer: The Grit Zone'],
-    ['.meleona-footer a[href="#conviction"]', 'Footer: Crisis Conviction'],
-    ['.meleona-footer a[href="#engine"]', 'Footer: The Engine'],
+    ['a[href="#analysis"]', 'Skip to the analysis'],
+    ['.meliona-footer a[href="#grit-showcase"]', 'Footer: The Grit Zone'],
+    ['.meliona-footer a[href="#crisis-record"]', 'Footer: Crisis Conviction'],
+    ['.meliona-footer a[href="#engine"]', 'Footer: The Engine'],
   ]) { await glideCheck(sel, label); }
 });
 
 // ---- 3. surface: every word, image and chart on the page ---------------------
 async function surface(tag) {
+  // Measure every block in the state it lands in (static/reveal.js), not the
+  // ones still waiting below the screen at opacity 0 - see device_check.mjs.
+  await page.evaluate(() => window.__melionaReveal?.revealAll());
   const f = await page.evaluate(() => {
     const main = document.querySelector('[data-testid="stMain"]');
     const heads = [...main.querySelectorAll('h1, h2, .panel-head .t, summary, .showcase-eyebrow, [data-testid="stMetricLabel"]')];
@@ -353,7 +368,7 @@ await step('engine baseline', async () => {
 
 await step('allocation', async () => {
   await openDrawer('02 · Allocation');
-  for (const est of ['Sample - plain history', 'EWMA - reactive / panic lens', 'Ledoit-Wolf - steady (default)']) {
+  for (const est of ['Sample: plain history', 'EWMA: reactive / panic lens', 'Ledoit-Wolf: steady (default)']) {
     const prev = await verdict();
     await pick('Covariance estimator', est);
     await settle();
@@ -422,10 +437,13 @@ await step('stress test', async () => {
       await settle();
       const sen = await sentence(), v = await verdict();
       const days = (sen.match(/\((\d+) trading days\)/) || [])[1];
-      ok(sen.includes(`Replaying the actual returns of ${sc}`) && /^-?\d+(\.\d+)?%$/.test(v),
+      // The verb follows the engine (ME-07): jump-diffusion replays nothing.
+      const jd = eng.startsWith('Jump');
+      const said = jd ? `calibrated to the actual returns of ${sc}` : `Replaying the actual returns of ${sc}`;
+      ok(sen.includes(said) && /^-?\d+(\.\d+)?%$/.test(v),
          `stress [${eng.split(' ')[0]}]: ${sc} replays and names itself`, `CVaR ${v}, ${days} trading days`
          + (/Excludes/.test(sen) ? `, ${sen.match(/Excludes ([^-]+)-/)?.[1].trim()} excluded and disclosed` : ''));
-      const cap = await page.locator('[data-testid="stCaptionContainer"]', { hasText: 'Replaying actual market returns from' }).first().textContent().catch(() => '');
+      const cap = await page.locator('[data-testid="stCaptionContainer"]', { hasText: jd ? 'Calibrating to actual market returns from' : 'Replaying actual market returns from' }).first().textContent().catch(() => '');
       ok(/\d{4}-\d\d-\d\d to \d{4}-\d\d-\d\d/.test(cap), `stress: ${sc} window shown`, cap.trim());
       await coneAgrees(`${sc}`);
     }
@@ -448,7 +466,7 @@ await step('every preset', async () => {
     await pick('Preset basket', p);
     const v = await newVerdict(prev);
     const errs = await page.locator('[data-testid="stAlertContentError"], [data-testid="stException"]').count();
-    const data = await page.locator('[data-testid="stCaptionContainer"]', { hasText: 'trading days · through' }).first().textContent().catch(() => '');
+    const data = await page.locator('[data-testid="stCaptionContainer"]', { hasText: 'daily returns) · through' }).first().textContent().catch(() => '');
     const through = (data.match(/through (\d{4}-\d\d-\d\d)/) || [])[1];
     const age = through ? (Date.now() - Date.parse(through)) / 864e5 : NaN;
     const warns = await page.locator('[data-testid="stAlertContentWarning"]').allTextContents();
@@ -465,27 +483,42 @@ await step('every preset', async () => {
 async function bookState() {
   return page.evaluate(() => {
     // A dossier card is the flex row whose first cell is its role label.
-    const ROLES = ['LEADS', 'ANCHOR', 'LEFT OUT'];
+    const ROLES = ['LEADS', 'ANCHOR', 'NO ROLE', 'LEFT OUT'];
     const cards = [...document.querySelectorAll('[data-testid="stMarkdownContainer"] div')]
-      .filter(d => d.children.length === 2 && ROLES.includes(d.firstElementChild.textContent.trim()));
-    const lbl = c => c.firstElementChild?.textContent.trim();
+      .filter(d => d.children.length === 2 && ROLES.includes(
+        (d.firstElementChild.textContent || '').trim()
+          .replace(d.firstElementChild.querySelector('.role-note')?.textContent.trim() || '', '').trim()));
+    // the role cell holds the label, and on a NO ROLE card the weight it holds
+    const note = c => c.firstElementChild?.querySelector('.role-note')?.textContent.trim() || '';
+    const lbl = c => (c.firstElementChild?.textContent || '').trim().replace(note(c), '').trim();
     const head = [...document.querySelectorAll('[data-testid="stMarkdownContainer"] div')]
-      .map(d => d.textContent).find(t => /^\$[\d,]+ book - \d+ of \d+ names/.test(t)) || '';
+      .map(d => d.textContent).find(t => /^\$[\d,]+ book: \d+ of your \d+ names/.test(t)) || '';
     return { leads: cards.filter(c => lbl(c) === 'LEADS').length, anchors: cards.filter(c => lbl(c) === 'ANCHOR').length,
+             held: cards.filter(c => lbl(c) === 'NO ROLE').length,
+             // every NO ROLE card states its weight, and no other card does
+             noteOk: cards.every(c => (lbl(c) === 'NO ROLE')
+               === /^(\d+\.\d%|<0\.1%) of the book$/.test(note(c))),
              out: cards.filter(c => lbl(c) === 'LEFT OUT').length, total: cards.length, head,
              outside: cards.filter(c => /outside the chosen universe/.test(c.textContent)).length };
   });
 }
 await step('the book', async () => {
   // "n of N names hold a position worth keeping" counts the LIQUIDITY gate:
-  // an eligible name can still be left out for ranking below the cut, so
-  // leaders + anchors <= eligible <= cards, and N is every card on screen.
-  const counts = b => (b.head.match(/(\d+) of (\d+) names/) || []).slice(1).map(Number);
-  const cards = b => `cards: ${b.leads} lead, ${b.anchors} anchor, ${b.out} left out, ${b.outside} from outside`;
+  // an eligible name can still hold no role for ranking below the cut, so
+  // leaders + anchors <= eligible <= N. N is the visitor's own names (ME-08):
+  // an outside anchor's card is on screen but not one of them, so it counts
+  // in neither N nor the anchors that must fit inside the eligible names.
+  const counts = b => (b.head.match(/(\d+) of your (\d+) names/) || []).slice(1).map(Number);
+  const own = b => b.total - b.outside, ownAnchors = b => b.anchors - b.outside;
+  const cards = b => `cards: ${b.leads} lead, ${b.anchors} anchor, ${b.held} held without a role, ${b.out} left out, ${b.outside} from outside`;
+  // Leaders and anchors sit under the headline; the other cards and the two
+  // finer settings sit in one drawer below them.
+  await openDrawer('The other names, line by line');
   const b0 = await bookState();
   const [e0, n0] = counts(b0);
   ok(b0.total > 0, 'book: dossier cards render', cards(b0));
-  ok(n0 === b0.total && b0.leads + b0.anchors <= e0 && e0 <= n0, 'book: the headline counts agree with the cards',
+  ok(b0.noteOk, 'book: every card without a role states the weight it holds', cards(b0));
+  ok(n0 === own(b0) && b0.leads + ownAnchors(b0) <= e0 && e0 <= n0, 'book: the headline counts agree with the cards',
      `${b0.head.slice(0, 70)} | ${cards(b0)}`);
   const size = page.locator('input[aria-label="Book size ($)"]').first();
   await size.scrollIntoViewIfNeeded();
@@ -499,7 +532,7 @@ await step('the book', async () => {
     const [e, n] = counts(b);
     const $v = '$' + Number(v).toLocaleString('en-US');
     ok(e <= prevElig, `book: at ${$v} names only leave, never join`, `${prevElig} -> ${e} eligible`);
-    ok(n === b.total && b.leads + b.anchors <= e, `book: headline still agrees with the cards at ${$v}`, cards(b));
+    ok(n === own(b) && b.leads + ownAnchors(b) <= e, `book: headline still agrees with the cards at ${$v}`, cards(b));
     prevElig = e;
   }
   await size.fill('1000000'); await size.press('Enter'); await settle();
@@ -514,10 +547,10 @@ await step('the book', async () => {
 });
 
 // ---- 7. tabs, drawers, Balance ----------------------------------------------------
-const TABS = ['Risk Topology', 'Risk Breakdown', 'Correlation Watch', 'Balance', 'Grit Zone',
-              'Crisis Conviction', 'Signal Lab', 'Regime Atlas', 'Liquidity', 'Security Master',
-              'Data Quality', 'Lineage & Audit'];
+const TABS = ['Risk Topology', 'Risk Breakdown', 'Liquidity', 'Correlation Watch', 'Balance',
+              'Grit Zone', 'Crisis Conviction', 'Data Quality', 'Lineage & Audit'];
 async function openTab(name) {
+  if (PROVENANCE.includes(name)) await openDrawer('Where the numbers come from');
   const t = page.getByRole('tab', { name, exact: true }).first();
   await t.scrollIntoViewIfNeeded(); await t.click(); await page.waitForTimeout(900);
 }
@@ -554,10 +587,10 @@ await step('balance, every flyer', async () => {
   const flyers = (await page.getByRole('option').allTextContents()).map(s => s.trim());
   await page.keyboard.press('Escape');
   for (const f of (FULL ? flyers : flyers.slice(0, 3))) {
-    await pick('High-flyer (Circle 1 - the volatile conviction position)', f); await settle();
+    await pick('High-flyer (Circle 1: the volatile conviction position)', f); await settle();
     const t = await page.evaluate(() => [...document.querySelectorAll('svg text')].map(e => e.textContent).find(s => /^GAP /.test(s)) || '');
     const line = await page.evaluate(() => [...document.querySelectorAll('div')].map(d => d.textContent)
-      .find(s => /^In the loaded 2-year history/.test(s)) || '');
+      .find(s => /^Over the \d+ daily returns loaded/.test(s)) || '');
     ok(/^GAP -?\d+(\.\d+)?%$/.test(t) && /cushion/.test(line), `balance: flyer ${f} pairs and measures its cushion`,
        `${t}; ${line.slice(0, 110)}`);
   }
@@ -682,7 +715,7 @@ await step('map long', () => mapAudit('long'));
 
 await step('short side', async () => {
   const prev = await verdict();
-  await choose('Bearish - short the book');
+  await choose('Bearish: short the book');
   await page.waitForFunction(() => /short/i.test(document.querySelector('.verdict-sentence')?.textContent || ''));
   await settle();
   const g = await page.evaluate(() => [...document.querySelectorAll('.st-key-gungnir_zone svg text')].map(t => t.textContent));

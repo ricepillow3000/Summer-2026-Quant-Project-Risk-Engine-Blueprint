@@ -18,7 +18,7 @@ things to Streamlit's static root:
 It never blocks startup: any failure prints a warning and exits 0, and the app
 runs exactly as before.
 
-    python -m tools.public_files            # MELEONA_SITE_URL overrides the URL
+    python -m tools.public_files            # MELIONA_SITE_URL overrides the URL
 """
 
 import datetime
@@ -28,15 +28,16 @@ import pathlib
 import shutil
 import sys
 
-SITE_URL = os.environ.get(
-    "MELEONA_SITE_URL",
-    "https://summer-2026-quant-project-risk-engine-blueprint-production.up.railway.app",
+# MELEONA_SITE_URL is the name's spelling before 2026-10-28; a host variable
+# set under it still counts.
+SITE_URL = (os.environ.get("MELIONA_SITE_URL") or os.environ.get("MELEONA_SITE_URL") or
+    "https://summer-2026-quant-project-risk-engine-blueprint-production.up.railway.app"
 ).rstrip("/")
-TITLE = "Meleona - Portfolio Risk Engine"
+TITLE = "Meliona · Portfolio Risk Engine"
 DESCRIPTION = ("VaR, CVaR, Monte Carlo stress testing and factor exposures, computed "
-               "live from Yahoo Finance data - every number traceable to its source.")
-MARK, END = "<!-- meleona-head -->", "<!-- /meleona-head -->"
-BOOT_MARK, BOOT_END = "<!-- meleona-boot -->", "<!-- /meleona-boot -->"
+               "live from Yahoo Finance data. Every number traces back to its source.")
+MARK, END = "<!-- meliona-head -->", "<!-- /meliona-head -->"
+BOOT_MARK, BOOT_END = "<!-- meliona-boot -->", "<!-- /meliona-boot -->"
 # The commit this process was built from. Railway sets RAILWAY_GIT_COMMIT_SHA
 # on a GitHub deploy and posts nothing back to GitHub, so "is the fix live?"
 # was guesswork (2026-09-03, 2026-09-09) until the page said so itself.
@@ -52,7 +53,7 @@ OLD_PRE_BOOT = (
     '<style>@keyframes pre-boot-off{to{opacity:0;visibility:hidden}}</style>'
     '<div style="position:absolute;bottom:28px;left:max(7vw,calc(50vw - 744px));'
     "font:11px 'Helvetica Neue',Arial,sans-serif;letter-spacing:.24em;"
-    'text-transform:uppercase;color:#6A5030">Loading Meleona</div></div>\n'
+    'text-transform:uppercase;color:#6A5030">Loading Meliona</div></div>\n'
 )
 
 
@@ -82,8 +83,18 @@ def head_tags(site_url: str, build: str = "") -> str:
     t, d, u = html.escape(TITLE), html.escape(DESCRIPTION), html.escape(site_url)
     b = html.escape(build[:12] or "unknown")
     return (
-        f'{MARK}\n<title>{t}</title>\n'
-        f'<meta name="meleona-build" content="{b}">\n'
+        f'{MARK}\n'
+        # Security headers Streamlit cannot send, as the meta tags a browser
+        # honours. Only directives that touch no script: no plugin embeds, no
+        # <base> hijack of relative URLs, no form posting off-site. A script
+        # policy would need 'unsafe-inline' and 'unsafe-eval' for Streamlit and
+        # its srcdoc frames, and so would guard nothing; frame-ancestors and
+        # X-Frame-Options are header-only (LAUNCH_CHECKLIST #89).
+        '<meta http-equiv="Content-Security-Policy" '
+        "content=\"object-src 'none'; base-uri 'self'; form-action 'self'\">\n"
+        '<meta name="referrer" content="strict-origin-when-cross-origin">\n'
+        f'<title>{t}</title>\n'
+        f'<meta name="meliona-build" content="{b}">\n'
         f'<meta name="description" content="{d}">\n'
         f'<link rel="canonical" href="{u}/">\n'
         f'<link rel="icon" type="image/png" href="/favicon.png">\n'
@@ -99,14 +110,27 @@ def head_tags(site_url: str, build: str = "") -> str:
         f'<meta property="og:image" content="{u}/og-image.png">\n'
         f'<meta property="og:image:width" content="1200">\n'
         f'<meta property="og:image:height" content="627">\n'
-        f'<meta property="og:image:alt" content="Meleona Portfolio Risk Engine: '
-        f'Monte Carlo fan chart, simulated paths and live-data audit result">\n'
+        f'<meta property="og:image:alt" content="The Meliona crest and name beside '
+        f'its live audit of 15 October 2026: 727 of 728 checks passed on Yahoo '
+        f'Finance data">\n'
         f'<meta name="twitter:card" content="summary_large_image">\n'
         # Single-page app: every unknown path is served this same index.html,
         # whose relative script paths break below the root - a mistyped
         # /a/b link was a blank white page. Send it to the branded 404 instead.
         "<script>if(!/^\\/(index\\.html)?$/.test(location.pathname))"
         "location.replace('/404.html')</script>\n"
+        # Motion (static/reveal.js). The blocks' hidden state switches on HERE,
+        # before the first paint, so no block shows finished and then hides.
+        # Never without IntersectionObserver or under reduced motion. The
+        # script is deferred, so it has run by DOMContentLoaded: if it has not
+        # (blocked, failed), the class comes off and the page shows as drawn.
+        # No JavaScript at all: the class is never set (the .no-js fallback).
+        "<script>(function(h){if(!('IntersectionObserver' in window)||"
+        "matchMedia('(prefers-reduced-motion: reduce)').matches)return;"
+        "h.classList.add('reveal-on');document.addEventListener('DOMContentLoaded',"
+        "function(){if(!window.__melionaReveal)h.classList.remove('reveal-on')})"
+        "})(document.documentElement)</script>\n"
+        '<script id="meliona-reveal" defer src="./app/static/reveal.js"></script>\n'
         f"{END}\n"
     )
 
@@ -138,7 +162,7 @@ def install(static_dir: pathlib.Path, site_url: str = SITE_URL,
         new = page.replace("<title>Streamlit</title>", "")
         new = new.replace("<head>", "<head>\n" + block, 1)
         new = new.replace(
-            "<noscript>", f"<noscript><p>{html.escape(TITLE)} - {html.escape(DESCRIPTION)}</p>", 1)
+            "<noscript>", f"<noscript><p>{html.escape(TITLE)}. {html.escape(DESCRIPTION)}</p>", 1)
         new = new.replace("<body>", "<body>\n" + boot_block(), 1)
     if BOOT_MARK in new:                   # the skeleton follows the hero's copy
         i, j = new.index(BOOT_MARK), new.index(BOOT_END) + len(BOOT_END) + 1

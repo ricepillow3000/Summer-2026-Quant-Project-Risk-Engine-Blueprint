@@ -29,6 +29,7 @@ from src.ingestion import fetch_prices
 from src.pairing import DEFENSIVE_ANCHOR_TICKERS, anchor_rank, pair_weights, backtest_pair
 from src.risk import portfolio_daily_returns
 from src.state_calibration import calibrate_state_dynamics
+from src.covariance import TRADING_DAYS
 
 
 # Hazard perimeter policy - disclosed in the map footnote, deliberately NOT
@@ -42,7 +43,6 @@ HAZARD_BETA_CAP = 1.9
 
 BETA_WINDOW = 63          # matches state_calibration.rolling_state_series
 VOL_WINDOW = 21
-TRADING_DAYS = 252
 
 
 def anchor_frame(returns: pd.DataFrame) -> pd.DataFrame:
@@ -216,9 +216,9 @@ def build_map_payload(returns: pd.DataFrame, weights: pd.Series,
             "plus +0.10 shock corr, calm = x 0.7 (disclosed policy, not "
             "data). Zero-drift risk view. Hazard: 3x today's vol (floored "
             "at 35%, capped at 90%) and beta "
-            + ("-0.8 (capped at -1.9) - the short book's holdings have their "
+            + ("-0.8 (capped at -1.9); the short book's holdings have their "
                "betas negated (anchor-pool names are not held and keep their "
-               "own), so the perimeter is mirrored and danger is MORE negative "
+               "own), so the perimeter is mirrored and danger is more negative "
                "beta"
                if bearish else "+0.8 (capped at 1.9)")
             + ". Pair numbers replay real history: monthly rebalance, no "

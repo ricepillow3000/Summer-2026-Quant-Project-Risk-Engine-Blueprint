@@ -40,10 +40,15 @@ jobs:
       - name: 0. Self-check (lint, bandit, engine tests with live checks, narrative) + dependency CVEs
         run: |
           python -m tools.check
+          # No CVE is skipped: the 2026-10-20 Pillow exception closed with
+          # Streamlit 1.66.1 and Pillow 13 (ME-16). A new exception needs John's
+          # call and test_the_dependency_audit_skips_no_cve changed with it.
           python -m pip_audit -r requirements.txt
       - name: 1. Provenance - engine prices vs raw Yahoo API, ^IRX vs the Treasury
         if: always()
-        run: python -m tools.live_provenance
+        run: |
+          set -o pipefail
+          python -m tools.live_provenance | tee provenance.log
       - name: 3. Batch audit - every preset on live data, each check cites its source
         if: always()
         run: python -m tests.batch_audit
@@ -84,6 +89,30 @@ jobs:
         run: |
           mkdir -p site-shots/devices
           node tools/device_check.mjs http://127.0.0.1:8501 site-shots/devices
+      # Every button glide lands (tools/glide_load_check.mjs): on the settled
+      # page, through a trackpad flick, under a reader's swipe back and a
+      # steady mouse wheel - and pressed while the page is still loading. Each
+      # loading press gets its own cold app: a copy of this checkout with an
+      # empty data/ cache, restarted, on its own port, so the app the other
+      # steps use keeps its cache. (Clearing the cache from the page is not an
+      # option: no visitor control may clear it - SECURITY-LESSONS.md.)
+      - name: 8c. This commit - every button glide lands, settled and mid-load
+        if: always()
+        run: |
+          node tools/glide_load_check.mjs http://127.0.0.1:8501 momentum 2
+          node tools/glide_load_check.mjs http://127.0.0.1:8501 reader 2
+          node tools/glide_load_check.mjs http://127.0.0.1:8501 steady 1
+          node tools/glide_load_check.mjs http://127.0.0.1:8501 rest 2
+          rm -rf /tmp/cold && cp -r . /tmp/cold
+          status=0
+          for b in 1 2 3 4 5; do
+            rm -rf /tmp/cold/data /tmp/cold/logs
+            (cd /tmp/cold && nohup streamlit run main.py --server.port 8502 --server.headless true > /tmp/cold-$b.log 2>&1 &)
+            for i in $(seq 1 60); do curl -sf http://127.0.0.1:8502/_stcore/health >/dev/null && break; sleep 2; done
+            ONLY=$b node tools/glide_load_check.mjs http://127.0.0.1:8502 early 1 || status=1
+            pkill -f "server.port 8502" || true; sleep 2
+          done
+          exit $status
       - name: 9. Deployed site - recruiter walk (informational until this branch is deployed)
         if: always()
         continue-on-error: true
@@ -110,11 +139,20 @@ jobs:
           export SCAN_SCENARIOS="$(python -c 'import json; from src.scenarios import HISTORICAL_REGIMES as H; print(json.dumps(list(H)))')"
           node tools/deep_scan.mjs "$SITE_URL" scan/deployed
 
+      # Provenance runs first, so its verdicts sit thousands of lines above the
+      # end of the log - past the 5,000-line tail the logs API returns (on
+      # 2026-10-28 it went red on every branch and its FAIL lines could not be
+      # read). Repeat them where the log ends.
+      - name: 12. Provenance verdicts, repeated at the end of the log
+        if: always()
+        run: grep -E "^FAIL|provenance checks pass" provenance.log || echo "provenance did not run"
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: live-audit
           path: |
+            provenance.log
             audit/batch_audit_*
             site-shots/
             walk/

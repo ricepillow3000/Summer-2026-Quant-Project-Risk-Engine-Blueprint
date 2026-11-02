@@ -53,6 +53,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from src.covariance import TRADING_DAYS
+
 # κ above this → matrix treated as numerically fragile; inversion falls
 # back to the pseudo-inverse. float64 has ~16 significant digits; 1e8
 # leaves half of them for the arithmetic on top of the inversion.
@@ -246,7 +248,7 @@ if __name__ == "__main__":  # smoke test - deterministic synthetic data
     r = np.column_stack([market + rng.normal(0, 0.006, t) for _ in tickers])
     df = pd.DataFrame(r, columns=tickers)
 
-    cov = df.cov() * 252
+    cov = df.cov() * TRADING_DAYS
     cleaned, n_clip = clip_eigenvalues(cov, n_obs=t)
     fac = eigen_factors(cleaned)
 

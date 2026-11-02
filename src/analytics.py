@@ -16,6 +16,7 @@ Quant Deep Dive:
 import numpy as np
 import pandas as pd
 from src.ingestion import fetch_prices, get_returns
+from src.covariance import TRADING_DAYS
 
 
 def covariance_matrix(returns: pd.DataFrame, annualize: bool = True) -> pd.DataFrame:
@@ -32,7 +33,7 @@ def covariance_matrix(returns: pd.DataFrame, annualize: bool = True) -> pd.DataF
     """
     cov = returns.cov()
     if annualize:
-        cov = cov * 252
+        cov = cov * TRADING_DAYS
     return cov
 
 

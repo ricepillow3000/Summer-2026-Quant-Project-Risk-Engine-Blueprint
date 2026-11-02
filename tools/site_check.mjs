@@ -148,14 +148,14 @@ for (const [label, w, h] of [['desktop', 1440, 900], ['phone', 390, 844]]) {
 // cost two sessions in September).
 const get = async p => { const r = await fetch(url.replace(/\/$/, '') + p); return [r.status, r.headers.get('content-type') || '', await r.text()]; };
 const [hs, , head] = await get('/');
-const build = (head.match(/<meta name="meleona-build" content="([^"]*)"/) || [])[1] || '(no build tag)';
+const build = (head.match(/<meta name="meliona-build" content="([^"]*)"/) || [])[1] || '(no build tag)';
 console.log(`INFO  build: ${build}`);
 if (process.env.EXPECT_BUILD)
   ok(process.env.EXPECT_BUILD.startsWith(build) && build.length >= 7,
      `deployed build is the commit under test (${build} vs ${process.env.EXPECT_BUILD.slice(0, 12)})`);
 if (process.env.SEO) {
   // Launch basics a crawler or link preview reads - raw HTML, no JavaScript.
-  for (const tag of ['<title>Meleona', 'name="description"', 'property="og:image"', 'property="og:title"', 'rel="canonical"', 'twitter:card'])
+  for (const tag of ['<title>Meliona', 'name="description"', 'property="og:image"', 'property="og:title"', 'rel="canonical"', 'twitter:card'])
     ok(hs === 200 && head.includes(tag), `seo: raw HTML carries ${tag}`);
   const [rs, , robots] = await get('/robots.txt');
   ok(rs === 200 && /Sitemap: https?:\/\//.test(robots), 'seo: /robots.txt names the sitemap');
@@ -167,7 +167,7 @@ if (process.env.SEO) {
   ok(fs === 200 && ft.startsWith('image/png'), 'seo: favicon served');
   const p404 = await browser.newPage();
   await p404.goto(url.replace(/\/$/, '') + '/no/such/page'); await p404.waitForTimeout(2500);
-  ok(/404 - page not found/i.test(await p404.evaluate(() => document.body.innerText)), 'seo: a bad link shows the branded 404, not a blank page');
+  ok(/404 · page not found/i.test(await p404.evaluate(() => document.body.innerText)), 'seo: a bad link shows the branded 404, not a blank page');
   await p404.screenshot({ path: `${outdir}/404.png` });
 }
 await browser.close();

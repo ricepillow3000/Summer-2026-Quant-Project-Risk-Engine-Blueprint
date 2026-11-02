@@ -1,11 +1,17 @@
 # Terms of Use
 
-_Last updated: 2026-08-26. Contact: meleona.support@gmail.com_
+_Last updated: 2026-11-02. Contact: meleona.support@gmail.com_
 
 ## What this is
 
-Meleona is an educational portfolio-risk engine built as a student portfolio
-project. By using it you accept these terms.
+Meliona is an educational portfolio-risk engine built and run by John Nguyen,
+an individual, as a student portfolio project. By using it you accept these
+terms.
+
+## Price
+
+Meliona is free. There is no paid tier, subscription, purchase, advert or
+hidden fee, so there is nothing to refund.
 
 ## Not investment advice
 
@@ -26,6 +32,12 @@ is end-of-day, not real-time, may be delayed, revised or wrong, and may be
 missing for some symbols or periods - the app discloses coverage gaps rather
 than filling them in. No warranty is made about accuracy, completeness or
 availability, and no number here should be relied on for trading.
+
+## Images
+
+The two photographs (the hero and the dark band) are from Unsplash and used
+under the Unsplash License, which allows free commercial use. The topographic
+background and the crest were made for this project.
 
 ## Acceptable use
 

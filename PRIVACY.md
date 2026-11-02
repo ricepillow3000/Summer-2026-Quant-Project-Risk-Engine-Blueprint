@@ -1,8 +1,11 @@
 # Privacy
 
-_Last updated: 2026-08-26. Contact: meleona.support@gmail.com_
+_Last updated: 2026-11-02. Contact: meleona.support@gmail.com_
 
-Meleona is a public, read-only market-risk dashboard. It has **no sign-up, no
+Meliona is run by John Nguyen, an individual, as a student portfolio project -
+not a company, and nothing here is sold.
+
+Meliona is a public, read-only market-risk dashboard. It has **no sign-up, no
 login, no password, and no user accounts**. This note describes everything the
 app holds, which is deliberately close to nothing.
 
@@ -31,29 +34,43 @@ The session reference exists for one purpose: if you email about a problem and
 quote it, the operator can find the matching stack trace. It is not a user ID,
 it is not stored anywhere else, and a new one is issued every visit.
 
-## Cookies
+## Cookies and browser storage
 
-One: the session cookie Streamlit uses to keep your browser tab connected to
-the server while you interact with the page. It carries no identity and no
-tracking value. No advertising or analytics cookies are set.
+Measured in a browser on 2026-11-02, this is everything the app stores on your
+device:
+
+| Name | Kind | Set by | Purpose | Lasts |
+|---|---|---|---|---|
+| `_streamlit_xsrf` | Cookie | Streamlit | Anti-forgery token: proves a request came from this page, not another site | Until you close the browser |
+| `stActiveTheme-/-v2` | Local storage | Streamlit | Remembers the light/dark theme setting | Until you clear site data |
+
+Both are needed for the page to work as you asked it to, carry no identity and
+no tracking value, and are never read by anyone but this app. That is why there
+is no consent banner: there is nothing optional to consent to. No advertising,
+analytics or third-party cookies are set.
 
 ## Third parties
 
 The **server** (not your browser) fetches data from:
 
-- **Yahoo Finance** (via the `yfinance` library) - prices, volumes, dividends,
-  splits, the 13-week T-bill rate.
-- **Business Insider** - ISIN lookups only, because that is where the `yfinance`
-  ISIN call goes.
+- **Yahoo Finance** (via the `yfinance` library) - prices (adjusted for
+  dividends and splits), volumes, and the 13-week T-bill rate. It is the only
+  outside service the app contacts.
 
 These requests contain ticker symbols. They do not contain anything about you,
 and they are made from the server, so your IP address is never exposed to
-either service. The full list of hosts the app may contact is enumerated in
+Yahoo. The full list of hosts the app may contact is enumerated in
 `src/netguard.py`, which refuses every other destination.
 
-The app is hosted on a commercial platform (Railway/Render). Like any web host,
+The app is hosted on Railway, a commercial platform. Like any web host,
 it processes connection metadata such as IP addresses for delivery and abuse
 prevention under its own privacy policy.
+
+## Children
+
+Nothing here asks for, or keeps, information about anyone - child or adult - so
+there is no age gate. If that ever changes, this section will say how age is
+checked before anything is collected.
 
 ## Deleting your data
 

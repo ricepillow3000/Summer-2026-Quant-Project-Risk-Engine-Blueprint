@@ -32,7 +32,7 @@ import traceback
 from logging.handlers import RotatingFileHandler
 
 LOG_DIR = os.path.join(os.path.dirname(__file__), "..", "logs")
-LOG_FILE = os.path.join(LOG_DIR, "meleona.log")
+LOG_FILE = os.path.join(LOG_DIR, "meliona.log")
 
 # Small on purpose: this is a diagnostic tail, not an archive, and the host is
 # an ephemeral free-tier disk that the cache budget already shares.
@@ -42,6 +42,13 @@ BACKUP_COUNT = 3
 _FORMAT = "%(asctime)s | %(levelname)-7s | %(name)s | %(message)s"
 
 _configured = False
+
+
+def host_setting(name: str, default: str = "") -> str:
+    """The host's MELIONA_<name> variable. The name was spelled Meleona until
+    2026-10-28; a variable set on the host under that spelling still counts, so
+    the rename cannot quietly disarm the kill switch."""
+    return os.getenv(f"MELIONA_{name}") or os.getenv(f"MELEONA_{name}") or default
 
 
 def setup_logging(level: int = logging.INFO) -> str:
@@ -75,7 +82,7 @@ def new_session_ref() -> str:
 
 
 def log_session_start(session_ref: str, detail: str = "") -> None:
-    logging.getLogger("meleona.session").info(
+    logging.getLogger("meliona.session").info(
         "ref=%s session start %s", session_ref, detail)
 
 
@@ -84,7 +91,7 @@ def log_incident(session_ref: str, where: str, exc: BaseException) -> str:
     Record a handled failure against a session ref. Returns the ref so the UI
     can show it: "something broke, quote REF when you email support".
     """
-    logging.getLogger("meleona.incident").error(
+    logging.getLogger("meliona.incident").error(
         "ref=%s where=%s %s: %s\n%s", session_ref, where,
         type(exc).__name__, exc,
         "".join(traceback.format_exception(type(exc), exc, exc.__traceback__)))
@@ -99,7 +106,7 @@ def recent_incidents(limit: int = 20) -> list[str]:
     if not os.path.exists(LOG_FILE):
         return []
     with open(LOG_FILE, encoding="utf-8", errors="replace") as fh:
-        lines = [ln.rstrip("\n") for ln in fh if "meleona.incident" in ln]
+        lines = [ln.rstrip("\n") for ln in fh if "meliona.incident" in ln]
     return lines[-limit:]
 
 

@@ -1,14 +1,14 @@
-# Meleona - Institutional-Grade Portfolio Optimization & Risk Engine
+# Meliona - Portfolio Optimization & Risk Engine
 
 A quantitative risk dashboard that lets anyone load a portfolio - equities, ETFs, FX, or futures - and stress-test it against thousands of simulated and historical market paths, live. Built by a 2nd-year Data Analytics student to recruiter-facing, quant-interview standards.
 
-**Live demo:** _coming August 2026_
+**Live:** https://summer-2026-quant-project-risk-engine-blueprint-production.up.railway.app
 
 ---
 
 ## What This Is
 
-Most student finance projects pull data and plot a chart. This one is built to the standard a quant desk would actually defend: modular Python, statistically rigorous math, honest data provenance, and a Streamlit dashboard that leads with **one number** - a headline CVaR verdict - with all the depth a step behind it.
+Most student finance projects pull data and plot a chart. This one checks its own numbers: modular Python, math tested against the papers it comes from, honest data provenance, and a Streamlit dashboard that leads with **one number** - a headline CVaR verdict - with all the depth a step behind it.
 
 Every market figure is fetched from Yahoo Finance at runtime and computed by the engine's own `numpy`/`scipy` code. **No value is ever hardcoded, estimated, or model-generated** - the provenance panel makes that auditable.
 
@@ -19,7 +19,7 @@ Every market figure is fetched from Yahoo Finance at runtime and computed by the
 - **Configurable universe** - one-click preset baskets (mega-cap tech, 13F-popular names, sector ETFs, FX majors, futures) or type any Yahoo symbol.
 - **Freshness-aware data engine** - per-universe parquet cache with a UTC provenance record on every pull; a data-health check flags staleness, gaps, and insufficient history.
 - **Two allocation methods** - equal weight and risk parity (equal-risk-contribution), with an optional volatility-targeting overlay (leverage up/down to a target annual vol).
-- **Two Monte Carlo engines** - bootstrap resampling *and* a Merton jump-diffusion process (Poisson jumps on Gaussian diffusion) for a fatter, more honest tail. Swappable live.
+- **Two Monte Carlo engines** - a stationary block bootstrap (crash weeks stay in one piece) *and* a Merton jump-diffusion process (Poisson jumps on Gaussian diffusion) for a fatter, more honest tail. Swappable live.
 - **Tail risk** - historical & parametric VaR, CVaR (expected shortfall), and a Kupiec proportion-of-failures backtest that validates the VaR model rather than just reporting it.
 - **Stress testing** - custom parametric shocks (drawdown + volatility) *or* replay of the actual daily returns of real crisis windows (dot-com, GFC, COVID, 2022, SVB, …), preserving real correlation breakdown.
 - **Risk decomposition** - per-asset risk-contribution vs. dollar-weight, named factor exposures (market/size/value/momentum via ETF proxies), and a correlation matrix.
@@ -36,7 +36,7 @@ Every market figure is fetched from Yahoo Finance at runtime and computed by the
 | Math | `numpy`, `scipy` - covariance/eigen-decomposition, CVaR, Monte Carlo, jump-diffusion |
 | Allocation | Risk parity (ERC), volatility targeting |
 | Dashboard | `streamlit`, `plotly` |
-| Deployment | Streamlit Community Cloud / Railway / Render (`Procfile` ready) |
+| Deployment | Railway (`Procfile`), static files served by Streamlit |
 
 ---
 
@@ -47,6 +47,28 @@ python -m pip install -r requirements.txt
 python -m streamlit run main.py
 ```
 Opens at http://localhost:8501.
+
+### Run it anywhere (Docker)
+
+The same app in a box, on any machine with [Docker](https://docs.docker.com/get-docker/) -
+no Python, no packages, no "works on my machine":
+
+```bash
+docker run -p 8501:8501 ghcr.io/ricepillow3000/meliona:latest
+```
+
+Then open http://localhost:8501. The image is built, started and checked on
+every push, and published from `main` for Intel/AMD and Apple Silicon machines
+(`.github/workflows/container.yml`). To build it yourself:
+
+```bash
+docker build -f docker/Dockerfile -t meliona .
+docker run -p 8501:8501 meliona
+```
+
+The box runs exactly what the live site runs (`Procfile`), as a non-root user,
+with Docker's health check on Streamlit's `/_stcore/health`. Why Docker and not
+Kubernetes: `RUNBOOK.md` §4.
 
 ### Tests
 
@@ -63,8 +85,8 @@ Deterministic math-invariant tests (CVaR ≥ VaR, risk parity equalizes contribu
 
 ```
 risk-engine/
-├── .streamlit/config.toml   # Institutional beige/bronze theme
-├── assets/logo.svg          # Lion-crest wordmark
+├── .streamlit/config.toml   # Beige/bronze theme, server hardening
+├── assets/logo.svg          # Crest: hexagon cut by an X, on a ringed charcoal disc
 ├── data/                    # Cached prices + provenance (gitignored)
 ├── src/
 │   ├── ingestion.py         # DataEngine: fetch, cache, provenance, dollar volume
@@ -138,10 +160,19 @@ which symbols other visitors requested.
 | ✅ | Data engine, caching, provenance, data-integrity checks |
 | ✅ | Covariance / correlation / eigen-decomposition |
 | ✅ | CVaR + bootstrap Monte Carlo; VaR methods + Kupiec backtest |
-| ✅ | Streamlit dashboard, institutional theme, crest |
+| ✅ | Streamlit dashboard, beige/bronze theme, crest |
 | ✅ | Risk parity, vol targeting, risk contribution, named factors |
 | ✅ | Historical regime replay, liquidity modeling, jump-diffusion engine |
-| ⬜ | **Live deployment to a public URL** (the recruiter link) |
+| ✅ | **Live deployment to a public URL** (the recruiter link) |
 | ⬜ | Optional: auto executive-summary, further UI polish |
 
 **Target ship date: August 23, 2026**
+
+---
+
+## Credits
+
+The hero and band photographs are from [Unsplash](https://unsplash.com), used
+under the Unsplash License (free commercial use, no attribution required). The
+topographic background in `static/gungnir.*` is generated in-repo, and the
+crest (`assets/logo.svg`) was drawn for this project.

@@ -32,6 +32,8 @@ import numpy as np
 import pandas as pd
 
 from src.eigenrisk import align_eigenvector_signs
+from src.risk import cvar
+from src.covariance import TRADING_DAYS
 
 TAIL_CONFIDENCE = 0.975          # ES level (Basel FRTB)
 DEFAULT_W_A = 0.60               # high-flyer weight in the pair
@@ -45,11 +47,9 @@ DEFENSIVE_ANCHOR_TICKERS = ["TLT", "GLD", "XLP", "XLU", "USMV"]
 
 def expected_shortfall(port_returns: pd.Series,
                        confidence: float = TAIL_CONFIDENCE) -> float:
-    """ES: average loss on the worst (1-confidence) share of days (positive number)."""
-    r = pd.Series(port_returns).dropna()
-    threshold = np.percentile(r, (1 - confidence) * 100)
-    tail = r[r <= threshold]
-    return float(-tail.mean())
+    """ES: average loss on the worst (1-confidence) share of days (positive
+    number). risk.cvar at the pairing's FRTB level - one estimator, not two."""
+    return cvar(port_returns, confidence)
 
 
 def es_confidence_interval(port_returns: pd.Series,
@@ -117,7 +117,7 @@ def anchor_rank(returns: pd.DataFrame, high_flyer: str,
         raise ValueError("no anchor candidates")
 
     pc1 = pc1_factor_correlations(returns).drop(high_flyer)
-    vol = cands.std() * np.sqrt(252)
+    vol = cands.std() * np.sqrt(TRADING_DAYS)
     es = cands.apply(expected_shortfall)
     corr_a = cands.corrwith(returns[high_flyer])
 
@@ -164,8 +164,8 @@ def pair_weights(returns_a: pd.Series, returns_b: pd.Series) -> dict:
     if sa <= 0 or sb <= 0:
         raise ValueError("both legs need positive volatility")
     w_a = sb / (sa + sb)
-    return {"w_a": w_a, "w_b": 1.0 - w_a, "vol_a": sa * np.sqrt(252),
-            "vol_b": sb * np.sqrt(252)}
+    return {"w_a": w_a, "w_b": 1.0 - w_a, "vol_a": sa * np.sqrt(TRADING_DAYS),
+            "vol_b": sb * np.sqrt(TRADING_DAYS)}
 
 
 def tail_gap(returns: pd.DataFrame, a: str, b: str,
@@ -230,8 +230,8 @@ def backtest_pair(returns_a: pd.Series, returns_b: pd.Series,
         "total_return_solo": float(solo.iloc[-1] - 1.0),
         "max_dd_pair": dd_pair, "max_dd_solo": dd_solo,
         "cushion": dd_pair - dd_solo,            # positive = shallower fall
-        "ann_vol_pair": float(pair_ret.std() * np.sqrt(252)),
-        "ann_vol_solo": float(joined["a"].std() * np.sqrt(252)),
+        "ann_vol_pair": float(pair_ret.std() * np.sqrt(TRADING_DAYS)),
+        "ann_vol_solo": float(joined["a"].std() * np.sqrt(TRADING_DAYS)),
         "es_pair": expected_shortfall(pair_ret),
         "es_solo": expected_shortfall(joined["a"]),
         "n_days": len(joined),

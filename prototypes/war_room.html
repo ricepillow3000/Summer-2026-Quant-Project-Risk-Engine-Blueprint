@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Meleona - Risk Topology</title>
+<title>Meliona · Risk Topology</title>
 <style>
 /* ============================================================
-   MELEONA RISK TOPOLOGY - the Monte Carlo as a strategy map.
+   MELIONA RISK TOPOLOGY - the Monte Carlo as a strategy map.
    House palette in its Gotham (dark band) register; panels are
    GLASS instruments floating over a full-bleed terrain, per the
    three-finish doctrine (matte reads, glossy trophies, glass
@@ -38,6 +38,8 @@
      same hexes (test_text_colours_meet_wcag_aa). */
   --dimtext:    #A09788;
   --bronzetext: #B49563;
+  /* fractal noise, drawn in place (a data: image fetches nothing) */
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .93 0 0 0 0 .91 0 0 0 0 .89 0 0 0 .05 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
@@ -60,14 +62,23 @@ body {
 /* ---- glass instrument finish ---- */
 .glass {
   position: absolute; z-index: 10;
-  background: linear-gradient(165deg, rgba(33,28,20,0.84), rgba(24,20,14,0.80));
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(237,233,227,0.13);
-  border-top-color: rgba(237,233,227,0.10);
-  border-radius: 6px;
-  box-shadow: 0 10px 24px -18px rgba(0,0,0,0.5);
+  /* Matte, square, one hairline, and a bronze crop mark at two opposite
+     corners - the panel is registered to the grid like a printed plate. The
+     grain is a few percent of noise, the age of the paper, never a pattern. */
+  background:
+    linear-gradient(var(--bronze), var(--bronze)) left top / 14px 1px no-repeat,
+    linear-gradient(var(--bronze), var(--bronze)) left top / 1px 14px no-repeat,
+    linear-gradient(var(--bronze), var(--bronze)) right bottom / 14px 1px no-repeat,
+    linear-gradient(var(--bronze), var(--bronze)) right bottom / 1px 14px no-repeat,
+    var(--grain), rgba(26,22,16,0.9);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border: 1px solid rgba(237,233,227,0.12);
 }
+/* The same grain over the terrain, under the panels: a worn plate, not a
+   screen. Inert - the canvases below still take every pointer event. */
+.stage::after { content: ''; position: absolute; inset: 0; z-index: 6;
+  pointer-events: none; background: var(--grain); opacity: .55; }
 
 /* ---- sidebar: settings and tools ---- */
 .side {
@@ -91,19 +102,18 @@ body {
 .runbtn {
   font-family: Georgia, serif; font-size: 14px; letter-spacing: 0.11em;
   text-transform: uppercase; color: var(--beige);
-  background: linear-gradient(180deg, #4A453D 0%, #3A362F 100%);
-  border: 1px solid rgba(217,192,137,0.35);
-  border-radius: 10px; padding: 12px 10px; width: 100%;
-  cursor: pointer; transition: background .25s, letter-spacing .25s;
+  background: #2E2A25; border: 1px solid rgba(217,192,137,0.45);
+  padding: 12px 10px; width: 100%;
+  cursor: pointer; transition: background .25s, border-color .25s;
 }
-.runbtn:hover { background: #6A5030; letter-spacing: 0.14em; }
+.runbtn:hover { background: #6A5030; border-color: var(--bronzesoft); }
 .runbtn:focus-visible { outline: 2px solid var(--bronze); outline-offset: 2px; }
 .runbtn[disabled] { opacity: .55; cursor: default; }
 .explbtn {
   font-family: Georgia, serif; font-size: 11.5px; letter-spacing: 0.1em;
   text-transform: uppercase; color: var(--mute);
   background: transparent; border: 1px solid var(--line2);
-  border-radius: 10px; padding: 8px 10px; width: 100%; margin-top: 8px;
+  padding: 8px 10px; width: 100%; margin-top: 8px;
   cursor: pointer; transition: color .2s, border-color .2s, background .2s;
 }
 .explbtn:hover { color: var(--beige); border-color: var(--bronze); }
@@ -118,7 +128,7 @@ body {
    glass (terms --bronzesoft 9.75:1, definitions --mute 7.24:1, heading
    #C6A26B 7.23:1) - never --dim or --bronze, which fail for text here */
 .gloss { margin-top: 10px; padding: 11px 11px 6px; border: 1px solid var(--line2);
-  border-left: 2px solid var(--bronze); border-radius: 6px; background: rgba(21,18,13,0.55);
+  border-left: 2px solid var(--bronze); background: rgba(21,18,13,0.55);
   font-size: 11.5px; line-height: 1.5; }
 .gloss .gh { font-size: 11.5px; letter-spacing: 0.16em; text-transform: uppercase; color: #C6A26B; }
 .gloss .gi { color: var(--mute); margin: 4px 0 2px; }
@@ -134,18 +144,17 @@ body {
 .row label { font-size: 12px; color: var(--mute); }
 select {
   background: rgba(29,25,18,0.85); color: var(--beige); border: 1px solid var(--line2);
-  font-family: Georgia, serif; font-size: 12px; padding: 3px 6px; border-radius: 6px;
+  font-family: Georgia, serif; font-size: 12px; padding: 3px 6px;
 }
 .tog { display: inline-flex; align-items: center; cursor: pointer; position: relative; }
 .tog input { position: absolute; opacity: 0; }
 .tog .pip {
-  width: 30px; height: 15px; border: 1px solid var(--line2); border-radius: 8px;
+  width: 28px; height: 14px; border: 1px solid var(--line2);
   background: rgba(29,25,18,0.85); position: relative; transition: border-color .2s;
   display: inline-block;
 }
 .tog .pip::after {
-  content: ''; position: absolute; top: 2px; left: 3px; width: 9px; height: 9px;
-  border-radius: 50%;
+  content: ''; position: absolute; top: 2px; left: 2px; width: 8px; height: 8px;
   background: var(--dim); transition: left .18s, background .18s;
 }
 .tog input:checked + .pip { border-color: var(--bronze); }
@@ -184,7 +193,7 @@ select {
   flex: 1; align-content: center; }
 .tile {
   background: rgba(21,18,13,0.45); border: 1px solid var(--line);
-  border-top: 2px solid var(--bronze); border-radius: 6px; padding: 9px 11px 8px;
+  border-top: 2px solid var(--bronze); padding: 9px 11px 8px;
 }
 .tile .l { font-size: 8.5px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--bronzetext); }
 .tile .v { font-size: 22px; color: var(--beige); line-height: 1.15; margin-top: 3px; }
@@ -196,7 +205,7 @@ select {
 .chip {
   font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase;
   color: var(--mute); border: 1px solid var(--line); border-left: 2px solid var(--bronze);
-  border-radius: 4px; padding: 4px 8px; background: rgba(21,18,13,0.5);
+  padding: 4px 8px; background: rgba(21,18,13,0.5);
 }
 .chip.warn { border-left-color: var(--ember); color: #C99A85; }
 
@@ -209,7 +218,7 @@ select {
 .mchip {
   font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase;
   color: var(--bronzetext); background: rgba(21,18,13,0.72); border: 1px solid var(--line);
-  border-radius: 6px; padding: 4px 9px;
+  padding: 4px 9px;
   backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
 }
 .mchip.warn { color: #C99A85; border-color: rgba(166,75,51,0.5); }
@@ -218,7 +227,7 @@ select {
 .tip {
   position: absolute; z-index: 12; pointer-events: none; display: none;
   width: 250px; background: rgba(24,20,14,0.92); border: 1px solid var(--line2);
-  border-top: 1px solid var(--line2); border-radius: 8px; padding: 10px 12px 9px;
+  border-top: 1px solid var(--line2); padding: 10px 12px 9px;
   backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
 }
 .tip .coords { font-size: 15px; color: var(--beige); }
@@ -245,6 +254,7 @@ select {
 }
 .standings .srow:hover { background: rgba(154,123,79,0.08); }
 .standings .srow.sel { background: rgba(154,123,79,0.12); border-left-color: var(--bronze); }
+.standings .srow:focus-visible { outline: 2px solid var(--bronze); outline-offset: -2px; }
 .srow .rk { font-size: 11px; color: var(--dimtext); width: 16px; }
 .srow .pair { font-size: 14px; color: var(--beige); flex: 1; }
 .srow .pair span { color: var(--dimtext); font-size: 11px; }
@@ -261,11 +271,11 @@ select {
 .linkdiag { display: block; margin: 0 auto 8px; max-width: 100%; height: auto; }  /* 300px drawing: scales down in a phone's frame instead of pushing the map sideways */
 .dgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 6px; }
 .dcell { border: 1px solid var(--line); border-top: 2px solid var(--bronze);
-  border-radius: 6px; padding: 8px 10px 7px; background: rgba(21,18,13,0.45); }
+  padding: 8px 10px 7px; background: rgba(21,18,13,0.45); }
 .dcell .l { font-size: 8.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--bronzetext); }
 .dcell .v { font-size: 19px; color: var(--beige); margin-top: 2px; }
 .dcell .v small { font-size: 11px; color: var(--mute); }
-.runctr { margin-top: 11px; border: 1px solid var(--line); border-radius: 6px;
+.runctr { margin-top: 11px; border: 1px solid var(--line);
   padding: 10px 12px 9px; background: rgba(21,18,13,0.45); }
 .runctr .l { font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--bronzetext); }
 .runctr .n { font-size: 28px; color: var(--beige); }
@@ -402,10 +412,10 @@ select {
 
   <!-- settings and tools -->
   <aside class="side glass" id="sidePanel">
-    <div class="eyebrow">Meleona · Risk Engine</div>
+    <div class="eyebrow">Meliona · Risk Engine</div>
     <h1>Risk Topology</h1>
     <div class="sub">Where the book can drift over the next 30 trading days, and what it costs to be wrong.</div>
-    <button class="runbtn" id="btnRun">Run Simulation</button>
+    <button class="runbtn" id="btnRun">Run simulation</button>
     <button class="explbtn" id="btnExplain" aria-expanded="false" aria-controls="glossary">Explain the map</button>
     <!-- John, 2026-10-19: the button "does not work or direct me anywhere" - it
          only switched on hover-reading over the plot. A click now opens this
@@ -422,7 +432,7 @@ select {
         <dt>T+30</dt>
         <dd>Thirty trading days after the last close.</dd>
         <dt>Mean-reverting (Ornstein-Uhlenbeck, OU) Monte Carlo</dt>
-        <dd>The simulation engine. Each path moves the book's beta and volatility day by day, with a pull back toward their long-run levels - an Ornstein-Uhlenbeck process (volatility moves on a log scale).</dd>
+        <dd>The simulation engine. Each path moves the book's beta and volatility day by day, with a pull back toward their long-run levels: an Ornstein-Uhlenbeck process (volatility moves on a log scale).</dd>
         <dt>AR(1)</dt>
         <dd>The one-step rule the model is fitted with: tomorrow's value is a constant, plus a fraction of today's, plus a random shock.</dd>
         <dt>Long-run vol</dt>
@@ -434,7 +444,7 @@ select {
         <dt>Vol</dt>
         <dd>How big the book's daily swings are, over the last 21 trading days, stated per year.</dd>
         <dt>Daily closes (EOD)</dt>
-        <dd>End-of-day adjusted closing prices from Yahoo Finance - not real-time.</dd>
+        <dd>End-of-day adjusted closing prices from Yahoo Finance, not real-time.</dd>
         <dt>Days fitted</dt>
         <dd>The trading days on which both the book's beta and its volatility could be measured; the model is fitted on them.</dd>
         <dt>Perimeter and breach</dt>
@@ -482,7 +492,7 @@ select {
   <!-- statistics band -->
   <header class="hud glass">
     <div class="verdict">
-      <div class="k">Expected Shortfall · 97.5% · T+30</div>
+      <div class="k">Expected shortfall · 97.5% · T+30</div>
       <div class="nrow">
         <div class="n" id="hudES">--<em>%</em></div>
         <div class="histwrap">
@@ -490,7 +500,7 @@ select {
           <div class="histcap" id="histCap">10,000 simulated 30-day outcomes</div>
         </div>
       </div>
-      <div class="s">Average loss across the worst 2.5% of simulated paths. One number, then the map.</div>
+      <div class="s">Average loss across the worst 2.5% of simulated paths.</div>
     </div>
     <div class="tiles">
       <div class="tile" title="If the next 30 days land in the worst 5% of simulated paths, the loss is at least this much."><div class="l">VaR 95 · T+30</div><div class="v" id="hudVaR">--</div><div class="d">simulated quantile</div></div>
@@ -508,8 +518,8 @@ select {
   <!-- linkage inspector -->
   <div class="inspector glass" id="inspPanel">
     <div class="insp-h">
-      <div class="k">Defensive Pairing</div>
-      <div class="t">Flyer - anchor · ranked by cushion</div>
+      <div class="k">Defensive pairing</div>
+      <div class="t">Flyer · anchor, ranked by cushion</div>
     </div>
     <div class="standings" id="standings"></div>
     <div class="detail" id="detail"></div>
@@ -792,11 +802,8 @@ function spacedText(g, txt, x, y) {
 function drawTerrain() {
   const g = xBase;
   g.clearRect(0, 0, W, H);
-  /* full-bleed night floor */
-  const bgGrad = g.createRadialGradient(W * 0.45, H * 0.4, 0, W * 0.45, H * 0.4, Math.max(W, H) * 1.15);
-  bgGrad.addColorStop(0, '#181410');
-  bgGrad.addColorStop(1, '#141009');
-  g.fillStyle = bgGrad;
+  /* full-bleed night floor - matte, one tone (the grain is CSS, above) */
+  g.fillStyle = '#161210';
   g.fillRect(0, 0, W, H);
 
   /* grid */
@@ -814,6 +821,20 @@ function drawTerrain() {
     g.textAlign = 'right';
     g.fillText(Math.round(v * 100) + '%', PAD.l - 8, y + 3);
   }
+  /* the plot is a ruled plate: a frame, and a 4px tick out of it at every
+     grid line, the way a printed chart is registered */
+  g.strokeStyle = 'rgba(237,233,227,0.24)';
+  g.strokeRect(PAD.l + 0.5, PAD.t + 0.5, W - PAD.l - PAD.r - 1, H - PAD.t - PAD.b - 1);
+  g.beginPath();
+  for (let b = Math.ceil(DOMN.b0 * 2) / 2; b <= DOMN.b1 + 0.001; b += 0.5) {
+    const x = Math.round(toX(b)) + 0.5;
+    g.moveTo(x, H - PAD.b); g.lineTo(x, H - PAD.b + 4);
+  }
+  for (let v = Math.ceil(DOMN.v0 * 10) / 10; v <= DOMN.v1 + 0.001; v += 0.1) {
+    const y = Math.round(toY(v)) + 0.5;
+    g.moveTo(PAD.l - 4, y); g.lineTo(PAD.l, y);
+  }
+  g.stroke();
   /* axis titles */
   /* x-title rides the right end of its axis - the bottom-left corner
      belongs to the identity chips and must never collide with them */
@@ -880,6 +901,11 @@ function drawFog() {
   g.clearRect(0, 0, W, H);
   if (!S.atmo || !S.cloud) return;
   const cloud = S.cloud;
+  /* Everything here stays inside the plot. The 99.7% ring is an ellipse
+     fitted to the cloud; where it crossed the frame it ran on over the axis
+     labels and under 0% volatility, a place no book can be. */
+  g.save();
+  g.beginPath(); g.rect(PAD.l, PAD.t, W - PAD.l - PAD.r, H - PAD.t - PAD.b); g.clip();
   let rMax = cloud.r997;
   const corners = [[PAD.l, PAD.t], [W - PAD.r, PAD.t], [PAD.l, H - PAD.b], [W - PAD.r, H - PAD.b]];
   for (const c of corners) {
@@ -897,9 +923,6 @@ function drawFog() {
     g.fillStyle = 'rgba(12,9,5,' + a.toFixed(3) + ')';
     g.fill('evenodd');
   }
-  /* keep gutters (axis labels) clean */
-  g.clearRect(0, 0, W, PAD.t); g.clearRect(0, H - PAD.b, W, PAD.b);
-  g.clearRect(0, 0, PAD.l, H); g.clearRect(W - PAD.r, 0, PAD.r, H);
 
   /* center density: one whisper-flat neutral fill inside the 68% ring - no
      glow (a radial gold bloom read as a game energy-core). */
@@ -932,6 +955,7 @@ function drawFog() {
       g.fillText(ring[1], p[0] + 5, p[1] - 3);
     }
   });
+  g.restore();
 }
 
 /* ---------- intel (above fog) ---------- */
@@ -1008,11 +1032,11 @@ function drawIntel() {
     const hov = S.hoverAsset === a.t;
     const selP = DEMO.pairs[S.selPair];
     const inPair = selP && (selP.fl === a.t || selP.an === a.t);
-    g.beginPath(); g.arc(x, y, hov ? 5.5 : 4, 0, Math.PI * 2);
+    rhombus(g, x, y, hov ? 6.5 : 5);
     g.fillStyle = inPair ? '#C9A227' : '#9A7B4F';
     g.fill();
     if (inPair) {
-      g.beginPath(); g.arc(x, y, 9, 0, Math.PI * 2);
+      rhombus(g, x, y, 10);
       g.strokeStyle = 'rgba(201,162,39,0.55)'; g.lineWidth = 1; g.stroke();
     }
     let ly = y - (inPair ? 14 : 9);
@@ -1043,6 +1067,13 @@ function drawIntel() {
   g.fillRect(hx0 - pw2, hy0 + 21, pw2 * 2, 13);
   g.fillStyle = 'rgba(237,233,227,0.9)';
   spacedText(g, 'Portfolio', hx0, hy0 + 30);
+}
+
+/* a square stood on its corner: the asset mark, symmetric on both axes */
+function rhombus(g, x, y, r) {
+  g.beginPath();
+  g.moveTo(x, y - r); g.lineTo(x + r, y); g.lineTo(x, y + r); g.lineTo(x - r, y);
+  g.closePath();
 }
 
 function drawMap() { drawTerrain(); drawIntel(); }
@@ -1175,25 +1206,25 @@ const EXPLAIN = {
     ? [t + ' · candidate hedge, not held',
        'A defensive name the pairing tournament may buy against the flyer. It is not in the book, so it sits at its own measured beta and volatility, across its full loaded history.']
     : [t + ' · one holding',
-    'Sits at its measured risk address: how hard it moves with the market (left-right) and how violently it moves day to day (up-down). Both measured across its FULL loaded history - not the recent rolling window used by the mark for the book itself, so a holding and the book are two different readings of the same axes: an average against a right-now.'],
+    'Sits at its measured risk address: how hard it moves with the market (left-right) and how violently it moves day to day (up-down). Both are measured across its full loaded history, while the book\'s own mark uses a recent rolling window, so a holding and the book are two readings of the same axes: an average against a right-now.'],
   portfolio: () => ['Portfolio · you are here',
     'The whole book today, measured from rolling windows of its real returns. Every simulated future starts from this exact spot.'],
-  link: pr => [pr.fl + ' - ' + pr.an + ' · defensive pair',
+  link: pr => [pr.fl + ' · ' + pr.an + ', defensive pair',
     'Two-asset risk parity: the flyer (' + pr.fl + ') and the anchor (' + pr.an + ') each carry an equal share of the risk, and the anchor holds most of the money. Tether them and ' + (BSGN > 0 ? 'a crash in the flyer' : 'a squeeze in the shorted flyer') + ' digs a shallower hole. Click the link to see the replayed history.'],
   ring: pct => [pct + ' probability ring',
-    'After 10,000 simulated 30-day futures, ' + pct + ' of them END inside this ring. Counted from the simulation, not assumed. The farther out, the darker: the fog is where the book almost never lands.'],
+    'After 10,000 simulated 30-day futures, ' + pct + ' of them end inside this ring. Counted from the simulation, not assumed. The farther out, the darker: the fog is where the book almost never lands.'],
   perimeter: () => ['Maximum VaR breach perimeter',
     'The danger line, set by a disclosed policy (3x today\'s volatility, floored at 35% and capped at 90%, or beta '
-    + (BSGN > 0 ? 'up 0.8, capped at 1.9' : 'down 0.8, capped at -1.9 - this book is short, so the betas of its holdings are negated and the perimeter is mirrored')
+    + (BSGN > 0 ? 'up 0.8, capped at 1.9' : 'down 0.8, capped at -1.9; this book is short, so the betas of its holdings are negated and the perimeter is mirrored')
     + '). Any simulated path that crosses it burns ember and counts toward the breach probability in the top bar.'],
   iso: pct => ['Iso-VaR guide · ' + pct + ' daily',
     'A reference altitude: at this volatility, a normal bad day (worst 5%) costs about ' + pct + '. Higher on the map = bigger daily losses at the same odds.'],
   xaxis: () => ['Portfolio beta · the x-axis',
     'Market sensitivity. 1.0 moves with the market, 0 ignores it, negative moves against it. Drifting right means the book behaves more like the index.'],
   yaxis: () => ['Realized volatility · the y-axis',
-    'How big the daily swings actually are, annualized, measured from real returns. Climbing this axis is what a risk manager gets paid to notice.'],
+    'How big the daily swings actually are, annualized, measured from real returns.'],
   tail: () => ['Tail territory',
-    'Beyond the 99.7% ring. The simulation almost never reaches here in 30 days - but "almost never" is where blowups live. That is why the map keeps it visible instead of cropping it away.'],
+    'Beyond the 99.7% ring. The simulation almost never reaches here in 30 days, yet this is where blowups happen, so the map keeps it in view instead of cropping it.'],
   terrain: () => ['The terrain · one Monte Carlo run',
     'Every thread is one simulated 30-day future of the book, stepping day by day through dynamics calibrated on its real history. The bright web is where futures crowd; ember threads crossed the danger line.'],
 };
@@ -1389,20 +1420,21 @@ function pairMC(pr, seed) {
 }
 
 function linkDiagramSVG(pr, st) {
-  /* circle-and-line, endpoints = center + (r+gap) * unit vector */
+  /* rhombus-and-line, the map's own marks; a rhombus of radius r meets the
+     line at r / (|ux| + |uy|) from its centre, so the gap is even both ends */
   const W2 = 300, H2 = 128;
-  const fx = 62, fy = 42, fr = 22;
-  const ax2 = 232, ay = 76, ar = 30;
+  const fx = 62, fy = 42, fr = 26;
+  const ax2 = 232, ay = 76, ar = 32;
   const u = norm2([ax2 - fx, ay - fy]);
-  const gap = 5;
-  const x1 = fx + u[0] * (fr + gap), y1 = fy + u[1] * (fr + gap);
-  const x2 = ax2 - u[0] * (ar + gap), y2 = ay - u[1] * (ar + gap);
+  const k = 1 / (Math.abs(u[0]) + Math.abs(u[1])), gap = 5;
+  const x1 = fx + u[0] * (fr * k + gap), y1 = fy + u[1] * (fr * k + gap);
+  const x2 = ax2 - u[0] * (ar * k + gap), y2 = ay - u[1] * (ar * k + gap);
+  const rh = (x, y, r, stroke, w) => '<polygon points="' + x + ',' + (y - r) + ' ' + (x + r) + ',' + y + ' ' +
+    x + ',' + (y + r) + ' ' + (x - r) + ',' + y + '" fill="none" stroke="' + stroke + '" stroke-width="' + w + '"/>';
   return '<svg class="linkdiag" width="' + W2 + '" height="' + H2 + '" viewBox="0 0 ' + W2 + ' ' + H2 + '">' +
     '<line x1="' + x1.toFixed(1) + '" y1="' + y1.toFixed(1) + '" x2="' + x2.toFixed(1) + '" y2="' + y2.toFixed(1) + '" stroke="#9A7B4F" stroke-width="1.2" stroke-dasharray="5 4"/>' +
-    '<circle cx="' + fx + '" cy="' + fy + '" r="' + fr + '" fill="none" stroke="#C9A227" stroke-width="1.4"/>' +
-    '<circle cx="' + fx + '" cy="' + fy + '" r="' + (fr - 4) + '" fill="none" stroke="rgba(201,162,39,0.4)" stroke-width="1"/>' +
-    '<circle cx="' + ax2 + '" cy="' + ay + '" r="' + ar + '" fill="none" stroke="#D9C089" stroke-width="1.4"/>' +
-    '<circle cx="' + ax2 + '" cy="' + ay + '" r="' + (ar - 4) + '" fill="none" stroke="rgba(217,192,137,0.4)" stroke-width="1"/>' +
+    rh(fx, fy, fr, '#C9A227', 1.4) + rh(fx, fy, fr - 5, 'rgba(201,162,39,0.4)', 1) +
+    rh(ax2, ay, ar, '#D9C089', 1.4) + rh(ax2, ay, ar - 5, 'rgba(217,192,137,0.4)', 1) +
     '<text x="' + fx + '" y="' + (fy + 4) + '" fill="#EDE9E3" font-size="11" font-family="Georgia" text-anchor="middle">' + esc(pr.fl) + '</text>' +
     '<text x="' + fx + '" y="' + (fy - fr - 7) + '" fill="#B49563" font-size="8" letter-spacing="2" font-family="Georgia" text-anchor="middle">FLYER ' + Math.round(st.w * 100) + '%</text>' +
     '<text x="' + ax2 + '" y="' + (ay + 4) + '" fill="#EDE9E3" font-size="11" font-family="Georgia" text-anchor="middle">' + esc(pr.an) + '</text>' +
@@ -1458,7 +1490,7 @@ function renderDetail() {
       ? '<div class="honest"><b>Paper trail.</b> ES and cushion come from the engine\'s real-history pair backtest: ' +
         'actual daily returns, monthly rebalance, no lookahead, over ' + real.nDays.toLocaleString('en-US') + ' trading days ' +
         'of Yahoo Finance adjusted closes. Weights are exact two-asset risk parity. Pair correlation ' + pr.rho.toFixed(2) + ' measured on the same window.</div>'
-      : '<div class="honest"><b>Honest limits.</b> Pair statistics come from a Gaussian daily-loop Monte Carlo ' +
+      : '<div class="honest"><b>Limits.</b> Pair statistics come from a Gaussian daily-loop Monte Carlo ' +
         'on demo calibration (flyer drift 10%, anchor 4%, pair correlation ' + pr.rho.toFixed(2) + '). ' +
         'Weights are exact two-asset risk parity: each leg carries an equal share of the risk, the anchor holds most of the money. ' +
         'Correlations converge toward one in real crashes; the live engine replays actual crisis windows instead.</div>');
@@ -1487,19 +1519,28 @@ function renderStandings() {
     .sort((a, b) => b.cu - a.cu);
   const maxCu = Math.max.apply(null, rows.map(r => Math.abs(r.cu))) || 1;
   el.innerHTML = rows.map((r, rank) =>
-    '<div class="srow' + (r.i === S.selPair ? ' sel' : '') + '" data-i="' + r.i + '">' +
+    // a button to the keyboard and to a screen reader, not only to a mouse
+    '<div class="srow' + (r.i === S.selPair ? ' sel' : '') + '" data-i="' + r.i +
+      '" role="button" tabindex="0" aria-pressed="' + (r.i === S.selPair) + '">' +
     '<span class="rk">0' + (rank + 1) + '</span>' +
-    '<span class="pair">' + esc(r.pr.fl) + ' - ' + esc(r.pr.an) + '</span>' +
+    '<span class="pair">' + esc(r.pr.fl) + ' · ' + esc(r.pr.an) + '</span>' +
     '<span class="cu">' + cushText(r.cu, !!r.pr.real) + '</span>' +
     '<span class="bar"><i style="width:' + Math.max(4, Math.abs(r.cu) / maxCu * 100).toFixed(0) + '%' +
       // The bar is a MAGNITUDE, so a pair that made the drawdown worse drew a
       // bar identical to one that helped. Sign has to survive into the mark.
       (r.cu < 0 ? ';background:#C25B3A' : '') + '"></i></span>' +
     '</div>').join('');
+  const pick = row => {
+    S.selPair = +row.dataset.i;
+    renderStandings(); renderDetail(); drawIntel();
+  };
   el.querySelectorAll('.srow').forEach(row => {
-    row.addEventListener('click', () => {
-      S.selPair = +row.dataset.i;
-      renderStandings(); renderDetail(); drawIntel();
+    row.addEventListener('click', () => pick(row));
+    row.addEventListener('keydown', e => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      e.preventDefault();                   // Space would scroll the panel
+      pick(row);
+      el.querySelector('.srow.sel').focus();  // the rows were redrawn: keep focus on the choice
     });
   });
 }

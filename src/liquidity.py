@@ -25,6 +25,8 @@ and the share exitable in a single day is the number a risk memo leads with.
 import numpy as np
 import pandas as pd
 
+from src.covariance import TRADING_DAYS
+
 
 def days_to_liquidate(weights, adv: pd.Series, book_value: float = 1_000_000.0,
                       participation_rate: float = 0.20) -> pd.DataFrame:
@@ -93,7 +95,7 @@ def liquidity_profile(dtl: pd.DataFrame) -> dict:
 
 
 def liquidity_adjusted_cvar(cvar: float, full_exit_days: float,
-                            base_horizon_days: int = 252) -> dict:
+                            base_horizon_days: int = TRADING_DAYS) -> dict:
     """
     Liquidity-adjusted CVaR: widen the tail to cover the days the book stays
     exposed simply because it cannot be sold instantly.

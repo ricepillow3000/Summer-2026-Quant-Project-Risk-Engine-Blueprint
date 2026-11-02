@@ -59,14 +59,14 @@ the same PR as the fix.
 
 ## In this repo: where admin power actually lives
 
-Meleona is public and anonymous: **no accounts, no roles, no login, no admin panel, no LLM, no secrets.** Every
+Meliona is public and anonymous: **no accounts, no roles, no login, no admin panel, no LLM, no secrets.** Every
 visitor gets the same page, and nothing a visitor types or sends selects a different one. The only operator powers
 sit outside the app, in accounts John holds:
 
 | Power | Where | Who can use it |
 |---|---|---|
 | Change what is deployed | GitHub push to `main` (Railway deploys `main`) | Anyone with write access to the repo: keep it to John, with 2FA and branch protection on `main` |
-| Kill switch, beta channel, support address | Railway environment variables (`MELEONA_MAINTENANCE`, `MELEONA_CHANNEL`, `MELEONA_SUPPORT_EMAIL`, `MELEONA_SITE_URL`) | John's Railway login |
+| Kill switch, beta channel, support address | Railway environment variables (`MELIONA_MAINTENANCE`, `MELIONA_CHANNEL`, `MELIONA_SUPPORT_EMAIL`, `MELIONA_SITE_URL`) | John's Railway login |
 | Warm or clear caches | A shell on the Railway service (`python -m tools.warm_cache`), or a restart | John's Railway login |
 
 So "only my laptop and desktop are admin" is enforced by **account security**, not by the app: GitHub and Railway
@@ -76,6 +76,27 @@ each with 2FA (a passkey or authenticator, not SMS), signed in only on those two
 `main.py` refusing the websocket `clear_cache` message.
 
 ## Findings log
+
+### 2026-10-22: the Pillow exception is closed (ME-16)
+Live audit run 80 on main (eb12a49) went red at step 0: pip_audit found 11 more Pillow 12.3.0 CVEs (CVE-2026-96636
+to 96644, CVE-2026-96778, GHSA-78g4-xqwv-q3g8), again fixed only in 13.0.0: 35 in all, 24 of them skipped. Streamlit
+1.66.1 is the first release that allows Pillow 13 (`pillow<14`; 1.63.0 to 1.66.0 still cap it below 13, read from
+each wheel's METADATA). John chose the upgrade over more exceptions: `requirements.txt` now pins `streamlit~=1.66.1`
+and `pillow>=13.0.0`, and every `--ignore-vuln` is gone from the Live audit, so pip_audit runs with no exception.
+The expiring test did its job (it went red on 1.66.1 while the skips were still there) and is replaced by
+`test_the_dependency_audit_skips_no_cve`: no workflow or tool skips a CVE, the requirements ask for Pillow 13, and
+the installed Streamlit allows it. Lesson: an exception that names the event that ends it, and a test that fails
+on that event, is one that actually ends.
+
+### 2026-10-20: Pillow CVEs the app cannot reach (a written exception, John's call; closed 2026-10-22, above)
+`pip_audit` went red on 8 new Pillow CVEs (crafted PDF, GIF, PPM, TIFF and EPS files; fixed in 13.0), and on
+2026-10-22 on 16 more (all Pillow 12.3.0, all fixed only in 13.0.0, per that run's pip_audit table): 24 in all.
+16 more IDs approved by John on 2026-10-22. Streamlit pulls
+Pillow in and caps it below 13 in every release up to 1.66, so the fix cannot be installed. The app opens no image a
+visitor supplies (no uploader or camera input, `maxUploadSize = 1`, no Pillow import in our code), so John chose to
+skip exactly those 24 IDs in Live audit step 0 rather than leave the gate red. The exception is pinned by
+`test_every_pip_audit_exception_is_unreachable_and_expires`: it fails the day the installed Streamlit accepts
+Pillow 13 (bump it and delete the exception) or the day the app gains a way to take a file.
 
 ### 2026-10-15: first sweep (from the story above)
 No way in: no input raises privilege (the `VALID_TICKER` funnel refused every emoji, right-to-left mark, zero-width,

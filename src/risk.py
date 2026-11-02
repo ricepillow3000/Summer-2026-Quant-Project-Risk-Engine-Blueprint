@@ -12,8 +12,8 @@ Quant Deep Dive:
 
 import numpy as np
 import pandas as pd
-from scipy import stats, special
-from src.covariance import RISKMETRICS_LAMBDA
+from scipy import optimize, stats, special
+from src.covariance import RISKMETRICS_LAMBDA, TRADING_DAYS
 from src.ingestion import fetch_prices, get_returns
 
 
@@ -40,13 +40,16 @@ def cvar(port_returns: pd.Series, confidence: float = 0.95) -> float:
     This is the number risk desks actually use - it captures tail severity,
     not just where the tail begins.
     """
-    threshold = np.percentile(port_returns, (1 - confidence) * 100)
-    tail = port_returns[port_returns <= threshold]
+    # The engine's one ES estimator: pairing.expected_shortfall is this at
+    # the pairing's ES 97.5. Missing days are dropped, never read as returns.
+    r = pd.Series(port_returns).dropna()
+    threshold = np.percentile(r, (1 - confidence) * 100)
+    tail = r[r <= threshold]
     return float(-tail.mean())
 
 
 def sharpe_ratio(port_returns: pd.Series, risk_free_rate: float = 0.0,
-                 periods: int = 252) -> float:
+                 periods: int = TRADING_DAYS) -> float:
     """
     Annualized Sharpe ratio: excess return per unit of volatility.
 
@@ -73,6 +76,47 @@ def parametric_var(port_returns: pd.Series, confidence: float = 0.95) -> float:
     mu, sigma = port_returns.mean(), port_returns.std()
     z = stats.norm.ppf(1 - confidence)
     return float(-(mu + z * sigma))
+
+
+# genpareto.fit spends ~95% of its time in scipy's generic objective
+# (_penalized_nnlf): argument checks and dispatch around a few numpy calls,
+# run ~150 times per fit and 200 fits per bootstrap. This is that objective
+# for genpareto with loc fixed at 0, the same numpy calls in the same order,
+# so the optimizer walks the same path to the same floats - 3x faster
+# (2026-10-20, John: "speed up the tail model fit"). Equal bit for bit on
+# scipy 1.18.1, which requirements.txt pins
+# (test_the_lean_tail_objective_equals_scipys_bit_for_bit). np.log, not
+# math.log: they differ in the last bit on some scales, which moves the fit.
+_LOGXMAX = np.log(np.finfo(float).max)
+
+
+def _lean_nnlf(theta, data):
+    c, scale = theta[0], theta[1]
+    if not np.isfinite(c) or scale <= 0:
+        return np.inf
+    x = (data - 0.0) / scale
+    n_log_scale = len(x) * np.log(scale)
+    b = -1.0 / c if c < 0 else np.inf
+    with np.errstate(invalid="ignore"):
+        ok = (0.0 <= x) & (x <= b)
+    n_bad = len(x) - np.count_nonzero(ok)
+    if n_bad > 0:
+        x = x[ok]
+    if c != 0:
+        logpdf = -special.xlog1py(c + 1.0, c * x) / c
+        logpdf = np.where(x == x, logpdf, -x)
+    else:
+        logpdf = -x
+    finite = np.isfinite(logpdf)
+    n_bad += logpdf.size - np.count_nonzero(finite)
+    return -np.sum(logpdf[finite]) + n_bad * _LOGXMAX * 100 + n_log_scale
+
+
+def _lean_fmin(func, x0, args=(), disp=0):
+    # scipy's own default optimizer, handed the lean objective instead of func.
+    # func is ignored, so this is right only for MLE with floc=0 and nothing
+    # else fixed - the one call gpd_tail_fit makes.
+    return optimize.fmin(_lean_nnlf, x0, args=args, disp=disp)
 
 
 def gpd_tail_fit(port_returns: pd.Series, threshold_quantile: float = 0.95,
@@ -140,7 +184,7 @@ def gpd_tail_fit(port_returns: pd.Series, threshold_quantile: float = 0.95,
         "moments_finite": None, "threshold_quantile": threshold_quantile,
     }
     if n < 100:
-        out["reason"] = f"only {n} observations - too few for a tail fit"
+        out["reason"] = f"only {n} observations, too few for a tail fit"
         return out
 
     u = float(np.quantile(losses, threshold_quantile))
@@ -154,7 +198,7 @@ def gpd_tail_fit(port_returns: pd.Series, threshold_quantile: float = 0.95,
         return out
 
     # floc=0 because exceedances are already measured FROM the threshold.
-    xi, _loc, beta = stats.genpareto.fit(exceed, floc=0.0)
+    xi, _loc, beta = stats.genpareto.fit(exceed, floc=0.0, optimizer=_lean_fmin)
     xi, beta = float(xi), float(beta)
     out["xi"], out["beta"], out["fitted"] = xi, beta, True
 
@@ -163,7 +207,7 @@ def gpd_tail_fit(port_returns: pd.Series, threshold_quantile: float = 0.95,
     for _ in range(n_boot):
         sample = rng.choice(exceed, size=n_u, replace=True)
         try:
-            b_xi, _, _ = stats.genpareto.fit(sample, floc=0.0)
+            b_xi, _, _ = stats.genpareto.fit(sample, floc=0.0, optimizer=_lean_fmin)
             boot.append(float(b_xi))
         except Exception:  # noqa: BLE001 - a failed refit is dropped, not faked
             continue
@@ -305,10 +349,10 @@ def mcneil_frey_tail(port_returns: pd.Series, lam: float = RISKMETRICS_LAMBDA,
                 "var": sigma_next * vals["var"],
                 "es": None if vals["es"] is None else sigma_next * vals["es"],
             }
-    # For the side-by-side that makes the clustering bias visible.
-    raw = gpd_tail_fit(r, **gpd_kwargs)
+    # For the side-by-side that makes the clustering bias visible. Only its xi
+    # is shown, so its bootstrap (half the panel's time) is not run.
+    raw = gpd_tail_fit(r, **{**gpd_kwargs, "n_boot": 0})
     fit["unconditional_xi"] = raw["xi"]
-    fit["unconditional_xi_ci"] = raw["xi_ci"]
     return fit
 
 
@@ -559,7 +603,7 @@ def monte_carlo(
     returns: pd.DataFrame,
     weights: np.ndarray,
     n_simulations: int = 10_000,
-    horizon_days: int = 252,
+    horizon_days: int = TRADING_DAYS,
     confidence: float = 0.95,
     block: bool = True,
 ) -> dict:
@@ -740,7 +784,10 @@ def calibrate_jump_diffusion(port_returns, k: float = 3.0) -> dict:
     """
     r = np.asarray(port_returns, dtype=float)
     lr = np.log1p(r)                       # log-returns: diffusion + jumps add
-    m, s = float(lr.mean()), float(lr.std())
+    # ddof=1: this is a method of moments on each part's own days, not a
+    # Gaussian MLE, so the unbiased variance is the estimator. ddof=0 cut the
+    # variance by (n-1)/n - ~7% on a 15-day crisis window (ME-10).
+    m, s = float(lr.mean()), float(lr.std(ddof=1))
     if s == 0:                             # degenerate constant series
         return {"mu_d": m, "sigma_d": 0.0, "lambda_daily": 0.0,
                 "mu_j": 0.0, "sigma_j": 0.0, "k": k, "n_jumps": 0, "n_days": len(lr)}
@@ -749,11 +796,11 @@ def calibrate_jump_diffusion(port_returns, k: float = 3.0) -> dict:
     calm, jumps = lr[~is_jump], lr[is_jump]
 
     mu_d = float(calm.mean()) if calm.size else m
-    sigma_d = float(calm.std()) if calm.size > 1 else s
+    sigma_d = float(calm.std(ddof=1)) if calm.size > 1 else s
     lambda_daily = float(is_jump.mean())
     if jumps.size:
         mu_j = float(jumps.mean() - mu_d)          # jump = move in EXCESS of drift
-        sigma_j = float(jumps.std()) if jumps.size > 1 else 0.0
+        sigma_j = float(jumps.std(ddof=1)) if jumps.size > 1 else 0.0
     else:
         mu_j = sigma_j = 0.0
 
@@ -768,7 +815,7 @@ def jump_diffusion_mc(
     returns: pd.DataFrame,
     weights: np.ndarray,
     n_simulations: int = 10_000,
-    horizon_days: int = 252,
+    horizon_days: int = TRADING_DAYS,
     confidence: float = 0.95,
     k: float = 3.0,
 ) -> dict:
@@ -836,8 +883,8 @@ if __name__ == "__main__":
     jd = jump_diffusion_mc(returns, equal_weights)
     p = jd["jump_params"]
     print(f"  Calibration: {p['n_jumps']} jump days in {p['n_days']} "
-          f"(> {p['k']}sigma) -> {p['lambda_daily'] * 252:.1f} jumps/yr expected")
-    print(f"  Diffusion vol (annual): {p['sigma_d'] * np.sqrt(252):.1%}")
+          f"(> {p['k']}sigma) -> {p['lambda_daily'] * TRADING_DAYS:.1f} jumps/yr expected")
+    print(f"  Diffusion vol (annual): {p['sigma_d'] * np.sqrt(TRADING_DAYS):.1%}")
     print(f"  1-Year VaR  (95%)    : {jd['var']:.1%}")
     print(f"  1-Year CVaR (95%)    : {jd['cvar']:.1%}")
     print(f"  Worst simulated year : {jd['worst_case']:+.1%}")

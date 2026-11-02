@@ -38,7 +38,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-TRADING_DAYS = 252
+TRADING_DAYS = 252   # the engine's one trading-days-per-year; every module imports it
 
 # The published RiskMetrics decay factor for DAILY data (J.P. Morgan/Reuters,
 # RiskMetrics Technical Document, 4th ed., 1996 - 0.94 daily, 0.97 monthly).
@@ -102,7 +102,7 @@ def estimate_covariance(returns: pd.DataFrame, method: str = "sample",
     if method == "EWMA":
         return ewma_covariance(returns, lam), (
             f"EWMA reactive lens, RiskMetrics λ = {lam:.2f} "
-            "(~11-day half-life - flinches at today, forgets the calm quarter)")
+            "(~11-day half-life: it flinches at today and forgets the calm quarter)")
     return sample_covariance(returns), "Sample covariance (equal weight, full window)"
 
 

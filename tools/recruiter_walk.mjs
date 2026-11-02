@@ -90,7 +90,7 @@ await step('land and read the headline', async () => {
   return `CVaR ${await verdict()}`;
 }, async () => /^\d+(\.\d+)?%$/.test(await verdict()) || `headline "${await verdict()}"`);
 
-await step('click "Explore what we do"', async () => {
+await step('click "Start with the Grit Zone"', async () => {
   await page.click('#hero .cta-btn');
   await page.waitForTimeout(2500);
 }, async () => {
@@ -143,15 +143,19 @@ await step('switch to the jump-diffusion engine', async () => {
 });
 
 await step('flip to the short side', async () => {
-  await page.getByText('Bearish - short the book', { exact: true }).first().click();
+  await page.getByText('Bearish: short the book', { exact: true }).first().click();
   await page.waitForFunction(() => /short/i.test(document.querySelector('.verdict-sentence')?.textContent || ''));
   return `CVaR ${await verdict()}`;
 });
 
-for (const name of ['Risk Topology', 'Risk Breakdown', 'Correlation Watch', 'Balance', 'Grit Zone',
-                    'Crisis Conviction', 'Signal Lab', 'Regime Atlas', 'Liquidity', 'Security Master',
-                    'Data Quality', 'Lineage & Audit']) {
+for (const name of ['Risk Topology', 'Risk Breakdown', 'Liquidity', 'Correlation Watch', 'Balance',
+                    'Grit Zone', 'Crisis Conviction', 'Data Quality', 'Lineage & Audit']) {
   await step(`open tab: ${name}`, async () => {
+    if (['Data Quality', 'Lineage & Audit'].includes(name)) {     // the folded provenance drawer
+      const s = page.locator('summary', { hasText: 'Where the numbers come from' }).first();
+      await s.scrollIntoViewIfNeeded();
+      if (!(await s.evaluate(el => el.parentElement.open))) await s.click();
+    }
     await tab(name).scrollIntoViewIfNeeded(); await tab(name).click(); await page.waitForTimeout(1200);
   }, async () => {
     const len = await page.evaluate(n => {
@@ -172,7 +176,7 @@ const TYPED_POOL = ['ACN', 'ADI', 'AEP', 'AIG', 'ALL', 'AMT', 'ANET', 'APD', 'BB
                     'CVS', 'DAL', 'DD', 'DG', 'DHR', 'DUK', 'EBAY', 'ECL', 'ELV', 'EMR',
                     'ETN', 'EXC', 'F', 'FCX', 'GD', 'GILD'];
 const typed = [...TYPED_POOL].sort(() => Math.random() - 0.5).slice(0, 3).sort();
-// Streamlit 1.62's ticker box draws each pick as a [data-tag] labelled with it.
+// Streamlit's ticker box (1.62 to 1.66.1) draws each pick as a [data-tag] labelled with it.
 const chips = () => page.evaluate(() =>
   [...document.querySelectorAll('[data-testid="stMultiSelectTagsContainer"] [data-tag]')]
     .map(e => e.getAttribute('aria-label')));

@@ -1,4 +1,4 @@
-# Meleona - Session Handoff
+# Meliona - Session Handoff
 
 Paste this into a new chat session to bring it up to speed instantly.
 
@@ -6,7 +6,7 @@ Paste this into a new chat session to bring it up to speed instantly.
 
 ## What this project is
 
-**Meleona** is an institutional-grade **Portfolio Optimization & Risk Engine**
+**Meliona** is an institutional-grade **Portfolio Optimization & Risk Engine**
 with a live Streamlit dashboard, built by a 2nd-year Data Analytics student to
 be recruiter-facing (the goal is a public live link on a resume). The name
 merges "Durand" (Old French, "enduring/built to withstand hard times") with
@@ -44,7 +44,7 @@ risk-engine/
 │   ├── grit.py          # Grit Zone: drawdown recovery, rolling consistency, regime resilience
 │   ├── security_master.py  # ISIN + corporate actions (dividends/splits) via yfinance
 │   └── data_quality.py  # automated schema/sanity validation gate on every price pull
-├── assets/logo.svg      # lion + scale + triangle crest (bronze, "Pride · Integrity")
+├── assets/logo.svg      # crest: hexagon cut by an X (2 triangles, 3 rhombuses) on a ringed disc
 ├── .streamlit/config.toml  # beige/bronze institutional theme
 ├── requirements.txt · Procfile · README.md · .gitignore
 ```
@@ -77,7 +77,7 @@ risk-engine/
   Percentile-ranked RELATIVE to the chosen universe (no absolute "grit" scale
   claimed). 7 deterministic unit tests; verified against live data (history
   length and regimes-survived per ticker line up with real IPO dates).
-- ✅ **Rebrand to Meleona** - page title, header wordmark, logo alt text, and
+- ✅ **Rebrand to Meliona** - page title, header wordmark, logo alt text, and
   docs updated from "Portfolio Risk Engine"
 - ✅ **Presentation-style redesign** - the app used to open as one long stack
   of controls plus five nested expanders (a wall of information before you'd
@@ -226,7 +226,7 @@ risk-engine/
   outbound email. Built: crash wire (`src/observability.py`: rotating local
   log, per-session reference in the footer, `log_incident()`; no third-party
   SDK, because one would contradict the privacy note it sits beside), kill
-  switch (`MELEONA_MAINTENANCE=1` serves a maintenance page and stops before
+  switch (`MELIONA_MAINTENANCE=1` serves a maintenance page and stops before
   any data call), outbound spend cap (`netguard.MAX_REQUESTS_PER_DAY`, charged
   at the single chokepoint, degrading to cached data on exhaustion instead of
   hammering Yahoo), a "Your data" privacy panel with a session-clear control
@@ -245,12 +245,12 @@ risk-engine/
 - ✅ **Support mailbox + beta channel + restore drill** (2026-08-26) - support
   moved off the personal address to the project mailbox
   `meleona.support@gmail.com`, forwarded to the personal inbox, overridable per
-  deployment with `MELEONA_SUPPORT_EMAIL`; a regression test now FAILS if the
+  deployment with `MELIONA_SUPPORT_EMAIL`; a regression test now FAILS if the
   personal address reappears in the app or in any public document. Creating the
   mailbox and turning on forwarding is a manual, phone-verified step, so it is
   written up in `RUNBOOK.md` §6b and is a blocking item in
   `LAUNCH_CHECKLIST.md`. Also shipped from the remaining checklist items:
-  `MELEONA_CHANNEL=beta` puts a beta notice plus a one-click "report this
+  `MELIONA_CHANNEL=beta` puts a beta notice plus a one-click "report this
   session" mailto (session reference already in the subject) on pre-release
   deploys only, and `tools/warm_cache.py` warms every preset after a deploy -
   `--drill` forces real fetches and prints the cold-refill time, which is the
@@ -450,6 +450,18 @@ risk-engine/
   as "1 -> 0.995"; the pair_weights docstring kept the false "flyer holds most
   of the risk". Swept every 10px, 360-1920: clean. Below 360px the plot is
   narrower than 260px - the screen, not the layout. Desktop dots unchanged.
+- ✅ **The tail model fits 6x faster, same numbers (2026-10-20)** - John: "speed up
+  the tail model fit next". The Tail Risk panel spent 3.8 s fitting: two GPD
+  fits (residuals, then raw returns), each with a 200-refit bootstrap of xi.
+  (1) The raw fit's bootstrap fed only `unconditional_xi_ci`, which nothing
+  read: it no longer runs (`n_boot=0`), and the key is gone. (2) scipy's
+  generic fit objective is mostly dispatch overhead; `src/risk._lean_nnlf` is
+  the same numpy calls for genpareto with loc 0, passed as the optimizer's
+  objective, equal bit for bit (3,000+ parameter points incl. every edge the fit can reach) on
+  the pinned scipy 1.18.1. Measured on four 10-year series: 3.82 s -> 0.63 s
+  per call, all 22 published numbers identical. Council caught one real bug in
+  the prototype: `math.log` instead of `np.log` differs in the last bit on
+  some scales (AVX512), which would have moved fits on some machines.
 - ✅ **Typed-in baskets download only their new names (2026-10-20)** - John:
   "make typed-in baskets load faster too". Two investigators: offline, the
   default basket plus three typed names took 29.3s to settle (34.7s for six
@@ -630,6 +642,217 @@ risk-engine/
   | Conviction: hand-typed "the one honest exception is the dot-com peak" | changed | read from the live table |
   | Hero/footer crisis count, path count typed in | changed | read from `HISTORICAL_REGIMES`, `N_PATHS` |
 
+- ✅ **New crest, and the name spelled Meliona (2026-10-28)** - John's logo
+  mandate, from his two sketches with the red-X'd outer triangles removed: a
+  charcoal disc, three rings fading outward, and a regular hexagon cut by an X
+  into two inward-pointing equilateral triangles and top/bottom rhombuses, plus
+  a keystone rhombus where the X crosses. Nothing touches (checked in code).
+  `tools/brand_icons.mjs` renders the favicon and touch icon from
+  `assets/logo.svg`; the share image got the crest and the new spelling in
+  place. Then every "Meleona" became "Meliona" (words, CSS classes, glide
+  globals, log file, build tag, setting names). Two deliberate leftovers: the
+  mailbox `meleona.support@gmail.com` (a Gmail address cannot be renamed -
+  RUNBOOK §6b says how to move), and `observability.host_setting()` still
+  reads `MELEONA_*` so a variable already set on Railway keeps working.
+- ✅ **The crest, beige and unframed, ripples on hover (2026-10-29)** - John
+  chose the beige pieces, asked for the glossy square plate to go, for the
+  rings to ripple inside to outside while hovered and stop when the pointer
+  leaves, and for the mark to be perfectly symmetric. The plate (border, tint,
+  shadow, padding) is gone and the crest fills the same box, so nothing below
+  moves (62 -> 104px on a 1440x900 laptop). The SVG is drawn about (0,0): every
+  mirror pair is the same number with the sign flipped. On hover each ring
+  swells 3.5% and fades, 0.3s behind the one inside it; on leave the glide
+  script lets each finish its pass and stop at rest (re-entering mid-settle
+  wakes all three), off under reduced motion. Measured: rings end at exactly
+  scale 1 within ~1s of leaving; rendered crest centred to 0.015px alone, and
+  on a 1x laptop it matches its mirror image but for 12 edge pixels.
+  `test_the_crest_is_symmetric_and_its_pieces_never_touch` (mutation-tested:
+  a 0.001 shift, touching rings, touching pieces, the plate returning).
+- ✅ **No lion left, and a new link preview (2026-10-29)** - the last two pieces
+  of the old crest were faint engravings: the balance scale behind the Grit Zone
+  and the lion's tail by the fan chart. They are now the new crest's hexagon in
+  outline and a quarter of its rings. The browser tab gets the new crest both
+  ways (the page's icon link and the icon Streamlit sets at run time). The link
+  preview (`public/og-image.png`) is rebuilt from `tools/og_image.html`, rendered
+  by `tools/brand_icons.mjs`: the crest, the name, one sentence, and a ruled
+  receipt of the 15 Oct 2026 live audit (727 of 728 checks; prices identical to
+  Yahoo's raw feed; T-bill 4.085% vs Treasury 4.100%; SPY/IVV 0.9995), every
+  figure copied from `audit/live_audit_2026-10-15T025826Z.md` and dated on the
+  image. No fan chart, no stat tiles, no eyebrow caps, no italic subtitle.
+
+- ✅ **showcase/: the engine in ~330 lines (2026-10-29)** - John wanted a short,
+  blunt copy of the Python for hiring managers, with plain Gen Z comments, kept
+  apart from the app (his call: the live site and the interview-depth notes in
+  `src/` stay as they are). `data, risk, portfolio, stress, run` cover prices,
+  VaR/CVaR, the walk-forward Kupiec backtest, both Monte Carlo engines, risk
+  parity, vol target, days to exit, the 10 crash replays and the Grit score.
+  `showcase/test_showcase.py` proves every function equals `src/` (to 1e-12,
+  same seeds) and runs in `tools.check`, so the copy cannot drift.
+- ✅ **Square, matte, and alive on arrival (2026-10-30)** - John: no watermark
+  logo, no curved boxes, a Swiss-grid map, Citadel-style motion. The crest
+  fragments behind the Grit Zone and the fan chart are gone; the four hero
+  tiles are matte rectangles in the buttons' grammar (a bronze foot rule on
+  hover, no glass, no sheen, no mixed corners), and the radius block that
+  re-rounded inputs, tables, charts and the verdict is deleted. The map:
+  square panels with bronze crop marks and a faint grain, a framed and ticked
+  plot, rhombus marks for names and the pairing diagram, square toggles, and
+  the probability rings clipped to the plot (the 99.7% ring ran past the frame,
+  over the axis labels and below 0% vol). Motion: on first load the crest and
+  tiles lift from face-down, the headline and its line slide in from the left
+  as the boot veil lifts; on scroll, headings slide in, the Grit pillars stand
+  up in turn and the band's photo settles - all on view timelines (scroll
+  position, not a clock), desktop only. citadel.com itself was unreachable
+  from the sandbox; built from John's description.
+- ✅ **Removing what reads as AI-generated (2026-11-02)**. John's list
+  first: em dashes, "It's not X. It's Y", random bold, emoji bullets, title
+  case, one-line paragraphs, pivotal/moreover/serves as. Every string a
+  visitor sees was edited (comments and docstrings untouched): spaced hyphens
+  doing a dash's job on the rendered page 167 -> 0, staging contrasts
+  rewritten while the honest negatives stay (not a forecast, excluded not
+  estimated), about 25 bold phrases inside sentences unbolded, restating
+  closers cut. Design, after research on generated-UI tells: no glow on charts
+  or behind the hero, the Grit Zone's three pillars in one row (they wrapped
+  to two plus an orphan), the hero button says where it goes ("Start with the
+  Grit Zone"), the "The Innovation"/"The Conviction" eyebrows gone, the
+  Book's cards square with a 2px role edge. Still open: the map's pair names
+  read "META - AVGO" in three places; one sits in code PR #32 edits, so all
+  three change together after it merges.
+- ✅ **Motion everywhere: arrivals from where each block sits, and a gliding
+  wheel (2026-11-02)**. John: "more exaggerated ... more present ... everywhere";
+  things on the left pop from the left, on the right from the right, in the
+  middle turned face up like a card; the motion ended at the engine and the
+  scroll felt normal. `static/reveal.js` now tags every Streamlit leaf block
+  (not a fixed list), so the engine's controls, captions, the Book's lines and
+  every tab and drawer arrive too, and reads each block's centre as it comes
+  on screen: left third swings in from the left, right third from the right,
+  a narrow middle block turns on its spine, a wide one tips up off its bottom
+  edge (every block on a phone). Travel, turn and settle are larger (46px
+  rise, up to 150px swing, 16 degree turn, 1.45 s, 90 ms stagger). The wheel
+  eases (GLIDE_EASE 0.09 of the distance a frame: a 300px notch settles over
+  ~1 s) and stands aside during a button's glide, inside anything that
+  scrolls on its own, for zoom, touch and keys, and under reduced motion.
+  Browser run on the preview: 0 blocks left invisible on screen at 1440 and
+  390px, no sideways scroll, button glides 44/44 (momentum, reader, steady,
+  rest).
+- ✅ **Arrival motion on an IntersectionObserver, and the photos cut 93% (2026-10-30)**
+  - John asked for Citadel-grade transitions: trigger-based, GPU-only, custom
+    easing, staggered, no flash of content, and working without JavaScript.
+  - `static/reveal.js` tags each block as Streamlit adds it, in the same task,
+    so it is hidden before its first paint. Our blocks and Streamlit's metrics,
+    charts and tables are covered.
+  - An IntersectionObserver reveals each block once: it fades in and slides up
+    24px, and headings slide in from the left. Blocks that arrive together
+    cascade 60ms apart, in document order.
+  - Only opacity and transform move. The curve is cubic-bezier(0.16, 1, 0.3, 1).
+    will-change is released when a block lands.
+  - The hidden state lives under `html.reveal-on`, which `<head>` sets before
+    the first paint (`tools/public_files.py`). It is never set without
+    JavaScript or under reduced motion. It comes off at DOMContentLoaded if the
+    script did not run.
+  - The hero and the sections a button flies to never animate.
+  - Decorative layers are scroll-linked: the band photo drifts as parallax and
+    the panel lintels draw themselves. Both use CSS scroll timelines; without
+    them, an IO-gated rAF fallback feeds `--scrub`.
+  - Photos are AVIF first, with JPEG/WebP fallbacks. The band and Gungnir plates
+    attach only within 600px of the screen. The Gungnir topography is a served
+    file now, not 750 KB of base64 on the websocket.
+  - Image weight: 4.4 MB -> 0.3 MB.
+  - Browser proof (offline synthetic market):
+    - 0 flashes
+    - layout shift 0.0000 while revealing
+    - reveal transitions: opacity and transform only
+    - 0 scroll listeners added by reveal.js
+    - 0/60/120ms cascades
+    - nothing hidden under reduced motion, with reveal.js blocked, or with
+      JavaScript off
+  - `device_check`/`deep_scan` now measure each block's landed state
+    (`__melionaReveal.revealAll()`).
+- ✅ **Risk Engine purge - the overwhelm audit** (2026-10-29). Snapshot commit
+  first ("Auto-Snapshot before Risk Engine Purge"). Non-UI: the glide script
+  left the deprecated `components.html` (a warning on every run) for a folded
+  `st.iframe`; a cold start with the feed down is tested to show guidance and
+  no number; the map is tested to draw no node or link the data did not
+  produce. UI, on John's rule - cut what the risk engine does not need, keep
+  what carries its identity (grit, the linkages between names): the research
+  workshop (Signal Lab, Regime Atlas, Security Master - and
+  `src/security_master.py` with its Yahoo calls) is gone; Liquidity joined the
+  main strip; Data Quality and Lineage fold into one "Where the numbers come
+  from" drawer; the Slice keeps its pairing sketch and equation and loses the
+  dense paragraph under them; The Book keeps its paragraph and its LEADS and
+  ANCHOR cards on the page and folds the no-role cards and two finer settings
+  into a drawer; the hero and headline speak plainly ("Bad-year loss",
+  "Simulated years"). The Risk Topology map is untouched.
+- ✅ **Options audit - every setting, mixed and matched, on live data**
+  (2026-10-30). John: every asset with every allocation, target vol 5-30%,
+  every estimator, both return models, every crisis, book size and
+  participation, "until no pairs are left untested", nothing hallucinated.
+  `tests/options_audit.py` + the **Options audit** workflow. ENGINE: all 20
+  presets and every suggested symbol paired with SPY, through the app's own
+  functions, each answer re-derived by the file's own numpy (the three
+  covariance estimators from their papers, risk parity's equal risk shares,
+  leverage = target / book vol at every target, both Monte Carlo engines' tail
+  and cone from their own paths plus the history's mean year, every crisis
+  replay from raw closes, days to exit for 6 book sizes x 10 participations,
+  and the map - every dot, the hazard line, every defensive link, and its web
+  of simulated futures held to closed-form OU theory under node). PAGE: the
+  real `main.py` under AppTest on 1,906 runs where every pair of widget values
+  meets (an all-pairs covering array over 20 widgets; 20 presets and 12
+  typed-in baskets); each run's headline CVaR, cone, Liquidity bars, Book
+  sentence, Correlation Watch line and map must equal the engine for exactly
+  those settings. Planted wiring bugs (a VT slider ignored, a wrong rolling
+  window, a book size ignored) fail it. The four crisis-record boxes are now
+  worked out a second time from Yahoo's raw chart API in the provenance step
+  (`crisis_boxes`, checked offline against `src.conviction`), and every in-page
+  button must sit on both glide scans' lists. The Workshop stays removed (John,
+  2026-10-30): Yahoo carries no ISIN (yfinance scrapes Business Insider,
+  "experimental"; a real one needs a CUSIP licence), so that column could
+  never be filled honestly.
+  First live run (499059a): 340 of 340 books and 1,906 of 1,906 page runs
+  reported; about 410,000 checks passed, and the 384 failures had three causes,
+  all fixed in d7ed26f. (1) A real crash: a short book, EWMA risk parity at
+  26-27% target vol, a 230-260% vol shock - April 2025's rally day became one
+  day losing more than the whole book, and the jump model took its log. The
+  page now says so and stops (no year compounds past a wipe-out). (2) ADV was
+  two numbers for a crypto + stock basket depending on which fetch ran first
+  (weekends counted as sessions on one path); one calendar now. (3) The audit
+  reached for widgets on pages that had correctly stopped (FX, rates and
+  commodity baskets at the Dot-com replay). The second run also showed my
+  absolute 1e-12 tolerance was too tight for a 7x-levered short FX book whose
+  numbers reach the thousands; it is relative now.
+
+- ✅ **The 60-item sweep: performance, legal, security (2026-11-02)** - John
+  sent a generic launch list; each item was checked against this app and
+  recorded in `LAUNCH_CHECKLIST.md` #38-95 (built, or N/A with the reason).
+  - Fixed:
+    - the egress allowlist and the privacy texts still named Business Insider,
+      gone with the Security Master;
+    - outbound requests get an explicit 30 s timeout (yfinance's handshake
+      passed none);
+    - websocket compression is on (107 KB -> ~44 KB a page load);
+    - the map's pairing rows answer the keyboard;
+    - the served HTML carries the security meta Streamlit cannot send
+      (`object-src`, `base-uri`, `form-action`, referrer);
+    - `PRIVACY.md` has a cookie and storage table measured in a browser, the
+      operator and a Children section;
+    - `TERMS.md` gained Price (free, nothing to refund) and Images;
+    - the README lost "Institutional-Grade" and "coming August 2026".
+  - Verified: no secret anywhere in git history, every dependency used, no
+    third-party host contacted by the browser.
+  - Open for John: record the two photos' Unsplash page links.
+
+- ✅ **Docker, not Kubernetes (2026-11-02)** - John wanted the app to run the
+  same on any machine, and Kubernetes' auto-healing, scaling and load
+  balancing, as long as it stays free. Built:
+  - `docker/Dockerfile`: what the Procfile runs, non-root, with a health
+    check; kept equal to the Procfile by a test.
+  - The `Container` workflow: builds the image, starts it and checks it on
+    every push; publishes `ghcr.io/ricepillow3000/meliona` (amd64 and arm64)
+    from main.
+  - `railway.toml`: deploys gated on `/_stcore/health`, and crashes restarted.
+
+  Scaling and load balancing are N/A by design: one process, a disk cache, and
+  sessions in memory. RUNBOOK §4 has the decision.
+
 ## Non-negotiable constraints (the "why")
 
 1. **No LLM data, ever.** Every market number comes from Yahoo Finance via
@@ -689,8 +912,7 @@ two paid-vendor-dependent pieces remain explicit backlog items:
 1. **Phase VI deployment** to a live URL (the resume link - the whole point).
    Streamlit Community Cloud is the fastest free path; Procfile + requirements
    are already set for Railway/Render too.
-2. If a paid data vendor becomes available: SEDOL/CUSIP/merger history
-   (security master) or true tick-level streaming (Polygon.io/Alpaca/IEX) -
-   both are scoped and ready to wire in once an API key exists.
+2. If a paid data vendor becomes available: true tick-level streaming
+   (Polygon.io/Alpaca/IEX) is scoped and ready to wire in once an API key exists.
 3. Extend liquidity: per-asset liquidity-adjusted VaR, or a book-size slider
    preset that showcases a small/mid-cap basket where days-to-liquidate bites.

@@ -2,7 +2,7 @@
 
 _Contact: meleona.support@gmail.com (subject line: `SECURITY`)_
 
-Meleona is a public, read-only market-risk dashboard run by one student. It has
+Meliona is a public, read-only market-risk dashboard run by one student. It has
 no accounts, no roles, no secrets and no database, so the threat model is
 resource exhaustion and injection, not authorization. `CLAUDE.md` lists the
 controls that follow from that and the two that are deliberately absent.
