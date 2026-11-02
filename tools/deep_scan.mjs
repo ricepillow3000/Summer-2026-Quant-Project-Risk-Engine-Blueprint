@@ -193,6 +193,14 @@ async function glideCheck(linkSel, label) {
     sc.style.scrollBehavior = prev;
   }, scrollerSel);
   await page.waitForTimeout(700);
+  // ...and the button itself arrived: a reader presses what they can see, but
+  // Playwright's click waits for a moving element to settle, and a footer box
+  // still turning over (1.45 s, static/reveal.js) ate 1.5 s of the window the
+  // flight is measured in - "565px short" on a flight that landed (2026-11-02).
+  await link.evaluate(a => new Promise(r => {
+    const t0 = performance.now();
+    (function f() { if (!a.closest('.reveal-item') || performance.now() - t0 > 4000) r(); else requestAnimationFrame(f); })();
+  }));
   await page.evaluate(([s, id]) => {
     const sc = document.querySelector(s), dest = document.getElementById(id);
     window.__glide = [];
