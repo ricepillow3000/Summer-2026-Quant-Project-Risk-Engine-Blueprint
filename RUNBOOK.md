@@ -89,8 +89,9 @@ lands:
   called `st.cache_data.clear()`, which emptied every cache for every
   visitor and deleted the disk cache the spend cap falls back on. Force a
   fresh pull as the operator with `python -m tools.warm_cache --drill`.
-- The signal IC, the ES bootstrap and the Risk Topology payload are cached
-  too (all deterministic): a new visitor's page view went 5.1s -> 1.8s of CPU.
+- The ES bootstrap and the Risk Topology payload are cached too (both
+  deterministic; the signal IC went with the Signal Lab on 2026-10-29): a new
+  visitor's page view went 5.1s -> 1.8s of CPU.
 - The freshness caption ticks once a minute, not once a second: at 1 Hz, 15
   idle tabs held the process at 93% of a core; now 4%.
 - Railway dashboard: set a usage limit and alert on the project, so a bad day
