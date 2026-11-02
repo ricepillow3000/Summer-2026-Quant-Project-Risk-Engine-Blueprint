@@ -521,6 +521,13 @@ def _pick(widget, idx):
     widget.set_value(opts[max(-len(opts), min(idx, len(opts) - 1))])
 
 
+def _watch(at, side: str):
+    """Correlation Watch's Asset A/B box, found by its label: its key carries
+    the basket (watch_a__<tickers>) so a new basket starts from its own pair."""
+    hits = [w for w in at.selectbox if w.label == f"Asset {side}"]
+    return hits[0] if hits else None
+
+
 def apply_row(at, row, mix_names):
     """Set every widget the way a visitor would, universe first (it re-draws
     every universe-dependent list), then the rest. Stops setting as soon as
@@ -576,10 +583,11 @@ def apply_row(at, row, mix_names):
     for w in at.slider:
         if w.label == "Max daily participation (% of ADV)":
             w.set_value(row["liq_part"])
-    keys = {w.key for w in at.selectbox} | {w.key for w in at.slider}
-    for key, idx in (("watch_a", row["watch_a"]), ("watch_b", row["watch_b"])):
-        if key in keys:
-            _pick(at.selectbox(key=key), idx)
+    keys = {w.key for w in at.slider}
+    for side, idx in (("A", row["watch_a"]), ("B", row["watch_b"])):
+        box = _watch(at, side)
+        if box is not None:
+            _pick(box, idx)
     if "watch_w" in keys:
         at.slider(key="watch_w").set_value(row["window"])
         at.slider(key="watch_t").set_value(row["threshold"])
@@ -722,7 +730,7 @@ def check_page(at, row, mix_names) -> list:
         and int(bh.group(4)) == row["book_part"] and int(bh.group(3)) == len(cols),
         f"book headline {re.sub('<[^>]+>', '', book)[:160]!r} for ${row['book']:,} at {row['book_part']}%")
 
-    pa, pb = at.selectbox(key="watch_a").value, at.selectbox(key="watch_b").value
+    pa, pb = _watch(at, "A").value, _watch(at, "B").value
     if pa == pb:
         rec("PAGE-05", "correlated with itself" in warns, f"{pa} against itself: no notice")
     else:
