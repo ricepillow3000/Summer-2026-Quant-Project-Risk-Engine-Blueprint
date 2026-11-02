@@ -1,0 +1,94 @@
+# Container: build the Docker image (docker/Dockerfile), start it, and prove it
+# serves this commit's app - health check green, the page's build stamp, the
+# static files, not running as root. On main, also publish it to GitHub's free
+# container registry for Intel/AMD and Apple Silicon/ARM machines, so anyone
+# can run Meliona with one command (README, "Run it anywhere").
+name: Container
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main", "claude/**"]
+
+permissions:
+  contents: read
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write      # only the publish step on main uses it
+    env:
+      IMAGE: ghcr.io/ricepillow3000/meliona
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build for this machine
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          load: true
+          tags: meliona:test
+          build-args: BUILD_SHA=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Start it and check it serves this commit's app
+        run: |
+          docker run -d --name meliona -p 8501:8501 meliona:test
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:8501/_stcore/health && break; sleep 2; done
+          echo
+          curl -sf http://127.0.0.1:8501/_stcore/health
+          echo
+          page=$(curl -sf http://127.0.0.1:8501/)
+          echo "$page" | grep -q "<meta name=\"meliona-build\" content=\"${GITHUB_SHA::12}\">" \
+            || { echo "FAIL the page does not carry this commit's build stamp"; exit 1; }
+          echo "$page" | grep -q 'src="./app/static/reveal.js"' \
+            || { echo "FAIL the launch files were not installed into the page"; exit 1; }
+          curl -sf -o /dev/null http://127.0.0.1:8501/app/static/reveal.js
+          curl -sf -o /dev/null http://127.0.0.1:8501/app/static/app.css
+          uid=$(docker exec meliona id -u)
+          [ "$uid" != "0" ] || { echo "FAIL the app runs as root"; exit 1; }
+          for i in $(seq 1 60); do
+            state=$(docker inspect -f '{{.State.Health.Status}}' meliona)
+            [ "$state" = healthy ] && break; sleep 2
+          done
+          echo "Docker health: $state (uid $uid)"
+          [ "$state" = healthy ] || { docker logs meliona; exit 1; }
+          docker image ls meliona:test --format 'image size: {{.Size}}'
+
+      - name: Logs
+        if: always()
+        run: docker logs meliona 2>&1 | tail -40 || true
+
+      - name: Sign in to ghcr.io (main only)
+        if: github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - if: github.ref == 'refs/heads/main'
+        uses: docker/setup-qemu-action@v3
+      - name: Publish for amd64 and arm64 (main only)
+        if: github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          build-args: BUILD_SHA=${{ github.sha }}
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.title=Meliona
+            org.opencontainers.image.description=Portfolio risk engine on live end-of-day Yahoo Finance data
+          cache-from: type=gha

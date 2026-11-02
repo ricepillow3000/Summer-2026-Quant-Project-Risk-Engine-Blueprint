@@ -114,6 +114,14 @@ built where there is a surface, N/A with the reason where there is none.
 | 94 | Leaked secrets in git history | **Scanned 2026-11-02** | The whole history was searched for cloud, GitHub, Slack, Google and model-provider keys, private keys, password/secret/api-key assignments and `.env`/key files: none ever committed. |
 | 95 | Full security audit | **Built** | `security_probe`, `bandit` and `pip-audit` on every push; the weekly sweep reads `docs/security/SECURITY-LESSONS.md`. |
 
+### 2026-11-02: Docker or Kubernetes
+
+| # | Asked for | Status | Where it lives / why not |
+|---|---|---|---|
+| 96 | Runs the same on any machine (containerization) | **Built** | `docker/Dockerfile` runs what the `Procfile` runs, as a non-root user, with a health check (`test_the_container_runs_what_the_procfile_runs`). The `Container` workflow builds and checks it on every push and publishes `ghcr.io/ricepillow3000/meliona` from `main` - free. One command: `docker run -p 8501:8501 ghcr.io/ricepillow3000/meliona:latest`. |
+| 97 | Auto-healing | **Built, free** | `railway.toml`: a deploy takes traffic only once `/_stcore/health` answers; a crashed process restarts (up to 10 times). In the box: Docker's `HEALTHCHECK`, plus a restart policy. |
+| 98 | Scaling up and load balancing (Kubernetes) | **N/A, decided** | One process by design: the cache is the container's disk and sessions live in memory on one websocket, so more copies mean cold caches and dropped sessions. Managed Kubernetes costs ~$70/month before servers. RUNBOOK §4, "Docker, not Kubernetes". |
+
 ## Before the link goes public
 
 - [ ] `python -m tests.test_engine` green (includes the full-app boot test).
@@ -142,3 +150,7 @@ built where there is a surface, N/A with the reason where there is none.
 - [ ] Record each photo's Unsplash page link (`static/facade.*`, `static/band.*`)
       beside its credit in the README - the licence needs no attribution, but the
       link is the proof of where each came from.
+- [ ] After the first `Container` run on `main`, make the image public once:
+      GitHub -> your profile -> Packages -> meliona -> Package settings ->
+      Change visibility -> Public. (A new package starts private; until then
+      `docker run` asks the visitor to sign in.)

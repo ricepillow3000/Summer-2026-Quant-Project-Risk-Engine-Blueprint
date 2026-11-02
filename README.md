@@ -48,6 +48,28 @@ python -m streamlit run main.py
 ```
 Opens at http://localhost:8501.
 
+### Run it anywhere (Docker)
+
+The same app in a box, on any machine with [Docker](https://docs.docker.com/get-docker/) -
+no Python, no packages, no "works on my machine":
+
+```bash
+docker run -p 8501:8501 ghcr.io/ricepillow3000/meliona:latest
+```
+
+Then open http://localhost:8501. The image is built, started and checked on
+every push, and published from `main` for Intel/AMD and Apple Silicon machines
+(`.github/workflows/container.yml`). To build it yourself:
+
+```bash
+docker build -f docker/Dockerfile -t meliona .
+docker run -p 8501:8501 meliona
+```
+
+The box runs exactly what the live site runs (`Procfile`), as a non-root user,
+with Docker's health check on Streamlit's `/_stcore/health`. Why Docker and not
+Kubernetes: `RUNBOOK.md` §4.
+
 ### Tests
 
 ```powershell

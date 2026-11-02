@@ -809,6 +809,19 @@ risk-engine/
     third-party host contacted by the browser.
   - Open for John: record the two photos' Unsplash page links.
 
+- ✅ **Docker, not Kubernetes (2026-11-02)** - John wanted the app to run the
+  same on any machine, and Kubernetes' auto-healing, scaling and load
+  balancing, as long as it stays free. Built:
+  - `docker/Dockerfile`: what the Procfile runs, non-root, with a health
+    check; kept equal to the Procfile by a test.
+  - The `Container` workflow: builds the image, starts it and checks it on
+    every push; publishes `ghcr.io/ricepillow3000/meliona` (amd64 and arm64)
+    from main.
+  - `railway.toml`: deploys gated on `/_stcore/health`, and crashes restarted.
+
+  Scaling and load balancing are N/A by design: one process, a disk cache, and
+  sessions in memory. RUNBOOK §4 has the decision.
+
 ## Non-negotiable constraints (the "why")
 
 1. **No LLM data, ever.** Every market number comes from Yahoo Finance via

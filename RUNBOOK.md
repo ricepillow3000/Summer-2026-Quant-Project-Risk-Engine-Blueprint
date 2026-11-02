@@ -125,6 +125,40 @@ processor, no `PRIVACY.md` change. **Revisit the proxy only if** the logs show
 many concurrent sessions stalling the process; even then the next control is a
 process-wide concurrency cap in the app, not a proxy.
 
+### Docker, not Kubernetes: decided 2026-11-02
+
+John asked for the app to run the same on any machine, and for what
+Kubernetes offers - auto-healing, scaling up, load balancing - as long as it
+stays free.
+
+- **Same box everywhere: Docker, built.** `docker/Dockerfile` runs what the
+  `Procfile` runs (`test_the_container_runs_what_the_procfile_runs`). The
+  `Container` workflow builds it on every push, starts it, and checks the
+  health endpoint, this commit's build stamp and that the app is not root; from
+  `main` it publishes `ghcr.io/ricepillow3000/meliona` for amd64 and arm64.
+  GitHub's registry is free for public images. The Dockerfile is not at the
+  repo root, because Railway would build a root Dockerfile instead of its own
+  builder.
+- **Auto-healing: built, for free.** `railway.toml` makes a new deploy take
+  traffic only once `/_stcore/health` answers, so a broken build never replaces
+  a working site, and restarts a crashed process up to 10 times. In the box,
+  Docker's `HEALTHCHECK` marks it unhealthy; `docker run --restart
+  unless-stopped` restarts it if it exits.
+- **Scaling up and load balancing: N/A, and Kubernetes would not change that.**
+  The app is one process on purpose. Its price cache is that container's disk,
+  and each visitor's session lives in that process's memory on one websocket. A
+  second copy would hold its own cold cache, and a balancer moving a visitor
+  between copies would drop their session unless it pinned them to one copy.
+  Railway's edge proxy already routes every visitor to the instance (and
+  would spread them over replicas if any were added). Capacity is measured
+  above (10 visitors at once: headline in ~21 s). The next step if the logs ever
+  show sessions stalling is a concurrency cap in the app, then a bigger
+  instance.
+- **Cost.** Docker and the registry cost nothing. A managed Kubernetes control
+  plane runs about $70 a month on the big clouds before a single server, and a
+  free self-run one (k3s on a spare machine) adds a machine to keep alive and
+  an IP to keep secret - to run one container.
+
 ## 5. Phased release
 
 1. **Local** - `python -m streamlit run main.py`, then `python -m tests.test_engine`

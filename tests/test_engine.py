@@ -3337,6 +3337,40 @@ def test_the_served_page_carries_the_security_meta_streamlit_cannot_send():
     assert '<meta name="referrer" content="strict-origin-when-cross-origin">' in head
 
 
+def test_the_container_runs_what_the_procfile_runs():
+    """John, 2026-11-02: package the app so it runs the same on any machine -
+    Docker, free, rather than Kubernetes (RUNBOOK §4). The box must run what
+    the live site runs, or "works in Docker" proves nothing about the site:
+    every Procfile process is in docker/Dockerfile, on the same Python, as a
+    user other than root, with Streamlit's health check. It stays out of the
+    repo root (Railway would build a root Dockerfile instead of its own
+    builder), and its ignore file keeps everything the app reads at runtime."""
+    import re
+    import tomllib
+    root = pathlib.Path(__file__).resolve().parent.parent
+    assert not (root / "Dockerfile").exists() and not (root / ".dockerignore").exists(), \
+        "a root Dockerfile or .dockerignore changes how Railway builds the live site"
+    docker = (root / "docker" / "Dockerfile").read_text(encoding="utf-8")
+    procfile = (root / "Procfile").read_text(encoding="utf-8")
+    for cmd in ("python -m tools.public_files", "python -m tools.warm_cache --every 5",
+                "streamlit run main.py"):
+        assert cmd in procfile and cmd in docker, f"the box and the site disagree on: {cmd}"
+    py = re.search(r"python-(\d+\.\d+)", (root / "runtime.txt").read_text()).group(1)
+    assert re.search(rf"^FROM python:{re.escape(py)}-slim", docker, re.M), \
+        f"the box is not on the site's Python {py}"
+    users = re.findall(r"^USER (\S+)", docker, re.M)
+    assert users and users[-1] not in ("root", "0"), "the app in the box runs as root"
+    assert re.search(r"^HEALTHCHECK .*\n?.*_stcore/health", docker, re.M)
+    ignored = {ln.strip().rstrip("/") for ln in (root / "docker" / "Dockerfile.dockerignore")
+               .read_text(encoding="utf-8").splitlines() if ln.strip() and not ln.startswith("#")}
+    needed = {"src", "static", "assets", "prototypes", "public", "tools", ".streamlit",
+              "main.py", "hero.py", "requirements.txt"}
+    assert not ignored & needed, f"the box leaves out what the app reads: {ignored & needed}"
+    deploy = tomllib.loads((root / "railway.toml").read_text(encoding="utf-8"))
+    assert deploy["deploy"]["healthcheckPath"] == "/_stcore/health"
+    assert "build" not in deploy, "railway.toml must not change how Railway builds"
+
+
 def test_the_websocket_is_compressed():
     """2026-11-02 sweep: every chart, table and the Risk Topology page reach the
     browser as websocket messages, and Streamlit sends them uncompressed by
