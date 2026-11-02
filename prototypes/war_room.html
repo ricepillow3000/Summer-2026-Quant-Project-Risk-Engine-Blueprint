@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Meliona - Risk Topology</title>
+<title>Meliona · Risk Topology</title>
 <style>
 /* ============================================================
    MELIONA RISK TOPOLOGY - the Monte Carlo as a strategy map.
@@ -414,7 +414,7 @@ select {
     <div class="eyebrow">Meliona · Risk Engine</div>
     <h1>Risk Topology</h1>
     <div class="sub">Where the book can drift over the next 30 trading days, and what it costs to be wrong.</div>
-    <button class="runbtn" id="btnRun">Run Simulation</button>
+    <button class="runbtn" id="btnRun">Run simulation</button>
     <button class="explbtn" id="btnExplain" aria-expanded="false" aria-controls="glossary">Explain the map</button>
     <!-- John, 2026-10-19: the button "does not work or direct me anywhere" - it
          only switched on hover-reading over the plot. A click now opens this
@@ -431,7 +431,7 @@ select {
         <dt>T+30</dt>
         <dd>Thirty trading days after the last close.</dd>
         <dt>Mean-reverting (Ornstein-Uhlenbeck, OU) Monte Carlo</dt>
-        <dd>The simulation engine. Each path moves the book's beta and volatility day by day, with a pull back toward their long-run levels - an Ornstein-Uhlenbeck process (volatility moves on a log scale).</dd>
+        <dd>The simulation engine. Each path moves the book's beta and volatility day by day, with a pull back toward their long-run levels: an Ornstein-Uhlenbeck process (volatility moves on a log scale).</dd>
         <dt>AR(1)</dt>
         <dd>The one-step rule the model is fitted with: tomorrow's value is a constant, plus a fraction of today's, plus a random shock.</dd>
         <dt>Long-run vol</dt>
@@ -443,7 +443,7 @@ select {
         <dt>Vol</dt>
         <dd>How big the book's daily swings are, over the last 21 trading days, stated per year.</dd>
         <dt>Daily closes (EOD)</dt>
-        <dd>End-of-day adjusted closing prices from Yahoo Finance - not real-time.</dd>
+        <dd>End-of-day adjusted closing prices from Yahoo Finance, not real-time.</dd>
         <dt>Days fitted</dt>
         <dd>The trading days on which both the book's beta and its volatility could be measured; the model is fitted on them.</dd>
         <dt>Perimeter and breach</dt>
@@ -491,7 +491,7 @@ select {
   <!-- statistics band -->
   <header class="hud glass">
     <div class="verdict">
-      <div class="k">Expected Shortfall · 97.5% · T+30</div>
+      <div class="k">Expected shortfall · 97.5% · T+30</div>
       <div class="nrow">
         <div class="n" id="hudES">--<em>%</em></div>
         <div class="histwrap">
@@ -499,7 +499,7 @@ select {
           <div class="histcap" id="histCap">10,000 simulated 30-day outcomes</div>
         </div>
       </div>
-      <div class="s">Average loss across the worst 2.5% of simulated paths. One number, then the map.</div>
+      <div class="s">Average loss across the worst 2.5% of simulated paths.</div>
     </div>
     <div class="tiles">
       <div class="tile" title="If the next 30 days land in the worst 5% of simulated paths, the loss is at least this much."><div class="l">VaR 95 · T+30</div><div class="v" id="hudVaR">--</div><div class="d">simulated quantile</div></div>
@@ -517,7 +517,7 @@ select {
   <!-- linkage inspector -->
   <div class="inspector glass" id="inspPanel">
     <div class="insp-h">
-      <div class="k">Defensive Pairing</div>
+      <div class="k">Defensive pairing</div>
       <div class="t">Flyer - anchor · ranked by cushion</div>
     </div>
     <div class="standings" id="standings"></div>
@@ -1205,25 +1205,25 @@ const EXPLAIN = {
     ? [t + ' · candidate hedge, not held',
        'A defensive name the pairing tournament may buy against the flyer. It is not in the book, so it sits at its own measured beta and volatility, across its full loaded history.']
     : [t + ' · one holding',
-    'Sits at its measured risk address: how hard it moves with the market (left-right) and how violently it moves day to day (up-down). Both measured across its FULL loaded history - not the recent rolling window used by the mark for the book itself, so a holding and the book are two different readings of the same axes: an average against a right-now.'],
+    'Sits at its measured risk address: how hard it moves with the market (left-right) and how violently it moves day to day (up-down). Both are measured across its full loaded history, while the book\'s own mark uses a recent rolling window, so a holding and the book are two readings of the same axes: an average against a right-now.'],
   portfolio: () => ['Portfolio · you are here',
     'The whole book today, measured from rolling windows of its real returns. Every simulated future starts from this exact spot.'],
   link: pr => [pr.fl + ' - ' + pr.an + ' · defensive pair',
     'Two-asset risk parity: the flyer (' + pr.fl + ') and the anchor (' + pr.an + ') each carry an equal share of the risk, and the anchor holds most of the money. Tether them and ' + (BSGN > 0 ? 'a crash in the flyer' : 'a squeeze in the shorted flyer') + ' digs a shallower hole. Click the link to see the replayed history.'],
   ring: pct => [pct + ' probability ring',
-    'After 10,000 simulated 30-day futures, ' + pct + ' of them END inside this ring. Counted from the simulation, not assumed. The farther out, the darker: the fog is where the book almost never lands.'],
+    'After 10,000 simulated 30-day futures, ' + pct + ' of them end inside this ring. Counted from the simulation, not assumed. The farther out, the darker: the fog is where the book almost never lands.'],
   perimeter: () => ['Maximum VaR breach perimeter',
     'The danger line, set by a disclosed policy (3x today\'s volatility, floored at 35% and capped at 90%, or beta '
-    + (BSGN > 0 ? 'up 0.8, capped at 1.9' : 'down 0.8, capped at -1.9 - this book is short, so the betas of its holdings are negated and the perimeter is mirrored')
+    + (BSGN > 0 ? 'up 0.8, capped at 1.9' : 'down 0.8, capped at -1.9; this book is short, so the betas of its holdings are negated and the perimeter is mirrored')
     + '). Any simulated path that crosses it burns ember and counts toward the breach probability in the top bar.'],
   iso: pct => ['Iso-VaR guide · ' + pct + ' daily',
     'A reference altitude: at this volatility, a normal bad day (worst 5%) costs about ' + pct + '. Higher on the map = bigger daily losses at the same odds.'],
   xaxis: () => ['Portfolio beta · the x-axis',
     'Market sensitivity. 1.0 moves with the market, 0 ignores it, negative moves against it. Drifting right means the book behaves more like the index.'],
   yaxis: () => ['Realized volatility · the y-axis',
-    'How big the daily swings actually are, annualized, measured from real returns. Climbing this axis is what a risk manager gets paid to notice.'],
+    'How big the daily swings actually are, annualized, measured from real returns.'],
   tail: () => ['Tail territory',
-    'Beyond the 99.7% ring. The simulation almost never reaches here in 30 days - but "almost never" is where blowups live. That is why the map keeps it visible instead of cropping it away.'],
+    'Beyond the 99.7% ring. The simulation almost never reaches here in 30 days, yet this is where blowups happen, so the map keeps it in view instead of cropping it.'],
   terrain: () => ['The terrain · one Monte Carlo run',
     'Every thread is one simulated 30-day future of the book, stepping day by day through dynamics calibrated on its real history. The bright web is where futures crowd; ember threads crossed the danger line.'],
 };
@@ -1489,7 +1489,7 @@ function renderDetail() {
       ? '<div class="honest"><b>Paper trail.</b> ES and cushion come from the engine\'s real-history pair backtest: ' +
         'actual daily returns, monthly rebalance, no lookahead, over ' + real.nDays.toLocaleString('en-US') + ' trading days ' +
         'of Yahoo Finance adjusted closes. Weights are exact two-asset risk parity. Pair correlation ' + pr.rho.toFixed(2) + ' measured on the same window.</div>'
-      : '<div class="honest"><b>Honest limits.</b> Pair statistics come from a Gaussian daily-loop Monte Carlo ' +
+      : '<div class="honest"><b>Limits.</b> Pair statistics come from a Gaussian daily-loop Monte Carlo ' +
         'on demo calibration (flyer drift 10%, anchor 4%, pair correlation ' + pr.rho.toFixed(2) + '). ' +
         'Weights are exact two-asset risk parity: each leg carries an equal share of the risk, the anchor holds most of the money. ' +
         'Correlations converge toward one in real crashes; the live engine replays actual crisis windows instead.</div>');

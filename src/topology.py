@@ -216,9 +216,9 @@ def build_map_payload(returns: pd.DataFrame, weights: pd.Series,
             "plus +0.10 shock corr, calm = x 0.7 (disclosed policy, not "
             "data). Zero-drift risk view. Hazard: 3x today's vol (floored "
             "at 35%, capped at 90%) and beta "
-            + ("-0.8 (capped at -1.9) - the short book's holdings have their "
+            + ("-0.8 (capped at -1.9); the short book's holdings have their "
                "betas negated (anchor-pool names are not held and keep their "
-               "own), so the perimeter is mirrored and danger is MORE negative "
+               "own), so the perimeter is mirrored and danger is more negative "
                "beta"
                if bearish else "+0.8 (capped at 1.9)")
             + ". Pair numbers replay real history: monthly rebalance, no "
