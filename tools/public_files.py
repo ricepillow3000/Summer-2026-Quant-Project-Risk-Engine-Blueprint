@@ -33,9 +33,9 @@ import sys
 SITE_URL = (os.environ.get("MELIONA_SITE_URL") or os.environ.get("MELEONA_SITE_URL") or
     "https://summer-2026-quant-project-risk-engine-blueprint-production.up.railway.app"
 ).rstrip("/")
-TITLE = "Meliona - Portfolio Risk Engine"
+TITLE = "Meliona · Portfolio Risk Engine"
 DESCRIPTION = ("VaR, CVaR, Monte Carlo stress testing and factor exposures, computed "
-               "live from Yahoo Finance data - every number traceable to its source.")
+               "live from Yahoo Finance data. Every number traces back to its source.")
 MARK, END = "<!-- meliona-head -->", "<!-- /meliona-head -->"
 BOOT_MARK, BOOT_END = "<!-- meliona-boot -->", "<!-- /meliona-boot -->"
 # The commit this process was built from. Railway sets RAILWAY_GIT_COMMIT_SHA
@@ -152,7 +152,7 @@ def install(static_dir: pathlib.Path, site_url: str = SITE_URL,
         new = page.replace("<title>Streamlit</title>", "")
         new = new.replace("<head>", "<head>\n" + block, 1)
         new = new.replace(
-            "<noscript>", f"<noscript><p>{html.escape(TITLE)} - {html.escape(DESCRIPTION)}</p>", 1)
+            "<noscript>", f"<noscript><p>{html.escape(TITLE)}. {html.escape(DESCRIPTION)}</p>", 1)
         new = new.replace("<body>", "<body>\n" + boot_block(), 1)
     if BOOT_MARK in new:                   # the skeleton follows the hero's copy
         i, j = new.index(BOOT_MARK), new.index(BOOT_END) + len(BOOT_END) + 1

@@ -63,7 +63,7 @@ def validate_prices(prices: pd.DataFrame) -> dict:
     checks.append(_check(
         "schema.sorted",
         "PASS" if is_sorted else "FAIL",
-        "Dates are sorted ascending." if is_sorted else "Dates are NOT sorted ascending.",
+        "Dates are sorted ascending." if is_sorted else "Dates are not sorted ascending.",
     ))
 
     non_numeric = [c for c in prices.columns if not pd.api.types.is_numeric_dtype(prices[c])]
@@ -137,8 +137,8 @@ def validate_prices(prices: pd.DataFrame) -> dict:
                 "sanity.extreme_moves",
                 "WARN",
                 f"{n_extreme} single-day move(s) beyond ±{EXTREME_MOVE_THRESHOLD:.0%} "
-                f"(worst: {worst_val:.0%}) - could be a real crash day or a data glitch; "
-                "verify before trusting.",
+                f"(worst: {worst_val:.0%}). It could be a real crash day or a data "
+                "glitch, so verify it before trusting it.",
             ))
         else:
             checks.append(_check(

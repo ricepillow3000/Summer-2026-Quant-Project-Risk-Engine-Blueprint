@@ -79,8 +79,8 @@ def factor_exposures(portfolio_returns: pd.Series, period: str = "2y") -> dict:
         "alpha_basis": (
             f"excess of the 13-week T-bill at {rf_annual:.2%} annual"
             if rf_annual is not None else
-            "RAW returns - no T-bill rate available, so this is NOT "
-            "risk-free-adjusted"),
+            "RAW returns: no T-bill rate was available, so this is not "
+            "adjusted for the risk-free rate"),
         "betas": {name: float(b) for name, b in zip(names, beta[1:])},
         "r_squared": float(r2),
         "observations": len(df),

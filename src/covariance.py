@@ -102,7 +102,7 @@ def estimate_covariance(returns: pd.DataFrame, method: str = "sample",
     if method == "EWMA":
         return ewma_covariance(returns, lam), (
             f"EWMA reactive lens, RiskMetrics λ = {lam:.2f} "
-            "(~11-day half-life - flinches at today, forgets the calm quarter)")
+            "(~11-day half-life: it flinches at today and forgets the calm quarter)")
     return sample_covariance(returns), "Sample covariance (equal weight, full window)"
 
 

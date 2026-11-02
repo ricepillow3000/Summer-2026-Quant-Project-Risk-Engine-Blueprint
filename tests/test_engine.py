@@ -4092,7 +4092,7 @@ def test_a_setting_that_loses_more_than_the_book_in_a_day_is_refused_in_words():
     at, restore = _offline_app(market=market)
     try:
         next(r for r in at.radio if r.label.startswith("Which side")).set_value(
-            "Bearish - short the book")
+            "Bearish: short the book")
         next(c for c in at.checkbox if c.label == "Target volatility").check()
         at.run()
         next(s for s in at.slider if s.label == "Target annual vol (%)").set_value(30)
@@ -4450,7 +4450,7 @@ def test_the_books_grit_is_the_grit_zones_full_history_grit():
         wrong = {t: (g, round(float(tab[t]))) for t, g in book.items()
                  if g != round(float(tab[t]))}
         assert not wrong, f"Book grit vs Grit Zone grit, shelf on (book, tab): {wrong}"
-        head = [m.value for m in at.markdown if " book - " in m.value and "names hold" in m.value]
+        head = [m.value for m in at.markdown if " book: " in m.value and "names hold" in m.value]
         assert head and f"of your {len(loaded)} names hold" in head[0], head
     finally:
         restore()
@@ -4470,7 +4470,7 @@ def test_the_book_lists_an_outside_etf_only_when_it_is_the_anchor():
         for m in at.markdown:
             hit = re.match(r"\s*(LEADS|ANCHOR|NO ROLE|LEFT OUT)\s+((?:\d+\.\d%|<0\.1%) of the book\s+)?"
                            r"([A-Z0-9.^=-]+) (.*)",
-                           re.sub(r"<[^>]+>", " ", m.value)) if "border-left:3px solid" in m.value else None
+                           re.sub(r"<[^>]+>", " ", m.value)) if "border-left:2px solid" in m.value else None
             if hit:
                 # a NO ROLE card, and only that one, says what it holds (ME-12 review)
                 assert bool(hit.group(2)) == (hit.group(1) == "NO ROLE"), hit.group(0)[:80]
@@ -4648,7 +4648,7 @@ def test_the_headline_accents_follow_real_state():
         assert ">Stressed<" in _verdict_html(at), "a crisis replay must mark the headline"
         assert _tab_strip_slot(at) == slot
 
-        at.radio(key="bv_direction").set_value("Bearish - short the book").run()
+        at.radio(key="bv_direction").set_value("Bearish: short the book").run()
         assert not at.exception, [e.value for e in at.exception]
         assert ">Short book<" in _verdict_html(at), "the bearish side must mark the headline"
         assert _tab_strip_slot(at) == slot, "an accent moved the tab strip"
@@ -5408,7 +5408,7 @@ def test_the_page_points_only_to_controls_that_exist():
     page = _offline_page()
     text = " ".join(page["text"])
     assert "Engine controls" not in text
-    alloc = [e.split(" - ")[0] for e in page["expanders"] if e.startswith("02 ")]
+    alloc = [e.split(":")[0] for e in page["expanders"] if e.startswith("02 ")]
     assert alloc and f"to EWMA in {alloc[0]}" in text, alloc
 
 
@@ -5427,7 +5427,7 @@ def test_a_day_with_no_volume_reported_is_skipped_not_read_as_zero():
         return dv
     at, restore = _offline_app(dollar_volume=gappy)
     try:
-        cards = [m.value for m in at.markdown if "border-left:3px solid" in m.value]
+        cards = [m.value for m in at.markdown if "border-left:2px solid" in m.value]
         v = [c for c in cards if ">V " in c]
         assert v, "no Book card for V"
         assert "reports no volume" not in v[0], v[0]

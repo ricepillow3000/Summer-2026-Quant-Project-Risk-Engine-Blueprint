@@ -90,7 +90,7 @@ await step('land and read the headline', async () => {
   return `CVaR ${await verdict()}`;
 }, async () => /^\d+(\.\d+)?%$/.test(await verdict()) || `headline "${await verdict()}"`);
 
-await step('click "Explore what we do"', async () => {
+await step('click "Start with the Grit Zone"', async () => {
   await page.click('#hero .cta-btn');
   await page.waitForTimeout(2500);
 }, async () => {
@@ -143,7 +143,7 @@ await step('switch to the jump-diffusion engine', async () => {
 });
 
 await step('flip to the short side', async () => {
-  await page.getByText('Bearish - short the book', { exact: true }).first().click();
+  await page.getByText('Bearish: short the book', { exact: true }).first().click();
   await page.waitForFunction(() => /short/i.test(document.querySelector('.verdict-sentence')?.textContent || ''));
   return `CVaR ${await verdict()}`;
 });
