@@ -5766,6 +5766,37 @@ def test_the_audits_full_history_asks_yahoo_for_daily_bars_by_date():
     assert "range=3mo" in asked[1], asked
 
 
+def test_blocks_arrive_from_where_they_sit_and_the_wheel_glides():
+    """John, 2026-11-02: "more present, everywhere" - a block on the left
+    enters from the left, one on the right from the right, one in the middle
+    turns face up like a card; the motion must not end at the engine, and the
+    wheel must feel glidey. Browser run: 0 blocks left invisible on screen at
+    1440 and 390px, no sideways scroll, a 300px notch eased over ~1 s, every
+    button glide check 44/44."""
+    import re
+    root = pathlib.Path(__file__).resolve().parent.parent
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    js = (root / "static" / "reveal.js").read_text(encoding="utf-8")
+    # four entrances, each a transform only (the GPU rule above still holds)
+    for kind in ("left", "right", "card", "flip"):
+        assert re.search(r"\.reveal-on \.reveal-item--" + kind + r"\s*\{[^}]*transform:", css), kind
+    assert "translate3d(calc(-1 * var(--reveal-x))" in css and "translate3d(var(--reveal-x), 0, 0)" in css
+    assert "rotateY(-92deg)" in css and "rotateX(-68deg)" in css
+    # the side is read from where the block sits, as it arrives
+    assert re.search(r"var SIDE = 0\.\d+;", js) and re.search(r"var WIDE = 0\.\d+;", js)
+    assert "return f < SIDE ? 'left' : f > 1 - SIDE ? 'right' : 'card';" in js
+    assert "el.classList.add('reveal-item--' + side(el));" in js
+    # every block, not a fixed list: Streamlit's leaf containers - the engine's
+    # controls, captions and cards - arrive too
+    assert "var LEAF = '[data-testid=\"stElementContainer\"]';" in js and "var ITEMS = NAMED + ',' + LEAF;" in js
+    assert ".st-key-glide" in re.search(r"var SKIP = '([^']+)'", js).group(1)
+    # the wheel glide: stands aside for zoom, a button's flight and anything
+    # that scrolls on its own, and never runs under reduced motion
+    assert "W.__melionaStop) return;" in js and "e.ctrlKey" in js and "scrolls(n, e.deltaY)" in js
+    assert js.index("if (calm)") < js.index("addEventListener('wheel'")
+    assert "{ passive: false }" in js and re.search(r"var GLIDE_EASE = 0\.\d+;", js)
+
+
 def test_every_in_page_button_is_flown_by_both_glide_scans():
     """John, 2026-10-30: every button must glide the reader down, never jump.
     tools/deep_scan.mjs and tools/glide_load_check.mjs measure each flight

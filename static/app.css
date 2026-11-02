@@ -624,25 +624,46 @@ div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
    neither touches layout, so nothing below a block shifts while it arrives.
    will-change asks for the GPU layer up front (no first-frame stutter);
    reveal.js removes the class when the block lands, releasing the layer.
+   Where a block sits decides how it arrives (reveal.js measures it as it
+   comes on screen; John, 2026-11-02 - "more present, everywhere"):
+     --left   on the left of the page: swings in from the left
+     --right  on the right: swings in from the right
+     --card   a narrow block in the middle: turns face up on its spine
+     --flip   a wide block in the middle (and every block on a phone, where
+              everything is the full width): tips up off its bottom edge
+   Before it is measured a block waits invisible, lowered and a little small.
    Tune here:
-     --reveal-y    slide-up distance (20-30px reads as weight, not travel)
-     --reveal-x    slide-in distance for headings (from the left)
+     --reveal-y    rise from below (the waiting state, and part of every flip)
+     --reveal-x    swing-in distance from either side (never wider than the
+                   gutter: stMain clips sideways overflow)
+     --reveal-turn how far a side entry is turned away (depth, not spin)
      --reveal-dur  how long the settle takes
      --ease-out    fast start, long soft landing (an expo-out curve)
    The stagger between blocks is STAGGER_MS in reveal.js.
    ============================================================ */
-:root { --reveal-y: 24px; --reveal-x: -32px; --reveal-dur: 1s;
-        --ease-out: cubic-bezier(0.16, 1, 0.3, 1); }
+:root { --reveal-y: 46px; --reveal-x: clamp(56px, 9vw, 150px); --reveal-turn: 16deg;
+        --reveal-dur: 1.45s; --ease-out: cubic-bezier(0.16, 1, 0.3, 1); }
 .reveal-on .reveal-item {
-    opacity: 0; transform: translate3d(0, var(--reveal-y), 0);
-    will-change: transform, opacity; }
-.reveal-on .reveal-item--left { transform: translate3d(var(--reveal-x), 0, 0); }
-.reveal-on .reveal-item--lift { transform: perspective(900px) rotateX(-55deg);
+    opacity: 0; transform: translate3d(0, var(--reveal-y), 0) scale(.94); }
+.reveal-on .reveal-item--left {
+    transform: perspective(1400px) translate3d(calc(-1 * var(--reveal-x)), 0, 0)
+               rotateY(var(--reveal-turn)) scale(.96);
+    transform-origin: 0 50%; }
+.reveal-on .reveal-item--right {
+    transform: perspective(1400px) translate3d(var(--reveal-x), 0, 0)
+               rotateY(calc(-1 * var(--reveal-turn))) scale(.96);
+    transform-origin: 100% 50%; }
+.reveal-on .reveal-item--card {
+    transform: perspective(1000px) rotateY(-92deg) scale(.9);
+    transform-origin: 50% 50%; }
+.reveal-on .reveal-item--flip {
+    transform: perspective(1600px) translate3d(0, calc(var(--reveal-y) * .6), 0) rotateX(-68deg);
     transform-origin: 50% 100%; }
 .reveal-on .reveal-item.is-visible {
     opacity: 1; transform: translate3d(0, 0, 0);
+    will-change: transform, opacity;
     /* !important: the CTA's own colour transitions are !important too */
-    transition: opacity calc(var(--reveal-dur) * .8) var(--ease-out),
+    transition: opacity calc(var(--reveal-dur) * .7) var(--ease-out),
                 transform var(--reveal-dur) var(--ease-out) !important;
     transition-delay: var(--reveal-delay, 0ms) !important; }
 @media (prefers-reduced-motion: reduce) {
