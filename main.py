@@ -61,7 +61,7 @@ from src.conviction import (
 
 # Title and icon match the <head> tools/public_files.py serves to crawlers and
 # link previews, so a shared link and the browser tab say the same thing.
-st.set_page_config(page_title="Meliona - Portfolio Risk Engine",
+st.set_page_config(page_title="Meliona · Portfolio Risk Engine",
                    page_icon=str(Path(__file__).parent / "public" / "favicon.png"),
                    layout="wide")
 
@@ -130,7 +130,7 @@ def safe_err(where: str, exc: BaseException) -> str:
     log_incident(); the ref is how support ties the two together.
     """
     log_incident(SESSION_REF, where, exc)
-    return f"{type(exc).__name__} - quote {SESSION_REF} if you report this"
+    return f"{type(exc).__name__}; quote {SESSION_REF} if you report this"
 
 # One prefilled mailto, reused by the beta banner and the privacy panel: the
 # subject already carries the session reference, so a report arrives with the
@@ -140,9 +140,9 @@ FEEDBACK_LINK = (f"mailto:{SUPPORT_EMAIL}?subject=Meliona%20feedback%20"
 
 if RELEASE_CHANNEL == "beta":
     st.info(
-        f"**Beta.** This is a pre-release deployment - features and numbers "
+        f"**Beta.** This is a pre-release deployment: features and numbers "
         f"may change, and data is live *end-of-day*, never real-time. Found "
-        f"something wrong? [Email the session]({FEEDBACK_LINK}) - reference "
+        f"something wrong? [Email the session]({FEEDBACK_LINK}); reference "
         f"`{SESSION_REF}` is already in the subject line.",
         icon=":material/science:",
     )
@@ -918,11 +918,10 @@ st.markdown(hero_html(crest=logo_svg) + _LIFT_SKELETON, unsafe_allow_html=True)
 st.markdown("""
 <div class="showcase-row">
   <div class="showcase-section" id="grit-showcase" style="position:relative;">
-    <div class="showcase-eyebrow">The Innovation</div>
     <h2 class="showcase-title">The Grit Zone</h2>
     <div class="showcase-body">
       Fear &amp; Greed indices measure market mood. We measure something more
-      durable: whether an asset, once knocked down, actually gets back up,
+      durable: whether an asset, once knocked down, gets back up,
       consistently, across real crises.
     </div>
     <div class="pillar-row">
@@ -945,12 +944,10 @@ st.markdown("""
   </div>
   <div class="showcase-section" id="conviction">
     <div class="conv-core">
-      <div class="showcase-eyebrow">The Conviction</div>
       <h2 class="showcase-title" style="font-size:34px;">The hardest trade is the one history rewards</h2>
       <div class="showcase-body">
-        Panic in a crash is wiring, not weakness. This engine answers it with
-        evidence, not a slogan: the actual record of every named crisis it
-        stress-tests, computed live. Below is what a buyer earned on the scariest
+        Panic in a crash is hard-wired. This engine answers it with the actual
+        record of every named crisis it stress-tests, computed live. Below is what a buyer earned on the scariest
         day of each crisis, and at the worst-timed entry, the pre-crash peak.
       </div>
       <a href="#crisis-record" class="cta-btn on-dark" style="margin-top:22px;">
@@ -992,7 +989,7 @@ try:
         st.markdown(f"""<div class="slab"><div class="slab-label">Bought the scariest day</div>
         <div class="slab-num">{round(_t1["pct_positive"] * _t1["n"])} of {_t1["n"]}</div>
         <div class="slab-note">crises were positive one year after the trough
-        - median return <b>{_t1["median"]:+.0%}</b>.</div></div>""", unsafe_allow_html=True)
+        (median return <b>{_t1["median"]:+.0%}</b>).</div></div>""", unsafe_allow_html=True)
     with _sl2:
         st.markdown(f"""<div class="slab"><div class="slab-label">Three years on</div>
         <div class="slab-num">{_t3["median"]:+.0%}</div>
@@ -1002,19 +999,19 @@ try:
     with _sl3:
         st.markdown(f"""<div class="slab"><div class="slab-label">Worst possible timing</div>
         <div class="slab-num">{round(_p3["pct_positive"] * _p3["n"])} of {_p3["n"]}</div>
-        <div class="slab-note">crises: a buyer at the pre-crash <b>peak</b>
+        <div class="slab-note">crises: a buyer at the pre-crash peak
         was ahead three years later (median return {_p3["median"]:+.0%}).</div></div>""",
                     unsafe_allow_html=True)
     with _sl4:
         st.markdown(f"""<div class="slab"><div class="slab-label">The AI-capex race</div>
         <div class="slab-num">{_bwin} of {_nrace}</div>
         <div class="slab-note">crises where heavy compute investors reclaimed
-        their pre-crisis level <b>faster</b> than the S&amp;P 500.</div></div>""",
+        their pre-crisis level faster than the S&amp;P 500.</div></div>""",
                     unsafe_allow_html=True)
     st.caption(
         "Computed live from Yahoo Finance adjusted closes (S&P 500 via SPY; "
         "AI-capex basket disclosed in the Crisis Conviction tab). Historical "
-        "record, not a forecast - full tables, definitions, and honest limits "
+        "record, not a forecast. Full tables, definitions, and honest limits are "
         "in the tab below."
     )
     # This CTA used to sit at the end of the narrative block ABOVE - which put
@@ -1070,12 +1067,12 @@ with _gungnir_zone:
     with _dir_col:
         direction = st.radio(
             "Which side of the trade are you on?",
-            ["Bullish - long the book", "Bearish - short the book"],
+            ["Bullish: long the book", "Bearish: short the book"],
             horizontal=True, key="bv_direction",
             help="Bearish mode re-runs every tail metric, Monte Carlo path and "
                  "the defensive pairing on a synthetic daily-rebalanced short "
                  "of the same assets. Borrow fees, margin interest and buy-ins "
-                 "are NOT modeled - real short results are worse than shown.")
+                 "are NOT modeled, so real short results are worse than shown.")
 bearish = direction.startswith("Bearish")
 _bv_sk_a, _bv_sk_b = ("the short position", "the squeeze cushion") if bearish \
     else ("the high-flyer", "the steady cushion")
@@ -1116,7 +1113,7 @@ with _gungnir_zone:
         f'<text x="268" y="190" text-anchor="middle" font-family="Georgia" font-size="11.5" fill="#6B6459">{_bv_sk_a}</text>'
         f'</svg>'
         f'<div style="font-family:Georgia;font-size:12.5px;color:#5D574D;max-width:560px;margin:2px auto 0;">'
-        f'{"Shorting flips the sketch: block 01 is the position you are against, block 02 a correlated long that cushions the squeeze. Equal areas, equal risk share. Short losses can exceed 100%; borrow costs are not modeled." if bearish else "Block 01 is narrow and tall - little capital, high volatility. Block 02 is wide and short. Equal areas, so each name carries the same share of the risk."}'
+        f'{"Shorting flips the sketch: block 01 is the position you are against, block 02 a correlated long that cushions the squeeze. Equal areas, equal risk share. Short losses can exceed 100%; borrow costs are not modeled." if bearish else "Block 01 is narrow and tall: little capital, high volatility. Block 02 is wide and short. Equal areas, so each name carries the same share of the risk."}'
         f'</div>'
         f'<a href="#engine" class="cta-btn" style="margin-top:14px;">'
         f'To the engine<span class="cta-arrow" aria-hidden="true"><svg viewBox="0 0 16 30" fill="none" xmlns="http://www.w3.org/2000/svg"><path class="shaft" d="M8 1 V22" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path class="head" d="M2.5 16.5 L8 22.5 L13.5 16.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a>'
@@ -1163,7 +1160,7 @@ st.markdown(
     '<div class="orient-t">New here? Read this first</div>'
     '<ol class="orient-l">'
     '<li><b>Pick what you own.</b> Choose a starter basket below, or type any '
-    'ticker - the box takes any symbol Yahoo Finance carries.</li>'
+    'ticker; the box takes any symbol Yahoo Finance carries.</li>'
     '<li><b>Break it on purpose.</b> Replay a real crisis, or move the sliders, '
     'and watch the headline number move.</li>'
     '<li><b>Read one number.</b> The verdict answers a single question: in the '
@@ -1179,7 +1176,7 @@ st.markdown(
 # ---- The cockpit: controls fold into three numbered drawers so the verdict
 # leads the section. Widgets still execute when collapsed - zero logic change,
 # the reader just isn't bombarded with every dial at once. ----
-with st.expander("01 · Universe - which assets", expanded=False):
+with st.expander("01 · Universe: which assets", expanded=False):
     preset = st.selectbox("Preset basket", list(PRESETS.keys()), label_visibility="collapsed")
 
     # Keying the multiselect on the preset name makes it re-initialize with the
@@ -1214,7 +1211,7 @@ if _rejected:
     _notices.warning(
         "Ignored "
         + ", ".join(f"`{t[:24]}`" for t in _rejected)
-        + " - not a valid Yahoo Finance symbol. Symbols are letters, digits "
+        + ": not a valid Yahoo Finance symbol. Symbols are letters, digits "
           "and `. - = ^` only (e.g. `BRK-B`, `EURUSD=X`, `GC=F`, `^IRX`)."
     )
 if len(tickers) > MAX_UNIVERSE:
@@ -1225,7 +1222,7 @@ if len(tickers) > MAX_UNIVERSE:
     # so a caller that skips this check still cannot exceed the budget; this
     # branch exists so the cap is disclosed rather than silently applied.
     _notices.warning(
-        f"This engine analyzes up to **{MAX_UNIVERSE}** symbols at once - a "
+        f"This engine analyzes up to **{MAX_UNIVERSE}** symbols at once, a "
         "deliberate compute budget on a public, single-process deployment. "
         f"Using the first {MAX_UNIVERSE} alphabetically; dropped "
         + ", ".join(f"`{html.escape(t)}`" for t in tickers[MAX_UNIVERSE:])
@@ -1371,7 +1368,7 @@ def _freshness_ticker(fetched_at_iso: str, live: bool):
     dot = ('<span class="fresh-dot is-live" role="img" aria-label="Data is current"></span>' if live
            else '<span class="fresh-dot is-stale" role="img" aria-label="Data is stale"></span>')
     st.caption(f"{dot} Data pulled {ago} · re-pulled from Yahoo once older "
-               f"than {CACHE_MAX_AGE_HOURS:g}h, on your next interaction - not on a timer.",
+               f"than {CACHE_MAX_AGE_HOURS:g}h, on your next interaction, not on a timer.",
                unsafe_allow_html=True)
 
 
@@ -1415,7 +1412,7 @@ if len(prices) < MIN_ROWS and len(tickers) > 1:
                 "Excluded "
                 + ", ".join(f"`{html.escape(t)}` ({int(_coverage[t])} trading days)"
                             for t in _short)
-                + f" - each has less than the {MIN_ROWS} days of history this "
+                + f": each has less than the {MIN_ROWS} days of history this "
                 "engine needs, and aligning the basket to their history would "
                 "have cut every other name down with them. Analysing the "
                 f"remaining {len(_keep)}."
@@ -1427,7 +1424,7 @@ if len(prices) < MIN_ROWS and len(tickers) > 1:
 
 if len(prices) < MIN_ROWS:
     st.error(
-        f"This basket only has {len(prices)} trading days in common - too few "
+        f"This basket only has {len(prices)} trading days in common, too few "
         f"to estimate risk from (this engine needs {MIN_ROWS}). That usually "
         "means one member is newly listed, delisted, or trades on a different "
         "calendar. Remove the newest name and try again."
@@ -1444,7 +1441,7 @@ _flat = flat_columns(returns)
 if _flat:
     _notices.warning(
         "Excluded " + ", ".join(f"`{html.escape(t)}`" for t in _flat)
-        + " - its price did not move once in this window (cash and money-market "
+        + ": its price did not move once in this window (cash and money-market "
         "funds look like this), so it carries no measurable risk and has no "
         "correlation to estimate. The analysis runs on the remaining names."
     )
@@ -1458,7 +1455,7 @@ if len(loaded) < 2:
              + ". Check the spelling or try different tickers.")
     st.stop()
 if missing:
-    _notices.caption(f"Couldn't load: {', '.join(missing)} - skipped.")
+    _notices.caption(f"Couldn't load {', '.join(missing)}; skipped.")
 _audit("Data fetch", f"{len(loaded)} tickers loaded from {preset!r}: {', '.join(loaded)}"
       + (f" (missing: {', '.join(missing)})" if missing else ""))
 
@@ -1483,21 +1480,21 @@ else:
 
 # ---- Allocation + stress test: one control deck, side by side ----
 deck_alloc, deck_stress = st.columns(2, gap="medium")
-with deck_alloc, st.expander("02 · Allocation - how capital is weighted",
+with deck_alloc, st.expander("02 · Allocation: how capital is weighted",
                              expanded=False):
     COV_LABELS = {
-        "Ledoit-Wolf": "Ledoit-Wolf - steady (default)",
-        "Sample": "Sample - plain history",
-        "EWMA": "EWMA - reactive / panic lens",
+        "Ledoit-Wolf": "Ledoit-Wolf: steady (default)",
+        "Sample": "Sample: plain history",
+        "EWMA": "EWMA: reactive / panic lens",
     }
     cov_method = st.selectbox(
         "Covariance estimator", ["Ledoit-Wolf", "Sample", "EWMA"],
         format_func=lambda m: COV_LABELS[m],
-        help="How the risk matrix is built - it feeds risk parity, vol-targeting, "
+        help="How the risk matrix is built. It feeds risk parity, vol-targeting, "
              "and the Balance blend. Ledoit-Wolf (default) shrinks noisy history "
              "toward a stable target: steady, always invertible. Sample is plain "
              "history. EWMA (RiskMetrics λ=0.94) weights the last ~2 weeks heavily "
-             "and forgets the calm quarter - it flinches at a single bad day. It is "
+             "and forgets the calm quarter, so it flinches at a single bad day. It is "
              "the reactive lens the rest of this product argues against; reach for it "
              "to SEE the panic view, not as your default.")
     cov, cov_info = estimate_covariance(returns, cov_method)  # annualized risk matrix
@@ -1510,16 +1507,16 @@ with deck_alloc, st.expander("02 · Allocation - how capital is weighted",
             'style="color:#6A5030;font-weight:700;">!</span> '
             "<b>Reactive lens.</b> EWMA spikes on one bad day (≈11-day half-life; "
             "at λ=0.94 about 73% of its weight sits in the last month, and it "
-            "takes ~37 trading days to reach 90%). It embodies exactly the panic "
-            "[Crisis Conviction] argues against - shown for contrast, so you can see "
-            "how twitchy risk looks, not because the engine recommends reacting.</div>",
+            "takes ~37 trading days to reach 90%). It is the panic [Crisis Conviction] "
+            "argues against, shown for contrast so you can see how twitchy risk "
+            "looks; the engine does not recommend reacting to it.</div>",
             unsafe_allow_html=True,
         )
     acol1, acol2 = st.columns(2)
     method = acol1.radio(
         "Weighting", ["Equal weight", "Risk parity"], label_visibility="collapsed",
         help="Risk parity equalizes each asset's RISK contribution, so no single "
-             "name dominates - the Bridgewater All-Weather idea.")
+             "name dominates (the Bridgewater All-Weather idea).")
     use_vt = acol2.checkbox(
         "Target volatility", help="Scale exposure to hold a constant annual vol "
         "(AQR managed-vol style). Leverage < 1 de-risks; > 1 levers up.")
@@ -1553,12 +1550,12 @@ if bearish:
 alloc_art = "an" if alloc_label[0] in "aeiou" else "a"  # "an equal-weight" / "a short ..."
 lev_txt = f", levered {leverage:.2f}×" if use_vt else ""
 
-with deck_stress, st.expander("03 · Stress test - shock or replay a crisis",
+with deck_stress, st.expander("03 · Stress test: shock or replay a crisis",
                               expanded=False):
     engine = st.radio(
         "Return model", ["Bootstrap (empirical)", "Jump-diffusion (Merton)"],
         horizontal=True,
-        help="Bootstrap resamples real historical days - it can only replay tails "
+        help="Bootstrap resamples real historical days, so it can only replay tails "
              "it has already seen. Jump-diffusion (Merton 1976) adds Poisson jumps "
              "on top of Gaussian diffusion, so a simulated day can fall further "
              "than any day in the sample. Switch between the two to compare "
@@ -1566,8 +1563,8 @@ with deck_stress, st.expander("03 · Stress test - shock or replay a crisis",
     mode = st.selectbox(
         "Scenario", ["Custom shock (sliders)"] + list(HISTORICAL_REGIMES.keys()),
         help="Custom: set your own drawdown and volatility shock. Or replay the "
-             "ACTUAL daily returns of a real crisis - real correlations, real "
-             "volatility, real path, not an approximation.")
+             "ACTUAL daily returns of a real crisis: real correlations, real "
+             "volatility, real path.")
     if mode == "Custom shock (sliders)":
         col1, col2 = st.columns(2)
         drawdown_shock = col1.slider(
@@ -1658,8 +1655,8 @@ if bearish:
 _worst_day = float((shocked_returns.to_numpy() @ np.asarray(sim_weights, dtype=float)).min())
 if _worst_day <= -1:
     st.warning(
-        f"At these settings one day of this book loses {-_worst_day:.0%} - more than "
-        "everything it holds - so there is no year to simulate past it. Lower the "
+        f"At these settings one day of this book loses {-_worst_day:.0%}, more than "
+        "everything it holds, so there is no year to simulate past it. Lower the "
         "volatility shock or the target volatility.")
     st.stop()
 mc = run_monte_carlo(shocked_returns, np.asarray(sim_weights, dtype=float), use_jd)
@@ -1689,8 +1686,8 @@ except Exception:  # noqa: BLE001 - headline must still render if volume feed is
 # this book rallied through, or a short book replaying a crash - and "loses an
 # average of -57.6%" (found by the recruiter walkthrough) contradicts itself.
 _tail = (f"loses an average of <b>{mc['cvar']:.1%}</b>" if mc["cvar"] > 0 else
-         f"still ends up an average of <b>{-mc['cvar']:+.1%}</b> - this window gives "
-         f"the book no tail loss to measure")
+         f"still ends up an average of <b>{-mc['cvar']:+.1%}</b> (this window gives "
+         f"the book no tail loss to measure)")
 if scenario_label:
     # Jump-diffusion replays nothing: it fits a model to the window. Either
     # way the N-day window becomes a year, and the sentence says so.
@@ -1709,7 +1706,7 @@ if scenario_label:
         # widening the regex later.
         verdict += (" *(Excludes "
                     + ", ".join(html.escape(t) for t in excluded)
-                    + " - not trading for the whole period, or priced at or below zero in it.)*")
+                    + ": not trading for the whole period, or priced at or below zero in it.)*")
 else:
     verdict = (
         f"In the worst 5% of simulated years, {alloc_art} {alloc_label} portfolio of these "
@@ -1721,7 +1718,7 @@ if bearish:
     verdict += (
         " <span style='font-size:12px;color:#6A512E;'>Synthetic daily-"
         "rebalanced short: borrow fees, margin interest and buy-ins are not "
-        "modeled - real short results are worse. Short losses can exceed "
+        "modeled, so real short results are worse. Short losses can exceed "
         "100% of capital.</span>"
     )
 
@@ -1801,12 +1798,11 @@ with v_col:
     with st.expander("How to read the cone"):
         st.markdown(
             '<div class="read-me">'
-            '<b>How to read the cone.</b> Time runs left to right - one year of '
-            'trading days. The dark centreline is the <b>middle outcome</b>: half '
-            'the simulations landed above it, half below. The dark inner cone holds '
-            'the <b>middle 50%</b> of outcomes; the pale outer cone holds <b>90%</b>. '
-            'It widens because uncertainty compounds. Its <b>bottom edge is the '
-            'frontier of the worst 5%</b>; the CVaR headline is the average loss '
+            'Time runs left to right across one year of trading days. The dark '
+            'centreline is the middle outcome: half the simulations landed above '
+            'it, half below. The dark inner cone holds the middle 50% of outcomes; '
+            'the pale outer cone holds 90%. It widens because uncertainty '
+            'compounds. Its bottom edge is the frontier of the worst 5%; the CVaR headline is the average loss '
             'beyond that edge, so the CVaR number sits deeper than the cone shows. '
             'Change any setting and watch the cone breathe.'
             '</div>', unsafe_allow_html=True)
@@ -1820,11 +1816,11 @@ with f_col:
                   else f"resampled in blocks averaging {mc['block_days']} days"
                   if mc.get("block_days", 1) > 1
                   else "resampled day by day (window too short for blocks)")
-               + " - a simulated estimate, not an exact truth)."
+               + "; a simulated estimate, not an exact truth)."
                if np.isfinite(mc.get("cvar_se", float("nan"))) else "")
     st.caption(
         "Each simulated path compounds a year of daily returns. Hypothetical "
-        "distribution, not a forecast - the curves interpolate between real "
+        "distribution, not a forecast. The curves interpolate between real "
         "computed percentiles." + _se_txt
     )
 
@@ -1840,7 +1836,7 @@ def eigen_factor_panel(cov, weights, returns) -> None:
     kappa = fac["condition_number"]
 
     e1, e2, e3 = st.columns(3)
-    e1.metric("PC1 - variance explained", f"{pc1_pct:.0f}%",
+    e1.metric("PC1: variance explained", f"{pc1_pct:.0f}%",
               help="Share of total universe VARIANCE carried by the single "
                    "dominant statistical factor. Read it as where the risk "
                    "sits, not as proof that everything moves together: this "
@@ -1851,30 +1847,30 @@ def eigen_factor_panel(cov, weights, returns) -> None:
                    "together'.")
     e2.metric("Your book riding PC1", f"{port_pc1:.0%}",
               help="Share of THIS portfolio's variance on that dominant "
-                   "factor - the macro vs idiosyncratic split.")
+                   "factor: the macro vs idiosyncratic split.")
     e3.metric("Condition number κ", f"{kappa:,.0f}" if np.isfinite(kappa)
               else "∞ (singular)",
-              help="λmax/λmin - numerical stability of the risk matrix "
+              help="λmax/λmin, the numerical stability of the risk matrix "
                    "before any inversion. Fragile above ~1e8.")
 
     # Plain-English translation so a non-quant meets a sentence, not κ.
     st.markdown(
-        f"**In plain terms:** one market wave drives about **{pc1_pct:.0f}%** of "
+        f"In plain terms, one market wave drives about **{pc1_pct:.0f}%** of "
         f"this universe's day-to-day swings, and **{port_pc1:.0%}** of *your* "
         "book's risk rides that single wave. The higher that climbs, the less "
-        "your diversification is actually real - in a crash it heads toward 100%.")
+        "real your diversification is; in a crash it heads toward 100%.")
 
     read_me(
         "<b>The rubber sheet.</b> Stretch a rubber sheet and most directions "
-        "bend - but a few stretch <i>straight</i>. Those unbending directions "
+        "bend, but a few stretch <i>straight</i>. Those unbending directions "
         "are the <b>eigenvectors</b>: the market's pure risk pathways. How "
-        "hard each is stretched is its <b>eigenvalue</b> - the variance that "
+        "hard each is stretched is its <b>eigenvalue</b>: the variance that "
         "factor carries. The decomposition untangles the correlation web into "
         "independent (orthogonal) factors, ranked by strength. Honest limit: "
-        "these factors are <i>statistical and unlabeled</i> - PC1 with "
+        "these factors are <i>statistical and unlabeled</i>. PC1 with "
         "all-positive loadings reads as the market wave, but naming later "
         "factors is interpretation, not math. In a crisis, PC1's share spikes "
-        "toward 100% - the diversification illusion collapsing into one bet.")
+        "toward 100% as the diversification illusion collapses into one bet.")
 
     # Scree chart: variance explained per factor + Marcenko-Pastur noise line
     lam = fac["eigenvalues"]
@@ -1904,13 +1900,13 @@ def eigen_factor_panel(cov, weights, returns) -> None:
         f"Factors above the dotted line carry more variance than pure noise "
         f"would produce at this sample size (N={len(lam)}, T={mp_t:.0f}"
         f"{' effective days under EWMA' if cov_method == 'EWMA' else ''}). "
-        "Heuristic reference at this universe size, not a hard test - the "
+        "Heuristic reference at this universe size, not a hard test; the "
         "Ledoit-Wolf estimator is the production defense against inversion "
         "noise. Flip the covariance estimator to EWMA in 02 · Allocation to "
         "see the CURRENT regime's factor structure instead of the "
         f"average over {len(returns)} daily returns.")
 
-    with st.expander("Factor loadings - how each name anchors onto each factor"):
+    with st.expander("Factor loadings: how each name anchors onto each factor"):
         ld = fac["loadings"]
         lmax = float(np.abs(ld.values).max()) or 1.0
         lfig = go.Figure(go.Heatmap(
@@ -1931,7 +1927,7 @@ def eigen_factor_panel(cov, weights, returns) -> None:
             "deterministic (largest loading forced positive) so a factor "
             "hedge can never silently invert between runs. Neutralizing PC1 "
             "with an index overlay removes the dominant systematic wave "
-            "without selling a single position - that is the eigen-hedge "
+            "without selling a single position. That is the eigen-hedge "
             "lens, shown here as exposure, not an execution engine.")
 
 
@@ -1952,8 +1948,7 @@ _book_size = _bk1.number_input(
     "Book size ($)", min_value=10_000, max_value=5_000_000_000,
     value=1_000_000, step=100_000, key="book_size",
     help="The parameter the whole section turns on. Raise it and names drop "
-         "out - not because they got worse, but because you can no longer "
-         "leave them.")
+         "out because you can no longer leave them.")
 _book_part = _bk2.slider(
     "Max daily participation (% of volume)", 5, 50,
     round(DEFAULT_PARTICIPATION * 100), step=5, key="book_part",
@@ -1966,20 +1961,20 @@ _book_part = _bk2.slider(
 _bk_box = st.container()
 _bk_head = _bk_box.empty()
 _bk_lead = _bk_box.container()
-_bk_more = _bk_box.expander("The other names, line by line - and two finer settings")
+_bk_more = _bk_box.expander("The other names, line by line, and two finer settings")
 _bk3, _bk4 = _bk_more.columns(2)
 _bk_floor = _bk3.toggle(
     "Flyers must be in the grittiest half", value=False, key="book_floor",
     help="Off: a recovery record only has to EXIST, and momentum does the "
          "ranking. On: a leader must also rank in the grittiest half. Both "
-         "readings of 'grittiest high-flyer' are defensible - this shows the "
-         "difference rather than deciding it for you.")
+         "readings of 'grittiest high-flyer' are defensible; this shows the "
+         "difference and leaves the choice to you.")
 _bk_fb = _bk4.toggle(
     "Allow a defensive anchor from outside the universe", value=True,
     key="book_fallback",
     help="A basket of mega-caps contains nothing that thins a tail. When "
          "nothing inside your universe cushions, this lets the engine reach "
-         "for TLT/GLD/XLP/XLU/USMV - and say on screen that it did.")
+         "for TLT/GLD/XLP/XLU/USMV and say on screen that it did.")
 
 # One slot, whatever the basket: The Book writes one card per name, and
 # Streamlit keys elements by position, so a card count that changed with the
@@ -2017,7 +2012,7 @@ with _bk_more:
 
         _bk_head.markdown(
             f'<div style="background:#F1EDE5;border:1px solid #C4BDAE;'
-            f'border-top:2px solid #9A7B4F;border-radius:12px;padding:18px 22px;'
+            f'border-top:2px solid #9A7B4F;border-radius:0;padding:18px 22px;'
             f'margin:6px 0 18px;font-family:Georgia,serif;font-size:17px;'
             f'color:#3F3B35;line-height:1.5;">{headline(_the_book)}</div>',
             unsafe_allow_html=True)
@@ -2051,7 +2046,7 @@ with _bk_more:
             # leaders and anchors stay on the page; the rest is in the drawer
             (_bk_lead if _d.role in (Role.FLYER, Role.CUSHION) else st).markdown(
                 f'<div style="display:flex;gap:14px;align-items:flex-start;'
-                f'background:{_bg};border-left:3px solid {_col};border-radius:8px;'
+                f'background:{_bg};border-left:2px solid {_col};border-radius:0;'
                 f'padding:12px 16px;margin-bottom:8px;">'
                 f'<div style="flex:0 0 86px;font-family:Helvetica Neue,sans-serif;'
                 f'font-size:9.5px;letter-spacing:.16em;color:#6A5030;'
@@ -2063,13 +2058,13 @@ with _bk_more:
 
         read_me(
             "<b>Read it top to bottom.</b> Every line is a slot-filled template "
-            "over measured numbers - the renderer is handed the dossier and no "
+            "over measured numbers: the renderer is handed the dossier and no "
             "price data, so it cannot say anything the engine did not compute. "
             "<b>NO ROLE</b> names are still held, at the size risk parity and "
             "liquidity give them, just without a lead or anchor role; "
             "<b>LEFT OUT</b> names hold nothing. "
-            "Change the book size and watch names leave: that is the liquidity "
-            "constraint doing real work, not a caption about it.")
+            "Change the book size and watch names leave as the liquidity "
+            "constraint binds.")
     except Exception as _bk_exc:  # noqa: BLE001 - the page must never die on data
         # safe_err, not str(exc): the message can carry a server path (see safe_err).
         _bk_head.info(
@@ -2077,7 +2072,7 @@ with _bk_more:
             f"({safe_err('the-book', _bk_exc)}). No placeholder book is shown.")
 
 st.markdown('<div id="analysis"></div>', unsafe_allow_html=True)
-panel_head("Risk & conviction", "The analysis - where the risk lives")
+panel_head("Risk & conviction", "The analysis: where the risk lives")
 (tab_3d, tab_breakdown, tab_liquidity, tab_watch, tab_balance, tab_grit,
  tab_conviction) = st.tabs([
     "Risk Topology", "Risk Breakdown", "Liquidity", "Correlation Watch",
@@ -2087,7 +2082,7 @@ panel_head("Risk & conviction", "The analysis - where the risk lives")
 # Atlas, Security Master) asked no question a visitor has to decide on, and it
 # stood open by default. What remains here is the provenance a reader can
 # audit - folded, one click away, never in the way.
-with st.expander("Where the numbers come from - data checks and audit trail"):
+with st.expander("Where the numbers come from: data checks and audit trail"):
     tab_dq, tab_lineage = st.tabs(["Data Quality", "Lineage & Audit"])
 
 with tab_watch:
@@ -2110,11 +2105,11 @@ with tab_watch:
                           "but is noisier.")
     thresh = wc4.slider("Concentration threshold", 0.50, 0.95, 0.75, step=0.05,
                         key="watch_t",
-                        help="Above this, the pair is close to one bet - "
+                        help="Above this, the pair is close to one bet and "
                              "diversification between them is thinning.")
 
     if pick_a == pick_b:
-        st.warning("Pick two different assets - a name is always +1.00 "
+        st.warning("Pick two different assets: a name is always +1.00 "
                    "correlated with itself.")
     else:
         roll = rolling_correlation(returns, pick_a, pick_b, window=win).dropna()
@@ -2133,12 +2128,12 @@ with tab_watch:
         # 60 prices leave 59 returns while the slider reaches 63: an empty
         # rolling series used to read as "Stable ... at +nan".
         if not len(roll) or not np.isfinite(latest):
-            st.info(f"Not enough history for a {win}-day window - shorten the "
+            st.info(f"Not enough history for a {win}-day window. Shorten the "
                     "rolling window to get a reading.")
         elif latest > thresh:
             st.warning(f"**Concentration reading:** {pick_a} and {pick_b} are "
                      f"moving at {latest:+.2f} over the last {win} trading "
-                     f"days - above your {thresh:.2f} threshold. Right now "
+                     f"days, above your {thresh:.2f} threshold. Right now "
                      "they are closer to one bet than two.")
         else:
             st.success(f"**Stable:** {pick_a} × {pick_b} at {latest:+.2f} over "
@@ -2162,15 +2157,15 @@ with tab_watch:
         st.plotly_chart(wfig, width="stretch", config=PLOTLY_CFG)
 
         read_me(
-            "<b>Covariance vs correlation - same sign, different units.</b> "
+            "<b>Covariance vs correlation: same sign, different units.</b> "
             "Both tell you the <i>direction</i> two assets move together. "
             "Covariance is in squared-return units, so its size is unreadable "
-            "alone; correlation is covariance divided by both volatilities - "
-            "co-movement per unit of risk, locked to −1…+1. The engine "
+            "alone; correlation is covariance divided by both volatilities, "
+            "giving co-movement per unit of risk, locked to −1…+1. The engine "
             "computes it by the matrix identity R = D⁻¹ΣD⁻¹. And it is not a "
             "constant: this line is the relationship <i>moving</i>. Pairs "
-            "that average +0.4 can run above +0.9 inside a stress regime - "
-            "which is exactly when you need them not to.")
+            "that average +0.4 can run above +0.9 inside a stress regime, "
+            "exactly when you need them not to.")
 
         # --- Defensive simulation: measured, not promised ---
         others = [t for t in loaded if t not in (pick_a, pick_b)]
@@ -2206,7 +2201,7 @@ with tab_watch:
             st.caption(
                 f"Measured through the same engine: the shift **{verdict_shift}** "
                 f"tail risk on this history. {dest} was chosen as the name "
-                f"least correlated to the pair - but its own average "
+                f"least correlated to the pair, but its own average "
                 f"correlation to them is **{dest_corr:+.2f}**, not zero: "
                 "inside one equity universe there is no truly independent "
                 "asset, only less-dependent ones. Simulation on historical "
@@ -2214,7 +2209,7 @@ with tab_watch:
                 "crashes, so measured diversification is a fair-weather "
                 "number.")
         elif latest > thresh:
-            st.caption("No third asset in this universe to shift into - "
+            st.caption("No third asset in this universe to shift into: "
                        "a two-asset book has nowhere defensive to go.")
 
 with tab_3d:
@@ -2235,7 +2230,7 @@ with tab_3d:
             st.iframe(war_room_html(_wr_payload), width="stretch", height=820)
         st.caption(
             "The Monte Carlo as a strategy map. The grid is (beta, realized "
-            "vol) - beta is how far the book moves when the market moves one "
+            "vol). Beta is how far the book moves when the market moves one "
             "point, so 1.0 tracks the market, above 1.0 swings harder; "
             "realized vol is how much it has actually been moving. The lit "
             "terrain holds 68% of simulated 30-day end-states, "
@@ -2248,7 +2243,7 @@ with tab_3d:
         st.info(
             "Risk Topology needs live market history to calibrate "
             f"({safe_err('risk-topology', _wr_exc)}). No demo numbers are "
-            "shown in the product - reload when data is available."
+            "shown in the product; reload when data is available."
         )
 
 with tab_breakdown:
@@ -2284,7 +2279,7 @@ with tab_breakdown:
     top = rc["risk_pct"].idxmax()
     st.caption(
         f"Share of total portfolio volatility per asset. {top} contributes the most "
-        f"risk ({rc.loc[top, 'risk_pct']:.0%}). Equal dollar weight ≠ equal risk - "
+        f"risk ({rc.loc[top, 'risk_pct']:.0%}). Equal dollar weight ≠ equal risk; "
         "switch Allocation to Risk parity to flatten these bars."
         + (f" Both bars are shares of the book itself; the {leverage:.2f}× "
            "vol-target overlay scales the whole book and does not change this "
@@ -2306,7 +2301,7 @@ with tab_breakdown:
     s2.metric("Annualized return", f"{ann_ret:+.1%}")
     s3.metric("Annualized volatility", f"{ann_vol:.1%}")
     rf_txt = (f"{rf:.2%} (13-week T-bill, ^IRX)" if rf is not None
-              else "unavailable - Sharpe computed against 0%")
+              else "unavailable, so Sharpe is computed against 0%")
     st.caption(
         f"Sharpe = (annualized return − risk-free) / annualized volatility, on "
         f"the real (unshocked) "
@@ -2323,12 +2318,12 @@ with tab_breakdown:
     read_me(
         "Each cell is how tightly two names move together: <b>bronze = lockstep "
         "(+1)</b>, <b>beige = independent (0)</b>, <b>charcoal = seesaw (−1)</b>. "
-        "A book full of deep bronze has little real diversification - everything "
+        "A book full of deep bronze has little real diversification: everything "
         "falls at once; charcoal cells are the offsets. The empty upper half is "
         "the same data mirrored, masked so the eye reads each pair once. "
         "Names are ordered by a correlation tree, so the ones that move "
         "together sit next to each other and each group reads as one block. "
-        "Sample: the returns AFTER the stress-test choice above - under a "
+        "Sample: the returns AFTER the stress-test choice above. Under a "
         "crisis replay this matrix is that crisis window, not the "
         f"{len(returns)} daily returns the Correlation Watch tab averages.")
     corr = correlation_matrix(shocked_returns)
@@ -2384,9 +2379,9 @@ with tab_breakdown:
     #     click so a cold viewer meets the intuitive charts (returns, risk
     #     contribution, correlation) first, and the model-validation depth
     #     second - "lead with one number", don't wall them with seven charts. ---
-    with st.expander("Deep dive - model validation & factor structure"):
+    with st.expander("Model validation & factor structure"):
         # --- VaR methods + backtest (validates the model, not just reports it) ---
-        panel_head("Value at Risk - methods & backtest", "The daily loss line, and whether it holds up")
+        panel_head("Value at Risk: methods & backtest", "The daily loss line, and whether it holds up")
         hist_var = var(port_returns)
         bt = var_backtest(port_returns)
         _chr = bt.get("christoffersen", {})
@@ -2402,23 +2397,23 @@ with tab_breakdown:
         v4.metric("Breach timing", _clump,
                   help="Kupiec counts breaches; this asks whether they arrived "
                        "independently or bunched together. Breaches that cluster "
-                       "mean the model holds in calm markets and fails in stress - "
+                       "mean the model holds in calm markets and fails in stress, "
                        "exactly when the number matters. 'n/a' means too few "
-                       "breaches to estimate it, not a pass.")
+                       "breaches to estimate it; it is not a pass.")
         verdict_word = ("passes" if bt["passed"] else
                         "fails" if bt["passed"] is False else "cannot be computed for")
         _kupiec_clause = (
             f"the model's breach rate of {bt['observed_rate']:.1%} is "
             "statistically consistent with the 5% it claims" if bt["passed"]
             else f"the model's breach rate of {bt['observed_rate']:.1%} is "
-                 "statistically INCONSISTENT with the 5% it claims - the VaR "
+                 "statistically INCONSISTENT with the 5% it claims: the VaR "
                  "model misstates its own tail on this sample")
         # Christoffersen. Reported separately because it answers a different
         # question, and because "n/a" must never read as a pass.
         if _chr.get("lr_ind") is None:
             _cc_clause = (
                 f"**Breach timing:** only {bt['breaches']} breach(es) in "
-                f"{bt['n']} days - too few consecutive-day transitions to "
+                f"{bt['n']} days, too few consecutive-day transitions to "
                 "estimate P(breach | breach yesterday), so the Christoffersen "
                 "independence test is not defined here. Not a pass: undefined."
             )
@@ -2427,7 +2422,7 @@ with tab_breakdown:
             _cc_word = "passes" if _chr["passed_cc"] else "fails"
             _cc_clause = (
                 f"**Breach timing (Christoffersen 1998):** breaches look "
-                f"{_ind_word} - P(breach | breach yesterday) = "
+                f"{_ind_word}: P(breach | breach yesterday) = "
                 f"{_chr['pi11']:.1%} vs {_chr['pi01']:.1%} otherwise; "
                 f"LR_ind = {_chr['lr_ind']} against a 3.84 critical value "
                 f"(p = {_chr['p_ind']:.3f}). Combined conditional coverage "
@@ -2435,7 +2430,7 @@ with tab_breakdown:
                 f"against 5.99 on 2 dof (p = {_chr['p_cc']:.3f}). "
                 + ("Count and timing both hold up."
                    if _chr["passed_cc"] else
-                   "A model can pass on count and still fail here - clustered "
+                   "A model can pass on count and still fail here: clustered "
                    "breaches mean it works in calm markets and breaks in stress.")
             )
         if not bt["testable"]:
@@ -2460,13 +2455,13 @@ with tab_breakdown:
                 f"LR = {bt['kupiec_lr']}, 95% critical = 3.84): "
                 f"{_kupiec_clause}. Walk-forward: each day's VaR is estimated "
                 f"from the {bt['window']} trading days strictly before it, then "
-                f"tested against that day's actual return - {bt['n']} "
+                f"tested against that day's actual return, across {bt['n']} "
                 "out-of-sample days."
             )
             st.caption(_cc_clause)
 
         # --- Tail shape (EVT) - the question CVaR cannot answer -------------
-        panel_head("Tail shape - how bad can it get",
+        panel_head("Tail shape: how bad can it get",
                    "What the average of the tail still doesn't tell you")
         try:
             _tf, _tf_days, _tf_dropped, _tf_years = load_tail_fit(
@@ -2489,7 +2484,7 @@ with tab_breakdown:
                       "None exists" if _xi >= 0 else f"{_tf['finite_endpoint_return']:.1%}",
                       help="A finite maximum loss exists only if ξ<0. For "
                            "equities ξ is essentially always >0, so the honest "
-                           "answer is that no finite worst case exists - the "
+                           "answer is that no finite worst case exists. The "
                            "only hard floor is -100% from limited liability.")
             _es999 = _tf["conditional"].get(0.999, {}).get("es")
             t3.metric("ES 99.9% tomorrow",
@@ -2498,12 +2493,12 @@ with tab_breakdown:
                            "fitted residual tail rescaled by the current "
                            "volatility forecast. It moves with the market's "
                            "state, unlike a static full-sample number. "
-                           "'undefined' means ξ≥1 - the mean itself does not "
+                           "'undefined' means ξ≥1: the mean itself does not "
                            "exist, so no ES can.")
 
             _ci_txt = ("" if _ci is None else
                        f" (95% bootstrap interval {_ci[0]:+.2f} to {_ci[1]:+.2f})")
-            _shape = ("**no finite worst case exists** - the tail decays "
+            _shape = ("no finite worst case exists. The tail decays "
                       "polynomially, so there is no loss level the model rules "
                       "out. The only hard floor is -100%."
                       if _xi >= 0 else
@@ -2519,7 +2514,7 @@ with tab_breakdown:
                 f"({_tf['threshold_return']:.2%} of the book at today's volatility; "
                 f"{_tf['threshold_z']:.2f} in standardised units), drawn from "
                 f"{_tf_days} daily returns "
-                f"(~{_tf_years:.1f} years - the {len(returns)} daily returns used elsewhere leave too few "
+                f"(~{_tf_years:.1f} years; the {len(returns)} daily returns used elsewhere leave too few "
                 f"exceedances to fit honestly). **ξ = {_xi:+.2f}**{_ci_txt}: {_shape}"
                 + (f" At this ξ the {', '.join(_broken)} of the loss "
                    f"distribution {'is' if len(_broken) == 1 else 'are'} "
@@ -2536,16 +2531,16 @@ with tab_breakdown:
                 st.caption(
                     f"**Conditional EVT (McNeil-Frey 2000).** Peaks-over-threshold "
                     f"assumes exceedances are independent, and the Christoffersen "
-                    f"test above is there to check exactly that - so the GPD here "
-                    f"is fitted to **volatility-standardised residuals**, not raw "
+                    f"test above is there to check exactly that, so the GPD here "
+                    f"is fitted to volatility-standardised residuals, not raw "
                     f"returns. Fitting the raw series instead gives ξ = {_uxi:+.2f} "
                     f"against {_xi:+.2f} filtered, a gap of {_gap:+.2f}: that "
                     f"difference is volatility clustering masquerading as a fatter "
                     f"tail, and it is what an unconditional fit would have "
                     f"reported as danger. Volatility is filtered with EWMA "
                     f"(λ={_tf.get('lam', 0.94)}, the RiskMetrics daily decay), "
-                    f"which is IGARCH(1,1) with λ fixed - so **no volatility "
-                    f"parameter is fitted to this sample** and the filter cannot "
+                    f"which is IGARCH(1,1) with λ fixed, so no volatility "
+                    f"parameter is fitted to this sample and the filter cannot "
                     f"overfit it. The paper specifies AR(1)-GARCH(1,1); this is "
                     f"the deliberate simplification. Tomorrow's numbers rescale "
                     f"the residual tail by the current volatility forecast "
@@ -2554,7 +2549,7 @@ with tab_breakdown:
             st.caption(
                 "Honest limits: ξ is estimated by maximum likelihood on "
                 "exceedances over a 95% threshold, which is known to sit a "
-                "little BELOW the asymptotic value - so read the gap between "
+                "little BELOW the asymptotic value, so read the gap between "
                 "the two fits, which is robust, rather than either level as "
                 "exact. The interval is a percentile bootstrap over "
                 "exceedances: it captures estimation noise, not the risk of "
@@ -2566,7 +2561,7 @@ with tab_breakdown:
             st.caption(
                 f"No tail fit: {_tf['reason']}. Extreme Value Theory needs "
                 "enough observations above the threshold before it says "
-                "anything - reporting a shape from fewer would be a guess "
+                "anything; reporting a shape from fewer would be a guess "
                 "wearing a parameter's name."
             )
 
@@ -2589,7 +2584,7 @@ with tab_breakdown:
 
         # --- Statistical risk factors (eigendecomposition / PCA) ---
         panel_head("Statistical risk factors",
-                   "Eigendecomposition - how many independent bets is this book?")
+                   "Eigendecomposition: how many independent bets is this book?")
         try:
             eigen_factor_panel(cov, weights, returns)
         except Exception as exc:  # noqa: BLE001 - degrade like the panel above
@@ -2611,7 +2606,7 @@ with tab_balance:
     st.caption(
         "Pick a name you hold; the engine ranks every other name in your universe "
         "by how it moves against it. A negatively-correlated partner offsets part "
-        "of the anchor's swings - diversification computed from real covariance, "
+        "of the anchor's swings; the diversification is computed from real covariance, "
         "not a story about the future."
     )
     if len(loaded) < 2:
@@ -2656,12 +2651,12 @@ with tab_balance:
             hedge_fig.update_layout(xaxis_title="correlation with " + anchor)
             st.plotly_chart(hedge_fig, width="stretch", config=PLOTLY_CFG)
             st.markdown(
-                '<div class="read-me"><b>Green</b> = moves <b>against</b> the anchor '
-                '(correlation below −0.2) - a true offset. <b>Bronze</b> = roughly '
-                '<b>independent</b> (±0.2): it diversifies but does not cancel the '
-                "anchor's moves. <b>Red</b> = moves <b>with</b> it - no protection. "
+                '<div class="read-me"><b>Green</b> = moves against the anchor '
+                '(correlation below −0.2), a true offset. <b>Bronze</b> = roughly '
+                'independent (±0.2): it diversifies but does not cancel the '
+                "anchor's moves. <b>Red</b> = moves with it, no protection. "
                 'In a single-sector basket (all tech, say) you often find no green at '
-                'all - everything rises and falls together.</div>',
+                'all, because everything rises and falls together.</div>',
                 unsafe_allow_html=True)
 
             best = ranked.index[0]
@@ -2669,18 +2664,18 @@ with tab_balance:
             pair = min_variance_pair(cov, anchor, best)
             # Honest verdict: is this actually a hedge, or just the least-bad?
             if best_corr < HEDGE:
-                kind = (f"**{best}** genuinely moves against {anchor} "
-                        f"(correlation {best_corr:+.2f}) - a real hedge.")
+                kind = (f"**{best}** moves against {anchor} "
+                        f"(correlation {best_corr:+.2f}), a real hedge.")
             elif best_corr <= INDEP:
                 kind = (f"No true hedge in this universe: **{best}** is the most "
-                        f"**independent** name (correlation {best_corr:+.2f}), not a "
-                        f"mirror. Blending it *diversifies* {anchor} - it does not "
+                        f"independent name (correlation {best_corr:+.2f}), not a "
+                        f"mirror. Blending it diversifies {anchor} but does not "
                         f"offset it. A genuine hedge would need an asset from outside "
                         f"this basket (bonds, gold, cash).")
             else:
-                kind = (f"Everything here moves **together**: even the least-correlated "
+                kind = (f"Everything here moves together: even the least-correlated "
                         f"name (**{best}**, {best_corr:+.2f}) still rises and falls with "
-                        f"{anchor}. This basket cannot hedge itself - a real offset "
+                        f"{anchor}. This basket cannot hedge itself; a real offset "
                         f"needs an asset from a different sector or asset class.")
 
             panel_head("The balanced pair",
@@ -2693,21 +2688,21 @@ with tab_balance:
                 f"{kind} Blending **{pair['w_anchor']:.0%} {anchor}** with "
                 f"**{pair['w_hedge']:.0%} {best}** takes the pair's annual volatility "
                 f"from **{pair['anchor_vol']:.1%}** ({anchor} alone) down to "
-                f"**{pair['blended_vol']:.1%}** - a {pair['vol_reduction']:.0%} "
-                "reduction, from diversification. Long-only minimum-variance weights, "
+                f"**{pair['blended_vol']:.1%}**, a {pair['vol_reduction']:.0%} "
+                "reduction from diversification. Long-only minimum-variance weights, "
                 f"on the {cov_method} risk matrix (02 · Allocation)."
             )
             # Caveat kept one click away but signposted in the title, so the
             # honesty is never buried - just not competing with the number.
-            with st.expander("The honest limit - what this does NOT do"):
+            with st.expander("The honest limit: what this does NOT do"):
                 st.markdown(
-                    '<div class="read-me"><b>The honest limit - read this.</b> '
-                    'Correlations are historical and <b>unstable</b>. In a real crash '
+                    '<div class="read-me">'
+                    'Correlations are historical and unstable. In a real crash '
                     'they converge toward +1: almost everything falls together, and a '
                     'hedge that worked in calm markets fades exactly when you need it '
-                    'most. This tab lowers <b>ordinary</b> volatility; it does not make a '
-                    'portfolio crisis-proof. It is the counterweight to Crisis Conviction '
-                    '- hold your nerve, and structure so being wrong costs less.</div>',
+                    'most. This tab lowers ordinary volatility; it does not make a '
+                    'portfolio crisis-proof. It is the counterweight to Crisis Conviction: '
+                    'hold your nerve, and structure so being wrong costs less.</div>',
                     unsafe_allow_html=True)
 
             # ---- BON VOYAGE: long-only defensive pairing ----------------
@@ -2742,7 +2737,7 @@ with tab_balance:
                 bv_rets = returns
             vols = returns.std() * np.sqrt(TRADING_DAYS)
             flyer = st.selectbox(
-                "High-flyer (Circle 1 - the volatile conviction position)",
+                "High-flyer (Circle 1: the volatile conviction position)",
                 loaded, index=loaded.index(vols.idxmax()),
                 help="Defaults to the most volatile name in your universe.")
             try:                                   # grit feeds the anchor rank
@@ -2776,13 +2771,13 @@ with tab_balance:
             # the steadier leg (Index core SPY/GLD: 47%), so who holds the
             # money is read off the weights, not assumed (2026-10-17 council).
             _bv_money = (
-                f'Why the anchor holds most of the capital: equal-risk split - '
+                f'Why the anchor holds most of the capital: equal-risk split. '
                 f'{flyer} runs {pw["vol_a"]:.0%} realized annual vol to {bv_anchor}\'s '
                 f'{pw["vol_b"]:.0%}, so each dollar of {flyer} carries '
                 f'{pw["vol_a"] / pw["vol_b"]:.1f}x the risk. Each leg carries the '
                 f'same share of the RISK; the anchor holds most of the MONEY.'
                 if pw["w_b"] >= 0.5 else
-                f'Why {flyer} holds more of the capital: equal-risk split - '
+                f'Why {flyer} holds more of the capital: equal-risk split. '
                 f'{flyer} runs {pw["vol_a"]:.0%} realized annual vol to {bv_anchor}\'s '
                 f'{pw["vol_b"]:.0%}, so here {flyer} is the steadier leg and each '
                 f'dollar of it carries {pw["vol_a"] / pw["vol_b"]:.1f}x the risk. '
@@ -2791,7 +2786,7 @@ with tab_balance:
             st.markdown(
                 f'<div style="display:flex;align-items:center;gap:44px;padding:26px 10px 12px;flex-wrap:wrap;">'
                 f'<div style="flex:1 1 100%;max-width:980px;margin:0 auto;background:#F1EDE5;'
-                f'border:1px solid #C4BDAE;border-top:2px solid #9A7B4F;border-radius:14px;'
+                f'border:1px solid #C4BDAE;border-top:2px solid #9A7B4F;border-radius:0;'
                 f'padding:26px 18px 14px;box-shadow:0 1px 2px rgba(63,59,53,.05),'
                 f'0 12px 30px -22px rgba(63,59,53,.4);">'
                 f'<svg viewBox="0 0 420 300" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;">'
@@ -2833,12 +2828,12 @@ with tab_balance:
                 f'<div style="font-family:Georgia;font-size:15px;color:#3F3B35;line-height:1.55;">'
                 # A fall is its size beside the verb: "fell -36%" reads as a rise.
                 f'Over the {bt["n_days"]} daily returns loaded, {"shorting" if bearish else "holding"} '
-                f'<b>{flyer}</b> alone fell <b>{abs(bt["max_dd_solo"]):.0%}</b> at its worst'
-                f'{" (a short bleeds when the name rallies - the squeeze)" if bearish else ""}; '
+                f'{flyer} alone fell <b>{abs(bt["max_dd_solo"]):.0%}</b> at its worst'
+                f'{" (a short bleeds when the name rallies: the squeeze)" if bearish else ""}; '
                 f'tethered to {"a correlated long in " if bearish else ""}'
-                f'<b>{bv_anchor}</b> at risk-parity weights '
+                f'{bv_anchor} at risk-parity weights '
                 f'(<b>{pw["w_b"]:.0%}</b> anchor / <b>{pw["w_a"]:.0%}</b> flyer, '
-                f'rebalanced monthly) the fall was <b>{abs(bt["max_dd_pair"]):.0%}</b> - '
+                f'rebalanced monthly) the fall was <b>{abs(bt["max_dd_pair"]):.0%}</b>, '
                 # a gap between two losses, in percentage points: "+17%"
                 # read as a 17% cut (John, 2026-10-19), so say the unit and
                 # the direction in words
@@ -2854,7 +2849,7 @@ with tab_balance:
                 f'{_bv_money}</div>'
                 f'</div></div>',
                 unsafe_allow_html=True)
-            with st.expander("The real backtest - pair vs solo, and the crisis record"):
+            with st.expander("The real backtest: pair vs solo, and the crisis record"):
                 bv_fig = go.Figure()
                 bv_fig.add_scatter(x=bt["solo_path"].index,
                                    y=(bt["solo_path"] - 1) * 100,
@@ -2903,33 +2898,33 @@ with tab_balance:
                 except Exception:  # noqa: BLE001 - crisis replay needs network
                     st.caption("Crisis replay unavailable offline.")
                 st.markdown(
-                    '<div class="read-me"><b>What this is - and is not.</b> '
+                    '<div class="read-me"><b>What this is and is not.</b> '
                     'Long-only defensive pairing (a core-satellite blend), not '
-                    '"pairs trading" - there is no short leg and no cointegration '
-                    'bet. The anchor is chosen by rank (lowest correlation to the '
-                    "universe's dominant risk factor, low volatility, shallow "
-                    'tail, highest Grit score - the engine\'s founding question, '
-                    '"who gets back up?", IS the Circle 2 screen - from your '
-                    'universe plus Treasury/gold/staples/utilities/min-vol ETFs) '
-                    '- ranked, never promised. Weights are risk parity: each leg '
+                    '"pairs trading": there is no short leg and no cointegration '
+                    'bet. The anchor is chosen by rank from your universe plus '
+                    'Treasury/gold/staples/utilities/min-vol ETFs: lowest correlation '
+                    "to the universe's dominant risk factor, low volatility, shallow "
+                    'tail, highest Grit score (the engine\'s founding question, '
+                    '"who gets back up?", IS the Circle 2 screen). It is ranked, '
+                    'never promised. Weights are risk parity: each leg '
                     'contributes equal risk, which is why the steadier leg '
                     'holds more of the capital. Losses '
-                    'are <b>cushioned, not capped</b>: a long-only pair has no '
+                    'are cushioned, not capped: a long-only pair has no '
                     'floor above zero, and crisis correlations converge toward '
                     '+1 exactly when protection matters most. The Tether / '
                     'Descent / Rotation phases are a descriptive regime study '
-                    'on past prices - not a trading signal. Educational '
+                    'on past prices, not a trading signal. Educational '
                     'analysis, not investment advice.</div>',
                     unsafe_allow_html=True)
                 if bearish:
                     st.caption(
                         "Bearish read of grit: LOW grit describes past "
-                        "fragility - it is not a short signal. Past losers "
+                        "fragility; it is not a short signal. Past losers "
                         "are often crowded shorts with high borrow cost and "
                         "the sharpest squeezes; the asset that keeps getting "
                         "back up (HIGH grit) is the short-seller's nightmare. "
                         "Synthetic daily-rebalanced short; borrow fees, "
-                        "margin and buy-ins not modeled - real short results "
+                        "margin and buy-ins not modeled, so real short results "
                         "are worse. Short losses can exceed 100%.")
         except Exception as exc:  # noqa: BLE001 - never crash the tab
             st.caption(f"Balance unavailable for this universe: {safe_err('balance-unavailable-for-this-universe', exc)}")
@@ -2951,13 +2946,13 @@ with tab_grit:
         else:
             st.plotly_chart(
                 hbar(gscores["grit_score"],
-                     title_x="Grit Score (0–100)", top_first=True),
+                     title_x="Grit score (0–100)", top_first=True),
                 width="stretch", config=PLOTLY_CFG,
             )
             read_me(
                 "<b>Longer bar = grittier.</b> The name at the top has, across its "
                 "own history, bounced back from drawdowns the fastest and most "
-                "reliably. Score is <b>0–100 relative to this basket</b> - it ranks "
+                "reliably. Score is 0–100 relative to this basket: it ranks "
                 "these names against each other, not against the whole market.")
             grittiest = gscores.index[0]
             g = gscores.loc[grittiest]
@@ -2972,7 +2967,7 @@ with tab_grit:
                         + ("" if pd.isna(_med) else
                            f" (median {_med:.0f} trading days to claw back)"))
             st.caption(
-                f"**{grittiest}** ranks grittiest here: {_rec}, stayed positive "
+                f"{grittiest} ranks grittiest here: {_rec}, stayed positive "
                 f"over {g['consistency']:.0%} of rolling 1-year holding "
                 f"periods, and lived through {g['n_regimes_survived']:.0f} of "
                 f"the named crisis windows above."
@@ -2985,9 +2980,9 @@ with tab_grit:
                 "drawdowns (≥5%). Consistency: share of rolling 1-year holding "
                 "periods that ended positive. Resilience: how shallow the "
                 "drawdown and how fast the recovery across the real historical "
-                "crisis windows this name actually traded through. Each bar is "
+                "crisis windows this name traded through. Each bar is "
                 "RANKED RELATIVE to the other names in this universe, not an "
-                "absolute score - swap in a different basket and the numbers move."
+                "absolute score; swap in a different basket and the numbers move."
             )
 
             if grit["excluded"]:
@@ -3002,8 +2997,8 @@ with tab_grit:
 with tab_conviction:
     st.caption(
         "Buying during a crisis feels impossible because the brain treats "
-        "financial loss like a physical threat - that panic is wiring, not "
-        "weakness. This tab doesn't argue with the feeling. It prices it: "
+        "financial loss like a physical threat; that panic is hard-wired. "
+        "This tab prices the feeling: "
         "for every named crisis this engine stress-tests, here is what "
         "actually happened next, computed live from market data."
     )
@@ -3038,7 +3033,7 @@ with tab_conviction:
 
         # The 3 metrics above carry the message; the full 10x7 grid folds
         # so a cold viewer isn't hit with 70 raw percentages up front.
-        with st.expander("Show the full table - every crisis, row by row"):
+        with st.expander("Show the full table: every crisis, row by row"):
             st.dataframe(
                 show.style.format({c: "{:+.0%}" for c in pct_cols}, na_rep="-")
                     .format({"Crash depth": "{:.0%}"})
@@ -3048,8 +3043,8 @@ with tab_conviction:
                 '<div class="read-me">'
                 '<b>How to read this.</b> Each row is a real crisis. '
                 '<b>Trough buy</b>: you bought the S&amp;P 500 (SPY) on the single '
-                'scariest day - the exact bottom. <b>Peak buy</b>: you bought at '
-                'the pre-crash top - the worst-timed entry possible. The columns '
+                'scariest day, the exact bottom. <b>Peak buy</b>: you bought at '
+                'the pre-crash top, the worst-timed entry possible. The columns '
                 'show where that money stood 1 and 3 trading-years later. '
                 '“-” means the crisis is too recent for that horizon: excluded, '
                 'not estimated.'
@@ -3060,13 +3055,13 @@ with tab_conviction:
             _p3y = pd.to_numeric(show["Peak buy, 3y later"], errors="coerce")
             _behind = show.loc[_p3y < 0, "Crisis"].tolist()
             st.caption(
-                "Nobody can time the exact trough - that row measures the "
+                "Nobody can time the exact trough, so that row measures the "
                 "direction of the edge, not an executable strategy. That's why "
                 "the peak row sits beside it: the worst-timed buyer was ahead "
                 f"three years later in {int((_p3y > 0).sum())} of "
                 f"{int(_p3y.notna().sum())} crises with three years of data"
                 + (f". The honest exception{'s' if len(_behind) > 1 else ''}: "
-                   f"{', '.join(_behind)} - three years wasn't enough."
+                   f"{', '.join(_behind)}, where three years wasn't enough."
                    if _behind else ".")
             )
 
@@ -3076,7 +3071,7 @@ with tab_conviction:
             f"The thesis: companies pouring capital into compute and AI "
             f"infrastructure ({', '.join(AI_CAPEX_BASKET)}, equal-weight) "
             f"recover from crises faster than the broad market. That is a "
-            f"HYPOTHESIS - here is the actual record, crisis by crisis: "
+            f"HYPOTHESIS. Here is the actual record, crisis by crisis, in "
             f"trading days from each side's trough back to its own "
             f"pre-crisis level."
         )
@@ -3101,7 +3096,7 @@ with tab_conviction:
                 orientation="h", name=nm, marker=dict(color=colr),
                 text=[_lbl(d, f) for d, f in zip(rr[col], rr[flag])],
                 textposition="outside", textfont=dict(size=11),
-                hovertemplate="%{y} - " + who + ": %{text}<extra></extra>"))
+                hovertemplate="%{y} · " + who + ": %{text}<extra></extra>"))
         race_fig = _style_fig(race_fig, height=max(340, 56 * len(rr) + 70))
         race_fig.update_layout(
             barmode="group", xaxis_title="trading days to reclaim pre-crisis level",
@@ -3118,20 +3113,20 @@ with tab_conviction:
             f'"not within 3y", that side never reclaimed its pre-crisis '
             f'level inside ~3 trading years; "never fell" means it did not '
             f'decline at all inside that window, so it had nothing to '
-            f'reclaim - shown, not hidden.'
-            + (f' Left out: {", ".join(rrec["left_out"])} - none of the '
+            f'reclaim; those crises stay on the chart.'
+            + (f' Left out: {", ".join(rrec["left_out"])}. None of the '
                f'basket\'s names was trading yet, so there was no race to '
                f'count.' if rrec["left_out"] else '')
             + '</div>',
             unsafe_allow_html=True)
         st.caption(
-            "*Honest limits: the basket carries today's \"AI capex\" label - "
+            "*Honest limits: the basket carries today's \"AI capex\" label; "
             "in 2008 these names were simply large-cap tech, and the record "
             "shown is theirs regardless of the label. Members that hadn't "
             "IPO'd by a crisis are excluded from that race, not back-filled "
             "(member count varies by crisis). Survivorship is real: this "
             "basket is named WITH hindsight. One benchmark, one basket, "
-            "hindsight throughout - evidence for a thesis, not proof. "
+            "hindsight throughout: evidence for a thesis, not proof. "
             "Educational analysis, not investment advice.*"
         )
     except Exception as exc:  # noqa: BLE001
@@ -3154,8 +3149,8 @@ with tab_liquidity:
     book = lc1.number_input(
         "Portfolio size ($)", min_value=10_000, max_value=5_000_000_000,
         value=1_000_000, step=100_000,
-        help="Total dollars invested. Position sizes - and so the days to unwind "
-             "them - scale from this.")
+        help="Total dollars invested. Position sizes, and so the days to unwind "
+             "them, scale from this.")
     participation = lc2.slider(
         "Max daily participation (% of ADV)", 5, 50,
         round(DEFAULT_PARTICIPATION * 100), step=5,
@@ -3199,7 +3194,7 @@ with tab_liquidity:
             read_me(
                 "<b>The tail you can't trade out of.</b> The headline CVaR "
                 "assumes you're flat at the horizon. This widens it by "
-                f"√(1 + exit-days/{TRADING_DAYS}) - the Basel liquidity-horizon convention - "
+                f"√(1 + exit-days/{TRADING_DAYS}) (the Basel liquidity-horizon convention) "
                 "to cover the extra days the market can move against you while "
                 "you're still unwinding. Prices market exposure over the unwind, "
                 "not the spread you pay to trade. A one-day-liquid book is barely "
@@ -3223,7 +3218,7 @@ with tab_liquidity:
         )
         if prof["least_liquid"] is not None:
             caption += (
-                f"**{prof['least_liquid']}** is the bottleneck at "
+                f"{prof['least_liquid']} is the bottleneck at "
                 f"{_fmt_days(prof['full_exit_days'])} to fully exit. "
             )
         if (mc["cvar"] > 0 and np.isfinite(lv["multiplier"])
@@ -3233,13 +3228,13 @@ with tab_liquidity:
             # is dead rather than the book being genuinely liquid.
             caption += (
                 "At this size the participation cap never binds, so the tail is "
-                "unchanged - a liquid book, not a dormant model. The *Small-cap "
+                "unchanged: a liquid book, not a dormant model. The *Small-cap "
                 "liquidity stress* preset, or a larger book above, makes it bite. "
             )
         if prof["no_volume"]:
             caption += (
                 f"*No volume feed for {', '.join(prof['no_volume'])} "
-                "(e.g. FX/futures on Yahoo) - excluded, not estimated.*"
+                "(e.g. FX/futures on Yahoo): excluded, not estimated.*"
             )
         st.caption(caption)
     except Exception as exc:  # noqa: BLE001
@@ -3248,7 +3243,7 @@ with tab_liquidity:
 with tab_dq:
     st.caption(
         "Every price pull runs through an automated validation gate before "
-        "any risk number is computed from it - schema checks, positivity, "
+        "any risk number is computed from it: schema checks, positivity, "
         "coverage, staleness, and an extreme-move flag. This validates "
         "structure and plausibility, not truth: it catches a malformed or "
         "implausible feed, not a wrong-but-plausible number."
@@ -3266,7 +3261,7 @@ with tab_dq:
             "FAIL": '<span class="dq-mark" role="img" aria-label="Fail" style="color:#3F3B35;font-weight:700;">&times;</span>'}
     for c in report["checks"]:
         st.markdown(f'<div class="dq-row">{mark[c["status"]]} <b>{html.escape(c["check"])}</b>'
-                    f' - {html.escape(c["message"])}</div>', unsafe_allow_html=True)
+                    f': {html.escape(c["message"])}</div>', unsafe_allow_html=True)
     verdict_dq = "PASS" if report["passed"] else "FAIL"
     panel_head("Overall data-quality gate", f"This feed: {verdict_dq}")
 
@@ -3290,19 +3285,18 @@ with tab_lineage:
         st.caption(
             "Prices are live end-of-day adjusted closes, pulled on demand from "
             "Yahoo Finance. Every figure above is computed from this source by "
-            "the engine's own code - no value originates from a language model. "
+            "the engine's own code; no value originates from a language model. "
             f"A copy older than {CACHE_MAX_AGE_HOURS:g} hours is re-pulled "
             "automatically on the next interaction."
         )
     else:
         st.caption("Provenance record appears after the first live fetch.")
 
-    panel_head("This run's audit trail", "Every step this session actually took, in order")
+    panel_head("This run's audit trail", "Every step this session took, in order")
     st.caption(
-        "Every step this run took, in order - session-scoped (rebuilt fresh "
-        "each rerun, not persisted across sessions). A full compliance system "
-        "would append this to durable storage; this is the same concept at "
-        "the scale this engine actually operates at."
+        "Session-scoped: rebuilt fresh each rerun, not persisted across "
+        "sessions. A full compliance system would append this to durable "
+        "storage; this is the same concept at the scale this engine operates at."
     )
     st.dataframe(pd.DataFrame(audit_log), width="stretch", hide_index=True)
 
@@ -3346,11 +3340,11 @@ st.markdown("""
 <div class="meliona-footer">
   <div class="f-rail">
     <a class="f-box" href="#grit-showcase"><span class="f-num">01</span>The Grit Zone
-      <small>Resilience ranked from real drawdowns - recovery, consistency, crisis behavior.</small></a>
+      <small>Resilience ranked from real drawdowns: recovery, consistency, crisis behavior.</small></a>
     <a class="f-box" href="#crisis-record"><span class="f-num">02</span>Crisis Conviction
       <small>The hardest trade, priced from the actual record of __NCRISES__ named crises.</small></a>
     <a class="f-box" href="#engine"><span class="f-num">03</span>The Engine
-      <small>Stress-test any universe live - allocation, scenarios, CVaR verdict.</small></a>
+      <small>Stress-test any universe live: allocation, scenarios, CVaR verdict.</small></a>
   </div>
   <div class="f-bar">
     <div>Meliona &middot; Portfolio Risk Engine &middot; &copy; 2026 John Nguyen</div>
@@ -3368,7 +3362,7 @@ st.markdown("""
       text description; charts are accompanied by their numbers in text. Known gaps are
       listed in the accessibility statement.</div>
     <div>Hit a barrier? Email <a href="mailto:__SUPPORT__?subject=Meliona%20accessibility%20%E2%80%93%20session%20__REF__">__SUPPORT__</a>
-      with the reference above - barriers are treated as defects, not feature requests.</div>
+      with the reference above. Barriers are treated as defects, not feature requests.</div>
   </div>
 </div>
 """.replace("__SUPPORT__", SUPPORT_EMAIL).replace("__REF__", SESSION_REF)

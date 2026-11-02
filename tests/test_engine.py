@@ -4176,7 +4176,7 @@ def test_a_setting_that_loses_more_than_the_book_in_a_day_is_refused_in_words():
     at, restore = _offline_app(market=market)
     try:
         next(r for r in at.radio if r.label.startswith("Which side")).set_value(
-            "Bearish - short the book")
+            "Bearish: short the book")
         next(c for c in at.checkbox if c.label == "Target volatility").check()
         at.run()
         next(s for s in at.slider if s.label == "Target annual vol (%)").set_value(30)
@@ -4534,7 +4534,7 @@ def test_the_books_grit_is_the_grit_zones_full_history_grit():
         wrong = {t: (g, round(float(tab[t]))) for t, g in book.items()
                  if g != round(float(tab[t]))}
         assert not wrong, f"Book grit vs Grit Zone grit, shelf on (book, tab): {wrong}"
-        head = [m.value for m in at.markdown if " book - " in m.value and "names hold" in m.value]
+        head = [m.value for m in at.markdown if " book: " in m.value and "names hold" in m.value]
         assert head and f"of your {len(loaded)} names hold" in head[0], head
     finally:
         restore()
@@ -4554,7 +4554,7 @@ def test_the_book_lists_an_outside_etf_only_when_it_is_the_anchor():
         for m in at.markdown:
             hit = re.match(r"\s*(LEADS|ANCHOR|NO ROLE|LEFT OUT)\s+((?:\d+\.\d%|<0\.1%) of the book\s+)?"
                            r"([A-Z0-9.^=-]+) (.*)",
-                           re.sub(r"<[^>]+>", " ", m.value)) if "border-left:3px solid" in m.value else None
+                           re.sub(r"<[^>]+>", " ", m.value)) if "border-left:2px solid" in m.value else None
             if hit:
                 # a NO ROLE card, and only that one, says what it holds (ME-12 review)
                 assert bool(hit.group(2)) == (hit.group(1) == "NO ROLE"), hit.group(0)[:80]
@@ -4732,7 +4732,7 @@ def test_the_headline_accents_follow_real_state():
         assert ">Stressed<" in _verdict_html(at), "a crisis replay must mark the headline"
         assert _tab_strip_slot(at) == slot
 
-        at.radio(key="bv_direction").set_value("Bearish - short the book").run()
+        at.radio(key="bv_direction").set_value("Bearish: short the book").run()
         assert not at.exception, [e.value for e in at.exception]
         assert ">Short book<" in _verdict_html(at), "the bearish side must mark the headline"
         assert _tab_strip_slot(at) == slot, "an accent moved the tab strip"
@@ -5492,7 +5492,7 @@ def test_the_page_points_only_to_controls_that_exist():
     page = _offline_page()
     text = " ".join(page["text"])
     assert "Engine controls" not in text
-    alloc = [e.split(" - ")[0] for e in page["expanders"] if e.startswith("02 ")]
+    alloc = [e.split(":")[0] for e in page["expanders"] if e.startswith("02 ")]
     assert alloc and f"to EWMA in {alloc[0]}" in text, alloc
 
 
@@ -5511,7 +5511,7 @@ def test_a_day_with_no_volume_reported_is_skipped_not_read_as_zero():
         return dv
     at, restore = _offline_app(dollar_volume=gappy)
     try:
-        cards = [m.value for m in at.markdown if "border-left:3px solid" in m.value]
+        cards = [m.value for m in at.markdown if "border-left:2px solid" in m.value]
         v = [c for c in cards if ">V " in c]
         assert v, "no Book card for V"
         assert "reports no volume" not in v[0], v[0]
@@ -5848,6 +5848,37 @@ def test_the_audits_full_history_asks_yahoo_for_daily_bars_by_date():
         lp.guarded_session = real
     assert "range=max" not in asked[0] and "period1=0&period2=" in asked[0] and "interval=1d" in asked[0], asked
     assert "range=3mo" in asked[1], asked
+
+
+def test_blocks_arrive_from_where_they_sit_and_the_wheel_glides():
+    """John, 2026-11-02: "more present, everywhere" - a block on the left
+    enters from the left, one on the right from the right, one in the middle
+    turns face up like a card; the motion must not end at the engine, and the
+    wheel must feel glidey. Browser run: 0 blocks left invisible on screen at
+    1440 and 390px, no sideways scroll, a 300px notch eased over ~1 s, every
+    button glide check 44/44."""
+    import re
+    root = pathlib.Path(__file__).resolve().parent.parent
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    js = (root / "static" / "reveal.js").read_text(encoding="utf-8")
+    # four entrances, each a transform only (the GPU rule above still holds)
+    for kind in ("left", "right", "card", "flip"):
+        assert re.search(r"\.reveal-on \.reveal-item--" + kind + r"\s*\{[^}]*transform:", css), kind
+    assert "translate3d(calc(-1 * var(--reveal-x))" in css and "translate3d(var(--reveal-x), 0, 0)" in css
+    assert "rotateY(-92deg)" in css and "rotateX(-68deg)" in css
+    # the side is read from where the block sits, as it arrives
+    assert re.search(r"var SIDE = 0\.\d+;", js) and re.search(r"var WIDE = 0\.\d+;", js)
+    assert "return f < SIDE ? 'left' : f > 1 - SIDE ? 'right' : 'card';" in js
+    assert "el.classList.add('reveal-item--' + side(el));" in js
+    # every block, not a fixed list: Streamlit's leaf containers - the engine's
+    # controls, captions and cards - arrive too
+    assert "var LEAF = '[data-testid=\"stElementContainer\"]';" in js and "var ITEMS = NAMED + ',' + LEAF;" in js
+    assert ".st-key-glide" in re.search(r"var SKIP = '([^']+)'", js).group(1)
+    # the wheel glide: stands aside for zoom, a button's flight and anything
+    # that scrolls on its own, and never runs under reduced motion
+    assert "W.__melionaStop) return;" in js and "e.ctrlKey" in js and "scrolls(n, e.deltaY)" in js
+    assert js.index("if (calm)") < js.index("addEventListener('wheel'")
+    assert "{ passive: false }" in js and re.search(r"var GLIDE_EASE = 0\.\d+;", js)
 
 
 def test_every_in_page_button_is_flown_by_both_glide_scans():

@@ -23,7 +23,7 @@ const [,, url, which = 'all', reps = '4'] = process.argv;
 const N = +reps;
 const SC = '[data-testid="stMain"]';
 const LINKS = [
-  ['#hero .cta-btn', 'Explore what we do'],
+  ['#hero .cta-btn', 'Start with the Grit Zone'],
   ['a.cta-btn[href="#crisis-record"]', 'See the crisis record'],
   ['a.cta-btn[href="#the-slice"]', 'From the record to the allocation'],
   ['a.cta-btn[href="#engine"]', 'To the engine'],

@@ -703,6 +703,37 @@ risk-engine/
   up in turn and the band's photo settles - all on view timelines (scroll
   position, not a clock), desktop only. citadel.com itself was unreachable
   from the sandbox; built from John's description.
+- ✅ **Removing what reads as AI-generated (2026-11-02)**. John's list
+  first: em dashes, "It's not X. It's Y", random bold, emoji bullets, title
+  case, one-line paragraphs, pivotal/moreover/serves as. Every string a
+  visitor sees was edited (comments and docstrings untouched): spaced hyphens
+  doing a dash's job on the rendered page 167 -> 0, staging contrasts
+  rewritten while the honest negatives stay (not a forecast, excluded not
+  estimated), about 25 bold phrases inside sentences unbolded, restating
+  closers cut. Design, after research on generated-UI tells: no glow on charts
+  or behind the hero, the Grit Zone's three pillars in one row (they wrapped
+  to two plus an orphan), the hero button says where it goes ("Start with the
+  Grit Zone"), the "The Innovation"/"The Conviction" eyebrows gone, the
+  Book's cards square with a 2px role edge. Still open: the map's pair names
+  read "META - AVGO" in three places; one sits in code PR #32 edits, so all
+  three change together after it merges.
+- ✅ **Motion everywhere: arrivals from where each block sits, and a gliding
+  wheel (2026-11-02)**. John: "more exaggerated ... more present ... everywhere";
+  things on the left pop from the left, on the right from the right, in the
+  middle turned face up like a card; the motion ended at the engine and the
+  scroll felt normal. `static/reveal.js` now tags every Streamlit leaf block
+  (not a fixed list), so the engine's controls, captions, the Book's lines and
+  every tab and drawer arrive too, and reads each block's centre as it comes
+  on screen: left third swings in from the left, right third from the right,
+  a narrow middle block turns on its spine, a wide one tips up off its bottom
+  edge (every block on a phone). Travel, turn and settle are larger (46px
+  rise, up to 150px swing, 16 degree turn, 1.45 s, 90 ms stagger). The wheel
+  eases (GLIDE_EASE 0.09 of the distance a frame: a 300px notch settles over
+  ~1 s) and stands aside during a button's glide, inside anything that
+  scrolls on its own, for zoom, touch and keys, and under reduced motion.
+  Browser run on the preview: 0 blocks left invisible on screen at 1440 and
+  390px, no sideways scroll, button glides 44/44 (momentum, reader, steady,
+  rest).
 - ✅ **Arrival motion on an IntersectionObserver, and the photos cut 93% (2026-10-30)**
   - John asked for Citadel-grade transitions: trigger-based, GPU-only, custom
     easing, staggered, no flash of content, and working without JavaScript.

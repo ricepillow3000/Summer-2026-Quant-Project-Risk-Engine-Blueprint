@@ -16,11 +16,11 @@ from src.ingestion import MAX_UNIVERSE
 from src.scenarios import HISTORICAL_REGIMES
 
 HERO_TITLE_LINES = ("Meliona", "Portfolio Risk Engine")
-HERO_SUB = ("See how much a portfolio could lose in a bad year, and what real market "
-            "crashes did to it - computed from live end-of-day prices. Every stock "
-            "falls sometimes. What sets a name apart is what happens after - that's "
-            "what we call <strong>grit</strong>.")
-HERO_CTA = "Explore what we do"
+HERO_SUB = ("See how much a portfolio could lose in a bad year and what real market "
+            "crashes did to it, computed from live end-of-day prices. Every stock "
+            "falls sometimes. What sets a name apart is what happens after, and "
+            "that is what we call grit.")
+HERO_CTA = "Start with the Grit Zone"
 # The tiles quote the engine, so they read its constants rather than restate
 # them: add a crisis to HISTORICAL_REGIMES and the hero, the footer and the
 # replay list all move together.

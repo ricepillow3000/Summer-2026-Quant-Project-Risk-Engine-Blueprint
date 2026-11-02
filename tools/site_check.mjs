@@ -167,7 +167,7 @@ if (process.env.SEO) {
   ok(fs === 200 && ft.startsWith('image/png'), 'seo: favicon served');
   const p404 = await browser.newPage();
   await p404.goto(url.replace(/\/$/, '') + '/no/such/page'); await p404.waitForTimeout(2500);
-  ok(/404 - page not found/i.test(await p404.evaluate(() => document.body.innerText)), 'seo: a bad link shows the branded 404, not a blank page');
+  ok(/404 · page not found/i.test(await p404.evaluate(() => document.body.innerText)), 'seo: a bad link shows the branded 404, not a blank page');
   await p404.screenshot({ path: `${outdir}/404.png` });
 }
 await browser.close();

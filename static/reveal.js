@@ -1,9 +1,13 @@
 /* Meliona motion: how the page arrives as you scroll.
  *
- *   1. Reveals - each block fades in and slides up (headings slide in from the
- *      left) the first time it enters the screen. An IntersectionObserver
- *      reports the moment it arrives; nothing listens to every scrolled pixel.
- *      Blocks that arrive together are staggered top to bottom, left to right.
+ *   1. Reveals - every block on the page arrives the first time it enters the
+ *      screen, from where it sits (John, 2026-11-02): a block on the left
+ *      third slides in from the left, one on the right third from the right,
+ *      and one in the middle turns face up like a dealt card (a wide one tips
+ *      up off its bottom edge, a narrow one turns on its spine). An
+ *      IntersectionObserver reports the moment it arrives; nothing listens to
+ *      every scrolled pixel. Blocks that arrive together are staggered top to
+ *      bottom, left to right.
  *   2. Scrubs - decorative layers (the band's photo, the bronze lintel over each
  *      panel) follow the scroll position itself. app.css does this with scroll
  *      timelines, off the main thread; where a browser has none, this file
@@ -11,6 +15,10 @@
  *      screen.
  *   3. Plates - the heavy photos behind a band start downloading 600px before
  *      the band reaches the screen, and fade in once there. Words come first.
+ *   4. Glide - a mouse wheel or trackpad eases the page to where it was sent
+ *      instead of stepping it there. It stands aside while a button's glide
+ *      flies, inside anything that scrolls on its own (a table, a list), and
+ *      for touch and keys, which keep the browser's own scrolling.
  *
  * Only opacity and transform ever change: the compositor (GPU) animates them,
  * and neither moves the layout, so nothing on the page shifts or reflows.
@@ -25,24 +33,30 @@
   var W = window, D = document, H = D.documentElement;
   if (W.__melionaReveal) return;                      // one copy per page
 
-  var STAGGER_MS = 60;    // gap between blocks that arrive together: higher = slower cascade
+  var STAGGER_MS = 90;    // gap between blocks that arrive together: higher = slower cascade
   var MAX_STEPS = 8;      // a long list waits at most MAX_STEPS x STAGGER_MS
 
-  // What reveals. Our own blocks and Streamlit's (metrics, charts, tables) -
-  // tagged here, as each one is added to the page, before it is painted.
-  var ITEMS = ['.reveal-item', '.showcase-eyebrow', '.showcase-title', '.showcase-body',
+  // What reveals. Our own blocks and Streamlit's (metrics, charts, tables) by
+  // name; every other block on the page - a control, a caption, a card, a
+  // line of the Book - as Streamlit's own leaf container. Tagged as each one
+  // is added to the page, before it is painted.
+  var NAMED = ['.reveal-item', '.showcase-eyebrow', '.showcase-title', '.showcase-body',
     '.gungnir-sub', '.pillar-card', '.slab', '.cta-btn', '.cta-link', '.sec-mark',
     '.panel-head', '.verdict-box', '.gungnir-plaque', '.orient', '.read-me', '.f-box',
     '[data-testid="stMetric"]', '[data-testid="stPlotlyChart"]',
     '[data-testid="stDataFrame"]'].join(',');
-  var LEFT = '.showcase-eyebrow, .showcase-title, .showcase-body, .gungnir-sub, .sec-mark';
-  var LIFT = '.pillar-card';
+  var LEAF = '[data-testid="stElementContainer"]';
+  var ITEMS = NAMED + ',' + LEAF;
   // Never animated: the hero (it has its own first-load arrival), the boot
-  // skeleton, the map (its own probe measures it), and any section a button
-  // flies to - the glide lands on it, and it must not fade as it lands
-  // (deep_scan: "destination never fades").
-  var SKIP = '#hero, #boot-skel, .st-key-risk-map';
+  // skeleton, the map (its own probe measures it), the glide's script frame,
+  // and any section a button flies to - the glide lands on it, and it must
+  // not fade as it lands (deep_scan: "destination never fades").
+  var SKIP = '#hero, #boot-skel, .st-key-risk-map, .st-key-glide';
   var DEST = '#grit-showcase, #conviction, #crisis-record, #the-slice, #engine, #analysis, #the-book';
+  // Where a block sits decides how it arrives: its centre in the left or right
+  // share of the page slides in from that side; in the middle it turns over.
+  var SIDE = 0.42;        // left of 42% (or right of 58%) of the page's width
+  var WIDE = 0.6;         // wider than 60% of the page: tips up, not turns
   var SCRUB = '.showcase-row, .panel-head';
   // Each photo plate, and the class on <html> that attaches it (app.css,
   // main.py). On <html>, not the band: Streamlit may rewrite a block's own
@@ -73,6 +87,8 @@
 
   function show(el, delay) {
     seen.unobserve(el);
+    el.classList.add('reveal-item--' + side(el));    // jumps there while still invisible
+    void el.offsetWidth;                               // ...and starts from there
     el.style.setProperty('--reveal-delay', delay + 'ms');
     el.classList.add('is-visible');
     var end = function (ev) {
@@ -80,13 +96,26 @@
       done(el);
     };
     el.addEventListener('transitionend', end);
-    el.__rvTimer = setTimeout(end, delay + 1500);     // a tab hidden mid-way never ends
+    el.__rvTimer = setTimeout(end, delay + 2200);     // a tab hidden mid-way never ends
+  }
+  // Measured as it arrives, not when tagged: Streamlit lays a block out after
+  // adding it, and a tab or drawer opened later sits wherever it opens. The
+  // hidden state only lifts and shrinks about the centre, so the centre read
+  // here is where the block will land.
+  function side(el) {
+    var page = (D.querySelector(SCROLLER) || D.body).getBoundingClientRect();
+    var r = el.getBoundingClientRect();
+    if (!page.width || !r.width) return 'flip';
+    if (r.width > WIDE * page.width) return 'flip';
+    var f = ((r.left + r.right) / 2 - page.left) / page.width;
+    return f < SIDE ? 'left' : f > 1 - SIDE ? 'right' : 'card';
   }
   // Landed: hand the block back to its own styles (hover lifts, transitions)
   // and drop will-change, so the GPU layer it held is released.
   function done(el) {
     clearTimeout(el.__rvTimer);
-    el.classList.remove('reveal-item', 'reveal-item--left', 'reveal-item--lift', 'is-visible');
+    el.classList.remove('reveal-item', 'reveal-item--left', 'reveal-item--right', 'reveal-item--flip',
+                        'reveal-item--card', 'is-visible');
     el.style.removeProperty('--reveal-delay');
   }
   api.revealAll = function () {                       // the end state, at once (layout probes)
@@ -126,6 +155,41 @@
     });
   }, { rootMargin: '600px 0px' });
 
+  // ---- 4. glide ----------------------------------------------------------------
+  // The wheel sets where the page is going; each frame closes a share of the
+  // distance (GLIDE_EASE), so a notch eases in and a long spin coasts out.
+  var GLIDE_EASE = 0.09;  // share of the remaining distance per frame: lower = longer coast
+  var SCROLLER = '[data-testid="stMain"]';
+  var aim = null, put = null, run = 0;
+  function scrolls(n, dy) {                            // can this inner box take the wheel itself?
+    var o = W.getComputedStyle(n).overflowY;
+    if (o !== 'auto' && o !== 'scroll') return false;
+    return dy > 0 ? n.scrollTop + n.clientHeight < n.scrollHeight - 1 : n.scrollTop > 0;
+  }
+  function coast() {
+    var sc = D.querySelector(SCROLLER);
+    // someone else moved the page (a button's glide, a key, the scrollbar):
+    // theirs wins, and this wheel's aim is dropped
+    if (!sc || aim === null || (put !== null && Math.abs(sc.scrollTop - put) > 2)) { aim = put = null; run = 0; return; }
+    var cur = sc.scrollTop, next = cur + (aim - cur) * GLIDE_EASE;
+    if (Math.abs(aim - next) < 0.5) next = aim;
+    sc.scrollTop = next;
+    put = sc.scrollTop;
+    if (put === aim || Math.abs(put - cur) < 0.05 && next !== aim) { aim = put = null; run = 0; return; }
+    run = W.requestAnimationFrame(coast);
+  }
+  W.addEventListener('wheel', function (e) {
+    if (e.ctrlKey || e.defaultPrevented || !e.deltaY || W.__melionaStop) return;   // zoom; a glide in flight
+    var sc = D.querySelector(SCROLLER);
+    if (!sc || !sc.contains(e.target)) return;
+    for (var n = e.target; n && n !== sc; n = n.parentElement) if (scrolls(n, e.deltaY)) return;
+    e.preventDefault();
+    var dy = e.deltaMode === 1 ? e.deltaY * 40 : e.deltaMode === 2 ? e.deltaY * sc.clientHeight : e.deltaY;
+    var max = sc.scrollHeight - sc.clientHeight;
+    aim = Math.max(0, Math.min((aim === null ? sc.scrollTop : aim) + dy, max));
+    if (!run) { put = sc.scrollTop; sc.style.scrollBehavior = 'auto'; run = W.requestAnimationFrame(coast); }
+  }, { passive: false });
+
   // ---- tagging -----------------------------------------------------------------
   // If this file arrived after the page had painted (no <head> snippet: a
   // local run), what is already on screen stays put; only what is below joins.
@@ -143,12 +207,13 @@
       el.__rv = 1;
       if (el.matches(PLATE)) { if (late) attach(el); else near.observe(el); }
       if (el.matches(SCRUB) && onScreen) onScreen.observe(el);
-      if (!el.matches(ITEMS) || el.matches(DEST) || el.querySelector(DEST)) return;
+      if (!el.matches(ITEMS) || el.matches(DEST) || el.querySelector(DEST) || el.querySelector(SKIP)) return;
+      // a container block arrives through its parts: its own leaves, or the
+      // named blocks inside it (a row of cards keeps its card-by-card deal)
+      if (!el.matches(NAMED) && (el.querySelector(LEAF) || el.querySelector(NAMED))) return;
       var parent = el.parentElement && el.parentElement.closest('.reveal-item');
       if (parent || (late && inView(el))) return;     // never animate inside an animating block
       el.classList.add('reveal-item');
-      if (el.matches(LEFT)) el.classList.add('reveal-item--left');
-      else if (el.matches(LIFT)) el.classList.add('reveal-item--lift');
       seen.observe(el);
     });
   }

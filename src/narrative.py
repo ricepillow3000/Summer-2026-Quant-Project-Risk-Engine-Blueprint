@@ -155,7 +155,7 @@ SENTENCES: dict[SentenceKey, str] = {
         "{momentum_lookback}-day return to {momentum_skip} days ago per unit of "
         "volatility "
         "({momentum_per_vol:+.2f}), and it has a recovery record: grit "
-        "{grit_score:.0f} of 100 across {n_universe} names. Paired with "
+        "{grit_score:.0f} of 100 across {n_universe} names. It is paired with "
         "{partner}, whose own tail is {tail_gap_pts:.1f} points shallower at ES 97.5."
     ),
     SentenceKey.FLYER_PAIRED_DEEPER: (
@@ -167,8 +167,8 @@ SENTENCES: dict[SentenceKey, str] = {
         "({momentum_per_vol:+.2f}), and it has a recovery record: grit "
         "{grit_score:.0f} of 100 across {n_universe} names. Its anchor "
         "{partner} won the screen on factor independence and steadiness, but "
-        "its own tail is {tail_gap_abs_pts:.1f} points DEEPER at ES 97.5 - on this "
-        "measure the pairing does not thin the tail."
+        "its own tail is {tail_gap_abs_pts:.1f} points DEEPER at ES 97.5, so on "
+        "this measure the pairing does not thin the tail."
     ),
     SentenceKey.FLYER_UNPAIRED: (
         "{ticker} carries {final_weight:.1%} of the book and would clear "
@@ -182,8 +182,8 @@ SENTENCES: dict[SentenceKey, str] = {
     SentenceKey.CUSHION_ANCHOR: (
         "{ticker} is the anchor beside {partner}. Among the grittiest half of "
         "the eligible names it came top of the anchor screen at "
-        "{anchor_score:.0f} of 100 - least tied to the dominant factor, "
-        "steadiest, thinnest own tail - with grit {grit_score:.0f} of 100 "
+        "{anchor_score:.0f} of 100 (least tied to the dominant factor, "
+        "steadiest, thinnest own tail), with grit {grit_score:.0f} of 100 "
         "across {n_universe} names. It holds {final_weight:.1%} of the book, "
         "clears {exit_bucket}, and its tail sits {tail_gap_pts:.1f} points shallower at "
         "ES 97.5 than the name beside it."
@@ -191,8 +191,8 @@ SENTENCES: dict[SentenceKey, str] = {
     SentenceKey.CUSHION_ANCHOR_DEEPER: (
         "{ticker} is the anchor beside {partner}. Among the grittiest half of "
         "the eligible names it came top of the anchor screen at "
-        "{anchor_score:.0f} of 100 - least tied to the dominant factor, "
-        "steadiest - with grit {grit_score:.0f} of 100 across {n_universe} "
+        "{anchor_score:.0f} of 100 (least tied to the dominant factor, "
+        "steadiest), with grit {grit_score:.0f} of 100 across {n_universe} "
         "names. It holds {final_weight:.1%} of the book and clears "
         "{exit_bucket}. Its own tail is {tail_gap_abs_pts:.1f} points DEEPER at ES 97.5 "
         "than the name it sits beside, so it earns its place on independence "
@@ -213,8 +213,8 @@ SENTENCES: dict[SentenceKey, str] = {
         "of this book above ${book_breakpoint:,.0f}."
     ),
     SentenceKey.EXCLUDED_MOMENTUM: (
-        "{ticker} clears the liquidity and history gates - it would leave "
-        "{exit_bucket}, grit {grit_score:.0f} of 100 - but its "
+        "{ticker} clears the liquidity and history gates (it would leave "
+        "{exit_bucket}, grit {grit_score:.0f} of 100), but its "
         "{momentum_lookback}-day return to {momentum_skip} days ago per unit of "
         "volatility is "
         "{momentum_per_vol:+.2f}. It is not rising, so it is not offered as a "
@@ -241,15 +241,15 @@ SENTENCES: dict[SentenceKey, str] = {
         "than the name beside it."
     ),
     SentenceKey.EXCLUDED_GRIT_FLOOR: (
-        "{ticker} is rising - {momentum_lookback}-day return to {momentum_skip} "
+        "{ticker} is rising ({momentum_lookback}-day return to {momentum_skip} "
         "days ago per unit of "
-        "volatility {momentum_per_vol:+.2f} - and would leave {exit_bucket}, "
+        "volatility {momentum_per_vol:+.2f}) and would leave {exit_bucket}, "
         "but grit {grit_score:.0f} of 100 puts it outside the grittiest half "
         "of the eligible names, and the grit floor is on."
     ),
     SentenceKey.EXCLUDED_RANK: (
-        "{ticker} clears every gate - it would leave {exit_bucket}, grit "
-        "{grit_score:.0f} of 100 - and simply did not rank in the top "
+        "{ticker} clears every gate (it would leave {exit_bucket}, grit "
+        "{grit_score:.0f} of 100) but did not rank in the top "
         "{n_flyers} on {momentum_lookback}-day return to {momentum_skip} days ago "
         "per unit of volatility."
     ),
@@ -701,7 +701,7 @@ def headline(book: list[TickerDossier]) -> str:
     d = book[0]
     # An outside anchor is not one of the universe's names (ME-08).
     n_ok = sum(1 for x in book if x.eligible and not x.is_fallback_anchor)
-    line = (f"${d.book_value:,.0f} book - {n_ok} of your {d.n_universe} names "
+    line = (f"${d.book_value:,.0f} book: {n_ok} of your {d.n_universe} names "
             f"hold a position worth keeping and leave within "
             f"{d.max_exit_days:.0f} day(s) at {d.participation_rate:.0%} of "
             f"quiet-tape volume.")

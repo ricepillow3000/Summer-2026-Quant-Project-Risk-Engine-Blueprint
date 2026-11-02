@@ -203,8 +203,8 @@ class NoDataError(RuntimeError):
 
 
 NO_DATA_MSG = ("Yahoo Finance returned no price history for these symbols. "
-               "Check the spelling (e.g. BRK-B, EURUSD=X, GC=F) - or the feed "
-               "may be briefly unreachable, so try again in a minute.")
+               "Check the spelling (e.g. BRK-B, EURUSD=X, GC=F). The feed may "
+               "also be briefly unreachable, so try again in a minute.")
 NO_OVERLAP_MSG = ("These symbols share no common trading days. Remove the "
                   "newest or a delisted name and try again.")
 

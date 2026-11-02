@@ -193,6 +193,14 @@ async function glideCheck(linkSel, label) {
     sc.style.scrollBehavior = prev;
   }, scrollerSel);
   await page.waitForTimeout(700);
+  // ...and the button itself arrived: a reader presses what they can see, but
+  // Playwright's click waits for a moving element to settle, and a footer box
+  // still turning over (1.45 s, static/reveal.js) ate 1.5 s of the window the
+  // flight is measured in - "565px short" on a flight that landed (2026-11-02).
+  await link.evaluate(a => new Promise(r => {
+    const t0 = performance.now();
+    (function f() { if (!a.closest('.reveal-item') || performance.now() - t0 > 4000) r(); else requestAnimationFrame(f); })();
+  }));
   await page.evaluate(([s, id]) => {
     const sc = document.querySelector(s), dest = document.getElementById(id);
     window.__glide = [];
@@ -256,7 +264,7 @@ async function glideCheck(linkSel, label) {
 }
 await step('glide', async () => {
   for (const [sel, label] of [
-    ['#hero .cta-btn', 'Explore what we do'],
+    ['#hero .cta-btn', 'Start with the Grit Zone'],
     ['a.cta-btn[href="#crisis-record"]', 'See the crisis record'],
     ['a.cta-btn[href="#the-slice"]', 'From the record to the allocation'],
     ['a.cta-btn[href="#engine"]', 'To the engine'],
@@ -360,7 +368,7 @@ await step('engine baseline', async () => {
 
 await step('allocation', async () => {
   await openDrawer('02 · Allocation');
-  for (const est of ['Sample - plain history', 'EWMA - reactive / panic lens', 'Ledoit-Wolf - steady (default)']) {
+  for (const est of ['Sample: plain history', 'EWMA: reactive / panic lens', 'Ledoit-Wolf: steady (default)']) {
     const prev = await verdict();
     await pick('Covariance estimator', est);
     await settle();
@@ -484,7 +492,7 @@ async function bookState() {
     const note = c => c.firstElementChild?.querySelector('.role-note')?.textContent.trim() || '';
     const lbl = c => (c.firstElementChild?.textContent || '').trim().replace(note(c), '').trim();
     const head = [...document.querySelectorAll('[data-testid="stMarkdownContainer"] div')]
-      .map(d => d.textContent).find(t => /^\$[\d,]+ book - \d+ of your \d+ names/.test(t)) || '';
+      .map(d => d.textContent).find(t => /^\$[\d,]+ book: \d+ of your \d+ names/.test(t)) || '';
     return { leads: cards.filter(c => lbl(c) === 'LEADS').length, anchors: cards.filter(c => lbl(c) === 'ANCHOR').length,
              held: cards.filter(c => lbl(c) === 'NO ROLE').length,
              // every NO ROLE card states its weight, and no other card does
@@ -579,7 +587,7 @@ await step('balance, every flyer', async () => {
   const flyers = (await page.getByRole('option').allTextContents()).map(s => s.trim());
   await page.keyboard.press('Escape');
   for (const f of (FULL ? flyers : flyers.slice(0, 3))) {
-    await pick('High-flyer (Circle 1 - the volatile conviction position)', f); await settle();
+    await pick('High-flyer (Circle 1: the volatile conviction position)', f); await settle();
     const t = await page.evaluate(() => [...document.querySelectorAll('svg text')].map(e => e.textContent).find(s => /^GAP /.test(s)) || '');
     const line = await page.evaluate(() => [...document.querySelectorAll('div')].map(d => d.textContent)
       .find(s => /^Over the \d+ daily returns loaded/.test(s)) || '');
@@ -707,7 +715,7 @@ await step('map long', () => mapAudit('long'));
 
 await step('short side', async () => {
   const prev = await verdict();
-  await choose('Bearish - short the book');
+  await choose('Bearish: short the book');
   await page.waitForFunction(() => /short/i.test(document.querySelector('.verdict-sentence')?.textContent || ''));
   await settle();
   const g = await page.evaluate(() => [...document.querySelectorAll('.st-key-gungnir_zone svg text')].map(t => t.textContent));

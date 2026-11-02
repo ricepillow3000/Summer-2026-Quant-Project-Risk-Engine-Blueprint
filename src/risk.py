@@ -184,7 +184,7 @@ def gpd_tail_fit(port_returns: pd.Series, threshold_quantile: float = 0.95,
         "moments_finite": None, "threshold_quantile": threshold_quantile,
     }
     if n < 100:
-        out["reason"] = f"only {n} observations - too few for a tail fit"
+        out["reason"] = f"only {n} observations, too few for a tail fit"
         return out
 
     u = float(np.quantile(losses, threshold_quantile))

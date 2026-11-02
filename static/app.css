@@ -248,11 +248,16 @@ html { scroll-behavior: smooth; }
 .showcase-body { font-size: 16px; color: #54504A; max-width: 620px; line-height: 1.6; }
 
 /* Pillars - no cards: ledger columns divided by bronze hairlines */
-.pillar-row { display: flex; gap: 0; flex-wrap: wrap; margin-top: 16px;
-    border-top: 1px solid #C4BDAE; }
+/* One row of three whatever the column's width (fixed 220px columns wrapped
+   to two plus an orphan in the band's half-width column, 2026-11-02). */
+.pillar-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0; margin-top: 16px; border-top: 1px solid #C4BDAE; }
 .pillar-card { background: transparent; border: none;
-    border-left: 1px solid #C4BDAE; padding: 26px 30px 14px; width: 220px;
+    border-left: 1px solid #C4BDAE; padding: 26px 22px 14px; min-width: 0;
     text-align: left; transition: border-color 0.25s ease; }
+@media (max-width: 640px) {
+    .pillar-row { grid-template-columns: 1fr; }
+    .pillar-card { border-left: none; padding-left: 4px; } }
 .pillar-card:first-child { border-left: none; padding-left: 4px; }
 .pillar-card:hover { border-left-color: #9A7B4F; }
 .pillar-label { font-family: 'Helvetica Neue', sans-serif; font-size: 11px;
@@ -581,27 +586,11 @@ div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
 [data-testid="stMainBlockContainer"] { padding-bottom: 96px; }
 
 
-/* Organic bronze light - soft radial glows behind the hero. Not flat blobs:
-   low-opacity, no hard edge, palette-only. */
-.hero-section::before, .hero-section::after { content:""; position:absolute;
-    border-radius:50%; pointer-events:none; z-index:0; filter: blur(48px); }
-.hero-section::before { width:340px; height:340px; left:-90px; top:-40px;
-    background: radial-gradient(circle, rgba(154,123,79,.16), transparent 68%); }
-.hero-section::after { width:420px; height:420px; right:5%; bottom:-150px;
-    background: radial-gradient(circle, rgba(154,123,79,.12), transparent 70%); }
 .hero-left, .hero-stats { position: relative; z-index: 1; }
 
-/* --- CHARTS: glossy finish - a bronze halo behind, glow on the bars --- */
-[data-testid="stPlotlyChart"] {
-    box-shadow: 0 0 42px -6px rgba(154,123,79,.30),
-                0 18px 44px -30px rgba(63,59,53,.5);
-    transition: filter .18s ease, box-shadow .4s ease; }
-[data-testid="stPlotlyChart"]:hover {
-    box-shadow: 0 0 52px -4px rgba(154,123,79,.38),
-                0 22px 52px -28px rgba(63,59,53,.6); }
-[data-testid="stPlotlyChart"] g.bars .point path,
-[data-testid="stPlotlyChart"] g.bars path {
-    filter: drop-shadow(0 0 5px rgba(154,123,79,.55)); }
+/* --- CHARTS: no halo and no glowing bars (John, 2026-11-02: glow on every
+   element reads as generated). A chart is a ruled figure on the page. --- */
+[data-testid="stPlotlyChart"] { box-shadow: none; }
 
 /* --- ARRIVAL (after citadel.com, John 2026-10-30) ---
    lift-face: an element laid face-down on its bottom edge stands up to face
@@ -624,25 +613,46 @@ div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
    neither touches layout, so nothing below a block shifts while it arrives.
    will-change asks for the GPU layer up front (no first-frame stutter);
    reveal.js removes the class when the block lands, releasing the layer.
+   Where a block sits decides how it arrives (reveal.js measures it as it
+   comes on screen; John, 2026-11-02 - "more present, everywhere"):
+     --left   on the left of the page: swings in from the left
+     --right  on the right: swings in from the right
+     --card   a narrow block in the middle: turns face up on its spine
+     --flip   a wide block in the middle (and every block on a phone, where
+              everything is the full width): tips up off its bottom edge
+   Before it is measured a block waits invisible, lowered and a little small.
    Tune here:
-     --reveal-y    slide-up distance (20-30px reads as weight, not travel)
-     --reveal-x    slide-in distance for headings (from the left)
+     --reveal-y    rise from below (the waiting state, and part of every flip)
+     --reveal-x    swing-in distance from either side (never wider than the
+                   gutter: stMain clips sideways overflow)
+     --reveal-turn how far a side entry is turned away (depth, not spin)
      --reveal-dur  how long the settle takes
      --ease-out    fast start, long soft landing (an expo-out curve)
    The stagger between blocks is STAGGER_MS in reveal.js.
    ============================================================ */
-:root { --reveal-y: 24px; --reveal-x: -32px; --reveal-dur: 1s;
-        --ease-out: cubic-bezier(0.16, 1, 0.3, 1); }
+:root { --reveal-y: 46px; --reveal-x: clamp(56px, 9vw, 150px); --reveal-turn: 16deg;
+        --reveal-dur: 1.45s; --ease-out: cubic-bezier(0.16, 1, 0.3, 1); }
 .reveal-on .reveal-item {
-    opacity: 0; transform: translate3d(0, var(--reveal-y), 0);
-    will-change: transform, opacity; }
-.reveal-on .reveal-item--left { transform: translate3d(var(--reveal-x), 0, 0); }
-.reveal-on .reveal-item--lift { transform: perspective(900px) rotateX(-55deg);
+    opacity: 0; transform: translate3d(0, var(--reveal-y), 0) scale(.94); }
+.reveal-on .reveal-item--left {
+    transform: perspective(1400px) translate3d(calc(-1 * var(--reveal-x)), 0, 0)
+               rotateY(var(--reveal-turn)) scale(.96);
+    transform-origin: 0 50%; }
+.reveal-on .reveal-item--right {
+    transform: perspective(1400px) translate3d(var(--reveal-x), 0, 0)
+               rotateY(calc(-1 * var(--reveal-turn))) scale(.96);
+    transform-origin: 100% 50%; }
+.reveal-on .reveal-item--card {
+    transform: perspective(1000px) rotateY(-92deg) scale(.9);
+    transform-origin: 50% 50%; }
+.reveal-on .reveal-item--flip {
+    transform: perspective(1600px) translate3d(0, calc(var(--reveal-y) * .6), 0) rotateX(-68deg);
     transform-origin: 50% 100%; }
 .reveal-on .reveal-item.is-visible {
     opacity: 1; transform: translate3d(0, 0, 0);
+    will-change: transform, opacity;
     /* !important: the CTA's own colour transitions are !important too */
-    transition: opacity calc(var(--reveal-dur) * .8) var(--ease-out),
+    transition: opacity calc(var(--reveal-dur) * .7) var(--ease-out),
                 transform var(--reveal-dur) var(--ease-out) !important;
     transition-delay: var(--reveal-delay, 0ms) !important; }
 @media (prefers-reduced-motion: reduce) {

@@ -542,7 +542,7 @@ def apply_row(at, row, mix_names):
             if go():
                 return
     _widget(at.radio, "Which side of the trade are you on?").set_value(
-        "Bearish - short the book" if row["side"] else "Bullish - long the book")
+        "Bearish: short the book" if row["side"] else "Bullish: long the book")
     _widget(at.selectbox, "Covariance estimator").set_value(row["estimator"])
     _widget(at.radio, "Weighting").set_value(row["weighting"])
     vt = _widget(at.checkbox, "Target volatility")
@@ -584,7 +584,7 @@ def apply_row(at, row, mix_names):
         at.slider(key="watch_w").set_value(row["window"])
         at.slider(key="watch_t").set_value(row["threshold"])
     for label, idx in (("Anchor (the position you want to balance)", row["anchor"]),
-                       ("High-flyer (Circle 1 - the volatile conviction position)", row["flyer"])):
+                       ("High-flyer (Circle 1: the volatile conviction position)", row["flyer"])):
         hits = [w for w in at.selectbox if w.label == label]
         if hits:
             _pick(hits[0], idx)
@@ -716,8 +716,8 @@ def check_page(at, row, mix_names) -> list:
             f"{_fmt_days(fin.max() if fin.size else np.inf)}, {want} "
             f"(${row['liq_book']:,} at {row['liq_part']}%)")
 
-    book = next((m.value for m in at.markdown if " book - " in m.value and "quiet-tape" in m.value), "")
-    bh = re.search(r"\$([\d,]+) book - (\d+) of your (\d+) names .* at (\d+)% of quiet-tape", book)
+    book = next((m.value for m in at.markdown if " book: " in m.value and "quiet-tape" in m.value), "")
+    bh = re.search(r"\$([\d,]+) book: (\d+) of your (\d+) names .* at (\d+)% of quiet-tape", book)
     rec("PAGE-04", bool(bh) and int(bh.group(1).replace(",", "")) == row["book"]
         and int(bh.group(4)) == row["book_part"] and int(bh.group(3)) == len(cols),
         f"book headline {re.sub('<[^>]+>', '', book)[:160]!r} for ${row['book']:,} at {row['book_part']}%")
