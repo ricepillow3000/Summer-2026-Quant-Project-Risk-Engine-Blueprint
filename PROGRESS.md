@@ -703,6 +703,20 @@ risk-engine/
   up in turn and the band's photo settles - all on view timelines (scroll
   position, not a clock), desktop only. citadel.com itself was unreachable
   from the sandbox; built from John's description.
+- ✅ **Removing what reads as AI-generated (2026-11-02)**. John's list
+  first: em dashes, "It's not X. It's Y", random bold, emoji bullets, title
+  case, one-line paragraphs, pivotal/moreover/serves as. Every string a
+  visitor sees was edited (comments and docstrings untouched): spaced hyphens
+  doing a dash's job on the rendered page 167 -> 0, staging contrasts
+  rewritten while the honest negatives stay (not a forecast, excluded not
+  estimated), about 25 bold phrases inside sentences unbolded, restating
+  closers cut. Design, after research on generated-UI tells: no glow on charts
+  or behind the hero, the Grit Zone's three pillars in one row (they wrapped
+  to two plus an orphan), the hero button says where it goes ("Start with the
+  Grit Zone"), the "The Innovation"/"The Conviction" eyebrows gone, the
+  Book's cards square with a 2px role edge. Still open: the map's pair names
+  read "META - AVGO" in three places; one sits in code PR #32 edits, so all
+  three change together after it merges.
 - ✅ **Motion everywhere: arrivals from where each block sits, and a gliding
   wheel (2026-11-02)**. John: "more exaggerated ... more present ... everywhere";
   things on the left pop from the left, on the right from the right, in the
