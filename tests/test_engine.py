@@ -763,6 +763,13 @@ def test_every_dependency_is_pinned_to_an_exact_version():
     for wf in (root / ".github" / "workflows").glob("*.yml"):
         for use in re.findall(r"uses:\s*(\S+)", wf.read_text(encoding="utf-8")):
             assert re.fullmatch(r"[\w.-]+/[\w.-]+@[0-9a-f]{40}", use), f"{wf.name}: {use}"
+    # The runner image is pinned too: on 2026-11-04 ubuntu-latest became
+    # Ubuntu 26.04, where Playwright 1.56.1 cannot install Chromium, and every
+    # browser check in the Live audit died at Install.
+    for wf in (root / ".github" / "workflows").glob("*.yml"):
+        for runner in re.findall(r"runs-on:\s*(\S+)", wf.read_text(encoding="utf-8")):
+            assert runner != "ubuntu-latest" and re.fullmatch(r"ubuntu-\d\d\.\d\d", runner), \
+                f"{wf.name}: runs-on {runner}"
     bot = (root / ".github" / "dependabot.yml").read_text(encoding="utf-8")
     assert 'package-ecosystem: "pip"' in bot and 'package-ecosystem: "github-actions"' in bot
 
