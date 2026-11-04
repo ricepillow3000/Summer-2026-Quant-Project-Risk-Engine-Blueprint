@@ -3792,6 +3792,8 @@ def test_the_crest_is_symmetric_and_its_pieces_never_touch():
     frames = re.search(r"@keyframes crest-ripple \{(.*?)\n\}", css, re.S).group(1)
     assert re.search(r"0%, 100% \{ transform: scale\(1\);\s+opacity: 1; \}", frames), (
         "a ring must start and end each pass at rest, or leaving the crest snaps it")
+    # John, 2026-11-04: the ripple 15% more noticeable (was 1.035 / .55)
+    assert re.search(r"50%\s+\{ transform: scale\(1\.04\);\s+opacity: \.48; \}", frames)
     assert re.search(r"prefers-reduced-motion: reduce\) \{\s*\.hero-crest:hover \.crest-ring", css)
     src = (root / "main.py").read_text(encoding="utf-8")
     assert "P.__melionaRipple" in src and "updateTiming({ iterations: pass + 1 })" in src
@@ -5050,7 +5052,7 @@ def test_the_skeleton_paints_first_and_the_hero_lifts_it():
     assert cfg["server"].get("enableStaticServing") is True
     served = sorted(p.name for p in (root / "static").iterdir())
     assert served == ["app.css", "band.avif", "band.jpg", "facade.avif", "facade.jpg",
-                      "gungnir.avif", "gungnir.webp", "reveal.js"], \
+                      "gungnir.avif", "gungnir.webp", "reveal.js", "windtunnel.js"], \
         f"static/ is served to the public; keep it to public files: {served}"
 
 
@@ -5911,7 +5913,7 @@ def test_blocks_arrive_from_where_they_sit_and_the_wheel_glides():
     # the side is read from where the block sits, as it arrives
     assert re.search(r"var SIDE = 0\.\d+;", js) and re.search(r"var WIDE = 0\.\d+;", js)
     assert "return f < SIDE ? 'left' : f > 1 - SIDE ? 'right' : 'card';" in js
-    assert "el.classList.add('reveal-item--' + side(el));" in js
+    assert "var how = side(el);" in js and "el.classList.add('reveal-item--' + how);" in js
     # every block, not a fixed list: Streamlit's leaf containers - the engine's
     # controls, captions and cards - arrive too
     assert "var LEAF = '[data-testid=\"stElementContainer\"]';" in js and "var ITEMS = NAMED + ',' + LEAF;" in js
@@ -5921,6 +5923,91 @@ def test_blocks_arrive_from_where_they_sit_and_the_wheel_glides():
     assert "W.__melionaStop) return;" in js and "e.ctrlKey" in js and "scrolls(n, e.deltaY)" in js
     assert js.index("if (calm)") < js.index("addEventListener('wheel'")
     assert "{ passive: false }" in js and re.search(r"var GLIDE_EASE = 0\.\d+;", js)
+
+
+def test_a_wide_block_never_turns_like_a_card_and_never_hangs_mid_turn():
+    """John, 2026-11-04 (screenshot): the Book's 1,488px sentence stood frozen
+    as a sliver mid-turn. A card turn is for a narrow block; given to a wide
+    one (measured while its placeholder was still small, then filled in) its
+    near edge swings past the eye at perspective 1000px. Rules: widths are
+    layout widths, a block with no size yet or wider than CARD in the middle
+    tips up instead, the card's eye distance is 3x its width, a block resized
+    mid-move lands at once, and an interrupted move lands too."""
+    import re
+    root = pathlib.Path(__file__).resolve().parent.parent
+    js = (root / "static" / "reveal.js").read_text(encoding="utf-8")
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    side = re.search(r"function side\(el\) \{(.*?)\n  \}", js, re.S).group(1)
+    assert "el.offsetWidth" in side and "getBoundingClientRect().width" not in side
+    assert "if (!pw || !w || !el.offsetHeight) return 'flip';" in side
+    assert "w > CARD * pw) return 'flip';" in side
+    card = float(re.search(r"var CARD = (0\.\d+);", js).group(1))
+    wide = float(re.search(r"var WIDE = (0\.\d+);", js).group(1))
+    assert card < wide and card <= 0.5
+    assert "Math.max(1000, 3 * el.offsetWidth)" in js
+    assert re.search(r"\.reveal-item--card \{\s*transform: perspective\(var\(--reveal-depth, 1000px\)\)", css)
+    assert "addEventListener('transitioncancel', end)" in js
+    assert "new ResizeObserver" in js and "grew.observe(el)" in js and "if (grew) grew.unobserve(el);" in js
+    assert "el.style.removeProperty('--reveal-depth');" in js
+
+
+def test_the_cone_is_coloured_by_return_and_the_smoke_rides_the_computed_cone():
+    """John, 2026-11-04: the cone should look blown by wind, with many colours
+    that "must not be random" but follow the cumulative return and the
+    trading days. One fixed scale (RETURN_SCALE) maps return to colour; the
+    band fills place each colour exactly at its return (fillgradient in the
+    y-axis's own units), the figure ships the same list to
+    static/windtunnel.js, and the smoke is percentile levels riding the
+    chart's own computed paths, never free points."""
+    import json
+    import re
+    root = pathlib.Path(__file__).resolve().parent.parent
+    src = (root / "main.py").read_text(encoding="utf-8")
+    ns: dict = {"np": np}
+    exec("import plotly.graph_objects as go\n"
+         + "CHARCOAL = '#3F3B35'\nAXIS_LINE = 'rgba(63,59,53,0.28)'\nGRID = AXIS_LINE\nBRONZE = '#9A7B4F'\n"
+         + re.search(r"^RETURN_SCALE = \(.*?\)\)\n", src, re.S | re.M).group(0)
+         + re.search(r"^def _return_gradient.*?(?=^def return_key_html)", src, re.S | re.M).group(0)
+         + re.search(r"^def _style_fig.*?(?=^def fan_chart|^# The cone's colours)", src, re.S | re.M).group(0)
+         + re.search(r"^def fan_chart.*?(?=^def panel_head)", src, re.S | re.M).group(0), ns)
+    scale = ns["RETURN_SCALE"]
+    rets = [r for r, _ in scale]
+    assert rets == sorted(rets) and len(set(c for _, c in scale)) == len(scale) >= 9
+    assert 0 in rets and rets[0] < -30 and rets[-1] > 30
+    days = np.arange(1, 253)
+    bands = {k: np.linspace(0, v, 252) for k, v in
+             (("p5", -0.2), ("p25", -0.05), ("p50", 0.08), ("p75", 0.2), ("p95", 0.4))}
+    bands["days"] = days
+    fig = json.loads(ns["fan_chart"](bands).to_json())
+    data, layout = fig["data"], fig["layout"]
+    # the audits read p95, p5, p75, p25 at 0..3 and the centreline by name
+    assert [d.get("name") for d in data[:4]] == ["p95", "p5", "p75", "p25"]
+    assert any(d.get("name") == "median" for d in data)
+    lo, hi = rets[0], rets[-1]
+    for i in (1, 3):
+        g = data[i]["fillgradient"]
+        assert g["type"] == "vertical" and g["start"] == lo and g["stop"] == hi
+        for (pos, col), (ret, hexc) in zip(g["colorscale"], scale):
+            assert abs(pos - (ret - lo) / (hi - lo)) < 1e-12
+            assert col.startswith("rgba(" + ",".join(str(int(hexc[j:j + 2], 16)) for j in (1, 3, 5)) + ",")
+    assert layout["meta"] == {"meliona": "cone", "scale": [[r, c] for r, c in scale]}
+    # the readout lists all five levels, best first (unified hover reads last-first)
+    labelled = [d["name"] for d in data if "hovertemplate" in d]
+    assert labelled == ["p5 readout", "p25 readout", "median", "p75 readout", "p95 readout"]
+    # the smoke: reads the chart's own levels and colours, stays in 5-95%,
+    # incompressible eddies, never under reduced motion, loaded with the motion
+    js = (root / "static" / "windtunnel.js").read_text(encoding="utf-8")
+    assert "var LO = 0.05, HI = 0.95;" in js
+    for name in ("p5", "p25", "median", "p75", "p95"):
+        assert f"'{name}']" in js
+    assert "_fullData" in js and "makeScale(meta.scale)" in js and "meliona === 'cone'" in js
+    assert "-M.a * M.kx * Math.cos(ph) * sinS" in js and "M.a * M.ks * Math.sin(ph) * cosS" in js
+    assert js.index("prefers-reduced-motion") < js.index("function Tunnel(")
+    assert "c.clip();" in js and js.index("c.clip();") < js.index("createRadialGradient")
+    assert "pointer-events:none" in js and "z-index" not in js.split("cssText")[1].split(";\n")[0]
+    reveal = (root / "static" / "reveal.js").read_text(encoding="utf-8")
+    assert reveal.index("if (calm)") < reveal.index("windtunnel.js")
+    assert "await windAgrees(tag" in (root / "tools" / "deep_scan.mjs").read_text(encoding="utf-8")
 
 
 def test_every_in_page_button_is_flown_by_both_glide_scans():

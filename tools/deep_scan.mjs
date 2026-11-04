@@ -162,7 +162,31 @@ async function coneAgrees(tag) {
   const med = pct(await metric('Median 1-year return'));
   if (Number.isFinite(med)) ok(Math.abs(med - p50) <= 0.06, `${tag}: Risk Breakdown median = cone centreline`,
                                `${med}% vs ${p50.toFixed(2)}%`);
+  await windAgrees(tag, p5, last(fan.data[0].y));
   return { v, p5, p50 };
+}
+
+// The smoke in the cone (static/windtunnel.js, John 2026-11-04): it must ride
+// THIS cone (the chart's own 5th and 95th percentiles, after every setting),
+// stay inside it, and wear the colour of the return each particle is drawn at -
+// read back from its pixel through Plotly's axis by the page's own check().
+async function windAgrees(tag, p5, p95) {
+  await page.evaluate(() => {
+    const gd = [...document.querySelectorAll('.js-plotly-plot')].find(g => (g._fullLayout?.meta || {}).meliona === 'cone');
+    gd?.scrollIntoView({ block: 'center' });
+  });
+  let w = null;
+  for (let i = 0; i < 30; i++) {
+    await page.waitForTimeout(200);
+    w = await page.evaluate(() => window.__melionaWind ? window.__melionaWind.check() : null);
+    if (w && w.particles >= 50 && Math.abs(w.p5End - p5) < 1e-9) break;
+  }
+  if (!w) return say('FAIL', `${tag}: wind tunnel loaded`, 'window.__melionaWind missing');
+  ok(w.particles >= 50, `${tag}: smoke is blowing through the cone`, `${w.particles} particles`);
+  ok(Math.abs(w.p5End - p5) < 1e-9 && Math.abs(w.p95End - p95) < 1e-9, `${tag}: smoke rides this cone`,
+     `smoke 5th ${w.p5End?.toFixed(3)} / 95th ${w.p95End?.toFixed(3)} vs chart ${p5.toFixed(3)} / ${p95.toFixed(3)}`);
+  ok(w.outsideCone === 0, `${tag}: no smoke outside the 5-95% cone`, `${w.outsideCone} of ${w.particles}`);
+  ok(w.colourMismatch === 0, `${tag}: every particle wears the colour of its own return`, `${w.colourMismatch} of ${w.particles}`);
 }
 
 // ---- boot timeline -----------------------------------------------------------

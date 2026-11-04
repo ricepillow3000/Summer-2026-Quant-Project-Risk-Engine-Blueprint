@@ -57,6 +57,7 @@
   // share of the page slides in from that side; in the middle it turns over.
   var SIDE = 0.42;        // left of 42% (or right of 58%) of the page's width
   var WIDE = 0.6;         // wider than 60% of the page: tips up, not turns
+  var CARD = 0.45;        // a card is narrower than 45% of the page; a wider block in the middle tips up
   var SCRUB = '.showcase-row, .panel-head';
   // Each photo plate, and the class on <html> that attaches it (app.css,
   // main.py). On <html>, not the band: Streamlit may rewrite a block's own
@@ -72,6 +73,14 @@
     (W.matchMedia && W.matchMedia('(prefers-reduced-motion: reduce)').matches);
   var api = W.__melionaReveal = { revealAll: function () {} };
   if (calm) { H.classList.remove('reveal-on'); return; }   // everything as drawn, photos at once
+  // The cone's wind tunnel (static/windtunnel.js) comes with the motion: one
+  // entry point, so the head and main.py's fallback both bring it.
+  if (!D.getElementById('meliona-wind')) {
+    var wt = D.createElement('script'), me = D.getElementById('meliona-reveal');
+    wt.id = 'meliona-wind';
+    wt.src = (me && me.src ? me.src : 'app/static/reveal.js').replace(/reveal\.js(\?.*)?$/, 'windtunnel.js');
+    D.head.appendChild(wt);
+  }
 
   // ---- 1. reveals ----------------------------------------------------------
   var seen = new IntersectionObserver(function (entries) {
@@ -87,36 +96,62 @@
 
   function show(el, delay) {
     seen.unobserve(el);
-    el.classList.add('reveal-item--' + side(el));    // jumps there while still invisible
+    var how = side(el);
+    el.classList.add('reveal-item--' + how);          // jumps there while still invisible
+    // A card turns on its spine with the eye 3x its width away, never closer:
+    // nearer, its front edge swings past the eye and it draws as a sliver.
+    el.style.setProperty('--reveal-depth', Math.max(1000, 3 * el.offsetWidth) + 'px');
     void el.offsetWidth;                               // ...and starts from there
     el.style.setProperty('--reveal-delay', delay + 'ms');
     el.classList.add('is-visible');
     var end = function (ev) {
-      if (ev && (ev.target !== el || ev.propertyName !== 'transform')) return;
+      if (ev && ev.target !== el) return;
+      if (ev && ev.type === 'transitionend' && ev.propertyName !== 'transform') return;
       done(el);
     };
     el.addEventListener('transitionend', end);
+    el.addEventListener('transitioncancel', end);     // interrupted: land, never hang mid-way
     el.__rvTimer = setTimeout(end, delay + 2200);     // a tab hidden mid-way never ends
+    // A block whose content is redrawn while it arrives (Streamlit fills a
+    // placeholder after a rerun: the Book's sentence, 2026-11-04) changes
+    // size mid-move. Its move was chosen for the old size, so it lands at
+    // once instead of finishing a turn meant for a different block.
+    el.__rvW = el.offsetWidth; el.__rvH = el.offsetHeight;
+    if (grew) grew.observe(el);
   }
+  var grew = W.ResizeObserver ? new ResizeObserver(function (entries) {
+    entries.forEach(function (e) {
+      var el = e.target, w = el.offsetWidth, h = el.offsetHeight;
+      if (!el.classList.contains('is-visible')) { grew.unobserve(el); return; }
+      if (Math.abs(w - el.__rvW) > 24 || Math.abs(h - el.__rvH) > 24) done(el);
+    });
+  }) : null;
   // Measured as it arrives, not when tagged: Streamlit lays a block out after
   // adding it, and a tab or drawer opened later sits wherever it opens. The
   // hidden state only lifts and shrinks about the centre, so the centre read
   // here is where the block will land.
+  // Widths are layout widths (offsetWidth): the waiting state's transform
+  // must not make a block look narrower than it is. A block with no size yet
+  // (an empty placeholder) tips up: it can never be mistaken for a card.
   function side(el) {
-    var page = (D.querySelector(SCROLLER) || D.body).getBoundingClientRect();
-    var r = el.getBoundingClientRect();
-    if (!page.width || !r.width) return 'flip';
-    if (r.width > WIDE * page.width) return 'flip';
-    var f = ((r.left + r.right) / 2 - page.left) / page.width;
+    var sc = D.querySelector(SCROLLER) || D.body;
+    var page = sc.getBoundingClientRect(), pw = sc.clientWidth || page.width;
+    var w = el.offsetWidth, r = el.getBoundingClientRect();
+    if (!pw || !w || !el.offsetHeight) return 'flip';
+    if (w > WIDE * pw) return 'flip';
+    var f = ((r.left + r.right) / 2 - page.left) / pw;
+    if (f >= SIDE && f <= 1 - SIDE && w > CARD * pw) return 'flip';
     return f < SIDE ? 'left' : f > 1 - SIDE ? 'right' : 'card';
   }
   // Landed: hand the block back to its own styles (hover lifts, transitions)
   // and drop will-change, so the GPU layer it held is released.
   function done(el) {
     clearTimeout(el.__rvTimer);
+    if (grew) grew.unobserve(el);
     el.classList.remove('reveal-item', 'reveal-item--left', 'reveal-item--right', 'reveal-item--flip',
                         'reveal-item--card', 'is-visible');
     el.style.removeProperty('--reveal-delay');
+    el.style.removeProperty('--reveal-depth');
   }
   api.revealAll = function () {                       // the end state, at once (layout probes)
     [].forEach.call(D.querySelectorAll('.reveal-item'), function (el) { seen.unobserve(el); done(el); });

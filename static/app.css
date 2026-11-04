@@ -203,7 +203,7 @@ html { scroll-behavior: smooth; }
    rest, scaled about its own centre, so the crest stays symmetric throughout. */
 @keyframes crest-ripple {
     0%, 100% { transform: scale(1);     opacity: 1; }
-    50%      { transform: scale(1.035); opacity: .55; }
+    50%      { transform: scale(1.04);  opacity: .48; }   /* 2026-11-04: +15% (was 1.035 / .55) */
 }
 .hero-crest .crest-ring { transform-box: fill-box; transform-origin: center; }
 .hero-crest:hover .crest-ring, .hero-crest.rippling .crest-ring {
@@ -643,7 +643,7 @@ div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
                rotateY(calc(-1 * var(--reveal-turn))) scale(.96);
     transform-origin: 100% 50%; }
 .reveal-on .reveal-item--card {
-    transform: perspective(1000px) rotateY(-92deg) scale(.9);
+    transform: perspective(var(--reveal-depth, 1000px)) rotateY(-92deg) scale(.9);
     transform-origin: 50% 50%; }
 .reveal-on .reveal-item--flip {
     transform: perspective(1600px) translate3d(0, calc(var(--reveal-y) * .6), 0) rotateX(-68deg);
@@ -1185,3 +1185,13 @@ a.cta-btn:focus-visible, a.cta-link:focus-visible, .meliona-footer a.f-box:focus
     animation: read-progress linear both; animation-timeline: --page; }
 @keyframes read-progress { to { transform: scaleX(1); } }
 }
+
+/* CONE KEY - the colour scale under the cumulative-return cone, labelled in
+   returns. The bar is decorative; the words use the page's AA text tones. */
+.cone-key { margin: 2px 0 6px; font-family: Georgia, serif; }
+.cone-key-label { font-size: 12px; color: #6A5030; letter-spacing: .02em; margin-bottom: 5px; }
+.cone-key-bar { height: 8px; width: 100%; border: 1px solid rgba(63,59,53,.18); }
+.cone-key-ticks { position: relative; height: 16px; font-size: 11px; color: #54504A; }
+.cone-key-ticks span { position: absolute; top: 3px; transform: translateX(-50%); white-space: nowrap; }
+.cone-key-ticks span:first-child { transform: none; }
+.cone-key-ticks span:last-child { transform: translateX(-100%); }

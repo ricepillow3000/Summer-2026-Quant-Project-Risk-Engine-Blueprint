@@ -862,6 +862,38 @@ risk-engine/
   Options audit, written after #21 was opened, looked the boxes up by the old
   keys and failed every page run (`KeyError: 'watch_a'`); it now finds them
   by their labels, Asset A and Asset B.
+- ✅ **The Book's sentence no longer freezes mid-turn (2026-11-04)**. John's
+  screenshot: the Book's full-width sentence stood as a sliver between the two
+  controls. A card turn (rotateY on its spine) is for a narrow block in the
+  middle; given to a 1,488px block (measured while its placeholder was still
+  small, then filled in by a rerun), its near edge swings past the eye at
+  perspective 1000px. reveal.js now reads layout widths, never gives a block
+  with no size yet or wider than 45% of the page a card turn, sets the card's
+  eye distance to 3x its width, lands a block at once if it is resized
+  mid-move (ResizeObserver) or its move is cancelled
+  (`test_a_wide_block_never_turns_like_a_card_and_never_hangs_mid_turn`;
+  browser run: a 260px middle block widened to 1,400px mid-turn landed in
+  under 120 ms). The crest's ripple is 15% stronger (scale 1.04, opacity .48).
+- ✅ **The cone in a wind tunnel (2026-11-04)**. John: smoke blown through the
+  cumulative-return cone, many colours that "must not be random" but follow
+  the return and the trading days, fully interactive. One fixed scale,
+  `RETURN_SCALE` in main.py (oxblood at -50%, sand at break-even, indigo at
+  +60%), colours the band fills at exactly the return each height stands for
+  (Plotly `fillgradient`, start/stop in the y-axis's own % units) and ships
+  in the figure's `layout.meta` to `static/windtunnel.js`, which blows smoke
+  through the cone: each particle is a percentile level between 5% and 95%
+  riding the chart's own computed paths, coloured by the return where it is;
+  eddies come from a stream function (incompressible, flat on the 5% and 95%
+  edges) so the smoke never bunches into lanes or leaves the cone, and all
+  drawing is clipped to the cone's outline. The pointer parts the smoke, a
+  click sends a gust, the hover readout lists all five levels best-first.
+  Off screen or in a hidden tab it stops; under reduced motion it never
+  loads. `window.__melionaWind.check()` reads each particle's return back
+  from its pixel through Plotly's axis; deep_scan's `windAgrees` runs it on
+  every cone it checks (baseline, risk parity, custom shock, every crisis,
+  the short book). Browser runs: ~980 particles, 0 coloured wrong, 0 outside
+  the cone, at 1440px and on an iPhone 15
+  (`test_the_cone_is_coloured_by_return_and_the_smoke_rides_the_computed_cone`).
 
 ## Non-negotiable constraints (the "why")
 
