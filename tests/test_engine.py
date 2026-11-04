@@ -5620,7 +5620,7 @@ def test_the_skeleton_paints_first_and_the_hero_lifts_it():
     cfg = tomllib.loads((root / ".streamlit" / "config.toml").read_text(encoding="utf-8"))
     assert cfg["server"].get("enableStaticServing") is True
     served = sorted(p.name for p in (root / "static").iterdir())
-    assert served == ["app.css", "band.avif", "band.jpg", "facade.avif", "facade.jpg",
+    assert served == ["app.css", "band.avif", "band.jpg", "dock.js", "facade.avif", "facade.jpg",
                       "gungnir.avif", "gungnir.webp", "reveal.js", "windtunnel.js"], \
         f"static/ is served to the public; keep it to public files: {served}"
 
@@ -6708,6 +6708,218 @@ start" rule is exercised."""
     for k, v in page.items():
         assert (v == mine[k]) if isinstance(v, (str, list)) else abs(v - mine[k]) < 1e-12, (k, v, mine[k])
     assert int(page["t1"].split(" of ")[1]) >= 3 and int(page["race"].split(" of ")[1]) >= 3, page
+
+
+
+def test_the_phone_shortcut_flies_to_the_engine_and_never_covers_it():
+    """John, 2026-11-04 (launch list): on a phone the only way into the engine
+    was to scroll past the whole showcase. A slim bar, "Run the risk engine",
+    now sits at the bottom of a phone screen between the hero and the engine.
+    Built so it cannot become the next defect: it appears only once the
+    hero's own button has left the screen and goes as soon as #engine (or
+    anything below it) is on screen, so it never covers the verdict, the Book
+    or the tabs; it is an in-page link the existing glide flies (a second
+    scroll routine would fight the first); observers decide when it shows, not
+    a scroll listener; it is never drawn on a wider screen; and it lives
+    outside Streamlit's tree, so the tab strip keeps its slot. The browser
+    half - shown past the hero, 44px, clear of the notice, lands on the engine,
+    gone there - is tools/site_check.mjs on the phone."""
+    import re
+    root = pathlib.Path(__file__).resolve().parent.parent
+    js = (root / "static" / "dock.js").read_text(encoding="utf-8")
+    reveal = (root / "static" / "reveal.js").read_text(encoding="utf-8")
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    main = (root / "main.py").read_text(encoding="utf-8")
+    # one entry point: reveal.js brings it, before its reduced-motion return
+    assert "'dock.js'" in reveal and reveal.index("'dock.js'") < reveal.index("if (calm)"), \
+        "dock.js must load under reduced motion too (only its slide stops)"
+    # the glide flies it: an in-page link to #engine, and no scrolling of its own
+    assert "href=\"#' + ENGINE + '\"" in js and "ENGINE = 'engine'" in js
+    for own in ("scrollTo", "scrollTop", "scrollIntoView", "scrollBy", "addEventListener('scroll'"):
+        assert own not in js, f"dock.js scrolls the page itself ({own}): the glide is the one routine"
+    # shown between the hero's button and the engine, by observers
+    assert "new IntersectionObserver" in js and "'#hero .cta-btn'" in js
+    assert "heroGone && engineAhead" in js and "r.bottom <= 0" in js and "r.top >= vh" in js
+    assert "(max-width: 640px)" in js, "the bar is for phones only"
+    # outside Streamlit's tree: nothing main.py writes, and not a block reveal.js hides
+    assert "m-dock" not in main and "m-stack" not in main
+    named = re.search(r"var NAMED = \[(.*?)\]", reveal, re.S).group(1)
+    mine = set(re.findall(r"className = '([\w-]+)'", js)) | set(re.findall(r'class="([\w-]+)"', js))
+    assert {"m-stack", "m-dock", "m-dock-btn", "m-notice", "m-notice-ok"} <= mine, mine
+    assert not [c for c in mine if f".{c}" in named], "a reveal would hide the bar or the notice"
+    # the look: phones only, safe area, a 44px square target, a pressed state,
+    # no glow, and under reduced motion only the slide stops
+    rule = lambda sel: re.search(re.escape(sel) + r"\s*\{([^}]*)\}", css).group(1)
+    assert re.search(r"@media \(min-width: 641px\)\s*\{\s*\.m-dock \{ display: none", css)
+    assert "env(safe-area-inset-bottom)" in rule(".m-dock")
+    btn = rule(".m-dock-btn")
+    assert "min-height: 44px" in btn and "border-radius: 0" in btn and "box-shadow: none" in btn
+    assert "background-color: #3F3B35" in rule(".m-dock"), "a charcoal bar"
+    assert ".m-dock-btn:active" in css and ".m-dock-btn:focus-visible" in css
+    assert re.search(r"prefers-reduced-motion: reduce\)\s*\{\s*\.m-dock \{ animation: none", css)
+    assert not re.search(r"\.m-[\w-]+[^{}]*\{[^}]*box-shadow:(?!\s*none)", css), "no glow on the dock"
+    # under the boot veil (999), so it never shows over the loading screen
+    z = int(re.search(r"\.m-stack \{[^}]*z-index: (\d+)", css).group(1))
+    assert z < 999
+    # the browser half exists and presses the bar
+    site = (root / "tools" / "site_check.mjs").read_text(encoding="utf-8")
+    assert "page.click('.m-dock-btn')" in site and "the shortcut glides to the engine" in site
+    assert "shortcut gone once the engine is on screen" in site and "no shortcut bar on a wide screen" in site
+    served = sorted(p.name for p in (root / "static").iterdir())
+    assert "dock.js" in served
+
+
+def test_the_cookie_notice_informs_once_and_never_blocks():
+    """John, 2026-11-04 (launch list): a cookie notice, informational - the
+    site's one cookie is Streamlit's anti-forgery _streamlit_xsrf, strictly
+    necessary, so there is nothing to consent to and a consent wall would
+    overclaim. Shown until OK is pressed, the press kept in localStorage
+    (`meliona-cookie-notice`) behind try/catch so blocked storage just shows it
+    again; never shown without JavaScript; never over the main button
+    (site_check, 390x844 and 1440x900, first load); and the layout probes
+    answer it the way a returning visitor did, or press OK through
+    window.__melionaNotice.dismiss() - on a desktop it sits over the
+    bottom-left corner, where a probe's click would otherwise land on it."""
+    import re
+    root = pathlib.Path(__file__).resolve().parent.parent
+    js = (root / "static" / "dock.js").read_text(encoding="utf-8")
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    main = (root / "main.py").read_text(encoding="utf-8")
+    privacy = (root / "PRIVACY.md").read_text(encoding="utf-8")
+    assert "var KEY = 'meliona-cookie-notice'" in js
+    # every storage touch is guarded: a blocked store must not break the page
+    for call in ("localStorage.getItem(KEY)", "localStorage.setItem(KEY, 'ok')"):
+        assert re.search(r"try \{[^\n]*" + re.escape(call) + r"[^\n]*\} catch", js), \
+            f"{call} is not inside try/catch"
+    assert js.count("W.localStorage") == 2, "a storage touch outside the two guarded ones"
+    # the words, and the same privacy page the footer opens
+    assert "This site uses one cookie, needed for security, and no tracking." in js
+    url = re.search(r"var PRIVACY = '([^']+)'", js).group(1)
+    assert f'href="{url}"' in main, "the notice and the footer must open the same privacy page"
+    assert ">OK</button>" in js and 'type="button"' in js
+    # informs, never walls: no accept/reject, nothing covering the page, and
+    # the stack lets clicks through everywhere but on its own boxes
+    for wall in ("Accept", "Reject", "consent to", "Manage"):
+        assert wall not in js, f"the notice reads as a consent wall ({wall})"
+    stack = re.search(r"\.m-stack \{([^}]*)\}", css).group(1)
+    assert "pointer-events: none" in stack and "inset: 0" not in stack and "top:" not in stack
+    assert "W.__melionaNotice = {" in js and "dismiss: dismiss" in js
+    # documented where the cookie table lives, with what it holds
+    row = next(ln for ln in privacy.splitlines() if ln.startswith("| `meliona-cookie-notice`"))
+    assert "Local storage" in row and "OK" in row
+    assert "it is not a consent banner" in " ".join(privacy.split())
+    # every layout probe answers it before measuring
+    for tool in ("device_check", "deep_scan", "recruiter_walk", "flow_check", "glide_load_check"):
+        t = (root / "tools" / f"{tool}.mjs").read_text(encoding="utf-8")
+        assert "localStorage.setItem('meliona-cookie-notice', 'ok')" in t or "__melionaNotice?.dismiss()" in t, tool
+    for tool in ("device_check", "deep_scan", "flow_check"):
+        t = (root / "tools" / f"{tool}.mjs").read_text(encoding="utf-8")
+        assert "revealAll(); window.__melionaNotice?.dismiss();" in t, f"{tool} measures with the notice up"
+    site = (root / "tools" / "site_check.mjs").read_text(encoding="utf-8")
+    assert "cookie notice clear of the main CTA" in site and "addInitScript" not in site, \
+        "site_check must see the notice a first visitor sees"
+
+
+def test_usage_counts_are_anonymous_hourly_and_reset_at_midnight():
+    """John, 2026-11-04 (launch list): first-party analytics, no SDK. Two
+    counters in memory - sessions started today (UTC) and how many sessions
+    opened each preset - and ONE aggregate line to the host's log an hour,
+    plus the finished day's line at the first event after midnight. Nothing
+    in it names a visitor: no reference, no IP, and only preset names from the
+    closed PRESETS list (a typed ticker or a forged ?preset= is dropped). A
+    rerun must not count again, nor must "Clear this session's data"."""
+    import logging
+    import threading
+    from datetime import datetime, timezone
+    import src.observability as obs
+    from src.ingestion import PRESETS
+
+    lines = []
+    t = [datetime(2026, 11, 4, 10, 0, tzinfo=timezone.utc).timestamp()]
+    u = obs.UsageCounter(clock=lambda: t[0], write=lines.append)
+    known = {"Mag-7", "Sector ETFs"}
+    u.session(); u.session(); u.preset("Mag-7", known); u.preset("Sector ETFs", known)
+    u.preset("Mag-7", known); u.preset("NVDA", known); u.preset("<script>", known)
+    assert lines == [], "a line before the hour is up"
+    t[0] += 3599
+    u.session()
+    assert lines == []
+    t[0] += 1
+    u.session()
+    assert lines == ["usage 2026-11-04: 4 sessions; presets: Mag-7 2, Sector ETFs 1"], lines
+    t[0] += 600
+    u.preset("Sector ETFs", known)
+    assert len(lines) == 1, "one line an hour, not one per event"
+    # past midnight UTC: the finished day's total, then zero
+    t[0] = datetime(2026, 11, 5, 0, 0, 5, tzinfo=timezone.utc).timestamp()
+    u.session()
+    assert lines[-1] == "usage 2026-11-04: 4 sessions; presets: Mag-7 2, Sector ETFs 2", lines
+    assert u.line() == "usage 2026-11-05: 1 session; presets: none"
+    u.flush()
+    assert lines[-1] == "usage 2026-11-05: 1 session; presets: none"
+    u.flush()
+    assert len(lines) == 3 and lines[-2].startswith("usage 2026-11-04"), "flush writes only what is new"
+    # nothing that could identify anyone reaches a line
+    assert not any(c in "".join(lines) for c in ("ref=", "NVDA", "<script>"))
+    # Streamlit serves each session on its own thread
+    c = obs.UsageCounter(clock=lambda: t[0], write=lambda _: None)
+    ts = [threading.Thread(target=lambda: [c.session() for _ in range(2000)]) for _ in range(8)]
+    [th.start() for th in ts]; [th.join() for th in ts]
+    assert c.line().startswith("usage 2026-11-05: 16000 sessions")
+    # its own INFO stream to the host log, not the root's errors-only stream
+    lg = logging.getLogger("meliona.usage")
+    assert lg is obs.usage_log and not lg.propagate and lg.level == logging.INFO
+    assert any(isinstance(h, logging.StreamHandler) and h.level == logging.INFO for h in lg.handlers)
+
+    # the real page: a session counts once, its preset once, however often it reruns
+    seen = []
+    saved, obs.usage = obs.usage, obs.UsageCounter(write=seen.append)
+    try:
+        at, restore = _offline_app()
+        try:
+            first = next(iter(PRESETS))
+            assert obs.usage.line().endswith(f"1 session; presets: {first} 1"), obs.usage.line()
+            at.run()
+            at.button(key="wipe_session").click().run()
+            assert not at.exception, [e.value for e in at.exception]
+            other = list(PRESETS)[1]
+            box = next(w for w in at.selectbox if w.label == "Preset basket")
+            box.set_value(other).run()
+            at.run()
+            line = obs.usage.line()
+            assert f"1 session;" in line and f"{first} 1" in line and f"{other} 1" in line, line
+        finally:
+            restore()
+    finally:
+        obs.usage = saved
+    main = (pathlib.Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
+    block = main[main.index('if "session_ref" not in st.session_state:'):][:300]
+    assert "count_session()" in block, "a session must count where its reference is minted, once"
+    assert "count_preset(preset, PRESETS)" in main and '"_usage_presets"' in main
+    # the policy says exactly this, and the runbook says where to read it
+    root = pathlib.Path(__file__).resolve().parent.parent
+    privacy = (root / "PRIVACY.md").read_text(encoding="utf-8")
+    runbook = (root / "RUNBOOK.md").read_text(encoding="utf-8")
+    assert "## Analytics" in privacy and "no analytics" in privacy.lower()
+    analytics = " ".join(privacy[privacy.index("## Analytics"):privacy.index("## Cookies")].split())
+    for claim in ("no cookie", "no identifier", "no IP address", "Once an hour", "midnight UTC",
+                  "never recorded", "no session reference", "Nothing is sent to any third party"):
+        assert claim in analytics, f"PRIVACY.md Analytics does not say: {claim!r}"
+    assert "meliona.usage" in runbook
+
+
+def test_the_footer_links_to_the_source_code():
+    """John, 2026-11-04 (launch list): the footer names Privacy, Terms and
+    Accessibility on GitHub but never the code itself - for a portfolio piece,
+    the one link a reviewer most wants. It sits in the same row, same tone."""
+    root = pathlib.Path(__file__).resolve().parent.parent
+    main = (root / "main.py").read_text(encoding="utf-8")
+    foot = main[main.index('<div class="meliona-footer">'):]
+    row = next(ln for ln in foot.splitlines() if "Source code on GitHub" in ln)
+    assert ('<a href="https://github.com/ricepillow3000/'
+            'Summer-2026-Quant-Project-Risk-Engine-Blueprint">Source code on GitHub</a>') in row
+    acc = foot.index(">Accessibility</a>")
+    assert acc < foot.index("Source code on GitHub") < foot.index("</div>", acc) + 200
 
 
 if __name__ == "__main__":

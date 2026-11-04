@@ -80,6 +80,11 @@ sweep of recent failures with no specific reference:
 Logs rotate at 1 MB x 3 files and hold tickers and stack traces - no personal
 data, which is what lets the privacy note say what it says.
 
+Usage: search Railway's log view (service -> Logs) for `meliona.usage`. One
+line an hour, e.g. `usage 2026-11-04: 37 sessions; presets: Mag-7 21, ...`; a
+day's last line (written at the first visit after midnight UTC, or at shutdown)
+is its total, and the counts restart at zero on every redeploy.
+
 ## 4. Spend and rate-limit control
 
 The engine calls no metered API and no LLM, so there is no credit balance to

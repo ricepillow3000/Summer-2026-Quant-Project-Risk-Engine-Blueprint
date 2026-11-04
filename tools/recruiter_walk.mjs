@@ -14,6 +14,10 @@ const LIMIT = 90000;
 
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+// The cookie notice (static/dock.js) is answered the way a returning visitor
+// answered it: OK pressed. It is a fixed, informational layer, not what this
+// tool measures, and on a desktop it sits over the bottom-left corner.
+await page.addInitScript(() => { try { localStorage.setItem('meliona-cookie-notice', 'ok'); } catch (e) { /* blocked */ } });
 page.setDefaultTimeout(LIMIT);
 const pageErrors = [];
 page.on('pageerror', e => pageErrors.push(String(e)));

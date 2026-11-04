@@ -6,7 +6,10 @@
 // (every crest/title/sub/button/tile box within 2px of the element it stands
 // in for), Streamlit's top bar stays hidden, the headline is a finite
 // percentage, the data is current, nothing on the page reads NaN/inf, the
-// page does not scroll sideways, and no script error fires. Screenshots land
+// page does not scroll sideways, and no script error fires. The bottom dock
+// (static/dock.js): the cookie notice shows on a first visit, clear of the
+// main CTA; on the phone the "Run the risk engine" bar comes up past the hero,
+// never under or over the notice, glides to the engine and goes there. Screenshots land
 // in outdir. Exit code 1 on any failure.
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const [,, url, outdir = '.'] = process.argv;
@@ -15,6 +18,19 @@ const ok = (cond, msg) => { console.log(`${cond ? 'PASS' : 'FAIL'}  ${msg}`); if
 
 const PAIRS = ['.hero-crest', '.hero-title', '.hero-sub', '.cta-btn',
                '.hstat:nth-child(1)', '.hstat:nth-child(2)', '.hstat:nth-child(3)', '.hstat:nth-child(4)'];
+
+// The bottom dock's boxes (static/dock.js), as the visitor sees them: null
+// when not drawn.
+function dockBoxes() {
+  const b = s => { const e = document.querySelector(s); if (!e) return null;
+    const r = e.getBoundingClientRect(); return r.width && r.height ? { l: r.left, t: r.top, r: r.right, b: r.bottom } : null; };
+  return { notice: b('.m-notice'), ok: b('.m-notice-ok'), dock: b('.m-dock:not([hidden])'),
+           btn: b('.m-dock:not([hidden]) .m-dock-btn'), cta: b('#hero .cta-btn') };
+}
+const meet = (a, b) => !!(a && b && a.l < b.r - 0.5 && b.l < a.r - 0.5 && a.t < b.b - 0.5 && b.t < a.b - 0.5);
+const inside = (a, w, h) => !!(a && a.l >= -0.5 && a.t >= -0.5 && a.r <= w + 0.5 && a.b <= h + 0.5);
+const tap = a => !!(a && a.r - a.l >= 44 && a.b - a.t >= 44);
+const box = a => (a ? `${Math.round(a.l)},${Math.round(a.t)} ${Math.round(a.r - a.l)}x${Math.round(a.b - a.t)}` : 'none');
 
 const browser = await chromium.launch();
 for (const [label, w, h] of [['desktop', 1440, 900], ['phone', 390, 844]]) {
@@ -55,6 +71,15 @@ for (const [label, w, h] of [['desktop', 1440, 900], ['phone', 390, 844]]) {
   ok(crestTop >= 0, `${label}: crest fully on screen (top ${crestTop.toFixed(0)}px)`);
   const cta = await page.evaluate(() => document.querySelector('#hero .cta-btn').getBoundingClientRect().bottom);
   ok(cta <= h, `${label}: main CTA above the fold (bottom ${cta.toFixed(0)}px of ${h})`);
+  // The cookie notice (static/dock.js) shows on a first visit. It informs and
+  // asks nothing, so it must never stand between a visitor and the main button:
+  // measured here, on the first screen, before it is answered.
+  const first = await page.evaluate(dockBoxes);
+  ok(!!first.notice, `${label}: cookie notice shown on a first visit`);
+  ok(inside(first.notice, w, h), `${label}: cookie notice inside the screen`);
+  ok(!meet(first.notice, first.cta), `${label}: cookie notice clear of the main CTA (CTA ${box(first.cta)}, notice ${box(first.notice)})`);
+  ok(tap(first.ok), `${label}: the notice's OK is a 44px target (${box(first.ok)})`);
+  ok(!first.dock, `${label}: no shortcut bar while the hero's own button is on screen`);
   const noAlt = await page.evaluate(() => [...document.querySelectorAll('img')].filter(i => !i.hasAttribute('alt')).length);
   ok(noAlt === 0, `${label}: every <img> has alt text (${noAlt} missing)`);
   await page.screenshot({ path: `${outdir}/${label}-hero.png` });
@@ -68,6 +93,37 @@ for (const [label, w, h] of [['desktop', 1440, 900], ['phone', 390, 844]]) {
   const text = await page.evaluate(() => document.body.innerText);
   const bad = text.match(/\b(nan|[-+]?inf)\b/gi);
   ok(!bad, `${label}: no NaN/inf in visible text${bad ? ` (${bad.slice(0, 3)})` : ''}`);
+  // The phone shortcut (static/dock.js): up once the hero's button has left the
+  // top of the screen, never on a wider screen, under the notice and never on
+  // it; pressed, the page's own glide flies it to the engine, and it goes as
+  // soon as the engine is on screen - it never sits over the verdict.
+  await page.evaluate(() => {
+    const sc = document.querySelector('[data-testid="stMain"]'), c = document.querySelector('#hero .cta-btn');
+    sc.style.scrollBehavior = 'auto'; sc.scrollTop += c.getBoundingClientRect().bottom + 60; sc.style.scrollBehavior = '';
+  });
+  await page.waitForTimeout(900);
+  const mid = await page.evaluate(dockBoxes);
+  if (label === 'phone') {
+    ok(!!mid.dock, 'phone: shortcut bar up once the hero button has scrolled off');
+    ok(inside(mid.dock, w, h) && mid.dock.b >= h - 0.5, `phone: shortcut bar on the bottom edge (${box(mid.dock)})`);
+    ok(tap(mid.btn), `phone: shortcut button is a 44px target (${box(mid.btn)})`);
+    ok(!!mid.notice && !meet(mid.notice, mid.dock), `phone: cookie notice sits above the shortcut, never on it (notice ${box(mid.notice)}, bar ${box(mid.dock)})`);
+    await page.screenshot({ path: `${outdir}/${label}-dock.png` });
+    await page.click('.m-dock-btn');
+    await page.waitForFunction(() => !document.__melionaStop && !window.__melionaStop, null, { timeout: 15000 }).catch(() => {});
+    await page.waitForTimeout(2500);
+    const after = await page.evaluate(() => ({ top: document.getElementById('engine').getBoundingClientRect().top,
+      hash: location.hash, up: !!window.__melionaNotice?.dock() }));
+    ok(after.top >= 0 && after.top <= 80 && !after.hash, `phone: the shortcut glides to the engine (heading ${after.top.toFixed(0)}px from the top${after.hash ? `, hash ${after.hash}` : ''})`);
+    ok(!after.up, 'phone: shortcut gone once the engine is on screen');
+    await page.click('.m-notice-ok');
+    const said = await page.evaluate(() => ({ shown: !!document.querySelector('.m-notice'),
+      kept: (() => { try { return localStorage.getItem('meliona-cookie-notice'); } catch (e) { return 'blocked'; } })() }));
+    ok(!said.shown && said.kept === 'ok', `phone: OK closes the notice and remembers it (${said.kept})`);
+  } else {
+    ok(!mid.dock, `${label}: no shortcut bar on a wide screen`);
+    await page.evaluate(() => window.__melionaNotice?.dismiss());
+  }
   // The footer renders at the end of the script run, after the headline.
   const contact = await page.waitForFunction(
     () => /meleona\.support@gmail\.com/.test(document.body.textContent), null, { timeout: 120000 })

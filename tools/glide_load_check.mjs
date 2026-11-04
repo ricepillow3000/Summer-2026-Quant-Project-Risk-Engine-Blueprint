@@ -36,6 +36,10 @@ const LOADING = LINKS.slice(0, 5);     // the footer exists only once the run ha
 
 const b = await chromium.launch(process.env.CHROMIUM ? { executablePath: process.env.CHROMIUM } : {});
 const ctx = await b.newContext({ viewport: { width: 1440, height: 900 } });
+// The cookie notice (static/dock.js) is answered the way a returning visitor
+// answered it: OK pressed. It is a fixed, informational layer, not what this
+// tool measures, and on a desktop it sits over the bottom-left corner.
+await ctx.addInitScript(() => { try { localStorage.setItem('meliona-cookie-notice', 'ok'); } catch (e) { /* blocked */ } });
 const tally = {}, fails = [], waits = {};
 
 async function sample(page, id, ms) {

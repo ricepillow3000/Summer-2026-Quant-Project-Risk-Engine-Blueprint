@@ -40,6 +40,10 @@ const ok = (cond, name, note = '') => say(cond ? 'PASS' : 'FAIL', name, note);
 
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+// The cookie notice (static/dock.js) is answered the way a returning visitor
+// answered it: OK pressed. It is a fixed, informational layer, not what this
+// tool measures, and on a desktop it sits over the bottom-left corner.
+await page.addInitScript(() => { try { localStorage.setItem('meliona-cookie-notice', 'ok'); } catch (e) { /* blocked */ } });
 page.setDefaultTimeout(LIMIT);
 
 // ---- 1. boot: listen before the first byte ----------------------------------
@@ -310,7 +314,7 @@ await step('glide', async () => {
 async function surface(tag) {
   // Measure every block in the state it lands in (static/reveal.js), not the
   // ones still waiting below the screen at opacity 0 - see device_check.mjs.
-  await page.evaluate(() => window.__melionaReveal?.revealAll());
+  await page.evaluate(() => { window.__melionaReveal?.revealAll(); window.__melionaNotice?.dismiss(); });
   const f = await page.evaluate(() => {
     const main = document.querySelector('[data-testid="stMain"]');
     const heads = [...main.querySelectorAll('h1, h2, .panel-head .t, summary, [data-testid="stMetricLabel"]')];
