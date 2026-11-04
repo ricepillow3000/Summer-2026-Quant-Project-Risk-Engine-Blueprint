@@ -716,8 +716,8 @@ def flow_key_html() -> str:
         (r, g, b), alpha = flow_air_rgba(s)
         stops.append(f"rgba({r},{g},{b},{alpha:.3f}) {100 * i / 12:.1f}%")
     ramp = (f'<span class="flow-ramp" style="background:linear-gradient(90deg,{",".join(stops)})"></span>'
-            f'<span class="flow-ramp-ends"><span>still ({FLOW_AIR["rest"] * full:.2f}, not drawn)</span>'
-            f'<span>1.00 = inflow</span><span>{full:.1f}+</span></span>')
+            f'<span class="flow-ramp-ends"><span>still (not drawn)</span>'
+            f'<span>1.0 = the stream at full strength</span><span>{full:.1f}+ squeezed past a path</span></span>')
     lo = None
     wall = []
     for hi, col in FLOW_WALL_STEPS:
@@ -726,12 +726,16 @@ def flow_key_html() -> str:
         lo = hi
     return ('<div class="flow-key">'
             '<div class="flow-key-row"><span class="flow-key-label">Grid</span>'
-            '<span>one cell = a few trading days (x-axis) by a step of return (y-axis); '
-            'its line points where the air in that cell is going</span></div>'
-            '<div class="flow-key-row"><span class="flow-key-label">Air speed, x inflow</span>'
+            '<span>each cell spans a few trading days (across) by a step of cumulative '
+            'return (up); its line shows which way the flow turns there</span></div>'
+            '<div class="flow-key-row"><span class="flow-key-label">Flow speed</span>'
             + ramp + '</div>'
-            '<div class="flow-key-row"><span class="flow-key-label">Wall pressure on a path</span>'
-            + "".join(wall) + '</div></div>')
+            '<div class="flow-key-row"><span class="flow-key-label">Stream strength</span>'
+            '<span>each trading day it follows how fast the 5-95% outcome range widens '
+            'that day; full strength on the day it widens fastest</span></div>'
+            '<div class="flow-key-row"><span class="flow-key-label">Pressure on a path (Cp, pressure coefficient)</span>'
+            + "".join(wall) + '<span>red: the flow presses hardest, on the steepest '
+            'stretches of the cone</span></div></div>')
 
 
 def fan_chart(bands: dict):

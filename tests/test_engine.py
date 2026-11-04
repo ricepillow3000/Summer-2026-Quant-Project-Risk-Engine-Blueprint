@@ -6356,9 +6356,23 @@ def test_blocks_arrive_from_where_they_sit_and_the_wheel_glides():
     assert ".st-key-glide" in re.search(r"var SKIP = '([^']+)'", js).group(1)
     # the wheel glide: stands aside for zoom, a button's flight and anything
     # that scrolls on its own, and never runs under reduced motion
-    assert "W.__melionaStop) return;" in js and "e.ctrlKey" in js and "scrolls(n, e.deltaY)" in js
+    assert "gliding()) return;" in js and "e.ctrlKey" in js and "scrolls(n, e.deltaY)" in js
     assert js.index("if (calm)") < js.index("addEventListener('wheel'")
-    assert "{ passive: false }" in js and re.search(r"var GLIDE_EASE = 0\.\d+;", js)
+    assert "{ passive: false }" in js
+    # John, 2026-11-04: "heavier ... like a boat being tugged" - a critically
+    # damped tow line on the frame's own clock, not a first-order ease
+    assert re.search(r"var TOW = \d+(\.\d+)?;", js)
+    assert "acc = TOW * TOW * (aim - pos) - 2 * TOW * vel;" in js
+    tow = float(re.search(r"var TOW = (\d+(?:\.\d+)?);", js).group(1))
+    assert 3.0 <= tow <= 7.0, "settles in about a second: heavy, not sluggish"
+    # it stands aside while a button's glide flies - and main.py's glide keeps
+    # its stop handle on the DOCUMENT (its P = window.parent.document): read
+    # from the window it was never seen, and the hull's longer momentum then
+    # dragged a glide short (glide check, 2026-11-04)
+    assert "function gliding() { return !!(D.__melionaStop || W.__melionaStop); }" in js
+    assert "|| gliding()) return;   // zoom; a glide in flight" in js
+    main_src = (pathlib.Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
+    assert "const P = window.parent.document;" in main_src and "P.__melionaStop = function" in main_src
 
 
 def test_a_wide_block_never_turns_like_a_card_and_never_hangs_mid_turn():

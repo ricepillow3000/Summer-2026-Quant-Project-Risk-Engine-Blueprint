@@ -151,6 +151,7 @@ async function covered(page) {
       const b = e.getBoundingClientRect();
       if (b.width < 2 || b.height < 2 || cs.pointerEvents === 'none' || e.disabled) return null;
       e.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });   // the site scrolls smoothly; measure where it lands
+      window.__melionaReveal?.revealAll();   // a block that starts arriving as it scrolls in: measure where it lands
       const c = e.getBoundingClientRect();
       const x = c.left + c.width / 2, y = c.top + c.height / 2;
       if (x < 0 || y < 0 || x > innerWidth || y > innerHeight) return `${(e.innerText || e.getAttribute('aria-label') || e.tagName).trim().slice(0, 30)} off screen`;
@@ -172,6 +173,21 @@ async function settle(page, where = '') {
     const ok = await page.waitForFunction(quiet, null, { timeout: 180000 }).then(() => true, () => false);
     if (!ok) { unsettled.push(where || 'page'); return; }
     await page.waitForTimeout(600);
+  }
+}
+
+// Every block in its landed state. One revealAll() is not enough: Streamlit
+// can mount a block just after it (a tab's or drawer's content), which then
+// starts its own arrival mid-measure - the Live audit on 05ff4dd measured an
+// iPad's drawer mid-slide over the tab strip. Land, wait two frames, repeat
+// until nothing is left to land.
+async function landed(page) {
+  for (let i = 0; i < 10; i++) {
+    const left = await page.evaluate(() => new Promise(done => {
+      window.__melionaReveal?.revealAll();
+      requestAnimationFrame(() => requestAnimationFrame(() => done(document.querySelectorAll('.reveal-item').length)));
+    }));
+    if (!left) return;
   }
 }
 
@@ -223,7 +239,7 @@ for (const dev of names) {
     // state each one lands in. A reveal moves only opacity and transform, never
     // layout, so this is the page the visitor sees once scrolled to each block -
     // and a block still waiting below the screen (opacity 0) is not skipped.
-    await page.evaluate(() => window.__melionaReveal?.revealAll());
+    await landed(page);
     const m = await page.evaluate(measure);
     sideways = Math.max(sideways, m.sideways);
     m.words.forEach(x => found.words.add(x));

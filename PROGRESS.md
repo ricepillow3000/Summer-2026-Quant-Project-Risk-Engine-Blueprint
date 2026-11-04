@@ -1066,3 +1066,26 @@ two paid-vendor-dependent pieces remain explicit backlog items:
   changes size mid-arrival. Local, with the GPU flag spoofed: no tunnel at
   load, the build waits until after a button's glide lands; glide checks
   (momentum, reader, steady, rest, cold early) and flow_check all pass.
+
+- ✅ **A heavier wheel, a financial chart key, a steadier device probe
+  (2026-11-04)**. John: "I want the scrolling to feel heavier ... like a boat
+  being tugged"; the cone's key said "Air speed, x inflow", which means nothing
+  next to trading data. (His missing motion was Windows' Animation effects
+  setting off: the site honours prefers-reduced-motion.)
+  - `static/reveal.js`: the wheel moves an aim and the page follows it on a
+    critically damped tow line (`TOW = 4.6` rad/s on the frame clock): it
+    gathers way instead of jumping (10% in 100 ms vs 33 ms, half in 350 ms vs
+    133), keeps its momentum through the next notch and settles without
+    overshoot (~1.3 s). Its stand-aside check for a button's glide read
+    `window.__melionaStop`, but main.py's glide keeps that on the document:
+    it never stood aside, and the longer momentum dragged a glide short (glide
+    check momentum/rest). Fixed (`gliding()`), test pinned.
+  - main.py `flow_key_html`: Grid (trading days x cumulative return), Flow
+    speed (1.0 = the stream at full strength), Stream strength (follows how
+    fast the 5-95% outcome range widens each trading day; full on the day it
+    widens fastest), Pressure on a path (Cp, pressure coefficient; red on the
+    cone's steepest stretches). The caption keeps "not a market quantity".
+  - `tools/device_check.mjs`: measures the landed page (`landed()`: land,
+    two frames, repeat until nothing is left to land; `covered()` lands a
+    block that starts arriving as it scrolls in). Live audit on 05ff4dd had
+    measured an iPad Pro's drawer mid-slide over the tab strip.
