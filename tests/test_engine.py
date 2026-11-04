@@ -6010,6 +6010,19 @@ def test_the_cone_is_coloured_by_return_and_the_smoke_rides_the_computed_cone():
     assert "await windAgrees(tag" in (root / "tools" / "deep_scan.mjs").read_text(encoding="utf-8")
 
 
+def test_the_browser_audit_runs_on_an_os_its_playwright_supports():
+    """2026-11-04: GitHub's ubuntu-latest became 26.04 and Playwright 1.56.1
+    refused to install Chromium there, so every browser step of the Live audit
+    died before running. The job is pinned to an image that Playwright version
+    supports; a bump of either must move both."""
+    import re
+    root = pathlib.Path(__file__).resolve().parent.parent
+    wf = (root / ".github" / "workflows" / "live-audit.yml").read_text(encoding="utf-8")
+    job = re.search(r"^  live-audit:\n(.*?)(?=^  \S|\Z)", wf, re.S | re.M).group(1)
+    assert re.search(r"^    runs-on: ubuntu-24\.04$", job, re.M), "browser audit on an unpinned runner"
+    assert "playwright@1.56.1" in wf
+
+
 def test_every_in_page_button_is_flown_by_both_glide_scans():
     """John, 2026-10-30: every button must glide the reader down, never jump.
     tools/deep_scan.mjs and tools/glide_load_check.mjs measure each flight

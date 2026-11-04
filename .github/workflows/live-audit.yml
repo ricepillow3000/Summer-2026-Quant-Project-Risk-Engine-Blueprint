@@ -19,7 +19,11 @@ permissions:
 
 jobs:
   live-audit:
-    runs-on: ubuntu-latest
+    # Pinned, not ubuntu-latest: on 2026-11-04 ubuntu-latest became 26.04, which
+    # Playwright 1.56.1 cannot install Chromium on ("does not support chromium on
+    # ubuntu26.04-x64"), and every browser step (site, devices, glides, deep scan)
+    # failed before it ran. Move both together when Playwright supports 26.04.
+    runs-on: ubuntu-24.04
     timeout-minutes: 150
     env:
       SITE_URL: ${{ inputs.site_url || 'https://summer-2026-quant-project-risk-engine-blueprint-production.up.railway.app' }}
