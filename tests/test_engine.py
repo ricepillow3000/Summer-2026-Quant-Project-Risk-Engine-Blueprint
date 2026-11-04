@@ -6010,6 +6010,15 @@ def test_the_cone_flow_is_a_lattice_boltzmann_solve_bound_to_the_data():
     assert ".wt-verify" in css and ".flow-key" in css
     reveal = (root / "static" / "reveal.js").read_text(encoding="utf-8")
     assert "windtunnel.js" in reveal
+    # an emulated GPU also draws the page: the solve there froze it (Live audit,
+    # 2026-11-04), so the page leaves the flow out on a software renderer, and
+    # CI proves the solve in its own step
+    assert "if (!g || g.soft) { api.status" in js
+    wf = (root / ".github" / "workflows" / "live-audit.yml").read_text(encoding="utf-8")
+    assert "node tools/flow_check.mjs http://127.0.0.1:8501 flow-shots" in wf
+    probe = (root / "tools" / "flow_check.mjs").read_text(encoding="utf-8")
+    for key in ("colourMismatch", "wallMismatch", "redOffWall", "obstacleMiss", "peakIsRed", "volatility-shock"):
+        assert key in probe, key
 
 
 def test_the_browser_audit_runs_on_an_os_its_playwright_supports():

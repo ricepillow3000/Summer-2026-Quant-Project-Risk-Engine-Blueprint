@@ -62,10 +62,11 @@
  * off a wall, the walls on the data, and the peak pressure painted red.
  *
  * Performance: a graphics card runs it live (stopping off screen, in a hidden
- * tab, while the reader scrolls or a button's glide flies). A software
- * renderer (SwiftShader, llvmpipe) or reduced motion gets the same
- * calculation as a still frame, computed in small slices while the page is
- * idle. No WebGL2: the chart alone.
+ * tab, while the reader scrolls or a button's glide flies); under reduced
+ * motion the same calculation is computed in small slices and shown as a
+ * still frame. A software renderer (SwiftShader, llvmpipe) or no WebGL2: the
+ * chart alone - an emulated GPU also draws the page, and the solve froze it.
+ * tools/flow_check.mjs runs and proves the solve in CI.
  */
 (function () {
   'use strict';
@@ -698,12 +699,16 @@
   function find() {
     prune();
     var g = glSupport();
-    if (!g) return;
+    // No GPU, no flow: a software renderer (SwiftShader, llvmpipe) runs the
+    // browser's own compositing on the same emulated GPU, and the solve froze
+    // the whole page on CI's machines (Live audit, 2026-11-04). The chart is
+    // complete without it. tools/flow_check.mjs proves the solve in CI.
+    if (!g || g.soft) { api.status = g ? 'software renderer: flow not run' : 'no WebGL2: flow not run'; return; }
     var plots = D.querySelectorAll('.js-plotly-plot');
     for (var i = 0; i < plots.length; i++) {
       var gd = plots[i], m = metaOf(gd);
       if (gd.__wind) { if (!gd.__wind.cv.isConnected) gd.__wind.read(); continue; }
-      if (m && m.meliona === 'cone') new Tunnel(gd, g.soft || reduced);
+      if (m && m.meliona === 'cone') new Tunnel(gd, reduced);
     }
   }
   var queued = 0;
