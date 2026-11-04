@@ -53,7 +53,9 @@ reports it; you grep for it:
 
     grep 9F3A2B7C logs/meliona.log*
 
-That returns the session-start line and any traceback logged during it. For a
+That returns the session-start line and any traceback logged during it. The
+disk is wiped by every redeploy; error lines also go to stderr, so after a
+redeploy search Railway's log view (service -> Logs) for the reference. For a
 sweep of recent failures with no specific reference:
 
     python -c "from src.observability import recent_incidents; print(chr(10).join(recent_incidents()))"

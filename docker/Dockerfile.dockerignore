@@ -1,7 +1,7 @@
 # What stays out of the box (read by `docker build -f docker/Dockerfile`; a
 # root .dockerignore could change what Railway's own builder sees).
 # Kept OUT: history, tests, docs, audit reports and local caches - nothing the
-# running app reads. Kept IN: main.py, hero.py, src/, static/, assets/,
+# running app reads. Kept IN: serve.py, main.py, hero.py, src/, static/, assets/,
 # prototypes/ (the map page), public/, tools/ (launch files, cache warmer),
 # .streamlit/ (server settings).
 .git

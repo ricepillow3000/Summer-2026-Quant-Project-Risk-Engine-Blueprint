@@ -23,6 +23,11 @@ enableXsrfProtection = true
 # visitor shares. 1 MB is the floor. Add a file_uploader and this needs a
 # budget sized for it - the test that pins this also forbids one.
 maxUploadSize = 1
+# The websocket's largest message, both ways. Streamlit's default is 200 MB,
+# so one scripted client could make the one shared process buffer 200 MB per
+# frame (2026-11-04 security review). The page's biggest message is the Risk
+# Topology page at ~0.3 MB; 16 MB is fifty times that.
+maxMessageSize = 16
 # Serves ./static/ at /app/static/ (path-traversal safe, nosniff) - locally and
 # on Railway. The photos (and reveal.js) live there as files: inlined as base64
 # they were ~5 MB on the websocket AHEAD of the boot skeleton, which then

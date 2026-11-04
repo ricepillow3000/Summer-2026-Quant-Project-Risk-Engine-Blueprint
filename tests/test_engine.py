@@ -741,6 +741,32 @@ def test_a_warm_pass_fits_inside_the_cache_budget():
     assert files < ing.CACHE_MAX_FILES / 2, f"{files} files against a cap of {ing.CACHE_MAX_FILES}"
 
 
+def test_every_dependency_is_pinned_to_an_exact_version():
+    """2026-11-04 security review: seven of ten packages were floors
+    (pandas>=2.2 resolved to 3.1.0), so the host installed whatever was newest
+    the day it built - a version no test had seen, and the door a hijacked
+    release walks through. Every package is exact, so are the gate's own
+    tools, and Dependabot proposes the bumps (each one then runs every check)."""
+    import re
+    root = pathlib.Path(__file__).resolve().parents[1]
+    lines = [ln.split("#")[0].strip() for ln in
+             (root / "requirements.txt").read_text(encoding="utf-8").splitlines()]
+    reqs = [ln for ln in lines if ln]
+    assert len(reqs) >= 10, reqs
+    loose = [r for r in reqs if not re.fullmatch(r"[A-Za-z0-9_.\-]+==[0-9][0-9A-Za-z.]*", r)]
+    assert not loose, f"not pinned to one exact version: {loose}"
+    audit = (root / ".github" / "workflows" / "live-audit.yml").read_text(encoding="utf-8")
+    tools = re.search(r"pip install -r requirements\.txt (.+)", audit).group(1).split()
+    assert tools and all("==" in t for t in tools), tools
+    # A tag can be moved to new code; a commit cannot. Every action is pinned
+    # to a commit, the tag kept beside it for Dependabot and readers.
+    for wf in (root / ".github" / "workflows").glob("*.yml"):
+        for use in re.findall(r"uses:\s*(\S+)", wf.read_text(encoding="utf-8")):
+            assert re.fullmatch(r"[\w.-]+/[\w.-]+@[0-9a-f]{40}", use), f"{wf.name}: {use}"
+    bot = (root / ".github" / "dependabot.yml").read_text(encoding="utf-8")
+    assert 'package-ecosystem: "pip"' in bot and 'package-ecosystem: "github-actions"' in bot
+
+
 def test_requirements_pin_yfinance():
     """The per-name cache splits and stitches downloads the way yfinance
     1.7.0's multi.py assembles them (the stitch test proves it on that
@@ -2352,6 +2378,34 @@ def test_cache_budget_drops_oldest_first():
                              "prices_04.parquet", "prices_05.parquet"]
 
 
+def test_the_cache_budget_drops_typed_baskets_before_the_presets():
+    """2026-11-04 security review: oldest-first alone let a stranger typing new
+    baskets evict every preset name between two warm passes. A typed-in entry
+    goes before any preset name's download, however old that download is."""
+    import os
+    import tempfile
+
+    import src.ingestion as ingestion
+
+    preset = next(iter(ingestion.PRESETS.values()))[0]
+    with tempfile.TemporaryDirectory() as tmp:
+        original = ingestion.DATA_DIR
+        ingestion.DATA_DIR = tmp
+        try:
+            kept = ingestion._raw_path(preset, "2y")         # the oldest file
+            typed = [os.path.join(tmp, f"prices_typed_{i}.parquet") for i in range(3)]
+            for age, path in enumerate([kept, *typed]):
+                with open(path, "wb") as fh:
+                    fh.write(b"x" * 1024)
+                os.utime(path, (1_700_000_000 + age, 1_700_000_000 + age))
+            dropped = ingestion._prune_cache(max_files=2, max_mb=1000)
+        finally:
+            ingestion.DATA_DIR = original
+        assert dropped == 2
+        assert sorted(os.listdir(tmp)) == sorted([os.path.basename(kept),
+                                                  os.path.basename(typed[-1])])
+
+
 def test_deploy_config_keeps_the_visitor_out_of_the_operator_seat():
     """Regression guard on the deployed posture: a visitor is a viewer, gets no
     operator toolbar, no tracebacks, and XSRF/CORS stay on."""
@@ -2367,6 +2421,36 @@ def test_deploy_config_keeps_the_visitor_out_of_the_operator_seat():
     assert settings["enableXsrfProtection"] == "true"
     assert settings["enableCORS"] == "true"
     assert settings["headless"] == "true"
+    # 2026-11-04: the websocket's message cap, Streamlit's 200 MB by default.
+    assert 0 < int(settings["maxMessageSize"]) <= 16
+
+
+def test_every_response_carries_the_security_headers():
+    """2026-11-04 security review: LAUNCH_CHECKLIST #37/#89 said HSTS and
+    frame-ancestors were impossible from inside Streamlit. Since 1.66 they are
+    not: serve.py wraps main.py in an ASGI app with real headers, and the
+    host runs serve.py. Every response carries them - the page, the health
+    check, a static file - and /_stcore/metrics (live session counts and cache
+    sizes, open to anyone by default) answers 404."""
+    from starlette.testclient import TestClient
+
+    import serve
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    assert "streamlit run serve.py" in (root / "Procfile").read_text(encoding="utf-8")
+    assert 'App(Path(__file__).with_name("main.py")' in (root / "serve.py").read_text(
+        encoding="utf-8"), "serve.py must serve main.py"
+    with TestClient(serve.app) as client:
+        for path in ("/", "/_stcore/health", "/app/static/app.css"):
+            got = client.get(path)
+            assert got.status_code == 200, (path, got.status_code)
+            for name, value in serve.HEADERS.items():
+                assert got.headers.get(name) == value, (path, name, got.headers.get(name))
+        assert "frame-ancestors 'self'" in serve.HEADERS["content-security-policy"]
+        assert serve.HEADERS["x-frame-options"] == "SAMEORIGIN"
+        assert "max-age=31536000" in serve.HEADERS["strict-transport-security"]
+        for path in ("/_stcore/metrics", "/_stcore/metrics?families=cache_memory_bytes"):
+            assert client.get(path).status_code == 404, path
 
 
 # --- launch readiness (2026-08-26) ------------------------------------------
@@ -2379,6 +2463,12 @@ def test_crash_wire_correlates_a_session_reference_to_a_traceback():
                                    setup_logging)
 
     setup_logging()
+    import logging
+    import sys
+    # A redeploy wipes logs/: errors (only) must also reach the host's stream
+    # (2026-11-04 security review), or the triage in RUNBOOK §3 dies with it.
+    assert any(type(h) is logging.StreamHandler and h.stream is sys.stderr
+               and h.level == logging.ERROR for h in logging.getLogger().handlers)
     ref = new_session_ref()
     assert len(ref) == 8 and ref.isalnum()
     log_session_start(ref, "regression test")
@@ -3353,7 +3443,7 @@ def test_the_container_runs_what_the_procfile_runs():
     docker = (root / "docker" / "Dockerfile").read_text(encoding="utf-8")
     procfile = (root / "Procfile").read_text(encoding="utf-8")
     for cmd in ("python -m tools.public_files", "python -m tools.warm_cache --every 5",
-                "streamlit run main.py"):
+                "streamlit run serve.py"):
         assert cmd in procfile and cmd in docker, f"the box and the site disagree on: {cmd}"
     py = re.search(r"python-(\d+\.\d+)", (root / "runtime.txt").read_text()).group(1)
     assert re.search(rf"^FROM python:{re.escape(py)}-slim", docker, re.M), \
@@ -3437,7 +3527,7 @@ def test_the_dependency_audit_skips_no_cve():
               if re.search(r"pip_audit -r requirements\.txt\s*$", f.read_text(encoding="utf-8"), re.M)]
     assert audits == ["live-audit.yml"], f"the dependency audit moved or went: {audits}"
     req = (root / "requirements.txt").read_text(encoding="utf-8")
-    assert re.search(r"^pillow>=13\b", req, re.M | re.I), "requirements.txt no longer asks for Pillow 13"
+    assert re.search(r"^pillow==13\b", req, re.M | re.I), "requirements.txt no longer asks for Pillow 13"
     caps = [r.replace(" ", "") for r in importlib.metadata.requires("streamlit") or []
             if r.lower().startswith("pillow")]
     assert caps and not any("<13" in r for r in caps), \
@@ -3470,7 +3560,7 @@ def test_a_crafted_clear_cache_message_clears_nothing():
     from streamlit.runtime.app_session import AppSession
 
     # A Streamlit upgrade that renames the handler would turn the patch into a
-    # silent no-op on a dead attribute (requirements.txt pins ~=1.66.1).
+    # silent no-op on a dead attribute (requirements.txt pins ==1.66.1).
     assert hasattr(AppSession, "_handle_clear_cache_request"), \
         "Streamlit renamed the clear_cache handler - re-point the patch in main.py"
 
