@@ -162,7 +162,38 @@ async function coneAgrees(tag) {
   const med = pct(await metric('Median 1-year return'));
   if (Number.isFinite(med)) ok(Math.abs(med - p50) <= 0.06, `${tag}: Risk Breakdown median = cone centreline`,
                                `${med}% vs ${p50.toFixed(2)}%`);
+  await windAgrees(tag, p5, last(fan.data[0].y));
   return { v, p5, p50 };
+}
+
+// The cone's flow (static/windtunnel.js, John 2026-11-04): a lattice Boltzmann
+// solve whose walls are THIS cone's percentile paths. The page's own check()
+// reads the picture back and compares it with the computed state: every grid
+// cell's line (colour and direction) against its velocity, every line on its
+// trading day and return level, every path segment against its pressure, no
+// red off the data, the walls on the data, the peak pressure red.
+async function windAgrees(tag, p5, p95) {
+  await page.evaluate(() => {
+    const gd = [...document.querySelectorAll('.js-plotly-plot')].find(g => (g._fullLayout?.meta || {}).meliona === 'cone');
+    gd?.scrollIntoView({ block: 'center' });
+  });
+  let w = null;
+  for (let i = 0; i < 30; i++) {
+    await page.waitForTimeout(200);
+    w = await page.evaluate(() => window.__melionaWind ? window.__melionaWind.check() : null);
+    if (w && w.lines >= 50 && Math.abs(w.p5End - p5) < 1e-9) break;
+  }
+  if (!w || !w.mode) return say('INFO', `${tag}: cone flow`, `not running here (renderer: ${await page.evaluate(() => window.__melionaWind?.renderer)})`);
+  ok(Math.abs(w.p5End - p5) < 1e-9 && Math.abs(w.p95End - p95) < 1e-9, `${tag}: the flow's walls are this cone's paths`,
+     `walls 5th ${w.p5End?.toFixed(3)} / 95th ${w.p95End?.toFixed(3)} vs chart ${p5.toFixed(3)} / ${p95.toFixed(3)}`);
+  ok(w.obstacleMiss === 0, `${tag}: every path point sits on a wall`, `${w.obstacleMiss} of ${w.obstacleChecks} missed`);
+  ok(w.colourMismatch === 0, `${tag}: every cell's line has its computed velocity's colour and direction`, `${w.colourMismatch} of ${w.lines} (${w.mode})`);
+  ok(w.particleMoveMismatch === 0 && w.particleColourMismatch === 0, `${tag}: every particle moves with the computed air and has its colour`,
+     `${w.particleMoveMismatch} moves and ${w.particleColourMismatch} colours wrong of ${w.particlesAlive}`);
+  ok(w.gridMiss === 0, `${tag}: every line sits on its trading day and return level`, `${w.gridMiss} of ${w.gridChecks}`);
+  ok(w.wallMismatch === 0, `${tag}: every path segment's colour is its computed pressure's step`, `${w.wallMismatch} of ${w.wallChecks}`);
+  ok(w.redOffWall === 0, `${tag}: red only on the data paths`, `${w.redOffWall} red pixels off them`);
+  ok(w.peakIsRed !== false, `${tag}: the highest pressure on the paths is painted red`, `Cp ${w.maxCp}`);
 }
 
 // ---- boot timeline -----------------------------------------------------------

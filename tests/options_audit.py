@@ -245,7 +245,11 @@ def mc_checks(mc: dict, sim: pd.DataFrame, w: np.ndarray, jd: bool) -> list:
                 f"{(np.diff(p, axis=0) >= -1e-12).all()}, cone end {b['p50'][-1]:.6f} vs "
                 f"median {np.median(tr):.6f}"))
     if (1 + port > 0).all():
-        lf = np.log1p(tr)
+        # The log of each path's own ending wealth, not log1p(total return):
+        # a year that ends below ~1e-16 of its start (a levered short under a
+        # 300% vol shock, 2026-11-04) rounds wealth - 1 to exactly -1, and
+        # log1p(-1) is -inf. final_values keeps the wealth itself.
+        lf = np.log(np.asarray(mc["final_values"], dtype=float))
         want = TRADING_DAYS * np.log1p(port).mean()
         se = lf.std(ddof=1) / np.sqrt(len(lf))
         out.append(("OPT-04", abs(lf.mean() - want) <= 5 * se + 1e-12,

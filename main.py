@@ -651,16 +651,106 @@ def _style_fig(fig, height: int = 300):
     return fig
 
 
+# The cone in a wind tunnel (John, 2026-11-04): static/windtunnel.js runs a
+# D2Q9 lattice Boltzmann flow (FluidX3D's method) whose walls are the five
+# computed percentile paths below, and draws it as FluidX3D draws a velocity
+# field: one line per cell of a grid laid on the chart's own axes (columns of
+# trading days, rows of percent return), pointing where the computed air in
+# that cell goes, coloured by its speed. Both colour tables ship to the
+# browser in the figure's layout.meta, and the key under the chart prints them.
+#   FLOW_AIR - FluidX3D's own velocity scale, colorscale_rainbow in its
+#     kernel.cpp (black, violet, blue, cyan, green, yellow, red, slow to fast),
+#     of which the air takes only the cool part, up to `top` (green): the hot
+#     end, red, is left to the data. A cell's colour is
+#     shade x rainbow(top x min(1, s / full)), s its speed as a multiple of the
+#     inflow. FluidX3D leaves a lattice point undrawn when its scaled speed is
+#     under 0.1 (`rest`): still air is transparent. Up to `fade` a line fades
+#     into the page, as FluidX3D's dark slow colours fade into its black
+#     ground; `shade` darkens the scale for a light page.
+#   FLOW_WALL_STEPS - a percentile path, segment by segment, by the surface
+#     pressure the flow puts on it, Cp = (p - p_outflow) / (rho U^2 / 2), as
+#     FluidX3D colours a boundary by the force on it: charcoal, crimson, then
+#     vivid red where the flow hits the data hardest. Red exists only on the
+#     data. The last bound is open-ended (1e9).
+FLOW_AIR = {"full": 1.6, "rest": 0.10, "fade": 0.45, "top": 0.62, "shade": 0.78, "alpha": 0.9}
+FLOW_WALL_STEPS = ((0.10, "#3F3B35"), (0.40, "#8E1B2B"), (1e9, "#E0102F"))
+
+
+def fluidx3d_rainbow(x: float) -> tuple:
+    """FluidX3D's colorscale_rainbow (src/kernel.cpp), line for line: x in
+    [0, 1] -> (r, g, b) in [0, 1], black at 0, red at 1. static/windtunnel.js
+    runs the same function in its line shader and in its check()."""
+    x = min(6.0, max(0.0, 6.0 * (1.0 - x)))
+    r = g = b = 0.0
+    if x < 1.2:
+        r, g = 1.0, x * 0.83333333
+    elif x < 2.0:
+        r, g = 2.5 - x * 1.25, 1.0
+    elif x < 3.0:
+        g, b = 1.0, x - 2.0
+    elif x < 4.0:
+        g, b = 4.0 - x, 1.0
+    elif x < 5.0:
+        r, b = x * 0.4 - 1.6, 3.0 - x * 0.5
+    else:
+        r, b = 2.4 - x * 0.4, 3.0 - x * 0.5
+    return r, g, b
+
+
+def flow_air_rgba(s: float) -> tuple:
+    """The colour of a cell's line for a speed s (a multiple of the inflow):
+    (r, g, b) in 0..255 and its opacity."""
+    a = FLOW_AIR
+    q = s / a["full"]
+    alpha = a["alpha"] * min(1.0, max(0.0, (q - a["rest"]) / (a["fade"] - a["rest"])))
+    rgb = fluidx3d_rainbow(a["top"] * min(1.0, q))
+    return tuple(round(255 * min(1.0, a["shade"] * c)) for c in rgb), alpha
+
+
+def flow_key_html() -> str:
+    """The key under the cone: what a cell, a line and each colour mean."""
+    full = FLOW_AIR["full"]
+    stops = []
+    for i in range(13):
+        s = full * i / 12
+        (r, g, b), alpha = flow_air_rgba(s)
+        stops.append(f"rgba({r},{g},{b},{alpha:.3f}) {100 * i / 12:.1f}%")
+    ramp = (f'<span class="flow-ramp" style="background:linear-gradient(90deg,{",".join(stops)})"></span>'
+            f'<span class="flow-ramp-ends"><span>still ({FLOW_AIR["rest"] * full:.2f}, not drawn)</span>'
+            f'<span>1.00 = inflow</span><span>{full:.1f}+</span></span>')
+    lo = None
+    wall = []
+    for hi, col in FLOW_WALL_STEPS:
+        rng = f"Cp &lt;{hi:.2f}" if lo is None else (f"Cp &ge;{lo:.2f}" if hi > 1e8 else f"Cp {lo:.2f}-{hi:.2f}")
+        wall.append(f'<span class="flow-chip"><span class="flow-swatch" style="background:{col}"></span>{rng}</span>')
+        lo = hi
+    return ('<div class="flow-key">'
+            '<div class="flow-key-row"><span class="flow-key-label">Grid</span>'
+            '<span>one cell = a few trading days (x-axis) by a step of return (y-axis); '
+            'its line points where the air in that cell is going</span></div>'
+            '<div class="flow-key-row"><span class="flow-key-label">Air speed, x inflow</span>'
+            + ramp + '</div>'
+            '<div class="flow-key-row"><span class="flow-key-label">Wall pressure on a path</span>'
+            + "".join(wall) + '</div></div>')
+
+
 def fan_chart(bands: dict):
     """
-    Monte Carlo outcome cone, rendered as a wind-tunnel envelope: median path
-    + 25–75 and 5–95 percentile bands.
+    Monte Carlo outcome cone: median path + 25-75 and 5-95 percentile bands,
+    with a lattice Boltzmann flow around its paths (static/windtunnel.js).
 
     Rendering note: the percentile paths are drawn as splines. Every plotted
     point is a real computed percentile from the simulation - the spline only
     interpolates *between* those points instead of connecting them with jagged
     straight segments. Hover reports the true underlying value, so nothing is
     smoothed away from the numbers themselves; only the ink between them.
+
+    The flow: the five percentile paths are solid walls in a D2Q9 lattice
+    Boltzmann grid laid over the plot; air enters on the left and is computed
+    step by step, one simulated year per crossing. It is drawn as one line per
+    cell of a grid on the chart's axes (FLOW_AIR colours the air,
+    FLOW_WALL_STEPS the paths). It shows the cone's SHAPE as an obstacle, not
+    a market quantity; the numbers are the paths, the hover and the headline.
     """
     d = bands["days"]
 
@@ -671,31 +761,51 @@ def fan_chart(bands: dict):
     edge = dict(width=0, shape="spline", smoothing=1.0)
 
     fig = go.Figure()
-    # Outer 5–95 cone (draw upper first, then lower with fill-to-previous)
-    fig.add_trace(go.Scatter(x=d, y=p(bands["p95"]), line=edge, hoverinfo="skip"))
-    fig.add_trace(go.Scatter(x=d, y=p(bands["p5"]), fill="tonexty", fillcolor=BAND_OUTER,
-                             line=edge, hoverinfo="skip"))
+    # Outer 5–95 cone (draw upper first, then lower with fill-to-previous).
+    # Trace order is read by the audits (p95, p5, p75, p25 at 0..3). Flat fills,
+    # no gradient: the flow's colours carry the picture.
+    fig.add_trace(go.Scatter(x=d, y=p(bands["p95"]), name="p95", line=edge, hoverinfo="skip"))
+    fig.add_trace(go.Scatter(x=d, y=p(bands["p5"]), name="p5", fill="tonexty",
+                             fillcolor="rgba(63,59,53,0.05)", line=edge, hoverinfo="skip"))
     # Inner 25–75 cone
-    fig.add_trace(go.Scatter(x=d, y=p(bands["p75"]), line=edge, hoverinfo="skip"))
-    fig.add_trace(go.Scatter(x=d, y=p(bands["p25"]), fill="tonexty", fillcolor=BAND_INNER,
-                             line=edge, hoverinfo="skip"))
-    # Hairline edges trace the envelope - the silhouette of the airflow
+    fig.add_trace(go.Scatter(x=d, y=p(bands["p75"]), name="p75", line=edge, hoverinfo="skip"))
+    fig.add_trace(go.Scatter(x=d, y=p(bands["p25"]), name="p25", fill="tonexty",
+                             fillcolor="rgba(63,59,53,0.09)", line=edge, hoverinfo="skip"))
+    # Hairline edges trace the envelope
     for key in ("p95", "p5"):
         fig.add_trace(go.Scatter(x=d, y=p(bands[key]), hoverinfo="skip",
-                                 line=dict(color="rgba(154,123,79,0.45)", width=1,
+                                 line=dict(color="rgba(63,59,53,0.45)", width=1,
                                            shape="spline", smoothing=1.0)))
-    # Median path - the centreline, drawn last so it sits on top
+
+    # The hover readout: all five levels on the hovered day, best at the top.
+    # A unified hover lists traces last-first, so the readouts go in
+    # worst-first, with the median in the middle.
+    def readout(key, label):
+        return go.Scatter(x=d, y=p(bands[key]), name=f"{key} readout", line=dict(width=0),
+                          hovertemplate="%{y:.1f}% " + label + "<extra></extra>")
+
+    fig.add_trace(readout("p5", "· worst 5% start here"))
+    fig.add_trace(readout("p25", "· bottom of the middle half"))
+    # Median path - the centreline, drawn after the fills so it sits on top
     fig.add_trace(go.Scatter(
         x=d, y=p(bands["p50"]), name="median",
-        line=dict(color=CHARCOAL, width=2.4, shape="spline", smoothing=1.0),
-        hovertemplate="Day %{x}<br><b>%{y:.1f}%</b> median<extra></extra>"))
+        line=dict(color=CHARCOAL, width=2.0, shape="spline", smoothing=1.0),
+        hovertemplate="<b>%{y:.1f}%</b> median, trading day %{x}<extra></extra>"))
+    fig.add_trace(readout("p75", "· top of the middle half"))
+    fig.add_trace(readout("p95", "· best 5% start here"))
     fig.add_hline(y=0, line=dict(color=AXIS_LINE, width=1, dash="dot"))
     fig.update_layout(
         xaxis_title="Trading days", yaxis_title="Cumulative return (%)",
-        hovermode="x unified",                 # one clean readout, not five
+        hovermode="x unified",                 # one readout: all five levels on that day
         transition=dict(duration=420, easing="cubic-in-out"),
+        # static/windtunnel.js finds the cone by this, and reads its colour tables here
+        meta={"meliona": "cone",
+              "flow": {"air": dict(FLOW_AIR),
+                       "wall": [list(s) for s in FLOW_WALL_STEPS]}},
     )
-    fig = _style_fig(fig, height=340)
+    fig = _style_fig(fig, height=360)
+    # room above the plot for the chart's "Verification Overlay" button
+    fig.update_layout(hoverlabel=dict(namelength=0), margin=dict(l=8, r=8, t=34, b=8))
     # Aerodynamic axes: no tick spikes, breathing gridlines only
     fig.update_xaxes(ticks="", showspikes=False)
     fig.update_yaxes(ticks="", ticksuffix="%")
@@ -1816,6 +1926,7 @@ with v_col:
             '</div>', unsafe_allow_html=True)
 with f_col:
     st.plotly_chart(fan_chart(mc["path_bands"]), width="stretch", config=PLOTLY_CFG)
+    st.markdown(flow_key_html(), unsafe_allow_html=True)
     # Jump-diffusion resamples nothing, and a replay under 30 days falls back to
     # i.i.d. (block_days=1): both used to claim "crash weeks stay intact".
     _se_txt = (f" CVaR sampling error: ±{mc['cvar_se']:.2%} "
@@ -1829,7 +1940,12 @@ with f_col:
     st.caption(
         "Each simulated path compounds a year of daily returns. Hypothetical "
         "distribution, not a forecast. The curves interpolate between real "
-        "computed percentiles." + _se_txt
+        "computed percentiles." + _se_txt + " The moving air is a lattice "
+        "Boltzmann (D2Q9) flow computed around the five percentile paths as solid "
+        "walls, one line per grid cell of trading days by return: it shows the "
+        "cone's shape as an obstacle, not a market quantity. Air crosses the chart "
+        "in one simulated year, so the day it passes is the day it replays. "
+        "Verification Overlay shows the solver's own numbers."
     )
 
 def eigen_factor_panel(cov, weights, returns) -> None:

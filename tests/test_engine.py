@@ -3021,14 +3021,15 @@ def test_no_decorative_gradients_glass_or_grain():
         assert "feTurbulence" not in text and "--grain" not in text, f"{name}: film grain is back"
     assert "gradient(" not in _style_of(page) + _style_of(p404), "a gradient in the map or the 404"
     assert "--bronzehi" not in page and "#C9A227" not in page, "the off-palette gold is back"
-    # main.py: only the photo scrims (each paired with a static/ photo) and the
-    # Slice's fade into its own ground
+    # main.py: only the photo scrims (each paired with a static/ photo), the
+    # Slice's fade into its own ground, and the cone's colour key - a legend
+    # sampled from the flow's own colour scale (FluidX3D's key), not a decoration
     tree = ast.parse(main)
     fade = {id(n.value) for n in ast.walk(tree) if isinstance(n, ast.Assign)
             and any(getattr(t, "id", "") == "_gungnir_fade" for t in n.targets)}
     for n in ast.walk(tree):
         if isinstance(n, ast.Constant) and isinstance(n.value, str) and "gradient(" in n.value:
-            assert "url(app/static/" in n.value or id(n) in fade, \
+            assert "url(app/static/" in n.value or id(n) in fade or n.value.startswith('<span class="flow-ramp"'), \
                 f"main.py line {n.lineno}: a gradient that is not a photo scrim"
     # no lift, sheen or halo on hover: feedback is a colour change
     for sel, body in _re.findall(r"([^{}]+)\{([^}]*)\}", clean):
@@ -4208,6 +4209,8 @@ def test_the_crest_is_symmetric_and_its_pieces_never_touch():
     frames = re.search(r"@keyframes crest-ripple \{(.*?)\n\}", css, re.S).group(1)
     assert re.search(r"0%, 100% \{ transform: scale\(1\);\s+opacity: 1; \}", frames), (
         "a ring must start and end each pass at rest, or leaving the crest snaps it")
+    # John, 2026-11-04: the ripple 15% more noticeable (was 1.035 / .55)
+    assert re.search(r"50%\s+\{ transform: scale\(1\.04\);\s+opacity: \.48; \}", frames)
     assert re.search(r"prefers-reduced-motion: reduce\) \{\s*\.hero-crest:hover \.crest-ring", css)
     src = (root / "main.py").read_text(encoding="utf-8")
     assert "P.__melionaRipple" in src and "updateTiming({ iterations: pass + 1 })" in src
@@ -5468,7 +5471,7 @@ def test_the_skeleton_paints_first_and_the_hero_lifts_it():
     assert cfg["server"].get("enableStaticServing") is True
     served = sorted(p.name for p in (root / "static").iterdir())
     assert served == ["app.css", "band.avif", "band.jpg", "facade.avif", "facade.jpg",
-                      "gungnir.avif", "gungnir.webp", "reveal.js"], \
+                      "gungnir.avif", "gungnir.webp", "reveal.js", "windtunnel.js"], \
         f"static/ is served to the public; keep it to public files: {served}"
 
 
@@ -6346,7 +6349,7 @@ def test_blocks_arrive_from_where_they_sit_and_the_wheel_glides():
     # the side is read from where the block sits, as it arrives
     assert re.search(r"var SIDE = 0\.\d+;", js) and re.search(r"var WIDE = 0\.\d+;", js)
     assert "return f < SIDE ? 'left' : f > 1 - SIDE ? 'right' : 'card';" in js
-    assert "el.classList.add('reveal-item--' + side(el));" in js
+    assert "var how = side(el);" in js and "el.classList.add('reveal-item--' + how);" in js
     # every block, not a fixed list: Streamlit's leaf containers - the engine's
     # controls, captions and cards - arrive too
     assert "var LEAF = '[data-testid=\"stElementContainer\"]';" in js and "var ITEMS = NAMED + ',' + LEAF;" in js
@@ -6356,6 +6359,140 @@ def test_blocks_arrive_from_where_they_sit_and_the_wheel_glides():
     assert "W.__melionaStop) return;" in js and "e.ctrlKey" in js and "scrolls(n, e.deltaY)" in js
     assert js.index("if (calm)") < js.index("addEventListener('wheel'")
     assert "{ passive: false }" in js and re.search(r"var GLIDE_EASE = 0\.\d+;", js)
+
+
+def test_a_wide_block_never_turns_like_a_card_and_never_hangs_mid_turn():
+    """John, 2026-11-04 (screenshot): the Book's 1,488px sentence stood frozen
+    as a sliver mid-turn. A card turn is for a narrow block; given to a wide
+    one (measured while its placeholder was still small, then filled in) its
+    near edge swings past the eye at perspective 1000px. Rules: widths are
+    layout widths, a block with no size yet or wider than CARD in the middle
+    tips up instead, the card's eye distance is 3x its width, a block resized
+    mid-move lands at once, and an interrupted move lands too."""
+    import re
+    root = pathlib.Path(__file__).resolve().parent.parent
+    js = (root / "static" / "reveal.js").read_text(encoding="utf-8")
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    side = re.search(r"function side\(el\) \{(.*?)\n  \}", js, re.S).group(1)
+    assert "el.offsetWidth" in side and "getBoundingClientRect().width" not in side
+    assert "if (!pw || !w || !el.offsetHeight) return 'flip';" in side
+    assert "w > CARD * pw) return 'flip';" in side
+    card = float(re.search(r"var CARD = (0\.\d+);", js).group(1))
+    wide = float(re.search(r"var WIDE = (0\.\d+);", js).group(1))
+    assert card < wide and card <= 0.5
+    assert "Math.max(1000, 3 * el.offsetWidth)" in js
+    assert re.search(r"\.reveal-item--card \{\s*transform: perspective\(var\(--reveal-depth, 1000px\)\)", css)
+    assert "addEventListener('transitioncancel', end)" in js
+    assert "new ResizeObserver" in js and "grew.observe(el)" in js and "if (grew) grew.unobserve(el);" in js
+    assert "el.style.removeProperty('--reveal-depth');" in js
+
+
+def test_the_cone_flow_is_a_lattice_boltzmann_solve_bound_to_the_data():
+    """John, 2026-11-04: no fluid-looking loop - "every line, color, velocity
+    vector, and animation timestep must be directly driven by and
+    deterministically bound to the provided data array", FluidX3D's look
+    ("grid cells with over 100,000 time steps") on the site's own background,
+    red only where the flow collides with the data, a "Verification Overlay",
+    and "each color, cell, line, animation and where it's going reflects the
+    chart". static/windtunnel.js is a D2Q9 lattice Boltzmann solver (FluidX3D's
+    method and its Smagorinsky subgrid model) whose walls are the chart's five
+    computed percentile paths; its clock and inflow come from the data; it is
+    drawn as FluidX3D draws a velocity field - one line per cell of a grid on
+    the chart's own axes, in FluidX3D's own colour scale - with FluidX3D's
+    tracer particles released per return level per trading-day cell; check()
+    proves the picture against the computed state."""
+    import re
+    root = pathlib.Path(__file__).resolve().parent.parent
+    js = (root / "static" / "windtunnel.js").read_text(encoding="utf-8")
+    src = (root / "main.py").read_text(encoding="utf-8")
+    # the solver: D2Q9 weights, BGK collision with FluidX3D's Smagorinsky-Lilly
+    # constant, halfway bounce-back, inflow, pressure outlet
+    assert "const float WT[9]=float[9](4./9.,1./9.,1./9.,1./9.,1./9.,1./36.,1./36.,1./36.,1./36.);" in js
+    assert "const int OPP[9]=int[9](0,3,4,1,2,7,8,5,6);" in js
+    assert "for(int i=0;i<9;i++)f[i]-=(f[i]-fe[i])/te;" in js and ".76421222*sqrt(hxx*hxx+hyy*hyy+2.*hxy*hxy)/rho" in js
+    assert "if(outY(q)||wall(q))f[i]=fAt(OPP[i],vUv);else f[i]=fAt(i,q);" in js
+    assert "else if(vUv.x>1.-texel.x){rho=1.;" in js
+    # deterministic: no randomness, no wall-clock in the physics; the frame
+    # rate only changes how many steps are shown per frame
+    body = js[js.index("(function () {"):]
+    assert "Math.random" not in body and "sin(t" not in body and "Date.now" not in body
+    assert "for (var k = 0; k < T.spf; k++) T.step();" in js
+    # the data are the walls, the clock, the inflow, the grid and the particles' release
+    assert "var LEVELS = ['p5', 'p25', 'median', 'p75', 'p95'];" in js and "_fullData" in js
+    assert "T.stepsPerDay = T.L.pc / (LBM.U_IN * n);" in js
+    assert "return LBM.U_IN * (1 - LBM.U_SWING + LBM.U_SWING * w) * Math.min(1, step / (LBM.SPIN_UP * this.L.pc / LBM.U_IN));" in js
+    assert "for (var c = d[0]; c + nd <= d[n - 1] + 1e-9; c += nd) cols.push(c + nd / 2);" in js   # columns: trading days
+    assert "rowsv.push((r + 0.5) * dr);" in js                                                    # rows: steps of return, on 0%
+    assert "T.release = G.nd * T.stepsPerDay;" in js
+    # FluidX3D's own pieces, line for line
+    assert "draw_line(p - u/2|u|, p + u/2|u|)" in js and "(gl_VertexID==0?-1.:1.)*half_*vec2(d.x,-d.y)" in js
+    assert "if(bd<1.&&length(bf)>0.)un+=length(un)*normalize(bf);" in js        # particle_boundary_force
+    # colours: FluidX3D's colorscale_rainbow, the air on its cool part only;
+    # still air transparent; red never in the air, the top wall step red
+    ns: dict = {}
+    exec(re.search(r"^FLOW_AIR = \{.*?\}\n", src, re.M).group(0)
+         + re.search(r"^FLOW_WALL_STEPS = .*?\n", src, re.M).group(0), ns)
+    air, wall = ns["FLOW_AIR"], ns["FLOW_WALL_STEPS"]
+    fns: dict = {"FLOW_AIR": air}
+    for name in ("fluidx3d_rainbow", "flow_air_rgba"):
+        exec(re.search(rf"^def {name}\(.*?(?=^\S)", src, re.S | re.M).group(0), fns)
+    rainbow, rgba = fns["fluidx3d_rainbow"], fns["flow_air_rgba"]
+    # FluidX3D's scale at its own landmarks: black, blue, cyan, green, yellow, red
+    for x, want in ((0.0, (0, 0, 0)), (1 / 3, (0, 0, 1)), (0.5, (0, 1, 1)), (2 / 3, (0, 1, 0)), (0.8, (1, 1, 0)), (1.0, (1, 0, 0))):
+        assert all(abs(g - w) < 1e-6 for g, w in zip(rainbow(x), want)), (x, rainbow(x))
+    def redness(r, g, b):
+        return r > 180 and g < 80 and b < 90
+    for i in range(401):
+        (r, g, b), alpha = rgba(air["full"] * 2 * i / 400)
+        assert not redness(r, g, b), "the air is never red"
+        if i * 2 / 400 < air["rest"]:
+            assert alpha == 0.0, "still air is transparent"
+    r, g, b = (int(wall[-1][1][i:i + 2], 16) for i in (1, 3, 5))
+    assert redness(r, g, b), "the highest wall pressure is the red step"
+    assert '"flow": {"air": dict(FLOW_AIR),' in src
+    # the same scale in the browser, line for line
+    assert "if(x<1.2){r=1.;g=x*.83333333;}else if(x<2.){r=2.5-x*1.25;g=1.;}" in js
+    # no glass, gloss, glow or blur anywhere in it
+    code = re.sub(r"//[^\n]*|/\*.*?\*/", "", body, flags=re.S)
+    for word in ("spec", "fresnel", "blur", "glow", "createRadialGradient", "shadowBlur"):
+        assert word not in code, word
+    # the environment: the grid's mesh, 1px domain box, transparent ground, the switch
+    assert "x.strokeRect(0.5, 0.5, sz.w - 1, sz.h - 1);" in js
+    assert "T.btn.textContent = 'Verification Overlay';" in js
+    assert "plot_bgcolor" not in src[src.index("def fan_chart"):src.index("def panel_head")]
+    # the proof
+    for key in ("colourMismatch", "gridMiss", "particleMoveMismatch", "particleColourMismatch",
+                "redOffWall", "obstacleMiss", "wallMismatch", "peakIsRed"):
+        assert key in js, key
+    scan = (root / "tools" / "deep_scan.mjs").read_text(encoding="utf-8")
+    assert "await windAgrees(tag" in scan and "redOffWall" in scan and "obstacleMiss" in scan and "gridMiss" in scan
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    assert ".wt-verify" in css and ".flow-key" in css and ".flow-ramp" in css
+    reveal = (root / "static" / "reveal.js").read_text(encoding="utf-8")
+    assert "windtunnel.js" in reveal
+    # an emulated GPU also draws the page: the solve there froze it (Live audit,
+    # 2026-11-04), so the page leaves the flow out on a software renderer, and
+    # CI proves the solve in its own step
+    assert "if (!g || g.soft) { api.status" in js
+    wf = (root / ".github" / "workflows" / "live-audit.yml").read_text(encoding="utf-8")
+    assert "node tools/flow_check.mjs http://127.0.0.1:8501 flow-shots" in wf
+    probe = (root / "tools" / "flow_check.mjs").read_text(encoding="utf-8")
+    for key in ("colourMismatch", "gridMiss", "particleMoveMismatch", "particleColourMismatch", "wallMismatch",
+                "redOffWall", "obstacleMiss", "peakIsRed", "volatility-shock"):
+        assert key in probe, key
+
+
+def test_the_browser_audit_runs_on_an_os_its_playwright_supports():
+    """2026-11-04: GitHub's ubuntu-latest became 26.04 and Playwright 1.56.1
+    refused to install Chromium there, so every browser step of the Live audit
+    died before running. The job is pinned to an image that Playwright version
+    supports; a bump of either must move both."""
+    import re
+    root = pathlib.Path(__file__).resolve().parent.parent
+    wf = (root / ".github" / "workflows" / "live-audit.yml").read_text(encoding="utf-8")
+    job = re.search(r"^  live-audit:\n(.*?)(?=^  \S|\Z)", wf, re.S | re.M).group(1)
+    assert re.search(r"^    runs-on: ubuntu-24\.04$", job, re.M), "browser audit on an unpinned runner"
+    assert "playwright@1.56.1" in wf
 
 
 def test_every_in_page_button_is_flown_by_both_glide_scans():

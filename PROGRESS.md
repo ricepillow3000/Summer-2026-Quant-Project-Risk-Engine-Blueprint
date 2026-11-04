@@ -862,6 +862,72 @@ risk-engine/
   Options audit, written after #21 was opened, looked the boxes up by the old
   keys and failed every page run (`KeyError: 'watch_a'`); it now finds them
   by their labels, Asset A and Asset B.
+- ✅ **The Book's sentence no longer freezes mid-turn (2026-11-04)**. John's
+  screenshot: the Book's full-width sentence stood as a sliver between the two
+  controls. A card turn (rotateY on its spine) is for a narrow block in the
+  middle; given to a 1,488px block (measured while its placeholder was still
+  small, then filled in by a rerun), its near edge swings past the eye at
+  perspective 1000px. reveal.js now reads layout widths, never gives a block
+  with no size yet or wider than 45% of the page a card turn, sets the card's
+  eye distance to 3x its width, lands a block at once if it is resized
+  mid-move (ResizeObserver) or its move is cancelled
+  (`test_a_wide_block_never_turns_like_a_card_and_never_hangs_mid_turn`;
+  browser run: a 260px middle block widened to 1,400px mid-turn landed in
+  under 120 ms). The crest's ripple is 15% stronger (scale 1.04, opacity .48).
+- ✅ **The cone in a wind tunnel (2026-11-04)**. John: smoke blown through the
+  cumulative-return cone, many colours that "must not be random" but follow
+  the return and the trading days, fully interactive. One fixed scale,
+  `RETURN_SCALE` in main.py (oxblood at -50%, sand at break-even, indigo at
+  +60%), colours the band fills at exactly the return each height stands for
+  (Plotly `fillgradient`, start/stop in the y-axis's own % units) and ships
+  in the figure's `layout.meta` to `static/windtunnel.js`, which blows smoke
+  through the cone: each particle is a percentile level between 5% and 95%
+  riding the chart's own computed paths, coloured by the return where it is;
+  eddies come from a stream function (incompressible, flat on the 5% and 95%
+  edges) so the smoke never bunches into lanes or leaves the cone, and all
+  drawing is clipped to the cone's outline. The pointer parts the smoke, a
+  click sends a gust, the hover readout lists all five levels best-first.
+  Off screen or in a hidden tab it stops; under reduced motion it never
+  loads. `window.__melionaWind.check()` reads each particle's return back
+  from its pixel through Plotly's axis; deep_scan's `windAgrees` runs it on
+  every cone it checks (baseline, risk parity, custom shock, every crisis,
+  the short book). Browser runs: ~980 particles, 0 coloured wrong, 0 outside
+  the cone, at 1440px and on an iPhone 15
+  (`test_the_cone_is_coloured_by_return_and_the_smoke_rides_the_computed_cone`).
+
+- ✅ **The cone's flow is a lattice Boltzmann solve bound to the data
+  (2026-11-04)**, replacing the smoke above at John's direction ("Every line,
+  color, velocity vector, and animation timestep must be directly driven by
+  and deterministically bound to the provided data array", FluidX3D's
+  engineering look, no glass or gloss, not pixelated, transparent at rest, red
+  only where the flow collides with the data, and a Verification Overlay).
+  `static/windtunnel.js` runs a D2Q9 BGK lattice Boltzmann solver on the GPU
+  (WebGL2, float32 render targets, MRT): the five computed percentile paths
+  are rasterised as solid walls (halfway bounce-back), air enters on the left,
+  the top and bottom rows are free stream, the right is a pressure outlet, and
+  24/16 columns of lead-in/run-out are computed off-plot so the boundaries sit
+  away from the data. No noise or timers: fixed steps per frame,
+  steps per trading day = plot columns / (inflow x trading days), and the
+  inflow on each replayed day follows the cone's widening that day. The air is
+  drawn at screen resolution (bilinear speed between nodes) through main.py's
+  stepped `FLOW_SPEED_STEPS` (transparent at rest; charcoal, deep blue, blue,
+  teal); the paths are drawn as smooth lines through their exact points, each
+  segment in its `FLOW_WALL_STEPS` pressure step (Cp against the outflow: red
+  only on the data); streamlines are seeded every 5 trading days along each
+  path and at the inflow (Heun steps, bilinear velocity, stop where still).
+  A faint lattice mesh and a 1px domain box frame it; the chart's
+  "Verification Overlay" button draws velocity arrows with their speeds, the
+  highest path pressures with their Cp, the fastest cell, and the solver's
+  state. `check()` proves the picture: every node's colour against its own
+  computed speed, every path segment's pixel against its pressure step, no
+  red pixel off a path, every path point on a wall, the peak pressure red.
+  Local runs: GPU mode 46,440 nodes / 1,224 segments, 0 mismatches; software
+  still mode 8,840 / 1,225, 0 mismatches; glide checks 44/44
+  (`test_the_cone_flow_is_a_lattice_boltzmann_solve_bound_to_the_data`).
+  Also: ubuntu-latest moved to 26.04, which Playwright 1.56.1 cannot install
+  Chromium on; the Live audit job is pinned to ubuntu-24.04
+  (`test_the_browser_audit_runs_on_an_os_its_playwright_supports`), and the
+  Options audit's log-year check reads each path's own ending wealth.
 
 - ✅ **Ship hardening: John's 2026-11-04 security, UX and design lists**
   (LAUNCH_CHECKLIST #99-138). Three read-only reviews (security, UX in a
@@ -943,3 +1009,40 @@ two paid-vendor-dependent pieces remain explicit backlog items:
    (Polygon.io/Alpaca/IEX) is scoped and ready to wire in once an API key exists.
 3. Extend liquidity: per-asset liquidity-adjusted VaR, or a book-size slider
    preset that showcases a small/mid-cap basket where days-to-liquidate bites.
+
+- ✅ **The cone's flow, redrawn the way FluidX3D draws a field (2026-11-04,
+  second pass)**. John: the smooth coloured field was "not the design I was
+  looking for" - he wanted FluidX3D's grid cells and fluid motion, with "each
+  color, cell, line, animation and where it's going" reflecting the chart.
+  Studied FluidX3D's own source (`kernel.cpp`: `graphics_field`,
+  `colorscale_rainbow`, `integrate_particles`, `particle_boundary_force`, the
+  SUBGRID Smagorinsky-Lilly model; `defines.hpp`; the D2Q9 Karman setup).
+  `static/windtunnel.js` now:
+  - draws ONE LINE PER CELL of a grid laid on the chart's axes - columns of
+    ND trading days (1, 2, 3, 5, 10 or 21), rows of DR percent of return
+    aligned on 0% - centred in its cell, pointing where the computed air there
+    goes, coloured by FluidX3D's `colorscale_rainbow` (main.py `FLOW_AIR`: the
+    air takes the cool half, black to green; still air under FluidX3D's 0.1
+    cut-off is transparent; red is left to the data);
+  - releases FluidX3D's tracer particles, one per return-level row every ND
+    trading days, moved each solver step by the computed velocity: in
+    undisturbed air they ride one grid cell apart, so the cone's effect is
+    their departure from the grid;
+  - runs ~111,000 lattice cells on a desktop (open air computed above and
+    below the plot, so the cone is a body in a stream, not a plug in a pipe),
+    tau 0.52 with FluidX3D's subgrid model, a spin-up from still air, and a
+    step counter that passes 100,000 in about a minute;
+  - colours a path by Cp against the free stream at the same trading day,
+    counting only moving air: red lands on the cone's nose (day 1) and the
+    steep early face of the 95th path, never on the still interior;
+  - prints its state (lattice, step, trading day) on the frame; the
+    Verification Overlay adds the grid in days x percent, sample speeds with
+    arrowheads, the solid cells' outline (VIS_FLAG_LATTICE), the top Cp and
+    the solver's numbers;
+  - reduced motion now loads it and gets one still frame (it never loaded).
+  `check()` proves every line's colour and direction, every line's trading
+  day and return level, every particle's step (FluidX3D's integrate_particles
+  recomputed on the CPU) and colour, every path segment's pressure step, and
+  no red off the data. Local runs (offline market, 1440px, iPhone 15, reduced
+  motion; 1,800 / 6,000 / 15,000 steps, baseline and volatility shock): 0
+  mismatches everywhere. CI's flow_check now runs 6,000 steps (past spin-up).
