@@ -1,6 +1,6 @@
 # Privacy
 
-_Last updated: 2026-11-02. Contact: meleona.support@gmail.com_
+_Last updated: 2026-11-04. Contact: meleona.support@gmail.com_
 
 Meliona is run by John Nguyen, an individual, as a student portfolio project -
 not a company, and nothing here is sold.
@@ -30,6 +30,7 @@ app holds, which is deliberately close to nothing.
 | Cached market data | Server disk, filename is a hash of the ticker set | Rotates on size; oldest first | Public Yahoo Finance prices, shared by every visitor who picks the same basket |
 | Error and session-start log lines | Server disk (`logs/`, size-capped, rotating) | Until rotated out (small), or the next redeploy | Timestamp, session reference, ticker symbols, stack trace |
 | Error lines only (no session starts) | Also the host's log stream (Railway), where Streamlit writes its own server errors | The host's log retention | The same error lines |
+| How many requests your network address made in the last minute | Server memory only, never written to disk | One minute | Your IP address and a count. It exists to stop one address flooding the server (rate limiting); if it is refused, the log records a scrambled tag that cannot be turned back into the address |
 
 The session reference exists for one purpose: if you email about a problem and
 quote it, the operator can find the matching stack trace. It is not a user ID,
@@ -66,6 +67,21 @@ Yahoo. The full list of hosts the app may contact is enumerated in
 The app is hosted on Railway, a commercial platform. Like any web host,
 it processes connection metadata such as IP addresses for delivery and abuse
 prevention under its own privacy policy.
+
+The **Privacy**, **Terms** and **Accessibility** links in the footer open on
+GitHub, where this project's code is published; GitHub handles those page
+visits under its own privacy statement. The app page itself loads nothing from
+GitHub or any other outside host.
+
+## Artificial intelligence
+
+No artificial intelligence model runs in this app. Nothing you type or pick
+is sent to an AI service, no number on the page comes from a language model
+(every figure is computed by the engine's own code from Yahoo Finance prices),
+and there is no chat. The sentences that describe your portfolio are fixed
+templates filled with computed numbers. The app's code was written with the
+help of AI coding assistants and is checked by its own automated tests and
+audits before it is published.
 
 ## Children
 

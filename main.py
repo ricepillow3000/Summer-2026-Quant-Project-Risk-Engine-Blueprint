@@ -12,6 +12,7 @@ so the engine speaks to any audience - not just one watchlist.
 """
 
 from pathlib import Path
+import re
 import html
 
 import numpy as np
@@ -90,6 +91,15 @@ AppSession._handle_clear_cache_request = _ignore_clear_cache_request
 # forwarded, filtered or handed on without touching a personal inbox.
 # MELIONA_SUPPORT_EMAIL overrides it per environment without a redeploy.
 SUPPORT_EMAIL = host_setting("SUPPORT_EMAIL", "meleona.support@gmail.com")
+# John's support phone (2026-11-04), shown as a tap-to-call link beside the
+# email. It is published on a public page, so it will be scraped like the
+# email: MELIONA_SUPPORT_PHONE on the host replaces it, and "off" hides it,
+# both without a redeploy.
+SUPPORT_PHONE = host_setting("SUPPORT_PHONE", "770-265-9930").strip()
+if SUPPORT_PHONE.lower() in {"off", "none", "0", ""}:
+    SUPPORT_PHONE = ""
+_digits = re.sub(r"\D", "", SUPPORT_PHONE)
+SUPPORT_TEL = f"+1{_digits}" if len(_digits) == 10 else (f"+{_digits}" if _digits else "")
 
 # What a visitor reads when Yahoo returns nothing for a preset basket. Those
 # names are known good, so the feed, not the spelling, is the likely cause.
@@ -110,7 +120,7 @@ if host_setting("MAINTENANCE").strip().lower() in {"1", "true", "yes", "on"}:
     st.title("Meliona is briefly offline")
     st.write(host_setting("MAINTENANCE_NOTE")
              or "The engine is paused for maintenance. Please check back shortly.")
-    st.caption(f"Questions: {SUPPORT_EMAIL}")
+    st.caption(f"Questions: {SUPPORT_EMAIL}" + (f" or {SUPPORT_PHONE}" if SUPPORT_PHONE else ""))
     st.stop()
 
 # Crash wire: attach the rotating log handler once, mint a per-session
@@ -3418,8 +3428,13 @@ with tab_lineage:
         st.session_state.clear()
         st.query_params.clear()           # the preset in the address too
         st.session_state.session_ref = keep
-        st.success("Session settings cleared. Reloading with defaults.")
+        st.session_state["_cleared"] = True
         st.rerun()
+    # Shown after the reload: a message written just before st.rerun() is
+    # wiped before anyone can read it (2026-11-04).
+    if st.session_state.pop("_cleared", False):
+        st.success("Done: this session's settings are cleared and the page is back "
+                   "to its defaults.")
 
 # ---- Closing band: three links onward, then copyright, support, accessibility ----
 st.markdown("""
@@ -3437,7 +3452,7 @@ st.markdown("""
     <div>Live end-of-day data: Yahoo Finance &middot; Educational analysis, not investment advice</div>
   </div>
   <div class="f-bar">
-    <div>Support: <a href="mailto:__SUPPORT__?subject=Meliona%20%E2%80%93%20session%20__REF__">__SUPPORT__</a>
+    <div>Support: <a href="mailto:__SUPPORT__?subject=Meliona%20%E2%80%93%20session%20__REF__">__SUPPORT__</a>__PHONE__
       &middot; <a href="https://github.com/ricepillow3000/Summer-2026-Quant-Project-Risk-Engine-Blueprint/blob/main/PRIVACY.md">Privacy</a>
       &middot; <a href="https://github.com/ricepillow3000/Summer-2026-Quant-Project-Risk-Engine-Blueprint/blob/main/TERMS.md">Terms</a>
       &middot; <a href="https://github.com/ricepillow3000/Summer-2026-Quant-Project-Risk-Engine-Blueprint/blob/main/ACCESSIBILITY.md">Accessibility</a></div>
@@ -3451,6 +3466,7 @@ st.markdown("""
       with the reference above; a barrier is fixed as a defect.</div>
   </div>
 </div>
-""".replace("__SUPPORT__", SUPPORT_EMAIL).replace("__REF__", SESSION_REF)
+""".replace("__SUPPORT__", SUPPORT_EMAIL).replace("__REF__", SESSION_REF).replace(
+    "__PHONE__", f' &middot; <a href="tel:{SUPPORT_TEL}">{SUPPORT_PHONE}</a>' if SUPPORT_PHONE else "")
    .replace("__NCRISES__", str(len(HISTORICAL_REGIMES))),
     unsafe_allow_html=True)

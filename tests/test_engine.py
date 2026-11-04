@@ -2488,6 +2488,156 @@ def test_every_response_carries_the_security_headers():
     assert "permissions-policy" not in serve.HEADERS   # see serve.py
 
 
+def test_one_address_cannot_flood_the_shared_process():
+    """John, 2026-11-04: "make sure there's rate limiting". serve.py's RateLimit
+    caps, per address, the sessions opened a minute, the sessions open at once
+    and the HTTP requests a minute - far above one person's page (one session,
+    ~40 requests) - so a script cannot flood the one process every visitor
+    shares. Railway's health probe is never limited; the address is the last
+    hop Railway appended to X-Forwarded-For; a refusal is logged once a minute
+    with a scrambled tag, never the address; a server error is logged."""
+    import asyncio
+    import logging
+
+    import serve
+
+    caps = (serve.NEW_SESSIONS_PER_MINUTE, serve.OPEN_SESSIONS, serve.REQUESTS_PER_MINUTE)
+    assert caps[0] >= 30 and caps[1] >= 15 and caps[2] >= 1000, "caps must stay far above one visitor"
+    assert any(m.cls is serve.RateLimit for m in serve.app._user_middleware)
+    now = [1000.0]
+    held = []
+
+    async def inner(scope, receive, send):
+        if scope["type"] == "websocket":
+            await send({"type": "websocket.accept"})
+            while held:                      # stays open while the test holds it
+                await asyncio.sleep(0)
+            return
+        status = 500 if scope["path"] == "/boom" else 200
+        await send({"type": "http.response.start", "status": status, "headers": []})
+        await send({"type": "http.response.body", "body": b""})
+
+    lim = serve.RateLimit(inner, clock=lambda: now[0])
+
+    def call(path="/", kind="http", xff=b"203.0.113.9, 198.51.100.7", client=("10.0.0.2", 1)):
+        sent = []
+
+        async def send(m):
+            sent.append(m)
+
+        async def receive():
+            return {"type": "http.request"}
+
+        scope = {"type": kind, "path": path, "client": client,
+                 "headers": [(b"x-forwarded-for", xff)] if xff else []}
+        asyncio.run(lim(scope, receive, send))
+        return sent[0]
+
+    old = (serve.NEW_SESSIONS_PER_MINUTE, serve.OPEN_SESSIONS, serve.REQUESTS_PER_MINUTE)
+    records = []
+    handler = logging.Handler()
+    handler.emit = records.append
+    serve.log.addHandler(handler)
+    try:
+        serve.NEW_SESSIONS_PER_MINUTE, serve.OPEN_SESSIONS, serve.REQUESTS_PER_MINUTE = 3, 2, 5
+        assert serve.client_address({"headers": [(b"x-forwarded-for", b"1.1.1.1, 2.2.2.2")]}) == "2.2.2.2"
+        assert serve.client_address({"headers": [], "client": ("9.9.9.9", 1)}) == "9.9.9.9"
+        assert [call()["status"] for _ in range(6)] == [200] * 5 + [429]
+        assert all(call("/_stcore/health")["status"] == 200 for _ in range(20)), "health probe limited"
+        assert call(xff=b"203.0.113.9, 192.0.2.44")["status"] == 200, "another address must be unaffected"
+        now[0] += 61
+        assert call()["status"] == 200, "a minute later the address is served again"
+        assert [call(kind="websocket")["type"] for _ in range(4)] == ["websocket.accept"] * 3 + ["websocket.close"]
+        assert call(kind="websocket") == {"type": "websocket.close", "code": 1013}
+        now[0] += 61
+        lim.open["198.51.100.7"] = 2                  # two sessions still open
+        assert call(kind="websocket")["type"] == "websocket.close", "open-session cap not enforced"
+        lim.open["198.51.100.7"] = 0
+        assert call(kind="websocket")["type"] == "websocket.accept"
+        refusals = [r.getMessage() for r in records if "refused" in r.getMessage()]
+        assert refusals and not any("198.51.100.7" in m or "203.0.113.9" in m for m in refusals)
+        assert len([m for m in refusals if "requests" in m]) == 1, "refusals must be logged once a minute"
+        call("/boom")
+        assert any(r.levelno == logging.ERROR and "500" in r.getMessage() for r in records)
+    finally:
+        serve.NEW_SESSIONS_PER_MINUTE, serve.OPEN_SESSIONS, serve.REQUESTS_PER_MINUTE = old
+        serve.log.removeHandler(handler)
+
+
+def test_every_link_on_the_page_goes_somewhere_and_no_placeholder_is_left():
+    """John, 2026-11-04: fix broken links, make the email and phone clickable,
+    remove placeholder text. Every in-page link (#id) lands on an id the page
+    renders, every link to this repository's files names a file that exists,
+    the email is a mailto: link, the phone a tel: link in international form
+    (and can be hidden from the host), and no placeholder words reach a page."""
+    import re
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    pages = {f: (root / f).read_text(encoding="utf-8") for f in
+             ("main.py", "hero.py", "public/404.html", "prototypes/war_room.html")}
+    every = "\n".join(pages.values())
+    ids = set(re.findall(r'id=["\']([\w-]+)["\']', every))
+    hrefs = set()
+    for text in pages.values():
+        hrefs |= set(re.findall(r'href=["\']([^"\'{}]+)["\']', text))
+        hrefs |= set(re.findall(r'\]\(((?:https?|mailto|tel):[^)\s]+|#[^)\s]+)\)', text))
+    assert len(hrefs) >= 5, f"too few links found - the scan is broken: {hrefs}"
+    repo = "https://github.com/ricepillow3000/Summer-2026-Quant-Project-Risk-Engine-Blueprint/blob/main/"
+    for h in hrefs:
+        if h.startswith("#"):
+            assert h[1:] in ids, f"in-page link {h} lands on no id"
+        elif h.startswith(repo):
+            assert (root / h[len(repo):]).is_file(), f"link to a missing file: {h}"
+    main = pages["main.py"]
+    assert 'href="mailto:__SUPPORT__' in main, "the footer email is not clickable"
+    assert 'href="tel:{SUPPORT_TEL}"' in main, "the footer phone is not tap-to-call"
+    default = re.search(r'host_setting\("SUPPORT_PHONE", "([^"]+)"\)', main).group(1)
+    digits = re.sub(r"\D", "", default)
+    assert len(digits) == 10 and f"+1{digits}" == "+17702659930", default
+    assert '{"off", "none", "0", ""}' in main, "the phone cannot be hidden from the host"
+    banned = re.compile(r"lorem|ipsum|\bTODO\b|\bTBD\b|\bFIXME\b|coming soon|"
+                        r"your name here|example\.com", re.I)
+    for f in ("main.py", "hero.py", "public/404.html", "prototypes/war_room.html", "README.md",
+              "PRIVACY.md", "TERMS.md", "SUPPORT.md", "ACCESSIBILITY.md"):
+        hit = banned.search((root / f).read_text(encoding="utf-8"))
+        assert not hit, f"placeholder text in {f}: {hit.group(0)!r}"
+
+
+def test_clearing_the_session_says_so_after_the_reload():
+    """John, 2026-11-04: add success messages. "Clear this session's data"
+    wrote its success line and called st.rerun() in the same breath, so the
+    reload wiped the message before anyone could read it. The message is now
+    shown after the reload, once, and the settings really are back to their
+    defaults."""
+    at, restore = _offline_app()
+    try:
+        at.button(key="wipe_session").click().run()
+        assert not at.exception, [e.value for e in at.exception]
+        done = [s.value for s in at.success if "cleared" in s.value]
+        assert done, "no success message after clearing the session"
+        at.run()                                          # the next rerun
+        assert not [s.value for s in at.success if "cleared" in s.value], "the message must show once"
+    finally:
+        restore()
+
+
+def test_the_live_site_is_watched_every_fifteen_minutes():
+    """John, 2026-11-04: "increase uptime monitoring". The Uptime workflow
+    checks the live site's health and its page (headers, build stamp) every 15
+    minutes; a failed scheduled run emails the owner. The daily Live audit and
+    Railway's restart-on-crash stay underneath it."""
+    import re
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    up = (root / ".github" / "workflows" / "uptime.yml").read_text(encoding="utf-8")
+    assert re.search(r'cron:\s*"\*/15 \* \* \* \*"', up), "uptime is not checked every 15 minutes"
+    assert "/_stcore/health" in up and "strict-transport-security" in up and "meliona-build" in up
+    audit = (root / ".github" / "workflows" / "live-audit.yml").read_text(encoding="utf-8")
+    assert "schedule:" in audit and "load_check.mjs http://127.0.0.1:8501 10" in audit, \
+        "the daily audit or the simultaneous-visitor drill is gone"
+    assert "load_check.mjs http://127.0.0.1:8504 1" in audit, "the restore drill is gone"
+
+
 # --- launch readiness (2026-08-26) ------------------------------------------
 
 def test_crash_wire_correlates_a_session_reference_to_a_traceback():

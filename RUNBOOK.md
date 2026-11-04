@@ -121,6 +121,14 @@ simultaneous first-time visitors see the headline within ~21s, 25 within ~53s,
 no errors, peak memory ~720 MB. Re-measure on Railway before quoting it as the
 live site's number. Report: `audit/stress_2026-10-15T020905Z.md`.
 
+**Repeatable since 2026-11-04:** `node tools/load_check.mjs <url> 10 240` opens
+ten visitors at once and fails on any error, refusal or missing headline; the
+Live audit runs it on every push (step 8e), then restores a fresh checkout
+with an empty cache and times it to its first headline. `serve.py` also caps
+each network address (60 new sessions a minute, 30 open, 3,000 requests a
+minute; health checks exempt), and the `Uptime` workflow checks the live site
+every 15 minutes.
+
 ### Reverse proxy / CDN (Cloudflare): decided against, 2026-10-15
 
 A five-adviser council (4-1, chair agreed) rejected putting Cloudflare in

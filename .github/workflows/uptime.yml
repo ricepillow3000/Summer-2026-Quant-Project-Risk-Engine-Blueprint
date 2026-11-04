@@ -1,0 +1,39 @@
+# Uptime: is the live site up, and is it serving main? Every 15 minutes
+# (John, 2026-11-04: "increase uptime monitoring"). The daily Live audit
+# checks everything; this checks the two things that matter between runs:
+# the health endpoint answers and the page carries main's build stamp with
+# its security headers. A failed run emails the repository owner (GitHub
+# notifies on failed scheduled workflows), and Railway restarts a crashed
+# process by itself (railway.toml). Free on a public repository. No actions,
+# only curl, so nothing here can be pinned to the wrong code.
+name: Uptime
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  uptime:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      SITE_URL: https://summer-2026-quant-project-risk-engine-blueprint-production.up.railway.app
+    steps:
+      - name: Health check, three tries a minute apart
+        run: |
+          for i in 1 2 3; do
+            if curl -sf --max-time 20 "$SITE_URL/_stcore/health" >/dev/null; then echo "health: ok"; exit 0; fi
+            echo "health: no answer (try $i)"; sleep 60
+          done
+          echo "::error::The live site did not answer its health check three times in a row."
+          exit 1
+      - name: The page loads, with its headers and a build stamp
+        run: |
+          curl -s --max-time 30 -D headers.txt -o page.html "$SITE_URL/"
+          grep -qi "^strict-transport-security:" headers.txt || { echo "::error::No HSTS header on the live page."; exit 1; }
+          grep -q 'name="meliona-build"' page.html || { echo "::error::The live page has no build stamp."; exit 1; }
+          echo "page: ok, build $(grep -o 'name="meliona-build" content="[^"]*"' page.html | cut -d'"' -f4)"

@@ -131,6 +131,21 @@ jobs:
       - name: 8d. This commit - the cone's flow, solved and proven on the pixels
         if: always()
         run: node tools/flow_check.mjs http://127.0.0.1:8501 flow-shots 6000
+      # John, 2026-11-04: "test simultaneous users and test backup restores".
+      # Ten visitors open the page at the same moment on this commit's app,
+      # through serve.py's rate limiter; then a copy of this checkout with no
+      # data/ and no logs/ - what a redeploy or a restore from git leaves - is
+      # started and timed to its first headline (the restore drill).
+      - name: 8e. This commit - ten visitors at once, and a restore from nothing
+        if: always()
+        run: |
+          node tools/load_check.mjs http://127.0.0.1:8501 10 240 simultaneous
+          rm -rf /tmp/restore && git worktree add -f /tmp/restore HEAD >/dev/null
+          (cd /tmp/restore && nohup streamlit run serve.py --server.port 8504 --server.headless true > /tmp/restore.log 2>&1 &)
+          start=$(date +%s)
+          for i in $(seq 1 90); do curl -sf http://127.0.0.1:8504/_stcore/health >/dev/null && break; sleep 2; done
+          echo "restore: healthy after $(( $(date +%s) - start ))s from an empty checkout"
+          node tools/load_check.mjs http://127.0.0.1:8504 1 360 restore || { tail -40 /tmp/restore.log; exit 1; }
       - name: 9. Deployed site - recruiter walk (informational until this branch is deployed)
         if: always()
         continue-on-error: true

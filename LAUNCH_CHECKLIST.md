@@ -178,6 +178,45 @@ has a regression test in `tests/test_engine.py`, so the tell cannot come back.
 | 137 | Verbose text, code breadcrumbs, section numbering, eyebrows, periods in titles | **Fixed** | The ten longest captions were shortened, keeping every number and limit; the data-quality checks print plain names instead of code IDs; the 01/02/03 numbering, the eyebrows and the period on a title are gone, on the page, the map and the 404 page (`test_visitor_copy_has_no_numbers_eyebrows_honest_or_shouting`). |
 | 138 | Dithering, ASCII images | **Fixed / verified** | The map's grain texture is gone; no ASCII art exists. |
 
+### 2026-11-04 (later): 20 protections before going public
+
+| # | Asked for | Status | Where it lives / why not |
+|---|---|---|---|
+| 139 | Rate limiting | **Built 2026-11-04** | `serve.py`'s `RateLimit`, per network address: 60 new sessions a minute, 30 open at once, 3,000 HTTP requests a minute - far above one person's page (one session, ~40 requests) - so only a script flooding the shared process is refused (HTTP 429, or the websocket closed with "try again later"). The health probe is never limited. The address is read from the hop Railway's proxy appended, counted in memory for a minute and never stored; a refusal is logged once a minute with a scrambled tag (`test_one_address_cannot_flood_the_shared_process`, `PRIVACY.md`). |
+| 140 | A set API limit; caching repeated requests | **Built** | 5,000 Yahoo requests a day per process (#8); every fetch cached in memory and on disk (#39). |
+| 141 | Error handling; failed requests; API timeouts | **Built** | `safe_err()` (#90); a feed-down message for presets (#126); dropped names retried once, then named (ME-14); a 30 s timeout on every outbound call (#48); the budget degrades to cached data (#8). |
+| 142 | Loading states, empty states, "empathy" states | **Built** | #30, #121, #124; messages say what happened and what to do next in plain words (#126). |
+| 143 | Prevent duplicate submissions and payments | **Verified / N/A** | No form posts and no payments; the only action button gives the same result twice (#123). |
+| 144 | Optimize database queries, add indexes, paginate large results | **N/A** | No database (#44, #53); long tables use Streamlit's virtualized grid (#41, #58). |
+| 145 | Compress files; limit upload sizes | **Built** | AVIF images and a compressed websocket (#38, #45); uploads capped at 1 MB with no uploader (#114); messages capped at 16 MB (#110). |
+| 146 | Uptime monitoring | **Built 2026-11-04** | The `Uptime` workflow checks the live site every 15 minutes - health check (three tries), the page, its HSTS header and its build stamp - and a failed run emails the owner. Under it: the daily Live audit and Railway's restart-on-crash (#97) (`test_the_live_site_is_watched_every_fifteen_minutes`). |
+| 147 | Error logging | **Built 2026-11-04** | Handled failures with session references (#1); errors also in the host's log (#105); now also every server error (HTTP 5xx) and every rate-limit refusal. |
+| 148 | Test simultaneous users | **Built 2026-11-04** | `tools/load_check.mjs` opens ten visitors at the same moment on this commit's app, through the rate limiter, and fails on any server error, refusal, error box or missing headline; Live audit step 8e, every push and daily. The 2026-10-15 stress test (RUNBOOK §4) was a one-off; this one is repeatable. |
+| 149 | Test backup restores | **Built 2026-11-04** | There is no user data to back up (#10). What can be lost is the container and its cache, and step 8e restores exactly that on every run: a fresh checkout of the commit, empty `data/` and `logs/`, started and timed to its first headline. The `Container` workflow does the same from the published image's recipe. |
+
+### 2026-11-04: legal list
+
+| # | Asked for | Status | Where it lives / why not |
+|---|---|---|---|
+| 150 | A privacy policy page; where data is collected | **Built** | `PRIVACY.md`, linked in the footer: what is not collected, a table of everything held, where and for how long (now including the rate limiter's one-minute counts), cookies, deletion (#3, #65). |
+| 151 | Where AI is used | **Built 2026-11-04** | `PRIVACY.md` "Artificial intelligence": no AI model runs in the app, nothing a visitor does reaches an AI service, no number comes from a language model, and the code was written with AI coding assistants and is checked by tests. |
+| 152 | Third parties named | **Built** | Yahoo Finance (server-side prices), Railway (host), and GitHub (where the footer's policy links open) - named in `PRIVACY.md` with what each sees. |
+| 153 | Uploads kept out of storage; no public storage buckets per user | **N/A, verified** | The app takes no uploads (#114) and has no storage buckets or per-user storage of any kind. |
+| 154 | No fake testimonials | **Verified** | None exist (#73). |
+| 155 | An AI chat's self-harm response | **N/A** | There is no chat and no AI (#151). If one is ever added, it needs a crisis response (e.g. 988 in the US) before it ships. |
+
+### 2026-11-04: seventeen site fixes
+
+| # | Asked for | Status | Where it lives / why not |
+|---|---|---|---|
+| 156 | No horizontal scrolling; no mobile overflow; test on mobile devices | **Verified** | `tools/device_check.mjs` on 13 devices every push (#64, #118). |
+| 157 | Meta description, page title, favicon, compressed images | **Built** | #23, #25, #38. |
+| 158 | Clickable email; clickable phone | **Built 2026-11-04** | The support email is a `mailto:` link; John's support phone (770-265-9930) is a `tel:+17702659930` link beside it in the footer, on the maintenance page and in `SUPPORT.md`. `MELIONA_SUPPORT_PHONE` changes it on the host, and `off` hides it, without a redeploy. |
+| 159 | Fix broken links; remove placeholder text | **Built 2026-11-04** | `test_every_link_on_the_page_goes_somewhere_and_no_placeholder_is_left`: every in-page link lands on an id, every link to the repository's files names a file that exists, and no lorem ipsum, TODO, TBD or "coming soon" reaches a page. |
+| 160 | Mobile menu | **Built (fitting form)** | One page, no separate sections to switch between: the phone's "menu" is the tab strip, which scrolls sideways with a labelled button, the jump buttons in the hero and the skip link. A hamburger menu would hide the page's only navigation behind a tap. |
+| 161 | A mobile-optimized empty state; error and success messages | **Built** | An emptied basket says what to do (#124); errors explain (#126); "Clear this session's data" now confirms itself after the reload - its message used to be wiped by the reload before anyone saw it (`test_clearing_the_session_says_so_after_the_reload`). |
+| 162 | A 404 page | **Built** | `public/404.html` (#21). |
+
 ## Before the link goes public
 
 - [ ] `python -m tests.test_engine` green (includes the full-app boot test).
