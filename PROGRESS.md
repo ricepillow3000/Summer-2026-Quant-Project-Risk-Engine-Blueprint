@@ -1089,3 +1089,16 @@ two paid-vendor-dependent pieces remain explicit backlog items:
     two frames, repeat until nothing is left to land; `covered()` lands a
     block that starts arriving as it scrolls in). Live audit on 05ff4dd had
     measured an iPad Pro's drawer mid-slide over the tab strip.
+
+- ✅ **The Grit Zone, traced on live data (2026-11-04)**. John: "all the
+  descriptions about the grit zone consistency resilience and recovery ...
+  accurate and traced from a data source". Every other number already had a
+  live re-derivation; the Grit Zone only had synthetic unit tests.
+  `tests/batch_audit.audit_grit` now runs on every preset's full-history
+  closes in the Live audit (step 3): GRIT-01 consistency (vectorised 1-year
+  holding periods), GRIT-02 recovery (drawdown episodes re-found as
+  high-water-mark spells), GRIT-03 crisis resilience (numpy windows over
+  HISTORICAL_REGIMES, the 2-year reclaim), GRIT-04 the peer-rank scores and
+  the stated blend (scipy ranks), GRIT-05 exactly the short histories
+  excluded. A planted error in each part fails its check
+  (`test_the_batch_audit_re_derives_every_grit_zone_number`).

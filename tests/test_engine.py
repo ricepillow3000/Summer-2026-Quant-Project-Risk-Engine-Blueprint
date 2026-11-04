@@ -6592,3 +6592,43 @@ if __name__ == "__main__":
             print(f"ERROR {t.__name__}: {e!r}")
     print(f"\n{len(tests) - failed}/{len(tests)} passed")
     sys.exit(1 if failed else 0)
+
+
+def test_the_batch_audit_re_derives_every_grit_zone_number():
+    """John, 2026-11-04: every Grit Zone description - consistency, resilience,
+    recovery - accurate and traced to the data. tests/batch_audit.audit_grit
+    re-derives each component a second way (high-water-mark spells, vectorised
+    holding periods, numpy crisis windows, scipy ranks) on every preset's
+    full-history closes in the Live audit. Here it must agree with the engine
+    on a staggered offline market, and catch a planted error in each part."""
+    import tests.batch_audit as ba
+    from src.ingestion import PRESETS
+    name = list(PRESETS)[0]
+    tickers = PRESETS[name]
+    px = _offline_market_prices(tickers, "max")
+    for i, c in enumerate(px.columns):
+        if i % 3 == 1:
+            px.loc[px.index[:len(px) - 1500], c] = np.nan        # a later listing: fewer crises
+        if i % 5 == 4:
+            px.loc[px.index[:len(px) - 300], c] = np.nan         # too young to score
+    saved = list(ba.results)
+    try:
+        ba.results.clear()
+        ba.audit_grit(name, tickers, px)
+        got = {r["id"]: r["status"] for r in ba.results}
+        assert got == {f"GRIT-0{i}": "PASS" for i in (1, 2, 3, 4, 5)}, got
+        real = ba.grit_scores
+        for col, ids in (("consistency", "GRIT-01"), ("pct_recovered", "GRIT-02"),
+                         ("avg_regime_drawdown", "GRIT-03"), ("grit_score", "GRIT-04")):
+            def planted(t, p, _col=col):
+                out = real(t, p)
+                out["scores"][_col] = out["scores"][_col].astype(float) + 0.2
+                return out
+            ba.grit_scores = planted
+            ba.results.clear()
+            ba.audit_grit(name, tickers, px)
+            ba.grit_scores = real
+            assert {r["id"]: r["status"] for r in ba.results}[ids] == "FAIL", (col, ba.results)
+    finally:
+        ba.grit_scores = real if "real" in locals() else ba.grit_scores
+        ba.results[:] = saved
