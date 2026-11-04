@@ -1186,12 +1186,19 @@ a.cta-btn:focus-visible, a.cta-link:focus-visible, .meliona-footer a.f-box:focus
 @keyframes read-progress { to { transform: scaleX(1); } }
 }
 
-/* CONE KEY - the colour scale under the cumulative-return cone, labelled in
-   returns. The bar is decorative; the words use the page's AA text tones. */
-.cone-key { margin: 2px 0 6px; font-family: Georgia, serif; }
-.cone-key-label { font-size: 12px; color: #6A5030; letter-spacing: .02em; margin-bottom: 5px; }
-.cone-key-bar { height: 8px; width: 100%; border: 1px solid rgba(63,59,53,.18); }
-.cone-key-ticks { position: relative; height: 16px; font-size: 11px; color: #54504A; }
-.cone-key-ticks span { position: absolute; top: 3px; transform: translateX(-50%); white-space: nowrap; }
-.cone-key-ticks span:first-child { transform: none; }
-.cone-key-ticks span:last-child { transform: translateX(-100%); }
+/* FLOW KEY - the two stepped colour tables of the cone's lattice Boltzmann
+   flow (main.py FLOW_SPEED_STEPS / FLOW_WALL_STEPS). Swatches are flat chips,
+   no gradients; words use the page's AA text tones. */
+.flow-key { margin: 4px 0 6px; font-family: Georgia, serif; font-size: 11px; color: #54504A; }
+.flow-key-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 3px 0; }
+.flow-key-label { color: #6A5030; font-size: 12px; min-width: 150px; }
+.flow-chip { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.flow-swatch { width: 14px; height: 10px; border: 1px solid #3F3B35; display: inline-block; }
+/* The cone's "Verification Overlay" switch (static/windtunnel.js): the page's
+   button grammar - matte, square, a 1px rule; pressed reads as filled. */
+.wt-verify { font: 11px/1 Georgia, serif; letter-spacing: .04em; color: #3F3B35;
+    background: #F1EDE5; border: 1px solid #3F3B35; border-radius: 0; padding: 6px 10px;
+    cursor: pointer; }
+.wt-verify:hover { background: #E4DED3; }
+.wt-verify[aria-pressed="true"] { background: #3F3B35; color: #F4F1EA; }
+.wt-verify:focus-visible { outline: 2px solid #6A5030; outline-offset: 2px; }

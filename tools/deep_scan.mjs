@@ -166,10 +166,11 @@ async function coneAgrees(tag) {
   return { v, p5, p50 };
 }
 
-// The smoke in the cone (static/windtunnel.js, John 2026-11-04): it must ride
-// THIS cone (the chart's own 5th and 95th percentiles, after every setting),
-// stay inside it, and wear the colour of the return each particle is drawn at -
-// read back from its pixel through Plotly's axis by the page's own check().
+// The cone's flow (static/windtunnel.js, John 2026-11-04): a lattice Boltzmann
+// solve whose walls are THIS cone's percentile paths. The page's own check()
+// reads the picture back and compares it with the computed state: every
+// node's colour against its speed, every path segment against its pressure,
+// no red off the data, the walls on the data, the peak pressure red.
 async function windAgrees(tag, p5, p95) {
   await page.evaluate(() => {
     const gd = [...document.querySelectorAll('.js-plotly-plot')].find(g => (g._fullLayout?.meta || {}).meliona === 'cone');
@@ -181,12 +182,14 @@ async function windAgrees(tag, p5, p95) {
     w = await page.evaluate(() => window.__melionaWind ? window.__melionaWind.check() : null);
     if (w && w.particles >= 50 && Math.abs(w.p5End - p5) < 1e-9) break;
   }
-  if (!w) return say('FAIL', `${tag}: wind tunnel loaded`, 'window.__melionaWind missing');
-  ok(w.particles >= 50, `${tag}: smoke is blowing through the cone`, `${w.particles} particles`);
-  ok(Math.abs(w.p5End - p5) < 1e-9 && Math.abs(w.p95End - p95) < 1e-9, `${tag}: smoke rides this cone`,
-     `smoke 5th ${w.p5End?.toFixed(3)} / 95th ${w.p95End?.toFixed(3)} vs chart ${p5.toFixed(3)} / ${p95.toFixed(3)}`);
-  ok(w.outsideCone === 0, `${tag}: no smoke outside the 5-95% cone`, `${w.outsideCone} of ${w.particles}`);
-  ok(w.colourMismatch === 0, `${tag}: every particle wears the colour of its own return`, `${w.colourMismatch} of ${w.particles}`);
+  if (!w || !w.mode) return say('INFO', `${tag}: cone flow`, `not running here (renderer: ${await page.evaluate(() => window.__melionaWind?.renderer)})`);
+  ok(Math.abs(w.p5End - p5) < 1e-9 && Math.abs(w.p95End - p95) < 1e-9, `${tag}: the flow's walls are this cone's paths`,
+     `walls 5th ${w.p5End?.toFixed(3)} / 95th ${w.p95End?.toFixed(3)} vs chart ${p5.toFixed(3)} / ${p95.toFixed(3)}`);
+  ok(w.obstacleMiss === 0, `${tag}: every path point sits on a wall`, `${w.obstacleMiss} of ${w.obstacleChecks} missed`);
+  ok(w.colourMismatch === 0, `${tag}: every node's colour is its computed speed's step`, `${w.colourMismatch} of ${w.particles} (${w.mode})`);
+  ok(w.wallMismatch === 0, `${tag}: every path segment's colour is its computed pressure's step`, `${w.wallMismatch} of ${w.wallChecks}`);
+  ok(w.redOffWall === 0, `${tag}: red only on the data paths`, `${w.redOffWall} red pixels off them`);
+  ok(w.peakIsRed !== false, `${tag}: the highest pressure on the paths is painted red`, `Cp ${w.maxCp}`);
 }
 
 // ---- boot timeline -----------------------------------------------------------

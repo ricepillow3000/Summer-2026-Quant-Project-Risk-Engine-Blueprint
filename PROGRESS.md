@@ -895,6 +895,40 @@ risk-engine/
   the cone, at 1440px and on an iPhone 15
   (`test_the_cone_is_coloured_by_return_and_the_smoke_rides_the_computed_cone`).
 
+- ✅ **The cone's flow is a lattice Boltzmann solve bound to the data
+  (2026-11-04)**, replacing the smoke above at John's direction ("Every line,
+  color, velocity vector, and animation timestep must be directly driven by
+  and deterministically bound to the provided data array", FluidX3D's
+  engineering look, no glass or gloss, not pixelated, transparent at rest, red
+  only where the flow collides with the data, and a Verification Overlay).
+  `static/windtunnel.js` runs a D2Q9 BGK lattice Boltzmann solver on the GPU
+  (WebGL2, float32 render targets, MRT): the five computed percentile paths
+  are rasterised as solid walls (halfway bounce-back), air enters on the left,
+  the top and bottom rows are free stream, the right is a pressure outlet, and
+  24/16 columns of lead-in/run-out are computed off-plot so the boundaries sit
+  away from the data. No noise or timers: fixed steps per frame,
+  steps per trading day = plot columns / (inflow x trading days), and the
+  inflow on each replayed day follows the cone's widening that day. The air is
+  drawn at screen resolution (bilinear speed between nodes) through main.py's
+  stepped `FLOW_SPEED_STEPS` (transparent at rest; charcoal, deep blue, blue,
+  teal); the paths are drawn as smooth lines through their exact points, each
+  segment in its `FLOW_WALL_STEPS` pressure step (Cp against the outflow: red
+  only on the data); streamlines are seeded every 5 trading days along each
+  path and at the inflow (Heun steps, bilinear velocity, stop where still).
+  A faint lattice mesh and a 1px domain box frame it; the chart's
+  "Verification Overlay" button draws velocity arrows with their speeds, the
+  highest path pressures with their Cp, the fastest cell, and the solver's
+  state. `check()` proves the picture: every node's colour against its own
+  computed speed, every path segment's pixel against its pressure step, no
+  red pixel off a path, every path point on a wall, the peak pressure red.
+  Local runs: GPU mode 46,440 nodes / 1,224 segments, 0 mismatches; software
+  still mode 8,840 / 1,225, 0 mismatches; glide checks 44/44
+  (`test_the_cone_flow_is_a_lattice_boltzmann_solve_bound_to_the_data`).
+  Also: ubuntu-latest moved to 26.04, which Playwright 1.56.1 cannot install
+  Chromium on; the Live audit job is pinned to ubuntu-24.04
+  (`test_the_browser_audit_runs_on_an_os_its_playwright_supports`), and the
+  Options audit's log-year check reads each path's own ending wealth.
+
 ## Non-negotiable constraints (the "why")
 
 1. **No LLM data, ever.** Every market number comes from Yahoo Finance via

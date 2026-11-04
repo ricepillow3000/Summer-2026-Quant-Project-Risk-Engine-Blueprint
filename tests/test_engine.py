@@ -5951,68 +5951,65 @@ def test_a_wide_block_never_turns_like_a_card_and_never_hangs_mid_turn():
     assert "el.style.removeProperty('--reveal-depth');" in js
 
 
-def test_the_cone_is_coloured_by_return_and_the_smoke_rides_the_computed_cone():
-    """John, 2026-11-04: the cone should look blown by wind, with many colours
-    that "must not be random" but follow the cumulative return and the
-    trading days. One fixed scale (RETURN_SCALE) maps return to colour; the
-    band fills place each colour exactly at its return (fillgradient in the
-    y-axis's own units), the figure ships the same list to
-    static/windtunnel.js, and the smoke is percentile levels riding the
-    chart's own computed paths, never free points."""
-    import json
+def test_the_cone_flow_is_a_lattice_boltzmann_solve_bound_to_the_data():
+    """John, 2026-11-04: no fluid-looking loop - "every line, color, velocity
+    vector, and animation timestep must be directly driven by and
+    deterministically bound to the provided data array", FluidX3D's engineering
+    look on the site's own background, red only where the flow collides with
+    the data, and a "Verification Overlay". static/windtunnel.js is a D2Q9
+    lattice Boltzmann solver (FluidX3D's method) whose walls are the chart's
+    five computed percentile paths; its clock and inflow come from the data;
+    colours come from main.py's stepped tables; check() proves the picture
+    against the computed state, pixel by pixel."""
     import re
     root = pathlib.Path(__file__).resolve().parent.parent
-    src = (root / "main.py").read_text(encoding="utf-8")
-    ns: dict = {"np": np}
-    exec("import plotly.graph_objects as go\n"
-         + "CHARCOAL = '#3F3B35'\nAXIS_LINE = 'rgba(63,59,53,0.28)'\nGRID = AXIS_LINE\nBRONZE = '#9A7B4F'\n"
-         + re.search(r"^RETURN_SCALE = \(.*?\)\)\n", src, re.S | re.M).group(0)
-         + re.search(r"^def _return_gradient.*?(?=^def return_key_html)", src, re.S | re.M).group(0)
-         + re.search(r"^def _style_fig.*?(?=^def fan_chart|^# The cone's colours)", src, re.S | re.M).group(0)
-         + re.search(r"^def fan_chart.*?(?=^def panel_head)", src, re.S | re.M).group(0), ns)
-    scale = ns["RETURN_SCALE"]
-    rets = [r for r, _ in scale]
-    assert rets == sorted(rets) and len(set(c for _, c in scale)) == len(scale) >= 9
-    assert 0 in rets and rets[0] < -30 and rets[-1] > 30
-    days = np.arange(1, 253)
-    bands = {k: np.linspace(0, v, 252) for k, v in
-             (("p5", -0.2), ("p25", -0.05), ("p50", 0.08), ("p75", 0.2), ("p95", 0.4))}
-    bands["days"] = days
-    fig = json.loads(ns["fan_chart"](bands).to_json())
-    data, layout = fig["data"], fig["layout"]
-    # the audits read p95, p5, p75, p25 at 0..3 and the centreline by name
-    assert [d.get("name") for d in data[:4]] == ["p95", "p5", "p75", "p25"]
-    assert any(d.get("name") == "median" for d in data)
-    lo, hi = rets[0], rets[-1]
-    for i in (1, 3):
-        g = data[i]["fillgradient"]
-        assert g["type"] == "vertical" and g["start"] == lo and g["stop"] == hi
-        for (pos, col), (ret, hexc) in zip(g["colorscale"], scale):
-            assert abs(pos - (ret - lo) / (hi - lo)) < 1e-12
-            assert col.startswith("rgba(" + ",".join(str(int(hexc[j:j + 2], 16)) for j in (1, 3, 5)) + ",")
-    assert layout["meta"] == {"meliona": "cone", "scale": [[r, c] for r, c in scale]}
-    # the readout lists all five levels, best first (unified hover reads last-first)
-    labelled = [d["name"] for d in data if "hovertemplate" in d]
-    assert labelled == ["p5 readout", "p25 readout", "median", "p75 readout", "p95 readout"]
-    # the smoke: reads the chart's own levels and colours, stays in 5-95%,
-    # incompressible eddies, never under reduced motion, loaded with the motion
     js = (root / "static" / "windtunnel.js").read_text(encoding="utf-8")
-    assert "var LO = 0.05, HI = 0.95;" in js
-    for name in ("p5", "p25", "median", "p75", "p95"):
-        assert f"'{name}']" in js
-    assert "_fullData" in js and "makeScale(meta.scale)" in js and "meliona === 'cone'" in js
-    assert "-M.a * M.kx * Math.cos(ph) * sinS" in js and "M.a * M.ks * Math.sin(ph) * cosS" in js
-    assert js.index("prefers-reduced-motion") < js.index("function Tunnel(")
-    assert "c.clip();" in js and js.index("c.clip();") < js.index("createRadialGradient")
-    # it never competes with a button's glide (it delayed a flick's wheel tail
-    # and the glide stopped 300px short, 2026-11-04), and it thins itself on a
-    # device too slow to draw it
-    assert "if (W.__melionaStop || now - inputAt < STILL_MS) { T.wake(); return; }" in js and "BUDGET_MS" in js
-    assert "['wheel', 'touchmove', 'scroll']" in js
-    assert "pointer-events:none" in js and "z-index" not in js.split("cssText")[1].split(";\n")[0]
+    src = (root / "main.py").read_text(encoding="utf-8")
+    # the solver: D2Q9 weights, BGK collision, halfway bounce-back, inflow, pressure outlet
+    assert "const float WT[9]=float[9](4./9.,1./9.,1./9.,1./9.,1./9.,1./36.,1./36.,1./36.,1./36.);" in js
+    assert "const int OPP[9]=int[9](0,3,4,1,2,7,8,5,6);" in js
+    assert "f[i]-=(f[i]-feq(i,rho,u))/tau;" in js
+    assert "if(outY(q)||wall(q))f[i]=fAt(OPP[i],vUv);else f[i]=fAt(i,q);" in js
+    assert "else if(vUv.x>1.-texel.x){rho=1.;" in js
+    # deterministic: no randomness, no wall-clock in the physics
+    body = js[js.index("(function () {"):]
+    assert "Math.random" not in body and "sin(t" not in body and "Date.now" not in body
+    assert "for (var k = 0; k < LBM.STEPS_PER_FRAME; k++) T.step();" in js
+    # the data are the walls, the clock and the inflow
+    assert "var LEVELS = ['p5', 'p25', 'median', 'p75', 'p95'];" in js and "_fullData" in js
+    assert "T.stepsPerDay = T.L.pc / (LBM.U_IN * n);" in js
+    assert "return LBM.U_IN * (1 - LBM.U_SWING + LBM.U_SWING * w);" in js
+    # colours: the figure's stepped tables; at rest transparent; red never in the air
+    ns: dict = {}
+    exec(re.search(r"^FLOW_SPEED_STEPS = \(.*?\)\)\n", src, re.S | re.M).group(0)
+         + re.search(r"^FLOW_WALL_STEPS = .*?\n", src, re.M).group(0), ns)
+    speed, wall = ns["FLOW_SPEED_STEPS"], ns["FLOW_WALL_STEPS"]
+    assert speed[0][2] == 0.0, "air at rest must be fully transparent"
+    assert [b for b, _, _ in speed] == sorted(b for b, _, _ in speed)
+    def redness(h):
+        r, g, b = (int(h[i:i + 2], 16) for i in (1, 3, 5))
+        return r > 180 and g < 80 and b < 90
+    assert not any(redness(c) for _, c, _ in speed), "the air is never red"
+    assert redness(wall[-1][1]), "the highest wall pressure is the red step"
+    assert '"flow": {"speed": [list(s) for s in FLOW_SPEED_STEPS],' in src
+    assert "for(int i=0;i<6;i++){if(s<sT[i]){k=sC[i];break;}}" in js     # stepped, not blended
+    # no glass, gloss, glow or blur anywhere in it
+    code = re.sub(r"//[^\n]*|/\*.*?\*/", "", body, flags=re.S)
+    for word in ("spec", "fresnel", "blur", "glow", "createRadialGradient", "shadowBlur"):
+        assert word not in code, word
+    # the environment: lattice mesh, 1px domain box, transparent ground, the switch
+    assert "x.strokeRect(0.5, 0.5, sz.w - 1, sz.h - 1);" in js
+    assert "T.btn.textContent = 'Verification Overlay';" in js
+    assert "plot_bgcolor" not in src[src.index("def fan_chart"):src.index("def panel_head")]
+    # the proof
+    for key in ("colourMismatch", "redOffWall", "obstacleMiss", "wallMismatch", "peakIsRed"):
+        assert key in js
+    scan = (root / "tools" / "deep_scan.mjs").read_text(encoding="utf-8")
+    assert "await windAgrees(tag" in scan and "redOffWall" in scan and "obstacleMiss" in scan
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    assert ".wt-verify" in css and ".flow-key" in css
     reveal = (root / "static" / "reveal.js").read_text(encoding="utf-8")
-    assert reveal.index("if (calm)") < reveal.index("windtunnel.js")
-    assert "await windAgrees(tag" in (root / "tools" / "deep_scan.mjs").read_text(encoding="utf-8")
+    assert "windtunnel.js" in reveal
 
 
 def test_the_browser_audit_runs_on_an_os_its_playwright_supports():
