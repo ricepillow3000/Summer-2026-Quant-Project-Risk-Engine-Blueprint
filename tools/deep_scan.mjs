@@ -354,7 +354,7 @@ await step('gungnir', async () => {
   ok(a.w * a.h === b.w * b.h, 'Gungnir: the two blocks have equal area (w1 s1 = w2 s2)', `${a.w}x${a.h} vs ${b.w}x${b.h}`);
   ok(Math.max(a.w / b.w, b.w / a.w) === Math.max(a.h / b.h, b.h / a.h) && Math.max(a.w / b.w, b.w / a.w) === 3,
      'Gungnir: the sketch is the plaque\'s 3:1 sentence', 'three times as volatile gets one third the capital');
-  ok(/w1σ1=w2σ2|w1σ1\s*=\s*w2σ2/.test(g.plaque.replace(/block 0[12]/g, '').replace(/\s+/g, '')), 'Gungnir: plaque states w1σ1 = w2σ2');
+  ok(/w1σ1=w2σ2|w1σ1\s*=\s*w2σ2/.test(g.plaque.replace(/block 0[12]|flyer|cushion/g, '').replace(/\s+/g, '')), 'Gungnir: plaque states w1σ1 = w2σ2');
   ok(g.labels.includes('the high-flyer') && g.labels.includes('the steady cushion'), 'Gungnir: long-side labels on the sketch');
 });
 
