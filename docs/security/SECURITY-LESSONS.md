@@ -116,6 +116,6 @@ runs in its own process with its own daily budget (the cap is per process), and 
 baskets before any preset download (`test_the_cache_budget_drops_typed_baskets_before_the_presets`), so a stranger who
 spends the web process's budget stops only other typed-in baskets, which get a plain message. **`server.maxMessageSize`**
 is 16 MB (`test_deploy_config_keeps_the_visitor_out_of_the_operator_seat`); the largest page message is the map at
-MAP_MB (measured on the page, LAUNCH_CHECKLIST #110). **Real HTTP headers** (HSTS, frame-ancestors, nosniff) come from
+about 0.1 MB with the full 25 names (measured 2026-11-04, LAUNCH_CHECKLIST #110). **Real HTTP headers** (HSTS, frame-ancestors, nosniff) come from
 `serve.py`, and `/_stcore/metrics` is hidden (`test_every_response_carries_the_security_headers`). Lesson for future sweeps: **a hidden button is not a locked
 door** - Streamlit's protocol still answered messages the UI no longer showed.

@@ -271,7 +271,7 @@ await step('glide', async () => {
     ['a[href="#analysis"]', 'Skip to the analysis'],
     ['.meliona-footer a[href="#grit-showcase"]', 'Footer: The Grit Zone'],
     ['.meliona-footer a[href="#crisis-record"]', 'Footer: Crisis Conviction'],
-    ['.meliona-footer a[href="#engine"]', 'Footer: The Engine'],
+    ['.meliona-footer a[href="#engine"]', 'Footer: The engine'],
   ]) { await glideCheck(sel, label); }
 });
 
@@ -282,7 +282,7 @@ async function surface(tag) {
   await page.evaluate(() => window.__melionaReveal?.revealAll());
   const f = await page.evaluate(() => {
     const main = document.querySelector('[data-testid="stMain"]');
-    const heads = [...main.querySelectorAll('h1, h2, .panel-head .t, summary, .showcase-eyebrow, [data-testid="stMetricLabel"]')];
+    const heads = [...main.querySelectorAll('h1, h2, .panel-head .t, summary, [data-testid="stMetricLabel"]')];
     const where = el => {
       let w = '';
       for (const h of heads) {
@@ -367,7 +367,7 @@ await step('engine baseline', async () => {
 });
 
 await step('allocation', async () => {
-  await openDrawer('02 · Allocation');
+  await openDrawer('Allocation: how capital');
   for (const est of ['Sample: plain history', 'EWMA: reactive / panic lens', 'Ledoit-Wolf: steady (default)']) {
     const prev = await verdict();
     await pick('Covariance estimator', est);
@@ -406,7 +406,7 @@ await step('allocation', async () => {
 });
 
 await step('stress test', async () => {
-  await openDrawer('03 · Stress test');
+  await openDrawer('Stress test: shock');
   // A deeper drawdown shock must not make the tail lighter.
   const slider = page.getByRole('slider', { name: 'Market drawdown shock' }).first();
   await slider.scrollIntoViewIfNeeded();
@@ -456,7 +456,7 @@ await step('stress test', async () => {
 });
 
 await step('every preset', async () => {
-  await openDrawer('01 · Universe');
+  await openDrawer('Universe: which assets');
   if (!PRESET_LIST) return say('FAIL', 'presets: list', 'SCAN_PRESETS not set');
   const names = PRESET_LIST;
   const list = FULL ? names : names.slice(0, 4);
@@ -483,7 +483,7 @@ await step('every preset', async () => {
 async function bookState() {
   return page.evaluate(() => {
     // A dossier card is the flex row whose first cell is its role label.
-    const ROLES = ['LEADS', 'ANCHOR', 'NO ROLE', 'LEFT OUT'];
+    const ROLES = ['Leads', 'Anchor', 'No role', 'Left out'];
     const cards = [...document.querySelectorAll('[data-testid="stMarkdownContainer"] div')]
       .filter(d => d.children.length === 2 && ROLES.includes(
         (d.firstElementChild.textContent || '').trim()
@@ -493,12 +493,12 @@ async function bookState() {
     const lbl = c => (c.firstElementChild?.textContent || '').trim().replace(note(c), '').trim();
     const head = [...document.querySelectorAll('[data-testid="stMarkdownContainer"] div')]
       .map(d => d.textContent).find(t => /^\$[\d,]+ book: \d+ of your \d+ names/.test(t)) || '';
-    return { leads: cards.filter(c => lbl(c) === 'LEADS').length, anchors: cards.filter(c => lbl(c) === 'ANCHOR').length,
-             held: cards.filter(c => lbl(c) === 'NO ROLE').length,
+    return { leads: cards.filter(c => lbl(c) === 'Leads').length, anchors: cards.filter(c => lbl(c) === 'Anchor').length,
+             held: cards.filter(c => lbl(c) === 'No role').length,
              // every NO ROLE card states its weight, and no other card does
-             noteOk: cards.every(c => (lbl(c) === 'NO ROLE')
+             noteOk: cards.every(c => (lbl(c) === 'No role')
                === /^(\d+\.\d%|<0\.1%) of the book$/.test(note(c))),
-             out: cards.filter(c => lbl(c) === 'LEFT OUT').length, total: cards.length, head,
+             out: cards.filter(c => lbl(c) === 'Left out').length, total: cards.length, head,
              outside: cards.filter(c => /outside the chosen universe/.test(c.textContent)).length };
   });
 }
@@ -587,11 +587,11 @@ await step('balance, every flyer', async () => {
   const flyers = (await page.getByRole('option').allTextContents()).map(s => s.trim());
   await page.keyboard.press('Escape');
   for (const f of (FULL ? flyers : flyers.slice(0, 3))) {
-    await pick('High-flyer (Circle 1: the volatile conviction position)', f); await settle();
-    const t = await page.evaluate(() => [...document.querySelectorAll('svg text')].map(e => e.textContent).find(s => /^GAP /.test(s)) || '');
+    await pick('High-flyer (the volatile conviction position)', f); await settle();
+    const t = await page.evaluate(() => [...document.querySelectorAll('div')].map(d => d.textContent).find(s => /^Safety line: tail gap /.test(s)) || '');
     const line = await page.evaluate(() => [...document.querySelectorAll('div')].map(d => d.textContent)
       .find(s => /^Over the \d+ daily returns loaded/.test(s)) || '');
-    ok(/^GAP -?\d+(\.\d+)?%$/.test(t) && /cushion/.test(line), `balance: flyer ${f} pairs and measures its cushion`,
+    ok(/^Safety line: tail gap -?\d+(\.\d+)?% /.test(t) && /cushion/.test(line), `balance: flyer ${f} pairs and measures its cushion`,
        `${t}; ${line.slice(0, 110)}`);
   }
 });
@@ -621,7 +621,7 @@ async function mapQuick(preset) {
   await f.waitForFunction(() => !document.getElementById('btnRun').disabled && /\d/.test(document.getElementById('hudES').textContent),
                           null, { timeout: LIMIT }).catch(() => {});
   const m = await f.evaluate(() => ({ es: document.getElementById('hudES').textContent, v: document.getElementById('hudVaR').textContent,
-    br: document.getElementById('hudTail').textContent, prov: document.getElementById('chipProv').textContent,
+    br: document.getElementById('hudTail').textContent, prov: document.getElementById('provTag').textContent,
     body: document.body.innerText, units: (document.getElementById('mapSummary').textContent.match(/plots (\d+) assets/) || [])[1] }));
   const ink = (await inkOf(f)).reduce((a, x) => a + Math.max(x, 0), 0);
   const es = pct(m.es), v = pct(m.v), br = pct(m.br);
@@ -635,7 +635,7 @@ async function mapAudit(side) {
   if (!f) return say('FAIL', `map [${side}]: frame present`, 'no #cvTrail');
   // The map's own frame: the glide's zero-height frame comes first on the page.
   await (await f.frameElement()).scrollIntoViewIfNeeded().catch(() => {});
-  const words = await f.evaluate(() => ({ chips: document.getElementById('chipProv').textContent,
+  const words = await f.evaluate(() => ({ chips: document.getElementById('provTag').textContent,
     tag: document.getElementById('provTag').textContent, foot: document.getElementById('paramsFoot').textContent,
     body: document.body.innerText }));
   ok(!/demo/i.test(words.chips + words.tag + words.foot), `map [${side}]: no demo wording on the live map`,

@@ -2738,39 +2738,78 @@ def test_captions_and_small_labels_clear_aa_after_their_opacity():
                 f"{name}: {fg} at opacity {op} reads {seen} on {g} - {_contrast(seen, g):.2f}:1")
 
 
+# The grounds a word can land on. Beige: the page (#EDE9E3; app.css paints it
+# over the theme's own #D4CDBF, which is kept as the strictest case), a panel
+# (#F1EDE5) and a tile (#E9E4DB). Dark: the charcoal bands and the footer.
+BEIGE_GROUNDS = ("#EDE9E3", "#F1EDE5", "#E9E4DB", "#D4CDBF")
+CHARCOAL = "#3F3B35"
+# Selectors whose words sit on a charcoal band: the showcase band, the footer
+# and the boot veil's status line (painted over the band's stand-in).
+ON_DARK = (".showcase-row", ".meliona-footer", ".sk-load")
+
+
+def _text_colour_failures(css: str) -> list:
+    """Every rule's text colour against the ground it really sits on: the
+    rule's own background when it paints one, the charcoal band when its
+    selector lives on one, and otherwise every beige ground. Never the best of
+    the two: that is how a light grey on the page passed (2026-11-04)."""
+    import re as _re
+    out = []
+    css = _re.sub(r"/\*.*?\*/", "", css, flags=_re.S)
+    for sel, body in _re.findall(r"([^{}]+)\{([^}]*)\}", css):
+        fg = _re.search(r"(?<![-\w])color:\s*(#[0-9A-Fa-f]{6})", body)
+        if not fg:
+            continue
+        bg = _re.search(r"background(?:-color)?:\s*(#[0-9A-Fa-f]{6})", body)
+        grounds = ((bg.group(1),) if bg else (CHARCOAL,)
+                   if any(k in sel for k in ON_DARK) else BEIGE_GROUNDS)
+        for g in grounds:
+            r = _contrast(fg.group(1), g)
+            if r < 4.5:
+                out.append(f"{sel.strip()[-70:]}: {fg.group(1)} on {g} is {r:.2f}:1")
+    return out
+
+
 def test_text_colours_meet_wcag_aa():
     """Every colour the stylesheet uses for TEXT must clear 4.5:1 on the ground
     it sits on. Bronze #9A7B4F measured 2.50:1 and is why this test exists - it
-    may still be used for rules and hovers, never for words."""
+    may still be used for rules and hovers, never for words.
+
+    2026-11-04 (design check): the panel subtitles (.panel-head .s, about 25 of
+    them) were #ABA499 on the beige page, 2.04:1. This test passed them because
+    it took the BEST of two grounds for every colour - #ABA499 clears 4.5:1 on
+    charcoal, a ground those words never touch. Each rule is now checked
+    against its own ground (_text_colour_failures), and the same check caught
+    the CTA's hover: near-black on the light bronze, 4.14:1."""
     import re as _re
 
     root = pathlib.Path(__file__).resolve().parent.parent
-    # main.py's inline style attributes are the same surface as the stylesheet:
-    # the engine's "skip to the risk map" link sat at 2.50:1 there while
-    # static/app.css was already clean, so both are scanned.
-    css = ((root / "static" / "app.css").read_text(encoding="utf-8")
-           + "\n" + (root / "main.py").read_text(encoding="utf-8"))
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    page404 = (root / "public" / "404.html").read_text(encoding="utf-8")
 
     # sanity: the formula agrees with the published reference pair
     assert abs(_contrast("#FFFFFF", "#000000") - 21.0) < 0.01
+    # sanity: the checker sees the ground. The old bug fails it on the page;
+    # a light grey is fine on the band and caught anywhere else.
+    assert _text_colour_failures(".panel-head .s { color: #ABA499; }")
+    assert not _text_colour_failures(".showcase-row .x { color: #B4AB9B; }")
+    assert _text_colour_failures(".x { color: #B4AB9B; }")
+    assert _text_colour_failures(".b:hover { background-color: #9A7B4F; color: #241F1A; }")
 
-    page, panel = "#D4CDBF", "#E9E4DB"
-    for fg in ("#4A4640", "#6A5030"):
-        assert _contrast(fg, page) >= 4.5, f"{fg} fails on the page ground"
-        assert _contrast(fg, panel) >= 4.5, f"{fg} fails on a panel"
-    assert _contrast("#EDE9E3", "#3F3B35") >= 4.5          # footer on charcoal
+    bad = _text_colour_failures(css) + _text_colour_failures(page404)
+    assert not bad, bad
+    sub = _re.search(r"\.panel-head \.s\s*\{[^}]*?(?<![-\w])color:\s*(#[0-9A-Fa-f]{6})", css)
+    assert sub and _contrast(sub.group(1), "#EDE9E3") >= 4.5, \
+        "the panel subtitle sits on the page and must clear 4.5:1 there"
 
-    # Every text colour must clear 4.5:1 on the ground it actually sits on.
-    # Light tones live on the charcoal bands, everything else on beige - so
-    # check each against its own ground rather than excusing it from the test,
-    # which is how #A89F8F sat at 4.25:1 on charcoal unnoticed.
-    charcoal = "#3F3B35"
-    for colour in set(_re.findall(r"(?<![-\w])color:\s*(#[0-9A-Fa-f]{6})", css)):
-        on_beige = min(_contrast(colour, page), _contrast(colour, panel))
-        on_band = _contrast(colour, charcoal)
-        assert max(on_beige, on_band) >= 4.5, (
-            f"{colour} clears nothing: {on_beige:.2f}:1 on beige, "
-            f"{on_band:.2f}:1 on charcoal")
+    # main.py's inline style attributes are the same surface as the stylesheet:
+    # the engine's "skip to the risk map" link sat at 2.50:1 there while
+    # static/app.css was already clean. Every word main.py colours sits on
+    # beige (a card, a table cell, the page).
+    src = (root / "main.py").read_text(encoding="utf-8")
+    for colour in set(_re.findall(r"(?<![-\w])color:\s*(#[0-9A-Fa-f]{6})", src)):
+        worst = min(_contrast(colour, g) for g in BEIGE_GROUNDS)
+        assert worst >= 4.5, f"main.py colours words {colour}: {worst:.2f}:1 on beige"
     assert "#9A7B4F" in css, "decorative bronze should still exist"
 
     # The Risk Topology map is its own dark surface, and was never scanned:
@@ -2846,6 +2885,257 @@ def test_accessibility_statement_matches_what_the_app_does():
     # and the footer must carry the statement and the contact route
     assert "ACCESSIBILITY.md" in app, "footer does not link the statement"
     assert "WCAG 2.2 AA" in app and "barrier" in app.lower()
+
+
+
+# --- design and UX rules, 2026-11-04 -----------------------------------------
+# John asked for every AI-design tell gone and kept gone: a design read found
+# tracked capitals on every label, negative kerning, gloss and glass layers,
+# film grain on the map, numbered "01 ·" sections, "honest" in the copy and
+# words shouted in capitals; a browser pass found 67 of 78 controls under a
+# fingertip's 44px, iOS zooming into 14px fields and the map's switches with no
+# name. Each rule below is one of those, so it cannot come back unnoticed.
+
+def _design_files():
+    root = pathlib.Path(__file__).resolve().parent.parent
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    page = (root / "prototypes" / "war_room.html").read_text(encoding="utf-8")
+    p404 = (root / "public" / "404.html").read_text(encoding="utf-8")
+    main = (root / "main.py").read_text(encoding="utf-8")
+    return css, page, p404, main
+
+
+def _style_of(html: str) -> str:
+    import re as _re
+    return "\n".join(_re.findall(r"<style>(.*?)</style>", html, _re.S))
+
+
+def _visitor_strings(src: str) -> list:
+    """(line, text) of every string main.py can put in front of a visitor:
+    not docstrings, not the glide script, not <style> blocks, and not strings
+    used only as keys (dict keys, subscripts, comparisons, host settings)."""
+    import ast
+    tree = ast.parse(src)
+    skip = set()
+    for n in ast.walk(tree):
+        body = getattr(n, "body", None)
+        if isinstance(body, list) and body and isinstance(body[0], ast.Expr) \
+                and isinstance(body[0].value, ast.Constant):
+            skip.add(id(body[0].value))                       # a docstring
+        if isinstance(n, ast.Call) and ast.unparse(n.func) in ("_script_frame", "host_setting"):
+            skip.update(id(m) for m in ast.walk(n))
+        if isinstance(n, ast.Dict):
+            skip.update(id(k) for k in n.keys if k is not None)
+        if isinstance(n, ast.Subscript):
+            skip.update(id(m) for m in ast.walk(n.slice))
+        if isinstance(n, ast.Compare):
+            skip.update(id(m) for m in [n.left, *n.comparators])
+    out = []
+    for n in ast.walk(tree):
+        if isinstance(n, ast.Constant) and isinstance(n.value, str) and id(n) not in skip:
+            if "<style" in n.value or "<script" in n.value:
+                continue
+            out.append((n.lineno, n.value))
+    return out
+
+
+def test_no_negative_letter_spacing_anywhere():
+    """2026-11-04: headings, numerals and the 404 were kerned tight (-0.01em
+    to -0.035em), the generated-page look. Type sets at its own spacing."""
+    import re as _re
+    css, page, p404, main = _design_files()
+    for name, text in (("app.css", css), ("war_room.html", page), ("404.html", p404),
+                       ("main.py", main)):
+        hits = _re.findall(r"letter-spacing\s*[:=]\s*[\"']?\s*-\s*[\d.]", text)
+        assert not hits, f"{name}: negative letter-spacing {hits}"
+
+
+def test_uppercase_is_kept_to_the_verdict_label():
+    """2026-11-04: 19 rules set labels, buttons, CTAs, the footer and the
+    "Updating" tag in tracked capitals, and the map spelled its canvas labels
+    out letter by letter (spacedText). Capitals are kept for the verdict's
+    label alone. (The tab strip was meant to be the other place, but its rules
+    targeted Streamlit's old baseweb tabs and had matched nothing since 1.66,
+    so the strip has read in sentence case all along; it stays that way.)"""
+    import re as _re
+    css, page, p404, main = _design_files()
+    allowed = (".verdict-label",)
+    rules = _re.findall(r"([^{}]+)\{([^}]*)\}", _re.sub(r"/\*.*?\*/", "", css, flags=_re.S))
+    caps = [sel.strip() for sel, body in rules if _re.search(r"text-transform:\s*uppercase", body)]
+    assert caps and all(sel in allowed for sel in caps), f"capitals outside the allowed two: {caps}"
+    tracked = [sel.strip() for sel, body in rules
+               if _re.search(r"letter-spacing:\s*0?\.\d*[1-9]", body) and sel.strip() not in allowed]
+    assert not tracked, f"tracked (letter-spaced) text outside the capitals: {tracked}"
+    for name, text in (("war_room.html", page), ("404.html", p404), ("main.py", main)):
+        assert not _re.search(r"text-transform:\s*uppercase", text), f"{name} sets capitals"
+    assert "toUpperCase" not in page and "spacedText" not in page, "the map spells labels out in capitals"
+    assert ".upper()}" not in main, "main.py prints a word in capitals"
+    assert not _re.search(r'letter-spacing="[\d.]+"', main + page), "an SVG label is letter-spaced"
+
+
+def test_no_decorative_gradients_glass_or_grain():
+    """2026-11-04: a sheen swept the metric tiles, the verdict numeral was
+    gradient-filled with a glint, the buttons, inputs, menus and read-me
+    panels were frosted glass, the page had three "lacquer" radial gradients,
+    and the map wore feTurbulence film grain. The page is flat now. Gradients
+    remain only where they do a job: the loading skeleton's shimmer, the
+    running rail and the scrims that keep text legible on the photos."""
+    import ast
+    import re as _re
+    css, page, p404, main = _design_files()
+    clean = _re.sub(r"/\*.*?\*/", "", css, flags=_re.S)
+    for sel, body in _re.findall(r"([^{}]+)\{([^}]*)\}", clean):
+        if "gradient(" in body:
+            assert ("#boot-skel" in sel or sel.strip() == ".sk"
+                    or "stStatusWidgetRunningIcon" in sel), f"decorative gradient on {sel.strip()}"
+    for name, text in (("app.css", css), ("war_room.html", page), ("404.html", p404), ("main.py", main)):
+        assert "backdrop-filter" not in text, f"{name}: glass (backdrop-filter) is back"
+        assert "feTurbulence" not in text and "--grain" not in text, f"{name}: film grain is back"
+    assert "gradient(" not in _style_of(page) + _style_of(p404), "a gradient in the map or the 404"
+    assert "--bronzehi" not in page and "#C9A227" not in page, "the off-palette gold is back"
+    # main.py: only the photo scrims (each paired with a static/ photo) and the
+    # Slice's fade into its own ground
+    tree = ast.parse(main)
+    fade = {id(n.value) for n in ast.walk(tree) if isinstance(n, ast.Assign)
+            and any(getattr(t, "id", "") == "_gungnir_fade" for t in n.targets)}
+    for n in ast.walk(tree):
+        if isinstance(n, ast.Constant) and isinstance(n.value, str) and "gradient(" in n.value:
+            assert "url(app/static/" in n.value or id(n) in fade, \
+                f"main.py line {n.lineno}: a gradient that is not a photo scrim"
+    # no lift, sheen or halo on hover: feedback is a colour change
+    for sel, body in _re.findall(r"([^{}]+)\{([^}]*)\}", clean):
+        if ":hover" in sel:
+            assert not _re.search(r"translateY\(-|box-shadow:\s*0 \d", body), f"{sel.strip()} lifts on hover"
+    assert "background-clip: text" not in css, "the gradient-filled verdict numeral is back"
+
+
+def test_visitor_copy_has_no_numbers_eyebrows_honest_or_shouting():
+    """2026-11-04: the drawers read "01 · Universe", "02 · Allocation",
+    "03 · Stress test" and the footer and sketch were numbered the same way;
+    "The Slice", "The Engine" and "The math behind the sketch" sat as eyebrows
+    over headings that already said it; "honest" appeared nine times; and
+    words were shouted (NOT, SEE, RISK, ACTUAL, WITH, HYPOTHESIS...). The copy
+    states things plainly."""
+    import re as _re
+    css, page, p404, main = _design_files()
+    allowed = set("""CVaR VaR ES ETF ETFs SPY QQQ TLT GLD XLP XLU USMV IWM IWD IWF MTUM SDK
+        WCAG AA UTC ADV OU GPD EVT PCA EWMA LR AI FX IRX GARCH IGARCH AR CI PC IPO GFC AQR
+        COVID SVB EOD CSS HTML GC BRK EURUSD UNH LLY AVGO AAPL MSFT NVDA AMZN META GOOGL""".split())
+    for line, text in _visitor_strings(main):
+        words = _re.sub(r"<[^>]+>|&\w+;", " ", text)
+        assert not _re.search(r"honest", words, _re.I), f"main.py:{line} says 'honest': {words[:80]}"
+        assert not _re.search(r"\b0[1-9]\s*·", words), f"main.py:{line} numbers a section: {words[:80]}"
+        for w in _re.findall(r"\b[A-Z][A-Z]{2,}\b", words):
+            assert w in allowed, f"main.py:{line} shouts {w!r}: {words[:90]}"
+    assert not _re.search(r">\s*0[1-9]\s*<", main), "a numbered label (01/02) is back in the markup"
+    for gone in ("showcase-eyebrow", "gplaque-eyebrow", 'class="f-num"', 'class="eyebrow"'):
+        assert gone not in main + page, f"{gone} is back"
+    assert "<i>" not in main, "italics are back in the copy"
+    assert ".eyebrow" not in p404 and "eyebrow" not in p404
+
+
+def test_the_preset_rides_in_the_address_and_only_a_known_one():
+    """UX check, 2026-11-04: every choice was lost on reload. The preset now
+    rides in the address (?preset=...) and a reload or a shared link opens the
+    same basket. The address is visitor input: only a name in PRESETS is
+    taken, anything else falls back to the default, and reading it adds no
+    element above the tab strip."""
+    from src.ingestion import PRESETS
+    names = list(PRESETS)
+    src = (pathlib.Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
+    assert 'st.query_params.get("preset")' in src and "_asked in PRESETS" in src
+    slots = {}
+    for label, query, want in (("default", None, names[0]),
+                               ("valid", {"preset": names[1]}, names[1]),
+                               ("unknown", {"preset": "<script>alert(1)</script>"}, names[0])):
+        at, restore = _offline_app(query=query)
+        try:
+            box = next(w for w in at.selectbox if w.label == "Preset basket")
+            assert box.value == want, (label, box.value)
+            tickers = next(w for w in at.multiselect if w.label == "Tickers to analyze")
+            assert sorted(tickers.value) == sorted(PRESETS[want]), (label, tickers.value)
+            slots[label] = _tab_strip_slot(at)
+            if label == "default":
+                box.set_value(names[1]).run()
+                assert at.query_params.get("preset") in (names[1], [names[1]]), at.query_params
+        finally:
+            restore()
+    assert len(set(slots.values())) == 1, f"the address moved the tab strip: {slots}"
+
+
+def test_touch_targets_phone_fields_and_gutters():
+    """UX check, 2026-11-04, measured at 390px with touch: 67 of 78 controls
+    were under 44x44px (the tag's remove cross 15x7, help marks 16x16, "Clear
+    all" 24x24, radio rows 22, selects 38, tabs 40, footer links 12); iOS
+    zoomed into the 14px fields on focus; and the 56px gutters left a phone's
+    text 278px. A coarse pointer gets 44px hit areas, a phone gets 16px
+    fields and 20px gutters, and the map's full-bleed frame follows the
+    gutter so it still sits 8px from each edge."""
+    import re as _re
+    css, page, p404, main = _design_files()
+    coarse = _re.search(r"@media \(pointer: coarse\) \{(.*?)\n\}", css, _re.S)
+    assert coarse, "no coarse-pointer block in app.css"
+    block = coarse.group(1)
+    for who in ('button[aria-label="Clear all"]::after',
+                '[data-testid="stTooltipHoverTarget"] button::after'):
+        assert who in block, f"no hit area for {who}"
+    # Streamlit 1.66 draws tabs, selects, radios and checkboxes with
+    # react-aria: their data-testids, not the old baseweb attributes, which
+    # match nothing any more
+    for who in ('[data-testid="stTab"]', '[data-testid="stSelectbox"] > div > div',
+                '[data-testid="stRadioOption"]', '[data-testid="stCheckbox"] label',
+                'button[aria-label^="Remove "] { min-width: 44px',
+                ".meliona-footer .f-bar a", '[data-testid="stExpander"] summary'):
+        assert who in block, f"{who} is not sized for a finger"
+    assert "min-height: 44px" in block and "inset: -" in block
+    phone = " ".join(_re.findall(r"@media \(max-width: 640px\) \{(.*?)\n\}", css, _re.S))
+    assert _re.search(r"input, textarea \{ font-size: (16px|1rem) !important", phone), \
+        "phone fields under 16px make iOS zoom on focus"
+    gutter = int(_re.search(r"\.block-container \{ padding-left: (\d+)px !important", phone).group(1))
+    assert gutter <= 24, f"phone gutter {gutter}px"
+    bleed = _re.search(r'\[data-testid="stIFrame"\] \{ width: calc\(100% \+ (\d+)px\)[^}]*margin-left: -(\d+)px', phone)
+    assert bleed and int(bleed.group(1)) == 2 * int(bleed.group(2)) == 2 * (gutter - 8), \
+        "the map's phone bleed no longer matches the gutter (8px from each edge)"
+    map_coarse = _re.search(r"@media \(pointer: coarse\) \{(.*?)\n\}", page, _re.S)
+    assert map_coarse and ".tog::after" in map_coarse.group(1) and \
+        "select { min-height: 44px; }" in map_coarse.group(1), "the map's controls are not sized for a finger"
+    assert ".runbtn:active" in page and ".explbtn:active" in page, "the map's buttons give no press feedback"
+
+
+def test_the_maps_switches_have_names():
+    """UX check, 2026-11-04: the browser reported an empty accessible name for
+    all three overlay switches - a screen reader said "checkbox, checked" and
+    nothing else. Each is named by aria-label and by its row's words."""
+    import re as _re
+    css, page, p404, main = _design_files()
+    for id_ in ("tgAtmo", "tgMarks", "tgLinks"):
+        tag = _re.search(r'<input[^>]*id="%s"[^>]*>' % id_, page).group(0)
+        label = _re.search(r'aria-label="([^"]+)"', tag)
+        assert label and len(label.group(1)) > 3, f"#{id_} has no accessible name"
+        assert f'<label for="{id_}">' in page, f"#{id_}'s row text is not its label"
+
+
+def test_type_follows_the_readers_font_size_and_stays_readable():
+    """UX check, 2026-11-04: 56 font sizes in px ignored a visitor's own
+    font-size setting, the footer bar was 10px, the session reference a reader
+    quotes to support 7.5px, the Book's role labels 9.5px and the map's labels
+    8-9.5px. Sizes are rem now (identical at the default 16px), nothing on the
+    page is under 11px and nothing on the map under 10px."""
+    import re as _re
+    css, page, p404, main = _design_files()
+    assert not _re.search(r"font-size:\s*[\d.]+px", css), "a px font size in app.css"
+    assert not _re.search(r"\bfont:\s*[\d.]+px", css)
+    sizes = [float(v) * 16 for v in _re.findall(r"font-size:\s*([\d.]+)rem", css)]
+    assert sizes and min(sizes) >= 11, f"text under 11px: {min(sizes)}px"
+    for sel in (r"\.meliona-footer \.f-bar \{", r"\.meliona-footer \.f-ref \{"):
+        body = _re.search(sel + r"[^}]*font-size:\s*([\d.]+)rem", css)
+        assert body and float(body.group(1)) * 16 >= 12, f"{sel} under 12px"
+    map_sizes = [float(v) for v in _re.findall(r"font-size:\s*([\d.]+)px", _style_of(page))]
+    map_sizes += [float(v) for v in _re.findall(r"font = '([\d.]+)px", page)]
+    map_sizes += [float(v) for v in _re.findall(r'font-size="([\d.]+)"', page)]
+    assert map_sizes and min(map_sizes) >= 10, f"map text under 10px: {min(map_sizes)}"
+    role = _re.search(r"flex:0 0 86px;font-family:Helvetica Neue,sans-serif;'\s*f'font-size:([\d.]+)px", main)
+    assert role and float(role.group(1)) >= 11, "the Book's role labels are under 11px"
 
 
 # --- pre-deploy red-team findings, 2026-08-27 --------------------------------
@@ -3750,7 +4040,8 @@ def test_gungnir_plaque_matches_its_sketch_and_its_math():
         assert abs(w[0] * s1 - w[1] * s2) < 1e-9, (rho, w)
         assert abs(w[0] - 0.25) < 1e-9 and abs(w[1] - 0.75) < 1e-9, (rho, w)
     src = (pathlib.Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
-    assert 'class="c">block 01<' in src and 'class="c">block 02<' in src
+    assert 'class="c">flyer<' in src and 'class="c">cushion<' in src, \
+        "the plaque must name the sketch's two blocks, the flyer and the cushion"
     assert 'class="c">circle' not in src and "Circle A" not in src
 
 
@@ -4444,7 +4735,7 @@ def test_defensive_pair_says_who_really_holds_the_money():
     assert "anchor holds most" not in under, f"anchor at 47%: {under}"
     assert "SPY holds more of the" in under and "steadier leg" in under, under
     over = say(0.75, 0.30, 0.10)
-    assert "the anchor holds most of the MONEY" in over, over
+    assert "the anchor holds most of the money" in over, over
     assert "steady anchor holds most of the capital" not in src, \
         "the read-me still says the anchor always holds most of the capital"
 
@@ -4539,7 +4830,7 @@ def _offline_market_prices(tickers=None, period="2y", **_kw):
     return pd.DataFrame(cols, index=idx).iloc[-252 * years:]
 
 
-def _offline_app(setup=None, market=None, rf=0.045, adv=5e9, dollar_volume=None):
+def _offline_app(setup=None, market=None, rf=0.045, adv=5e9, dollar_volume=None, query=None):
     """Run the real main.py under AppTest on _offline_market_prices (or
     `market`); returns (AppTest, restore). Every src module is imported BEFORE
     patching, so a module-level `from src.ingestion import fetch_prices` is
@@ -4584,6 +4875,8 @@ def _offline_app(setup=None, market=None, rf=0.045, adv=5e9, dollar_volume=None)
     try:
         app = pathlib.Path(__file__).resolve().parent.parent / "main.py"
         at = AppTest.from_file(str(app), default_timeout=300)
+        if query:                                   # the address's ?key=value
+            at.query_params.update(query)
         at.run()
         assert not at.exception, f"app raised: {[e.value for e in at.exception]}"
     except BaseException:
@@ -4649,18 +4942,18 @@ def test_the_book_lists_an_outside_etf_only_when_it_is_the_anchor():
         loaded = list([w for w in at.selectbox if w.label.startswith("Anchor")][0].options)
         cards = {}
         for m in at.markdown:
-            hit = re.match(r"\s*(LEADS|ANCHOR|NO ROLE|LEFT OUT)\s+((?:\d+\.\d%|<0\.1%) of the book\s+)?"
+            hit = re.match(r"\s*(Leads|Anchor|No role|Left out)\s+((?:\d+\.\d%|<0\.1%) of the book\s+)?"
                            r"([A-Z0-9.^=-]+) (.*)",
                            re.sub(r"<[^>]+>", " ", m.value)) if "border-left:2px solid" in m.value else None
             if hit:
                 # a NO ROLE card, and only that one, says what it holds (ME-12 review)
-                assert bool(hit.group(2)) == (hit.group(1) == "NO ROLE"), hit.group(0)[:80]
+                assert bool(hit.group(2)) == (hit.group(1) == "No role"), hit.group(0)[:80]
                 cards[hit.group(3)] = (hit.group(1), hit.group(4))
         assert cards, "no Book cards parsed"
         shelf = [t for t in DEFENSIVE_ANCHOR_TICKERS if t not in loaded]
         for t, (role, text) in cards.items():
             if t in shelf:
-                assert role == "ANCHOR" and "outside the chosen universe" in text, (t, role, text)
+                assert role == "Anchor" and "outside the chosen universe" in text, (t, role, text)
         assert set(cards) - set(shelf) == set(loaded), sorted(cards)
     finally:
         restore()
@@ -5592,10 +5885,10 @@ def test_a_difference_of_two_percentages_says_points_and_a_ratio_says_relative()
     assert unwind and "relative" in unwind[0], unwind
     # The Book's tail gap is a difference of two ES figures: points too
     # (Council A review, 2026-10-22: "2.4% shallower at ES 97.5").
-    gaps = [t for t in text if "shallower at ES" in t or "DEEPER at ES" in t]
+    gaps = [t for t in text if "shallower at ES" in t or "deeper at ES" in t]
     assert gaps, "no Book tail-gap sentence on the page"
     for t in gaps:
-        assert re.search(r"\d points (shallower|DEEPER) at ES", t), t
+        assert re.search(r"\d points (shallower|deeper) at ES", t), t
 
 
 def test_the_headline_unwind_names_its_book_size_and_participation():
@@ -5627,12 +5920,14 @@ def test_a_median_that_can_be_negative_is_called_a_return_not_a_gain():
 def test_the_page_points_only_to_controls_that_exist():
     """ME-03 (2026-10-22): the factor caption said "Flip the covariance
     estimator to EWMA in Engine controls"; no control on the page has that
-    name - the estimator lives in the 02 drawer."""
+    name - the estimator lives in the Allocation drawer. (The drawers lost
+    their "01 · 02 · 03" numbers on 2026-11-04; the caption names the drawer
+    by its title, so this follows the title.)"""
     page = _offline_page()
     text = " ".join(page["text"])
     assert "Engine controls" not in text
-    alloc = [e.split(":")[0] for e in page["expanders"] if e.startswith("02 ")]
-    assert alloc and f"to EWMA in {alloc[0]}" in text, alloc
+    alloc = [e.split(":")[0] for e in page["expanders"] if e.startswith("Allocation")]
+    assert alloc and f"to EWMA in the {alloc[0]} drawer" in text, alloc
 
 
 # --- ME-09 (2026-10-22): data-quality holes ---
@@ -5711,7 +6006,10 @@ def test_the_balance_tab_ranks_and_sizes_a_pair_on_one_risk_matrix():
     ranked = rank_hedges(correlation_from_cov(cov), anchor)
     best, corr = ranked.index[0], float(ranked.iloc[0])
     assert cap, "Balance caption missing"
-    assert f"**{best}**" in cap[0] and f"{corr:+.2f}" in cap[0], (best, f"{corr:+.2f}", cap[0])
+    # the name is no longer set in bold (2026-11-04: bold as decoration), so
+    # it is matched as a whole word beside its correlation
+    assert (f"({best}, {corr:+.2f})" in cap[0] or f"{best} moves against" in cap[0]
+            or f"{best} is the most" in cap[0]) and f"{corr:+.2f}" in cap[0], (best, f"{corr:+.2f}", cap[0])
     assert "EWMA" in cap[0], f"the caption does not name its risk matrix: {cap[0]}"
 
 
@@ -5879,15 +6177,27 @@ def test_the_app_calls_nothing_streamlit_has_deprecated():
 def test_a_cold_start_with_the_feed_down_shows_guidance_not_a_crash():
     """Phase 3 cold start: a first visitor on an empty cache with Yahoo
     unreachable. The page must not raise, must say what to do in the visitor's
-    words, and must show no number at all - no verdict, no map, no placeholder."""
+    words, and must show no number at all - no verdict, no map, no placeholder.
+
+    2026-11-04 (UX check): on a preset basket nothing was typed, yet the page
+    led with "Check the spelling". A preset's names are known good, so the
+    page now says the feed is likely unreachable; the engine's own message,
+    which names both causes, stays for a basket with typed names."""
+    import ast
     from src.ingestion import NO_DATA_MSG, NoDataError
 
     def feed_down(*a, **k):
         raise NoDataError(NO_DATA_MSG)
 
+    tree = ast.parse((pathlib.Path(__file__).resolve().parent.parent / "main.py")
+                     .read_text(encoding="utf-8"))
+    feed_msg = next(ast.literal_eval(n.value) for n in tree.body if isinstance(n, ast.Assign)
+                    and any(getattr(t, "id", "") == "FEED_DOWN_MSG" for t in n.targets))
+    assert "unreachable" in feed_msg and "spelling" not in feed_msg, feed_msg
+
     at, restore = _offline_app(market=feed_down, dollar_volume=feed_down)
     try:
-        assert [e.value for e in at.error] == [NO_DATA_MSG], [e.value for e in at.error]
+        assert [e.value for e in at.error] == [feed_msg], [e.value for e in at.error]
         page = " ".join(m.value for m in at.markdown)
         assert '<div class="verdict-box">' not in page, "a verdict rendered with no data behind it"
         frames = [f.proto.srcdoc for f in at.get("iframe")]

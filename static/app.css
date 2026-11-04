@@ -1,11 +1,11 @@
 /* Meliona - the Tearsheet design system.
    Extracted from main.py 2026-08-26: it was 778 lines of inline <style> inside
    the app script, re-sent on every rerun and impossible to read next to the
-   Python. Same rules, same order, one file, loaded once by load_css().
+   Python. Loaded once by load_css().
 
    Bronze TEXT is #6A5030, not the #9A7B4F used for rules and hovers: on this
    beige ground the lighter bronze measures 2.50:1, below the 4.5:1 WCAG 2.2 AA
-   floor for body text. #6A5030 measures 4.74:1 on the page and 5.92:1 on a
+   floor for body text. #6A5030 measures 6.20:1 on the page and 6.42:1 on a
    panel. Decorative bronze (borders, hover states, fills) is untouched - the
    palette still reads as bronze, the words are simply legible.
 
@@ -13,43 +13,44 @@
    4.25:1 against #3F3B35, just under the 4.5:1 AA floor for small text. The
    new one is 4.89:1 and is visually the same warm grey.
 
-   Small uppercase labels - tab strip, panel eyebrows, plaque terms - were
-   #8A7E6A, which cleared nothing: 2.52:1 on the page and 3.15:1 on a panel.
-   They are #5A5344 now (4.82:1 and 6.02:1). These are 9.5-11.5px labels, so
-   the AA floor for them is the full 4.5:1, not the 3:1 large-text allowance.
-
    Bronze TEXT on the charcoal bands is #C6A26B (4.65:1), not the #B08A55 used
-   for borders and gradient fills there, which was 3.50:1 as text. Same rule as
-   above: decorative bronze unchanged, bronze words legible. */
+   for borders there, which was 3.50:1 as text.
 
-/* ============================================================
-   "THE TEARSHEET" - private-bank editorial design language.
-   Doctrine: sharp edges (no rounded pills), hairline bronze rules,
-   extreme type contrast (huge serif numerals vs tiny tracked labels),
-   numbered ruled sections. Numbers are king; craft gives it soul.
-   ============================================================ */
+   Tokens (2026-11-04: nine beige grounds, five muted inks and five hairlines
+   had drifted apart; each now has one or two values):
+     grounds   page #EDE9E3 · panel #F1EDE5 · tile #E9E4DB
+     ink       charcoal #3F3B35 · body #4A4640 · quiet #5D574D · bronze #6A5030
+     rules     bronze #9A7B4F · hairline #C4BDAE
+   Every text colour is checked against the ground it really sits on by
+   test_text_colours_meet_wcag_aa. Capitals are kept for the verdict's label
+   alone (test_uppercase_is_kept_to_the_verdict_label).
+
+   The house mark is one 2px bronze rule over a surface. Surfaces are flat:
+   no gloss, no glass, no lift on hover, no shadow halos. */
+
 html, body, [class*="css"] { font-family: Georgia, 'Times New Roman', serif; }
-h1, h2, h3 { color: #3F3B35; font-weight: 400; letter-spacing: -0.01em; }
-/* Sharpen the whole app - kill Streamlit's default rounded corners */
-[data-testid="stExpander"], [data-baseweb="tab"], .stButton>button,
+h1, h2, h3 { color: #3F3B35; font-weight: 400; }
+/* Square corners everywhere - Streamlit rounds its widgets, tags and alerts */
+[data-testid="stExpander"], [data-testid="stExpander"] details, .stButton>button,
 [data-testid="stMetric"], div[data-baseweb="select"]>div,
 [data-baseweb="input"], [data-baseweb="base-input"], .stNumberInput input,
 [data-testid="stTextInput"] input, [data-testid="stDataFrame"],
-[data-testid="stPlotlyChart"], [data-baseweb="popover"] [data-baseweb="menu"] {
+[data-testid="stPlotlyChart"], [data-baseweb="popover"] [data-baseweb="menu"],
+[data-baseweb="tag"], .stMultiSelect [data-baseweb="select"] span[role="button"],
+[data-testid="stAlert"], [data-testid="stAlertContainer"] {
     border-radius: 0 !important; }
 /* Captions: the quiet ink at full strength. Streamlit draws st.caption at
    60% opacity, so the #524E47 written here reached the page as 2.74-2.77:1
    (screenshot pixels, ME-13). A lighter tone at opacity 1 keeps the quiet
-   look and clears 4.5:1 on every beige ground (4.5 page - 6.2 tile). */
+   look and clears 4.5:1 on every beige ground. */
 .stCaption, [data-testid="stCaptionContainer"],
 [data-testid="stCaptionContainer"] p, [data-testid="stCaptionContainer"] div {
-    font-size: 13.5px !important; color: #5D574D !important; line-height: 1.5 !important;
+    font-size: 0.8438rem !important; color: #5D574D !important; line-height: 1.5 !important;
     opacity: 1 !important; }
-/* Metric labels: #ABA499 measured 2.14-2.17:1 on their tiles (ME-13). */
-[data-testid="stMetricLabel"] p { font-size: 11px !important; color: #5D574D !important;
-    letter-spacing: 0.14em !important; text-transform: uppercase !important; }
+/* Metric labels: sentence case, quiet ink (#ABA499 measured 2.14:1, ME-13). */
+[data-testid="stMetricLabel"] p { font-size: 0.8125rem !important; color: #5D574D !important; }
 [data-testid="stMetricValue"] { font-family: Georgia, serif !important;
-    color: #3F3B35 !important; letter-spacing: -0.01em; }
+    color: #3F3B35 !important; }
 /* Streamlit keeps a metric's label and value to one line and cuts the rest
    with an ellipsis; in a phone's or portrait iPad's narrow metric columns that
    hid "IR at effective breadth (159 bets/yr)" and "10 / 13 exp."
@@ -61,58 +62,54 @@ h1, h2, h3 { color: #3F3B35; font-weight: 400; letter-spacing: -0.01em; }
     white-space: normal !important; overflow: visible !important;
     text-overflow: clip !important; overflow-wrap: anywhere; }
 /* 1.66 also makes the label's paragraph inline (for its ellipsis), so a wrapped
-   11px label took the 14px box's line height: 2 lines 35px, not 30 (ME-16) */
+   label took the 14px box's line height (ME-16) */
 [data-testid="stMetricLabel"] p { display: block !important; }
 
-/* Header crest + wordmark */
-.brand-row { display: flex; align-items: center; gap: 16px; margin-bottom: 2px; }
-.brand-title { font-size: 32px; color: #3F3B35; line-height: 1.1; letter-spacing: -0.015em; }
-.brand-tag { font-family: 'Helvetica Neue', sans-serif; font-size: 11px;
-             letter-spacing: 0.2em; text-transform: uppercase; color: #685334; }
-
-/* HERO VERDICT - the editorial centerpiece. No card: a stat framed by
-   bronze hairlines, the one number that owns the page. */
+/* The verdict: a stat between two rules, the one number that owns the page.
+   Its label is the one place capitals are kept. */
 .verdict-box { background: transparent; border: none;
     border-top: 2px solid #9A7B4F; border-bottom: 1px solid #C4BDAE;
-    padding: 26px 4px 30px; margin: 12px 0 30px; }
-.verdict-label { font-family: 'Helvetica Neue', sans-serif; font-size: 11px;
+    padding: 26px 4px 30px; margin: 8px 0 30px; }
+.verdict-label { font-family: 'Helvetica Neue', sans-serif; font-size: 0.6875rem;
     letter-spacing: 0.22em; text-transform: uppercase; color: #6A5030; }
-.verdict-number { font-size: 96px; color: #3F3B35; margin: 8px 0 4px;
-    line-height: 1; letter-spacing: -0.035em; font-weight: 400; }
-.verdict-sentence { font-size: 18px; color: #54504A; line-height: 1.6; max-width: 580px; }
-
-/* Numbered section eyebrow - editorial ledger markers (01 - UNIVERSE) */
-.sec-mark { font-family: 'Helvetica Neue', sans-serif; font-size: 12px;
-    letter-spacing: 0.24em; text-transform: uppercase; color: #6A5030;
-    border-top: 1px solid #C4BDAE; padding-top: 14px; margin: 26px 0 12px;
-    display: flex; align-items: baseline; gap: 12px; }
-.sec-mark b { color: #B7A98E; font-weight: 400; }
-.panel-label { font-family: 'Helvetica Neue', sans-serif; font-size: 11px;
-    letter-spacing: 0.16em; text-transform: uppercase; color: #5A5344;
-    margin-bottom: 4px; }
+.verdict-number { font-size: 6rem; color: #3F3B35; margin: 8px 0 4px;
+    line-height: 1; font-weight: 400; }
+.verdict-sentence { font-size: 1.125rem; color: #4A4640; line-height: 1.6; max-width: 580px; }
 
 /* Slider - squared thumb, hairline track */
 [data-testid="stSlider"] [data-baseweb="slider"] > div > div { background: #C4BDAE !important; }
 [data-testid="stSlider"] [role="slider"] {
     background: #9A7B4F !important; border-radius: 0 !important;
-    border: 2px solid #F4F1EA !important;
-    box-shadow: 0 1px 3px rgba(63,59,53,0.25) !important; }
+    border: 2px solid #F1EDE5 !important; box-shadow: none !important; }
 [data-testid="stSlider"] [data-testid="stThumbValue"] {
     color: #3F3B35 !important; font-family: 'Helvetica Neue', sans-serif !important;
-    font-size: 12px !important; }
+    font-size: 0.75rem !important; }
 
-/* Expander - flat cream, sharp, hairline */
+/* Expanders: a tile with a hairline; the border warms when it can be opened */
 [data-testid="stExpander"] { border: 1px solid #C4BDAE !important;
-    background: #ECE7DD !important; }
+    background: #E9E4DB !important; box-shadow: none !important; margin-top: 10px;
+    transition: border-color .25s ease; }
+/* Streamlit draws a second, rounded border on the <details> inside: one frame */
+[data-testid="stExpander"] details { border: none !important; }
+[data-testid="stExpander"]:hover { border-color: #9A7B4F !important; }
 
 /* ---- Presentation flow: hero, showcase, CTAs (reveals: search "REVEAL") ---- */
 html { scroll-behavior: smooth; }
+/* The page ground. The theme's own background is the darker #D4CDBF. */
+[data-testid="stAppViewContainer"] { background: #EDE9E3 !important; }
 
-/* WIDE COURT - the whole page works now, capped for taste. Layout is
-   `wide`; this rules the court width and the gutter rhythm. */
+/* Page width and gutters. On a phone the 56px gutters left a 390px screen
+   278px of text and the "New here?" list 176px (UX check, 2026-11-04): 20px
+   there, and the map's full-bleed frame below follows the same number. */
 .block-container { max-width: 1600px !important;
     padding-left: 56px !important; padding-right: 56px !important;
     padding-top: 2.4rem !important; }
+@media (max-width: 640px) {
+  .block-container { padding-left: 20px !important; padding-right: 20px !important; }
+  /* iOS zooms the page into any field under 16px when it takes focus, and
+     the selects, the ticker box and the number inputs were 14px. */
+  input, textarea { font-size: 1rem !important; }
+}
 
 /* The page scrolls inside Streamlit's own <section>, NOT <html> - smooth
    behavior must live on the real scroller or anchors hard-teleport. The
@@ -126,43 +123,37 @@ html { scroll-behavior: smooth; }
 #engine { scroll-margin-top: 28px; }
 #analysis { scroll-margin-top: 28px; }
 #gungnir { scroll-margin-top: 28px; }
-/* Gungnir - the slice: the WHOLE zone (headline, direction radio, circle
-   sketch, CTA) sits on one beige topography engraved with the bound rune,
-   strongest at the left edge, dissolving rightward - Casper's mirror. */
+/* Gungnir - the slice: the WHOLE zone (headline, direction radio, sketch,
+   CTA) sits on one beige topography, strongest at the left edge, dissolving
+   rightward. */
 .st-key-gungnir_zone { position: relative; padding: 64px 0 84px; margin-top: 30px; }
 .st-key-gungnir_zone::before { content: ""; position: absolute;
   top: 0; bottom: 0; left: calc(50% - 50vw); right: calc(50% - 50vw);
-  background-color: #F4F1EA; background-size: cover;
+  background-color: #F1EDE5; background-size: cover;
   background-position: left top; background-repeat: no-repeat;
   border-top: 1px solid #C4BDAE; border-bottom: 1px solid #C4BDAE; }
 .st-key-gungnir_zone > * { position: relative; z-index: 1; }
-.gungnir-head .showcase-eyebrow { color: #6A5030; }
 .gungnir-head .showcase-title { color: #3F3B35; margin: 6px 0 10px; }
-.gungnir-sub { font-family: Georgia, serif; font-size: 14px; color: #5D574D;
+.gungnir-sub { font-family: Georgia, serif; font-size: 0.875rem; color: #5D574D;
   max-width: 600px; line-height: 1.6; }
-/* The plaque: the two-asset risk-parity identity engraved beside the
-   sketch it explains. Solid plate over the contour wash (instruments
-   never fade), hairline bronze, quieter than the radio and the CTA. */
+/* The plaque: the two-asset risk-parity identity beside the sketch it
+   explains. A flat plate under one bronze rule. */
 .gungnir-plaque { max-width: 560px; margin-top: 34px; padding: 30px 34px 26px;
-  background: #F1EDE5; border: 1px solid #C4BDAE; border-top: 2px solid #9A7B4F;
-  box-shadow: 0 1px 2px rgba(63,59,53,.05), 0 8px 24px -18px rgba(63,59,53,.35); }
-.gplaque-eyebrow { font-family: 'Helvetica Neue', sans-serif; font-size: 11px;
-  letter-spacing: .22em; text-transform: uppercase; color: #6A5030; }
-.gplaque-eq { display: flex; align-items: flex-start; gap: 20px; margin: 18px 0 12px; }
+  background: #F1EDE5; border-top: 2px solid #9A7B4F; }
+.gplaque-eq { display: flex; align-items: flex-start; gap: 20px; margin: 0 0 12px; }
 .gplaque-term { display: flex; flex-direction: column; align-items: center; gap: 7px; }
-.gplaque-term .t { font-family: Georgia, serif; font-size: 46px; line-height: 1;
-  color: #3F3B35; letter-spacing: .01em; }
+.gplaque-term .t { font-family: Georgia, serif; font-size: 2.875rem; line-height: 1;
+  color: #3F3B35; }
 .gplaque-term .t sub { font-size: .48em; }
-.gplaque-eqs { font-family: Georgia, serif; font-size: 46px; line-height: 1;
+.gplaque-eqs { font-family: Georgia, serif; font-size: 2.875rem; line-height: 1;
   color: #6A5030; }
-.gplaque-term .c { font-family: 'Helvetica Neue', sans-serif; font-size: 9.5px;
-  letter-spacing: .2em; text-transform: uppercase; color: #5A5344; }
-.gplaque-read { font-family: Georgia, serif; font-size: 15.5px; color: #54504A;
+.gplaque-term .c { font-family: 'Helvetica Neue', sans-serif; font-size: 0.75rem;
+  color: #5D574D; }
+.gplaque-read { font-family: Georgia, serif; font-size: 0.9688rem; color: #4A4640;
   line-height: 1.6; max-width: 460px; }
 
-/* HERO - the great hall, now a two-column court: the pitch on the
-   left, a 2x2 deck of engine-fact tiles on the right (reference:
-   dashboard stat cards). 58vh, not 88. */
+/* HERO - a two-column court: the pitch on the left, a 2x2 deck of
+   engine-fact tiles on the right. */
 .hero-section { min-height: 58vh; display: grid;
     grid-template-columns: minmax(0, 1.45fr) minmax(300px, 1fr);
     gap: 56px; align-items: center; text-align: left;
@@ -174,25 +165,24 @@ html { scroll-behavior: smooth; }
        photo's <style>, so the skeleton has this shape before the photo comes. */
     margin: calc(-2.4rem - 96px) calc(50% - 50vw) 0;
     padding: 96px max(7vw, calc(50vw - 744px)) 48px;
-    /* Ledger frame, same grammar as Gotham: 2px bronze rule top and bottom
-       with a 1px inner hairline 14px inside each edge. */
-    box-shadow: inset 0 2px 0 rgba(176,138,85,.55), inset 0 -2px 0 rgba(176,138,85,.55),
-        inset 0 16px 0 -15px rgba(176,138,85,.45), inset 0 -16px 0 -15px rgba(176,138,85,.45);
+    /* A 2px bronze rule top and bottom */
+    box-shadow: inset 0 2px 0 rgba(176,138,85,.55), inset 0 -2px 0 rgba(176,138,85,.55);
     border-bottom: 1px solid #C4BDAE;
     position: relative; overflow: hidden; }
+/* min-width 0 all the way down: at 200% zoom a phone is 195 CSS px wide and
+   the sub-text and the button ran out of the hero (UX check, 2026-11-04). */
 .hero-left { display: flex; flex-direction: column; align-items: flex-start;
     gap: 16px; min-width: 0; }
+.hero-left > * { min-width: 0; max-width: 100%; }
+.hero-title, .hero-sub { overflow-wrap: break-word; }
 @media (max-width: 1100px) {
-  .hero-section { grid-template-columns: 1fr; }
+  .hero-section { grid-template-columns: minmax(0, 1fr); }
   .showcase-row { grid-template-columns: 1fr !important; } }
 /* Short-viewport hero compression lives at the END of the stylesheet stack
-   (search "SHORT-VIEWPORT HERO"), because .hero-title is redefined twice more
-   below and the hero padding is set by an injected <style> emitted later
-   still - a rule placed here loses on source order no matter how correct. */
-/* The stat deck lives in Casper's wash with no plate - but the TILES stay
-   fully solid (John: fading them read unprofessional). The background does
-   the fading; the instruments never do. */
-.hero-stats { position: relative; }
+   (search "SHORT-VIEWPORT HERO"): the hero padding is set by an injected
+   <style> emitted later, and a rule placed here loses on source order. */
+.hero-stats { position: relative; z-index: 1; display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 /* The crest stands on the page itself - no plate, no frame (John, 2026-10-29):
    the box keeps its size so nothing below it moves, and the mark fills it. */
 .hero-crest { width: 132px; height: 132px; }
@@ -212,150 +202,90 @@ html { scroll-behavior: smooth; }
 .hero-crest .crest-ring:nth-of-type(3) { animation-delay: .6s; }
 @media (prefers-reduced-motion: reduce) {
     .hero-crest:hover .crest-ring, .hero-crest.rippling .crest-ring { animation: none; } }
-.hero-eyebrow { font-family: 'Helvetica Neue', sans-serif; font-size: 12px;
-    letter-spacing: 0.32em; text-transform: uppercase; color: #6A5030; }
-.hero-title { font-size: clamp(44px, 10.5vw, 96px) !important; color: #3F3B35;
-    line-height: 0.98 !important; margin: 2px 0; letter-spacing: -0.035em; }
-.hero-sub { font-size: 21px; color: #54504A; max-width: 640px; line-height: 1.6; }
-.hero-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
-    position: relative; z-index: 1; }
-.hstat { border: 1px solid rgba(63,59,53,.22); background: #F1EDE5;
-    padding: 20px 22px 16px;
-    /* The buttons' grammar: a matte rectangle, square corners, no glass, no
-       shadow. Hover draws a 2px bronze rule along the foot, nothing moves. */
-    transition: border-color .3s ease, box-shadow .3s cubic-bezier(.16,1,.3,1); }
-.hstat:hover { border-color: #3F3B35; box-shadow: inset 0 -2px 0 #9A7B4F; }
-.hstat .n { font-size: 38px; color: #3F3B35; line-height: 1.05;
-    letter-spacing: -0.02em; }
-.hstat .l { font-family: 'Helvetica Neue', sans-serif; font-size: 10px;
-    letter-spacing: 0.2em; text-transform: uppercase; color: #6A5030;
-    margin-top: 6px; }
+.hero-title { font-size: clamp(2.5rem, 10.5vw, 5.25rem) !important; color: #3F3B35;
+    line-height: 0.98 !important; margin: 2px 0; }
+.hero-title .hline { display: block; }
+.hero-sub { font-size: 1.3125rem; color: #4A4640; max-width: 640px; line-height: 1.6; }
+/* The stat squares: filled rectangles, square corners, no frame, no hover. */
+.hstat { background: #F1EDE5; padding: 20px 22px 16px; min-width: 0; }
+.hstat .n { font-size: 2.375rem; color: #3F3B35; line-height: 1.05; overflow-wrap: anywhere; }
+.hstat .l { font-family: 'Helvetica Neue', sans-serif; font-size: 0.8125rem;
+    color: #6A5030; margin-top: 6px; }
 
 /* Twin showcases share one row - half the scroll, none of the clutter */
 .showcase-row { display: grid; grid-template-columns: 1fr 1fr; gap: 64px;
     padding: 48px 8px 20px; }
 .showcase-row .showcase-section { padding: 0; }
 
-/* CTA - sharp charcoal slab, bronze on hover, alive to the touch */
 /* CTA: one rule set, near the end of the file (search "CTA: matte rectangle"). */
 
 .showcase-section { padding: 56px 8px 44px; text-align: left; display: flex;
     flex-direction: column; align-items: flex-start; gap: 18px; }
-.showcase-eyebrow { font-family: 'Helvetica Neue', sans-serif; font-size: 12px;
-    letter-spacing: 0.28em; text-transform: uppercase; color: #6A5030; }
-.showcase-title { font-size: 52px; color: #3F3B35; margin: 0; font-weight: 400;
-    letter-spacing: -0.025em; line-height: 1.05; }
-.showcase-body { font-size: 16px; color: #54504A; max-width: 620px; line-height: 1.6; }
+.showcase-title { font-size: 3.25rem; color: #3F3B35; margin: 0; font-weight: 400;
+    line-height: 1.05; }
+.showcase-body { font-size: 1rem; color: #4A4640; max-width: 620px; line-height: 1.6; }
 
-/* Pillars - no cards: ledger columns divided by bronze hairlines */
+/* Pillars - ledger columns divided by hairlines */
 /* One row of three whatever the column's width (fixed 220px columns wrapped
    to two plus an orphan in the band's half-width column, 2026-11-02). */
 .pillar-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 0; margin-top: 16px; border-top: 1px solid #C4BDAE; }
 .pillar-card { background: transparent; border: none;
     border-left: 1px solid #C4BDAE; padding: 26px 22px 14px; min-width: 0;
-    text-align: left; transition: border-color 0.25s ease; }
+    text-align: left; }
 @media (max-width: 640px) {
     .pillar-row { grid-template-columns: 1fr; }
     .pillar-card { border-left: none; padding-left: 4px; } }
 .pillar-card:first-child { border-left: none; padding-left: 4px; }
-.pillar-card:hover { border-left-color: #9A7B4F; }
-.pillar-label { font-family: 'Helvetica Neue', sans-serif; font-size: 11px;
-    letter-spacing: 0.16em; text-transform: uppercase; color: #6A5030; margin-bottom: 6px; }
-.pillar-desc { font-size: 13.5px; color: #524E47; line-height: 1.5; }
-
-/* Apple-fine hairline: bronze breathes in the centre, fades at the edges */
-.section-divider { border: none; height: 1px; margin: 8px 0 30px;
-    background: linear-gradient(90deg, transparent,
-        rgba(154,123,79,.55) 18%, rgba(154,123,79,.55) 82%, transparent); }
-
+.pillar-label { font-family: Georgia, serif; font-size: 1.0625rem; color: #6A5030;
+    margin-bottom: 6px; }
+.pillar-desc { font-size: 0.8438rem; color: #4A4640; line-height: 1.5; }
 
 /* Tables read as cut slabs too */
-[data-testid="stDataFrame"] { border: 1px solid #D4CDBF;
-    border-top: 2px solid #9A7B4F; }
+[data-testid="stDataFrame"] { border: 1px solid #C4BDAE;
+    border-top: 2px solid #9A7B4F; box-shadow: none; }
 
-/* Keyboard focus carries the same bronze - prestige includes a11y. In-page
-   links (CTAs, the skip link, the footer boxes) share their own ring: see
-   "One focus ring" near the end of the file. */
-.stButton>button:focus-visible,
-[data-baseweb="tab"]:focus-visible {
-    outline: 2px solid #9A7B4F; outline-offset: 2px; }
+/* Keyboard focus carries the same bronze. In-page links (CTAs, the skip link,
+   the footer boxes) share their own ring: see "One focus ring" near the end. */
+.stButton>button:focus-visible { outline: 2px solid #9A7B4F; outline-offset: 2px; }
 .engine-heading { text-align: left; padding: 4px 0 22px; }
 
-/* ============================================================
-   TABS - "the gatehouse". Each label is a stone lintel: generous
-   breathing room, wide tracking, a bronze rule that slides in.
-   The previous rule tracked the type but gave it NO horizontal
-   padding, so uppercase labels collided into one another.
-   ============================================================ */
-[data-testid="stTabs"] [data-baseweb="tab-list"] {
-    gap: 4px; border-bottom: 1px solid #C4BDAE;
-    overflow-x: auto; scrollbar-width: none; }
-[data-testid="stTabs"] [data-baseweb="tab-list"]::-webkit-scrollbar { display: none; }
-[data-testid="stTabs"] [data-baseweb="tab"] {
-    font-family: 'Helvetica Neue', sans-serif;
-    font-size: 11.5px; letter-spacing: 0.18em; text-transform: uppercase;
-    color: #5A5344; white-space: nowrap;             /* never wrap a label */
-    padding: 15px 26px !important;                    /* the missing air */
-    background: transparent; position: relative;
-    transition: color .28s ease, background .28s ease; }
-[data-testid="stTabs"] [data-baseweb="tab"] * { letter-spacing: inherit; }
-[data-testid="stTabs"] [data-baseweb="tab"]:hover {
-    color: #3F3B35; background: rgba(154,123,79,0.06); }
-/* bronze rule grows from the centre - no jump, no flash */
-[data-testid="stTabs"] [data-baseweb="tab"]::after {
-    content: ''; position: absolute; left: 50%; right: 50%; bottom: -1px;
-    height: 2px; background: #9A7B4F;
-    transition: left .3s cubic-bezier(.16,1,.3,1), right .3s cubic-bezier(.16,1,.3,1); }
-[data-testid="stTabs"] [aria-selected="true"] { color: #3F3B35 !important; }
-[data-testid="stTabs"] [aria-selected="true"]::after { left: 0; right: 0; }
-[data-testid="stTabs"] [data-baseweb="tab-highlight"] { display: none; }
-
-/* Panel swap: content settles in rather than snapping */
-@keyframes panel-settle {
-    from { opacity: 0; transform: translateY(10px); }
-    to   { opacity: 1; transform: translateY(0); } }
-[data-testid="stTabs"] [data-baseweb="tab-panel"] {
-    animation: panel-settle .42s cubic-bezier(.16,1,.3,1) both;
-    padding-top: 22px; }
+/* TABS - Streamlit 1.66 draws its tab strip with react-aria ([data-testid=
+   "stTab"]); the rules this file used to carry targeted the old baseweb tabs
+   and had not matched anything since the upgrade, so the strip reads in the
+   page's own serif, sentence case, with Streamlit's bronze underline (the
+   theme's primary colour). Kept as it renders; the dead rules went
+   2026-11-04. */
+[data-testid="stTabs"] { margin-top: 10px; }
+[data-testid="stTab"]:focus-visible { outline: 2px solid #6A5030; outline-offset: 2px; }
 
 /* ============================================================
-   THE KEEP - stone-slab surfaces. Sharp corners, hairline mortar,
-   one soft shadow so a panel reads as a cut block, not a web card.
-   Same palette; only the structure is new.
+   SLABS - a flat panel under one bronze rule.
    ============================================================ */
-.slab { background: #F1EDE5; border: 1px solid #D4CDBF;
-    border-top: 2px solid #9A7B4F; padding: 22px 24px 18px; height: 100%;
-    box-shadow: 0 1px 2px rgba(63,59,53,.05), 0 8px 24px -18px rgba(63,59,53,.35);
-    transition: transform .3s cubic-bezier(.16,1,.3,1),
-                box-shadow .3s ease, border-color .3s ease; }
-.slab:hover { transform: translateY(-2px); border-color: #9A7B4F;
-    box-shadow: 0 2px 4px rgba(63,59,53,.06), 0 16px 34px -20px rgba(63,59,53,.45); }
-.slab-label { font-family: 'Helvetica Neue', sans-serif; font-size: 10.5px;
-    letter-spacing: 0.2em; text-transform: uppercase; color: #6A5030;
-    margin-bottom: 10px; }
-.slab-num { font-size: 40px; color: #3F3B35; line-height: 1;
-    letter-spacing: -0.03em; margin-bottom: 6px; }
-.slab-note { font-size: 13px; color: #5D574D; line-height: 1.55; }
+.slab { background: #F1EDE5; border-top: 2px solid #9A7B4F;
+    padding: 22px 24px 18px; height: 100%; margin-top: 48px; }
+.slab-label { font-family: 'Helvetica Neue', sans-serif; font-size: 0.8125rem;
+    color: #6A5030; margin-bottom: 10px; }
+.slab-num { font-size: 2.5rem; color: #3F3B35; line-height: 1; margin-bottom: 6px; }
+.slab-note { font-size: 0.8125rem; color: #5D574D; line-height: 1.55; }
 
-/* Plain-language read-out under every chart: what am I looking at? */
-.read-me { border-left: 2px solid #9A7B4F; background: rgba(154,123,79,0.05);
-    padding: 12px 16px; margin: 10px 0 4px; font-size: 14px; color: #524E47;
-    line-height: 1.6; }
+/* Plain-language read-out under a chart: what am I looking at? */
+.read-me { background: #F1EDE5; padding: 12px 16px; margin: 10px 0 4px;
+    font-size: 0.875rem; color: #4A4640; line-height: 1.6; }
 .read-me b { color: #3F3B35; font-weight: 400; }
 
-/* Ruled panel header inside a tab - the lintel over each block */
+/* Ruled panel header inside a tab: a serif title and a quiet line beside it */
 .panel-head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
-    border-top: 1px solid #C4BDAE; padding-top: 13px; margin: 34px 0 14px;
+    border-top: 1px solid #C4BDAE; padding-top: 13px; margin: 26px 0 14px;
     position: relative; }
-/* A bronze accent draws itself across the lintel as the section scrolls
-   into view - scroll-linked: its length IS how far the lintel has come up the
+/* A bronze accent draws itself across the rule as the section scrolls
+   into view - scroll-linked: its length IS how far the rule has come up the
    screen. Scroll timelines where the browser has them; elsewhere static/
    reveal.js feeds the same position as --scrub, only while it is on screen.
    Under reduced motion it stays scaleX(0) and the 1px border is the base. */
 .panel-head::before { content: ''; position: absolute; top: -1px; left: 0;
     height: 2px; width: 100%; transform: scaleX(0); transform-origin: left;
-    background: linear-gradient(90deg, #9A7B4F, #C8A86E 55%, transparent); }
+    background: #9A7B4F; }
 @supports (animation-timeline: view()) {
   .panel-head::before { animation: lintel-draw linear both;
       animation-timeline: view(); animation-range: entry 0% cover 20%; }
@@ -365,71 +295,74 @@ html { scroll-behavior: smooth; }
   .reveal-on .panel-head::before { transform: scaleX(min(1, calc(var(--scrub, 0) * 4))); }
 }
 /* Wraps rather than nowrap: on a 375px phone 5 of 25 titles ran out of their
-   box and one was cut off (device_check, 2026-10-17). The lintel is
-   flex-wrap, so a title that fits still sits on one line. */
-.panel-head .t { font-family: 'Helvetica Neue', sans-serif; font-size: 11.5px;
-    letter-spacing: 0.2em; text-transform: uppercase; color: #3F3B35; }
-.panel-head .s { font-size: 13px; color: #ABA499; line-height: 1.5; }
+   box and one was cut off (device_check, 2026-10-17). */
+.panel-head .t { font-family: Georgia, serif; font-size: 1.125rem; color: #3F3B35; }
+/* The subtitle sits on the page (#EDE9E3): #ABA499 measured 2.04:1 there
+   (design check, 2026-11-04). */
+.panel-head .s { font-size: 0.875rem; color: #5D574D; line-height: 1.5; }
 
-/* Charts glide in with the panel instead of popping */
+/* Charts settle in rather than snapping */
+@keyframes panel-settle {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); } }
 [data-testid="stPlotlyChart"], [data-testid="stIFrame"] {
     animation: panel-settle .5s cubic-bezier(.16,1,.3,1) both;
     animation-delay: .06s; }
+[data-testid="stPlotlyChart"], [data-testid="stImage"] { box-shadow: none; }
 /* The glide script's frame (main.py _script_frame): st.iframe will not take
    height 0, so its 1px frame is folded to 0 here - what components.html drew. */
 div:has(> .st-key-glide), .st-key-glide, .st-key-glide div.stElementContainer, .st-key-glide iframe {
     height: 0 !important; min-height: 0 !important; overflow: hidden !important; }
-/* The Risk Topology map (the app's only visible st.iframe) on a phone: inside the
-   56px page gutters it got 278px of a 390px iPhone and was cut off. It spans
-   the screen instead, 8px from each edge; the page's text keeps its gutters. */
+/* The Risk Topology map (the app's only visible st.iframe) on a phone: inside
+   the page gutters it was cut off. It spans the screen instead, 8px from each
+   edge (the 20px phone gutter less 12px each side); the text keeps its gutters. */
 @media (max-width: 640px) {
-  [data-testid="stIFrame"] { width: calc(100% + 96px) !important; max-width: none !important;
-                             margin-left: -48px !important; }
+  [data-testid="stIFrame"] { width: calc(100% + 24px) !important; max-width: none !important;
+                             margin-left: -12px !important; }
 }
 
-/* Metric slabs pick up the same masonry - and a glossy specular sheen that
-   sweeps across on hover (three-finish "trophy" role). Hover-only, one pass;
-   the prefers-reduced-motion guard nulls the transition to a static tile. */
-[data-testid="stMetric"] { background: #F1EDE5; border: 1px solid #D4CDBF;
-    border-top: 2px solid #9A7B4F; padding: 16px 18px 12px;
-    position: relative; overflow: hidden;
-    transition: transform .3s cubic-bezier(.16,1,.3,1), border-color .3s ease,
-                box-shadow .3s ease; }
-[data-testid="stMetric"]::before { content: ''; position: absolute; top: 0;
-    left: -70%; width: 45%; height: 100%; pointer-events: none;
-    background: linear-gradient(100deg, transparent,
-        rgba(200,168,110,.22), transparent);
-    transform: skewX(-18deg);
-    transition: left .6s cubic-bezier(.16,1,.3,1); }
-[data-testid="stMetric"]:hover { transform: translateY(-3px); border-color: #9A7B4F;
-    box-shadow: 0 14px 28px -18px rgba(63,59,53,.5); }
-[data-testid="stMetric"]:hover::before { left: 125%; }
+/* Metric tiles: a flat panel under the bronze rule. */
+[data-testid="stMetric"] { background: #F1EDE5; border: none;
+    border-top: 2px solid #9A7B4F; padding: 15px 18px !important; box-shadow: none; }
 
-/* The many fold-away expanders feel touchable: bronze border warms on hover */
-[data-testid="stExpander"] { transition: border-color .25s ease,
-    box-shadow .25s ease; }
-[data-testid="stExpander"]:hover { border-color: #9A7B4F !important;
-    box-shadow: 0 8px 20px -16px rgba(63,59,53,.4); }
+/* Buttons: a flat rectangle; hover inverts, a press settles */
+.stButton>button { font-family: 'Helvetica Neue', sans-serif; font-size: 0.8125rem;
+    border: 1px solid #C4BDAE; background: #F1EDE5; color: #3F3B35;
+    box-shadow: none;
+    transition: background .25s ease, border-color .25s ease, color .25s ease; }
+.stButton>button:hover { background: #3F3B35; color: #F1EDE5; border-color: #3F3B35; }
+.stButton>button:active { transform: scale(.985); }
 
-/* Buttons: cut stone, bronze on press, alive to the touch */
-.stButton>button { font-family: 'Helvetica Neue', sans-serif; font-size: 11.5px;
-    letter-spacing: 0.16em; text-transform: uppercase; border: 1px solid #C4BDAE;
-    background: #F1EDE5; color: #3F3B35;
-    transition: background .25s ease, border-color .25s ease,
-                letter-spacing .25s ease, transform .25s cubic-bezier(.16,1,.3,1),
-                box-shadow .25s ease; }
-.stButton>button:hover { background: #3F3B35; color: #F4F1EA;
-    border-color: #3F3B35; letter-spacing: 0.2em; transform: translateY(-1px);
-    box-shadow: 0 10px 22px -14px rgba(63,59,53,.55); }
-.stButton>button:active { transform: translateY(0) scale(.985); }
-
-/* Inputs breathe too: bronze focus, soft glow - nothing snaps */
+/* Inputs: flat panel ground, bronze on hover and focus */
 div[data-baseweb="select"] > div, .stNumberInput input,
 [data-testid="stTextInput"] input, .stMultiSelect [data-baseweb="select"] > div {
+    background: #F1EDE5 !important;
     transition: border-color .25s ease, box-shadow .25s ease; }
 div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
 .stNumberInput input:focus, [data-testid="stTextInput"] input:focus {
     box-shadow: 0 0 0 1px #9A7B4F !important; }
+/* Dropdown menus: the same flat panel with a hairline */
+[data-baseweb="popover"] [data-baseweb="menu"],
+[data-baseweb="popover"] ul[role="listbox"] {
+    background: #F1EDE5 !important; border: 1px solid #C4BDAE; box-shadow: none; }
+[data-baseweb="menu"] li[role="option"]:hover,
+ul[role="listbox"] li:hover { background: rgba(154,123,79,.12) !important; }
+
+/* Alerts (st.info / warning / success / error): Streamlit draws them in blue,
+   yellow, green and red, the only bright colours on the page (Correlation
+   Watch showed one on every load). Here they are a panel under a rule; the
+   rule's tone and the words carry the kind. */
+[data-testid="stAlertContainer"] { background: #F1EDE5 !important;
+    border-top: 2px solid #9A7B4F; }
+[data-testid="stAlertContentWarning"], [data-testid="stAlertContentError"] {
+    color: #3F3B35 !important; }
+[data-testid="stAlertContentInfo"], [data-testid="stAlertContentSuccess"] {
+    color: #3F3B35 !important; }
+[data-testid="stAlert"]:has([data-testid="stAlertContentWarning"]) [data-testid="stAlertContainer"],
+[data-testid="stAlert"]:has([data-testid="stAlertContentError"]) [data-testid="stAlertContainer"] {
+    border-top-color: #6A5030; }
+[data-testid="stAlertContainer"] [data-testid="stIconMaterial"],
+[data-testid="stAlertContainer"] svg { color: #6A5030 !important; }
 
 /* ============================================================
    SKELETON LOADING - the scaffold shows before the stone.
@@ -439,10 +372,11 @@ div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
       real ones will, then the veil lifts onto the real page.
    2) Scroll skeletons: charts entering the viewport wear a
       shimmer plate that dissolves as they arrive.
+   The shimmer gradients here are functional: they are the loading sign.
    ============================================================ */
 @keyframes sk-sheen { from { background-position: 200% 0; }
                       to   { background-position: -200% 0; } }
-.sk { background: linear-gradient(90deg, #E2DCD0 25%, #EFEAE0 45%, #E2DCD0 65%);
+.sk { background: linear-gradient(90deg, #E2DCD0 25%, #F1EDE5 45%, #E2DCD0 65%);
     background-size: 200% 100%; animation: sk-sheen 1.15s linear infinite; }
 #boot-skel { position: fixed; inset: 0; z-index: 999; background: #EDE9E3;
     display: flex; flex-direction: column; overflow: hidden;
@@ -457,7 +391,7 @@ div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
        carries the type that container gives the hero (theme serif, 16px/1.6;
        an h1 at weight 700 with 20px/16px padding) - in Georgia 400 the title
        broke over two lines where the hero takes three. */
-    font-family: "Source Serif", serif; font-size: 16px; line-height: 1.6; }
+    font-family: "Source Serif", serif; font-size: 1rem; line-height: 1.6; }
 #boot-skel h1 { margin: 0; padding: 20px 0 16px; font-weight: 700;
     word-break: break-word; }
 /* Shimmers run until the hero lifts the veil; the lift also stops them
@@ -480,24 +414,24 @@ div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
 #boot-skel .sk-ink, #boot-skel .sk-ink * { color: transparent !important;
     -webkit-text-fill-color: transparent; }
 #boot-skel .sk-ink { border-radius: 6px;
-    background: linear-gradient(90deg, #E2DCD0 25%, #EFEAE0 45%, #E2DCD0 65%) repeat-x;
+    background: linear-gradient(90deg, #E2DCD0 25%, #F1EDE5 45%, #E2DCD0 65%) repeat-x;
     background-size: 200% 62%; animation: sk-ink-sheen 1.15s linear infinite;
     -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 /* Solid shapes: crest and button shimmer whole; tiles are calm cards whose
-   number and label are ink. No hovers, glints or fly-ins on a placeholder. */
+   number and label are ink. No hovers or fly-ins on a placeholder. */
 #boot-skel .hero-crest, #boot-skel .cta-btn {
-    background: linear-gradient(90deg, #E2DCD0 25%, #EFEAE0 45%, #E2DCD0 65%) !important;
+    background: linear-gradient(90deg, #E2DCD0 25%, #F1EDE5 45%, #E2DCD0 65%) !important;
     background-size: 200% 100% !important; animation: sk-sheen 1.15s linear infinite;
     border-color: transparent !important; box-shadow: none !important; color: transparent !important; }
 #boot-skel .hero-crest { border-radius: 50%; }   /* the crest is round */
-#boot-skel .hstat { background: #E9E4DA !important; border-color: #DDD6C9 !important;
+#boot-skel .hstat { background: #E9E4DB !important;
     box-shadow: none !important; animation: none !important; transform: none !important; }
 #boot-skel .hstat .n { -webkit-text-fill-color: transparent; background: none; }
 /* A one-digit stat ("2", "4") would be a sliver that reads as a glitch. */
 #boot-skel .hstat .n .sk-ink { display: inline-block; min-width: 1.6em; }
-/* Below the hero the real page continues into the Gotham band: an 11px
-   light strip, a hairline, then the photo band - colours sampled from the
-   rendered page (avg #99958E top, #8D8983 body), not guessed. */
+/* Below the hero the real page continues into the dark band: an 11px light
+   strip, a hairline, then the photo band - colours sampled from the rendered
+   page (avg #99958E top, #8D8983 body), not guessed. */
 #boot-skel .sk-band { flex: 1; margin-top: 12px; border-top: 2px solid #B8A995;
     background: linear-gradient(180deg, #99958E 0, #8D8983 70px); }
 
@@ -511,86 +445,10 @@ div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
        shape while it loads. The hero lifts it instantly; the id beats * so the
        30 s safety net survives the rule above. */
     #boot-skel { animation: boot-off 0s linear 30s forwards !important; } }
-/* Verdict numeral - brushed-bronze-to-charcoal specular fill with a single
-   sheen sweep on arrival. @supports-guarded so it stays solid charcoal where
-   background-clip:text is unsupported (the .verdict-number base keeps color). */
-@supports ((-webkit-background-clip: text) or (background-clip: text)) {
-  .verdict-number {
-    background: linear-gradient(100deg,
-        #3F3B35 0%, #46413A 30%, #C8A86E 50%, #46413A 70%, #3F3B35 100%);
-    background-size: 240% 100%;
-    -webkit-background-clip: text; background-clip: text;
-    -webkit-text-fill-color: transparent;
-    text-shadow: 0 1px 0 rgba(255,255,255,.28);
-    animation: verdict-sheen 2.6s cubic-bezier(.4,0,.2,1) .25s 1 both; }
-}
-@keyframes verdict-sheen { 0% { background-position: 160% 0; }
-                           62%, 100% { background-position: 0 0; } }
 
-/* Verdict frame - faint top glass + one light-glint pass across it on load. */
-.verdict-box { position: relative; overflow: hidden;
-    background: linear-gradient(180deg, rgba(255,253,248,.55), rgba(255,253,248,0) 62%); }
-.verdict-box::after { content: ""; position: absolute; top: 0; left: -45%;
-    width: 45%; height: 100%; pointer-events: none;
-    background: linear-gradient(100deg, transparent,
-        rgba(255,255,255,.5) 50%, transparent);
-    transform: skewX(-18deg); animation: gloss-glint 2.4s ease-out .2s 1 both; }
-@keyframes gloss-glint { from { left: -45%; } to { left: 150%; } }
-
-
-
-/* Streamlit metric readouts - lift the flat numbers onto small glass tiles,
-   consistent with the hero deck, with a hover lift for tactility. */
-[data-testid="stMetric"] {
-    background: linear-gradient(157deg, rgba(246,242,234,.92), rgba(233,227,215,.62));
-    border: 1px solid #D3CBBA; padding: 15px 18px !important;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.6),
-                0 10px 26px -20px rgba(63,59,53,.5);
-    transition: transform .35s cubic-bezier(.16,1,.3,1), box-shadow .35s ease; }
-[data-testid="stMetric"]:hover { transform: translateY(-3px);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.75),
-                0 18px 40px -22px rgba(63,59,53,.6); }
-
-/* Charts float on soft depth so the surfaces read as glossy panes, not
-   flat ink on paper. */
-[data-testid="stPlotlyChart"], [data-testid="stImage"] {
-    box-shadow: 0 18px 44px -32px rgba(63,59,53,.5);
-    transition: box-shadow .4s ease; }
-[data-testid="stPlotlyChart"]:hover { box-shadow: 0 22px 52px -30px rgba(63,59,53,.6); }
-
-/* Expanders + dataframes - a whisper of gradient + inner highlight so panels
-   catch light instead of sitting dead flat. */
-[data-testid="stExpander"] {
-    background: linear-gradient(160deg, #EFEAE0, #E6E0D4) !important;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,.5),
-                0 8px 22px -18px rgba(63,59,53,.4) !important; }
-[data-testid="stDataFrame"] {
-    box-shadow: 0 12px 30px -24px rgba(63,59,53,.45); }
-
-/* Section hairline draws itself in - a bronze line unspooling left-to-right. */
-.section-divider { background-size: 200% 100%;
-    animation: divider-draw 1.1s cubic-bezier(.16,1,.3,1) both; }
-@keyframes divider-draw { from { background-size: 0% 100%; opacity: 0; }
-                          to   { background-size: 200% 100%; opacity: 1; } }
-
-@media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after { animation: none !important; transition: none !important; }
-    .verdict-box::after { display: none !important; }
-    .section-divider { background-size: 200% 100% !important; opacity: 1 !important; } }
-.section-divider { margin: 54px 0 34px !important; }
-[data-testid="stTabs"] { margin-top: 10px; }
-[data-baseweb="tab-list"] { margin-bottom: 14px !important; }
-[data-testid="stExpander"] { margin-top: 10px; }
-.panel-head, .lintel { margin-top: 26px; }
-.verdict-box { margin-top: 8px; }
 [data-testid="stMainBlockContainer"] { padding-bottom: 96px; }
 
-
 .hero-left, .hero-stats { position: relative; z-index: 1; }
-
-/* --- CHARTS: no halo and no glowing bars (John, 2026-11-02: glow on every
-   element reads as generated). A chart is a ruled figure on the page. --- */
-[data-testid="stPlotlyChart"] { box-shadow: none; }
 
 /* --- ARRIVAL (after citadel.com, John 2026-10-30) ---
    lift-face: an element laid face-down on its bottom edge stands up to face
@@ -686,120 +544,45 @@ div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
 /* Skeleton status line - sits on the band, in the hero's left gutter */
 #boot-skel .sk-load { position: absolute; bottom: 28px;
     left: max(7vw, calc(50vw - 744px));
-    font-family:'Helvetica Neue',sans-serif; font-size:11px;
-    letter-spacing:.24em; text-transform:uppercase; color:#F1EDE5;
+    font-family:'Helvetica Neue',sans-serif; font-size:0.8125rem; color:#F1EDE5;
     animation: sk-pulse 1.3s ease-in-out infinite; }
 @keyframes sk-pulse { 0%,100%{opacity:.45;} 50%{opacity:1;} }
 
 @media (prefers-reduced-motion: reduce) {
     .hero-section::before, .hero-section::after { display:none !important; } }
-/* --- LACQUER: light falls on the page from above; corners hold shade --- */
-[data-testid="stAppViewContainer"] {
-    background:
-      radial-gradient(1100px 520px at 50% -140px, rgba(255,253,247,.95), rgba(255,253,247,0) 65%),
-      radial-gradient(760px 480px at 88% 12%, rgba(154,123,79,.06), transparent 70%),
-      radial-gradient(820px 520px at 6% 92%, rgba(63,59,53,.05), transparent 72%),
-      #EDE9E3 !important;
-    background-attachment: fixed; }
-
-/* --- MATTE REBALANCE: expanders and tables go back to paper --- */
-[data-testid="stExpander"] { background: #ECE7DD !important;
-    box-shadow: none !important; }
-[data-testid="stDataFrame"] { box-shadow: none; }
-
-/* --- GLASS: the instruments --- */
-@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .stButton>button { background: rgba(246,242,234,.5);
-      -webkit-backdrop-filter: blur(14px) saturate(1.2);
-      backdrop-filter: blur(14px) saturate(1.2);
-      border: 1px solid rgba(154,123,79,.4);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,.65),
-                  inset 0 -8px 14px -12px rgba(154,123,79,.35),
-                  0 8px 22px -16px rgba(63,59,53,.4); }
-  div[data-baseweb="select"] > div, .stNumberInput input,
-  [data-testid="stTextInput"] input,
-  .stMultiSelect [data-baseweb="select"] > div {
-      background: rgba(246,242,234,.48) !important;
-      -webkit-backdrop-filter: blur(12px) saturate(1.15);
-      backdrop-filter: blur(12px) saturate(1.15);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,.55); }
-  /* Dropdown menus float as true glass panes over the page */
-  [data-baseweb="popover"] [data-baseweb="menu"],
-  [data-baseweb="popover"] ul[role="listbox"] {
-      background: rgba(244,240,232,.72) !important;
-      -webkit-backdrop-filter: blur(20px) saturate(1.3);
-      backdrop-filter: blur(20px) saturate(1.3);
-      border: 1px solid rgba(154,123,79,.35);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,.6),
-                  0 24px 52px -22px rgba(63,59,53,.5); overflow: hidden; }
-  [data-baseweb="menu"] li[role="option"]:hover,
-  ul[role="listbox"] li:hover { background: rgba(154,123,79,.16) !important; }
-  /* Read-me panels: frosted glass slabs, the briefing cards you lean on */
-  .read-me { background: rgba(246,242,234,.5) !important;
-      -webkit-backdrop-filter: blur(16px) saturate(1.15);
-      backdrop-filter: blur(16px) saturate(1.15);
-      border: 1px solid rgba(154,123,79,.3) !important;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,.55),
-                  0 12px 30px -24px rgba(63,59,53,.4); }
-}
 
 /* (Engravings: the Nordic runes went 2026-07-09, the crest fragments behind
    the Grit Zone and the fan chart 2026-10-30 - John: a watermark logo reads
    tacky. The crest lives in the hero, once.) */
 
-/* --- ROUND 5: precision numerals + one-pass ignite ---
-   Tabular figures on every metric so columns of numbers align like a
-   ledger - precision feel, serif untouched. (Charts used to bloom in on
-   mount, off screen as often as not; they reveal on arrival now - REVEAL.) */
+/* Tabular figures on every metric so columns of numbers align like a ledger. */
 [data-testid="stMetricValue"], .verdict-number, .hstat .n {
     font-variant-numeric: tabular-nums; }
 
-/* --- ROUND 6: reference-layout lifts (Sculptor / RiverNorth), our palette ---
-   Sculptor: the hero display element is a stack of period-terminated serif
-   words; the brand recedes to the eyebrow. RiverNorth: section rhythm comes
-   from full-width alternating color bands - here the twin showcases sit on
-   one full-bleed charcoal band between beige fields. */
-.hero-title .hline { display: block; }
-.hero-title { font-size: clamp(40px, 10.5vw, 84px) !important; }
-
+/* The dark band: the twin showcases sit on one full-bleed charcoal band
+   between beige fields, under a photo and its scrim (main.py). */
 .showcase-row { background: #3F3B35; position: relative;
     margin-left: calc(50% - 50vw); margin-right: calc(50% - 50vw);
     padding: 72px max(7vw, calc(50vw - 744px)) 64px;
-    border-top: 2px solid #9A7B4F; border-bottom: 2px solid #9A7B4F; }
-/* Architectural plate behind the band - photo arrives via a small injected
-   style (a file served from static/) layered UNDER a charcoal scrim; this rule holds geometry
-   and the duotone, tuned WARM (dusk-bronze city, per John's references),
-   not cold fog. Text sits above on its own layer. */
+    border-top: 2px solid #9A7B4F; border-bottom: 2px solid #9A7B4F;
+    overflow: hidden; }
+/* The photo arrives via a small injected style (a file served from static/)
+   layered UNDER a charcoal scrim; this rule holds geometry and the duotone,
+   tuned warm. Text sits above on its own layer. */
 .showcase-row::before { content: ""; position: absolute; inset: 0;
     background-size: cover; background-position: center 30%;
     filter: grayscale(.4) sepia(.42) brightness(.6) contrast(1.03); }
-/* The band's dressed edges - no more naked ribbon: outside, a 2px bronze
-   rule (border above); inside, a 1px bronze hairline set 14px in (the
-   classic double-rule ledger frame), plus soft gradient eases at top and
-   bottom so beige melts into the dark instead of snapping. */
-.showcase-row::after { content: ""; position: absolute; inset: 0;
-    pointer-events: none;
-    background:
-      linear-gradient(rgba(176,138,85,.55), rgba(176,138,85,.55))
-        left 0 top 14px / 100% 1px no-repeat,
-      linear-gradient(rgba(176,138,85,.55), rgba(176,138,85,.55))
-        left 0 bottom 14px / 100% 1px no-repeat,
-      linear-gradient(180deg, rgba(237,233,227,.16), rgba(237,233,227,0) 120px),
-      linear-gradient(0deg, rgba(30,27,23,.5), rgba(30,27,23,0) 140px); }
 .showcase-row > * { position: relative; z-index: 1; }
 /* The band and the Conviction stack used to stage arrival theatre (a photo
    "launch" and a fading double frame) when a button delivered the reader
    here. Removed with the rest of the slide-change effects: the scroll is the
    transition. */
-.showcase-row { overflow: hidden; }
 .conv-core { position: relative; display: flex;
     flex-direction: column; gap: 18px; }
 .showcase-row .showcase-title { color: #EDE9E3; }
 .showcase-row .showcase-body { color: #C4BDAE; }
-.showcase-row .showcase-eyebrow { color: #C6A26B; }
 .showcase-row .pillar-row { border-top-color: rgba(196,189,174,.28); }
 .showcase-row .pillar-card { border-left-color: rgba(196,189,174,.28); }
-.showcase-row .pillar-card:hover { border-left-color: #B08A55; }
 .showcase-row .pillar-label { color: #C6A26B; }
 .showcase-row .pillar-desc { color: #B4AB9B; }
 
@@ -808,60 +591,50 @@ div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
 [data-testid="stAppViewContainer"] section, [data-testid="stMain"] {
     overflow-x: clip; }
 
-/* The conviction slabs breathe below the dark band instead of touching it */
-.slab { margin-top: 48px; }
-
-/* --- MCAP FOOTER (private-equity-rebrand reference): the page closes on a
-   full-bleed charcoal band - a "where to next" rail of outlined link boxes,
-   then a thin copyright/disclaimer bar. Our twist: the rail is numbered like
-   a ledger and every claim on it stays honest. --- */
+/* --- FOOTER: the page closes on a full-bleed charcoal band - three links
+   onward, then the copyright, support and accessibility lines. --- */
 .meliona-footer { background: #3F3B35;
     margin: 84px calc(50% - 50vw) 0; padding: 56px max(7vw, calc(50vw - 744px)) 36px; }
 .meliona-footer .f-rail { display: grid; grid-template-columns: repeat(3, 1fr);
     gap: 16px; margin-bottom: 44px; }
 @media (max-width: 1100px) { .meliona-footer .f-rail { grid-template-columns: 1fr; } }
-.meliona-footer .f-box { display: block; border: 1px solid rgba(196,189,174,.3);
-    padding: 20px 22px; color: #EDE9E3 !important; text-decoration: none !important;
-    font-family: 'Helvetica Neue', sans-serif; font-size: 11px;
-    letter-spacing: .18em; text-transform: uppercase;
-    transition: border-color .25s ease, background .25s ease; }
-.meliona-footer .f-box:hover { border-color: #B08A55;
-    background: rgba(154,123,79,.12); }
+.meliona-footer .f-box { display: block; border-top: 2px solid #B08A55;
+    padding: 18px 4px 20px; color: #EDE9E3 !important; text-decoration: none !important;
+    font-family: Georgia, serif; font-size: 1.0625rem;
+    transition: background .25s ease; }
+.meliona-footer .f-box:hover { background: rgba(154,123,79,.12); }
 .meliona-footer .f-box small { display: block; margin-top: 8px; color: #B4AB9B;
-    font-family: Georgia, serif; font-size: 13px; letter-spacing: .02em;
-    text-transform: none; line-height: 1.5; }
-.meliona-footer .f-num { color: #C6A26B; margin-right: 10px; }
-.meliona-footer .f-bar { border-top: 1px solid rgba(196,189,174,.25);
+    font-family: Georgia, serif; font-size: 0.8125rem; line-height: 1.5; }
+.meliona-footer .f-bar { border-top: 1px solid rgba(196,189,174,.28);
     padding-top: 18px; display: flex; justify-content: space-between;
     flex-wrap: wrap; gap: 8px; font-family: 'Helvetica Neue', sans-serif;
-    font-size: 10px; letter-spacing: .14em; text-transform: uppercase;
-    color: #B4AB9B; }
+    font-size: 0.75rem; line-height: 1.6; color: #B4AB9B; }
+.meliona-footer .f-bar + .f-bar { border-top: 0; padding-top: 10px; }
+.meliona-footer .f-bar a { color: #EDE9E3; }
+/* the session reference is read out to support: full size, light ink */
+.meliona-footer .f-ref { font-size: 0.75rem; color: #EDE9E3; }
 
 /* --- Orientation strip: the three sentences a first-time visitor needs before
    meeting a single dial. Added 2026-08-26 after a non-specialist walkthrough
    found the controls arrive before any statement of what the page is for. --- */
-.orient { border: 1px solid #C4BDAE; border-left: 3px solid #6A5030;
-    background: #E9E4DB; padding: 20px 24px 18px; margin: 0 0 26px; }
-.orient-t { font-family: 'Helvetica Neue', sans-serif; font-size: 11px;
-    letter-spacing: .2em; text-transform: uppercase; color: #5A5344;
-    margin-bottom: 12px; }
+.orient { background: #E9E4DB; border-top: 2px solid #9A7B4F;
+    padding: 20px 24px 18px; margin: 0 0 26px; }
+.orient-t { font-family: Georgia, serif; font-size: 1.125rem; color: #3F3B35;
+    margin: 0 0 12px; }
 .orient-l { margin: 0; padding-left: 20px; font-family: Georgia, serif;
-    font-size: 15.5px; line-height: 1.62; color: #4A4640; }
+    font-size: 0.9688rem; line-height: 1.62; color: #4A4640; }
 .orient-l li { margin-bottom: 7px; }
 .orient-l li:last-child { margin-bottom: 0; }
 .orient-l b { color: #3F3B35; }
-.orient-f { margin-top: 13px; padding-top: 11px; border-top: 1px solid #D6CFC0;
-    font-family: Georgia, serif; font-size: 13.5px; color: #5D574D; }
+.orient-f { margin-top: 13px; padding-top: 11px; border-top: 1px solid #C4BDAE;
+    font-family: Georgia, serif; font-size: 0.8438rem; color: #5D574D; }
 
 /* --- GUIDED DESCENT ------------------------------------------------------
    The CTA arrow is drawn, not printed. Resting, it is invisible. On hover the
    shaft draws downward and the head lands a beat later, so the mark assembles
    itself in the reading direction - the eye is told where the page is about to
    go before it moves. On click the finished arrow is released: it accelerates
-   down, fades, and the page glides after it.
-
-   Two rules keep it calm rather than busy. The draw is slow (520ms, gentle
-   ease) so it reads as deliberate; and the whole thing is a no-op under
+   down, fades, and the page glides after it. A no-op under
    prefers-reduced-motion, where the arrow simply sits there fully drawn. --- */
 .cta-arrow { display: inline-block; width: 11px; height: 21px; margin-left: 11px;
     vertical-align: -3px; }
@@ -909,7 +682,8 @@ div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
    switch as a stall (2026-10-19). Streamlit still mounts its running icon in
    the hidden header, exactly while a run is in flight (after 500 ms, so quick
    reruns never flash), and the page draws its own sign off it: a bronze rail
-   moving across the top and a still "Updating…" tag. Neither takes a click. */
+   moving across the top and a still "Updating…" tag. Neither takes a click.
+   The rail's gradient is the moving bar itself, a status sign. */
 @keyframes run-rail { from { background-position: 100% 0; } to { background-position: -150% 0; } }
 body:has([data-testid="stStatusWidgetRunningIcon"])::before { content: "";
     position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 990;
@@ -919,8 +693,7 @@ body:has([data-testid="stStatusWidgetRunningIcon"])::before { content: "";
 body:has([data-testid="stStatusWidgetRunningIcon"])::after { content: "Updating\2026";
     position: fixed; top: 10px; right: 12px; z-index: 990; pointer-events: none;
     padding: 6px 10px; background: #3F3B35; color: #EDE9E3;
-    font: 11px/1 'Helvetica Neue', Arial, sans-serif; letter-spacing: .2em;
-    text-transform: uppercase; }
+    font: 0.75rem/1 'Helvetica Neue', Arial, sans-serif; }
 /* Reduced motion stops the rail (global rule); it stays, as a still line. */
 @media (prefers-reduced-motion: reduce) {
     body:has([data-testid="stStatusWidgetRunningIcon"])::before { background: #9A7B4F; } }
@@ -933,10 +706,9 @@ body:has([data-testid="stStatusWidgetRunningIcon"])::after { content: "Updating\
    below the fold. The defect is VERTICAL, so this keys off viewport HEIGHT - a
    tall screen keeps the full editorial scale untouched and only a short one
    compresses. Nothing is hidden: the stat deck simply sits below the fold.
-   LAST in this sheet on purpose, every declaration !important: `.hero-title` is
-   redefined twice above (96px and 84px, both !important), and an earlier or
-   non-important rule here would be silently shadowed - the failure this file
-   has hit before. Here, not sent by main.py, because the boot skeleton in
+   LAST in this sheet on purpose, every declaration !important: `.hero-title`
+   is !important above, and an earlier or non-important rule here would be
+   silently shadowed. Here, not sent by main.py, because the boot skeleton in
    index.html needs these tiers from the first frame. */
 /* A 1080p laptop leaves roughly 900px of viewport after browser chrome, and
    at full scale the CTA lands at 926px - just under the fold. So the first,
@@ -945,62 +717,55 @@ body:has([data-testid="stStatusWidgetRunningIcon"])::after { content: "Updating\
 @media (max-height: 1000px) {
   .hero-section { padding-top: 46px !important; padding-bottom: 32px !important;
                   min-height: 0 !important; }
-  .hero-title { font-size: clamp(34px, 6.6vw, 64px) !important;
+  .hero-title { font-size: clamp(2.125rem, 6.6vw, 4rem) !important;
                 line-height: 1.02 !important; }
-  .hero-sub { font-size: 17px !important; line-height: 1.5 !important; }
+  .hero-sub { font-size: 1.0625rem !important; line-height: 1.5 !important; }
   .hero-crest { width: 104px !important; height: 104px !important; }
 }
 @media (max-height: 860px) {
   .hero-section { padding-top: 30px !important; padding-bottom: 22px !important;
                   min-height: 0 !important; gap: 18px !important; }
   .hero-left { gap: 8px !important; }
-  .hero-title { font-size: clamp(30px, 5.2vw, 50px) !important;
+  .hero-title { font-size: clamp(1.875rem, 5.2vw, 3.125rem) !important;
                 line-height: 1.03 !important; margin: 0 !important; }
-  .hero-sub { font-size: 15.5px !important; line-height: 1.42 !important;
+  .hero-sub { font-size: 0.9688rem !important; line-height: 1.42 !important;
               max-width: 540px !important; }
   .hero-crest { width: 84px !important; height: 84px !important; }
   .hero-stats { gap: 8px !important; }
   .hstat { padding: 10px 12px 8px !important; }
-  .hstat .hnum { font-size: 26px !important; }
 }
 @media (max-height: 700px) {
   .hero-section { padding-top: 20px !important; padding-bottom: 16px !important; }
-  .hero-title { font-size: clamp(27px, 4.4vw, 40px) !important; }
-  .hero-sub { font-size: 14.5px !important; }
+  .hero-title { font-size: clamp(1.6875rem, 4.4vw, 2.5rem) !important; }
+  .hero-sub { font-size: 0.9062rem !important; }
 }
 /* ---- CTA: matte rectangle, Citadel reference -------------------------
-   The buttons read bland because a later rule overrode the flat base with a
-   180deg gradient, an inset white gloss line, a drop shadow and a ::before
-   skew "shine" sweep, with a hover that lifted 2px and animated its own
-   letter-spacing. That is a glossy game pill wearing a serif label, and the
-   motion is doing the work the colour should do.
-
-   Citadel's own buttons are the opposite: a hard rectangle, ONE flat colour,
-   no bevel, no shadow, no shine - and the entire interaction is a confident
-   colour change. That is where the presence comes from, so the dazzle here is
-   the inversion on hover, not an effect layered on top.
+   A hard rectangle, ONE flat colour, no bevel, no shadow, no shine - and the
+   entire interaction is a confident colour change. Sentence case, like every
+   other label on the page.
 
    Colours stay strictly inside the palette, and each hover lands on a colour
    that belongs to the surface the button sits on:
-     light beige field  charcoal -> bronze
+     light beige field  charcoal -> the dark text bronze #6A5030
      dark showcase band bronze   -> beige (a clean inversion into the page)
-   Bronze always carries DARK type: cream on bronze measures about 1.8:1,
-   which fails badly, while charcoal on bronze is about 6.8:1.
+   The light bronze #9A7B4F is no ground for words: cream on it measures
+   2.2:1 and near-black #241F1A 4.14:1, both under AA (the old comment here
+   said 6.8:1; test_text_colours_meet_wcag_aa now checks each pair). Cream
+   on #6A5030 is 6.42:1.
 
    ONE rule set (2026-10-22, ME-06): three earlier layers - a lifting hover,
    a gradient with a sheen sweep, a 10px radius - lost every property to this
-   one and only made the file lie about the button. What still counted from
-   them (box, type, position/overflow) lives here now; the look is unchanged. */
+   one and only made the file lie about the button. */
 .cta-btn {
   display: inline-block; margin-top: 14px; padding: 15px 34px;
+  max-width: 100%;
   /* the released arrow falls inside the plaque, not across the page */
   position: relative; overflow: hidden;
-  /* Same voice as the hero headline: Georgia serif, engraved plaque. */
-  font-family: Georgia, 'Times New Roman', serif; font-size: 14.5px;
-  letter-spacing: 0.11em; text-transform: uppercase;
+  /* Same voice as the hero headline: Georgia serif. */
+  font-family: Georgia, 'Times New Roman', serif; font-size: 1rem;
   text-decoration: none !important;
   background-color: #3F3B35 !important;
-  color: #F4F1EA !important;
+  color: #F1EDE5 !important;
   border: 1px solid #3F3B35 !important;
   border-radius: 0 !important;
   box-shadow: none !important;
@@ -1008,17 +773,15 @@ body:has([data-testid="stStatusWidgetRunningIcon"])::after { content: "Updating\
               color .22s ease !important;
 }
 .cta-btn:hover {
-  background-color: #9A7B4F !important;
-  border-color: #9A7B4F !important;
-  color: #241F1A !important;
+  background-color: #6A5030 !important;
+  border-color: #6A5030 !important;
+  color: #F1EDE5 !important;
 }
-.cta-btn:active { background-color: #8A6A3C !important; }
+.cta-btn:active { background-color: #4A3A24 !important; }
 
-/* A CTA sitting ON the dark showcase band needs the inverse treatment. The
-   default .cta-btn is a flat charcoal slab (#3F3B35) built for the beige
-   field; on the band's own #3F3B35 it would vanish - the same complaint as a
-   transparent button on beige, just mirrored. This variant inverts to solid bronze with dark type,
-   which is the highest-contrast pairing available inside the palette.
+/* A CTA sitting ON the dark showcase band needs the inverse treatment: on the
+   band's own #3F3B35 the charcoal slab would vanish. It inverts to solid
+   bronze with dark type, the highest-contrast pairing inside the palette.
    Rule: choose the variant by the BACKGROUND the button sits on. */
 .cta-btn.on-dark {
   /* the palette's LIGHTER bronze. It raises BOTH the type contrast on the
@@ -1041,13 +804,11 @@ body:has([data-testid="stStatusWidgetRunningIcon"])::after { content: "Updating\
    it 587px wide beside 221-428px siblings (ME-04): it sizes to its words. */
 .conv-core > .cta-btn { align-self: flex-start; }
 
-/* The quiet CTA - "Skip to the analysis" under the engine heading. It was
-   styled inline, with no hover, an arrow that never drew and no launch
-   (ME-04). It keeps its size (a skip must not compete with the slab buttons)
-   and takes the CTA's voice: Georgia capitals, the drawn arrow, the launch. */
+/* The quiet CTA - "Skip to the analysis" under the engine heading. It keeps
+   its size (a skip must not compete with the slab buttons) and takes the
+   CTA's voice: Georgia, the drawn arrow, the launch (ME-04). */
 .cta-link { display: inline-block; margin-top: 10px; padding-bottom: 2px;
-    font-family: Georgia, 'Times New Roman', serif; font-size: 12px;
-    letter-spacing: 0.11em; text-transform: uppercase;
+    font-family: Georgia, 'Times New Roman', serif; font-size: 0.875rem;
     color: #6A5030 !important; text-decoration: none !important;
     border-bottom: 1px solid rgba(154,123,79,.4);
     transition: color .22s ease, border-color .22s ease; }
@@ -1064,6 +825,9 @@ body:has([data-testid="stStatusWidgetRunningIcon"])::after { content: "Updating\
 a.cta-btn:focus-visible, a.cta-link:focus-visible, .meliona-footer a.f-box:focus-visible {
     outline: 2px solid var(--ring) !important; outline-offset: 3px !important;
     box-shadow: none !important; border-radius: 0 !important; }
+/* The page's scroller takes a Tab stop (Streamlit makes it focusable so the
+   keys scroll it); it had no ring there (UX check, 2026-11-04). */
+[data-testid="stMain"]:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
 
 /* Streamlit puts a sans-serif link icon on every heading; on these serif
    headings it read as a stray control. Hidden, not removed: the hero's
@@ -1072,18 +836,15 @@ a.cta-btn:focus-visible, a.cta-link:focus-visible, .meliona-footer a.f-box:focus
 
 /* ---- The Slice: fill the width, shorten the column, free the button ----
    Measured at 1920x860: the row is 465px tall and driven ENTIRELY by the
-   left sketch, while the maths plaque is capped at max-width 560px inside a
-   694px column - 134px of dead width that forces its text into more lines
-   than it needs. Letting the plaque use its column does two jobs at once:
-   the empty space fills, and the same words occupy fewer lines, so the block
-   gets shorter rather than taller. The sketch then comes down to match, and
-   the CTA underneath rises into view instead of sitting on the fold.
-   Widths and rhythm are untouched on tall screens. */
+   left sketch, while the maths plaque was capped at 560px inside a 694px
+   column. Letting the plaque use its column fills the space and puts the same
+   words on fewer lines, so the block gets shorter; the sketch comes down to
+   match, and the CTA underneath rises into view. */
 .st-key-gungnir_zone .gungnir-plaque { max-width: 100% !important; }
 
 @media (max-height: 1000px) {
   /* the sketch is the tallest thing in the row, and mostly air around the
-     two circles - trim the drawing, not the labels */
+     two blocks - trim the drawing, not the labels */
   .st-key-gungnir_zone svg[viewBox="0 0 360 200"] {
     width: 400px !important; max-width: 100% !important; height: auto !important;
   }
@@ -1092,41 +853,37 @@ a.cta-btn:focus-visible, a.cta-link:focus-visible, .meliona-footer a.f-box:focus
 @media (max-height: 860px) {
   .st-key-gungnir_zone svg[viewBox="0 0 360 200"] { width: 348px !important; }
   .st-key-gungnir_zone .gungnir-plaque {
-    padding: 14px 18px 12px !important; font-size: 13px !important;
+    padding: 14px 18px 12px !important; font-size: 0.8125rem !important;
   }
 }
 
 /* The Slice has to read as one screen: land on it and the controls AND the
-   button onward are both in view. Its zone carries 178px of vertical chrome
-   (64/84 padding plus a 30px margin) before any content, which is generous on
-   a tall display and wasteful on a laptop. Same height-tiered treatment as
-   the hero - nothing removed, just tightened where the screen is short. */
+   button onward are both in view. Same height-tiered treatment as the hero -
+   nothing removed, just tightened where the screen is short. */
 @media (max-height: 1000px) {
   .st-key-gungnir_zone { padding: 30px 0 34px !important; margin-top: 14px !important; }
-  .gungnir-head .showcase-title { font-size: 26px !important; margin: 4px 0 8px !important; }
-  .gungnir-sub { font-size: 13.5px !important; }
+  .gungnir-head .showcase-title { font-size: 1.625rem !important; margin: 4px 0 8px !important; }
+  .gungnir-sub { font-size: 0.8438rem !important; }
   .gungnir-plaque { margin-top: 18px !important; padding: 20px 24px 18px !important; }
 }
 @media (max-height: 860px) {
   .st-key-gungnir_zone { padding: 20px 0 24px !important; margin-top: 10px !important; }
-  .gungnir-head .showcase-title { font-size: 23px !important; }
-  .gungnir-sub { font-size: 12.5px !important; }
+  .gungnir-head .showcase-title { font-size: 1.4375rem !important; }
+  .gungnir-sub { font-size: 0.7812rem !important; }
   .gungnir-plaque { margin-top: 12px !important; padding: 15px 18px 13px !important; }
 }
 
-/* Data Quality rows: caption size, full-strength caption ink (a caption's
-   60% opacity blends it to about 2.7:1 on the panel). */
-.dq-row { font-size: 14px; line-height: 1.5; color: #524E47; margin: 2px 0; }
+/* Data Quality rows: caption size, full-strength ink (a caption's 60%
+   opacity blends it to about 2.7:1 on the panel). */
+.dq-row { font-size: 0.875rem; line-height: 1.5; color: #4A4640; margin: 2px 0; }
 /* Palette status marks (Data Quality, the EWMA warning): a fixed-width serif
    glyph, so a column of checks lines up like a ledger. */
 .dq-mark { display: inline-block; width: 1.1em; text-align: center;
     font-family: Georgia, 'Times New Roman', serif; }
 
 /* ---- Accents with meaning (ME-11, 2026-10-22) ---------------------------
-   John: "make the website feel alive ... accent marks that are meaningful".
-   Each one draws a state the page already computed; none is decoration for
-   its own sake, words carry AA tones, and the global reduced-motion rule
-   (animation: none) leaves every one of them still. */
+   Each one draws a state the page already computed; words carry AA tones,
+   and the global reduced-motion rule leaves every one of them still. */
 
 /* The headline's scale: where this CVaR sits between no loss and the whole
    book. The live tick slides in from the last headline this session showed;
@@ -1139,9 +896,9 @@ a.cta-btn:focus-visible, a.cta-link:focus-visible, .meliona-footer a.f-box:focus
 .cvar-tick.prev { background: #9A7B4F; opacity: .45; height: 6px; }
 @keyframes cvar-tick-in { from { left: var(--from); } }
 .cvar-scale-ends { display: flex; justify-content: space-between; max-width: 420px;
-    margin: 4px 0 0; font-family: 'Helvetica Neue', sans-serif; font-size: 10px;
-    letter-spacing: .16em; text-transform: uppercase; color: #6A5030; }
-.cvar-delta { margin: 6px 0 2px; font-size: 13.5px; color: #6A5030; }
+    margin: 4px 0 0; font-family: 'Helvetica Neue', sans-serif; font-size: 0.75rem;
+    color: #6A5030; }
+.cvar-delta { margin: 6px 0 2px; font-size: 0.8438rem; color: #6A5030; }
 /* A loss past the whole book (leverage, a short) is not clamped in silence:
    the tick sits at the end with an outward notch and the end says "beyond". */
 .cvar-scale-ends .beyond { color: #6A5030; font-weight: 700; }
@@ -1152,8 +909,8 @@ a.cta-btn:focus-visible, a.cta-link:focus-visible, .meliona-footer a.f-box:focus
 /* State marks on the verdict's label: the two states that change what the
    number means - a shock or crisis replay applied, and the short side. */
 .state-mark { display: inline-block; margin-left: 10px; padding: 2px 7px 1px;
-    border: 1px solid #9A7B4F; color: #6A5030; font-size: 10px;
-    letter-spacing: .18em; vertical-align: 1px; }
+    border: 1px solid #9A7B4F; color: #6A5030; font-size: 0.75rem;
+    letter-spacing: 0; text-transform: none; vertical-align: 1px; }
 
 /* The freshness dot beside "Data pulled N min ago": one pulse per minute tick
    (the fragment re-renders, the animation runs once) while the data is live;
@@ -1166,7 +923,7 @@ a.cta-btn:focus-visible, a.cta-link:focus-visible, .meliona-footer a.f-box:focus
 .fresh-dot { box-sizing: border-box; }
 .fresh-dot.is-live { background: #9A7B4F; animation: fresh-pulse 1.6s ease-out 1; }
 .fresh-dot.is-stale { background: transparent; border: 1.5px solid #7E776B; }
-@keyframes fresh-pulse { 0% { box-shadow: 0 0 0 0 rgba(154,123,79,.55); }
+@keyframes fresh-pulse { 0% { box-shadow: 0 0 0 0 rgba(154,123,79,.4); }
                          100% { box-shadow: 0 0 0 7px rgba(154,123,79,0); } }
 
 /* Reading progress: a 1px bronze line across the top, as far along as the
@@ -1184,4 +941,41 @@ a.cta-btn:focus-visible, a.cta-link:focus-visible, .meliona-footer a.f-box:focus
     transform: scaleX(0); transform-origin: 0 50%;
     animation: read-progress linear both; animation-timeline: --page; }
 @keyframes read-progress { to { transform: scaleX(1); } }
+}
+
+/* ---- Touch: every control a finger can hit (UX check, 2026-11-04) ----------
+   At 390px 67 of 78 controls were under the 44x44px a fingertip needs: the
+   tag's remove cross 15x7, the help mark 16x16, "Clear all" 24x24, radio rows
+   22 tall, selects 38, tabs 40, footer links 12. Where growing the box would
+   move the layout (the help mark, "Clear all", a slider's thumb, the tab
+   scroller), an invisible ::after widens the HIT AREA only; elsewhere the box
+   itself takes 44px. A ticker tag clips its children, so its cross cannot
+   borrow space outside it: the tag grows to 44px and the cross fills its end.
+   Streamlit 1.66 draws these controls with react-aria, so the selectors are
+   its data-testids. Only for a coarse pointer: a mouse keeps the density. */
+@media (pointer: coarse) {
+  button[aria-label="Clear all"], [data-testid="stTooltipHoverTarget"] button,
+  [data-testid="stSlider"] [role="slider"],
+  [data-testid="stTabsScrollRight"], [data-testid="stTabsScrollLeft"] { position: relative; }
+  button[aria-label="Clear all"]::after,
+  [data-testid="stTooltipHoverTarget"] button::after,
+  [data-testid="stSlider"] [role="slider"]::after { content: ""; position: absolute; inset: -14px; }
+  [data-testid="stTabsScrollRight"]::after, [data-testid="stTabsScrollLeft"]::after {
+      content: ""; position: absolute; inset: -2px -12px; }
+  [data-testid="stMultiSelectTagsContainer"] span:has(> button[aria-label^="Remove "]) {
+      min-height: 44px; align-items: stretch; }
+  button[aria-label^="Remove "] { min-width: 44px; align-self: stretch;
+      display: inline-flex; align-items: center; justify-content: center; }
+  [data-testid="stTab"] { min-height: 44px; }
+  [data-testid="stSelectbox"] > div > div, [data-testid="stNumberInputContainer"],
+  [data-testid="stNumberInputField"] { min-height: 44px; }
+  [data-testid="stNumberInputStepDown"], [data-testid="stNumberInputStepUp"] {
+      min-width: 44px; min-height: 44px; }
+  [data-testid="stExpander"] summary { min-height: 44px; }
+  [data-testid="stRadioOption"], [data-testid="stCheckbox"] label {
+      min-height: 44px; align-items: center; }
+  .cta-link { padding: 12px 0 10px; }
+  /* the hit area grows, the line spacing does not (the margin hands it back) */
+  .meliona-footer .f-bar a { display: inline-block; padding: 13px 4px; margin: -13px 0; }
+  .stButton>button { min-height: 44px; }
 }
