@@ -2436,10 +2436,13 @@ def test_every_response_carries_the_security_headers():
     """2026-11-04 security review: LAUNCH_CHECKLIST #37/#89 said HSTS and
     frame-ancestors were impossible from inside Streamlit. Since 1.66 they are
     not: serve.py wraps main.py in an ASGI app with real headers, and the
-    host runs serve.py. Every response carries them - the page, the health
-    check, a static file - and /_stcore/metrics (live session counts and cache
-    sizes, open to anyone by default) answers 404."""
-    from starlette.testclient import TestClient
+    host runs serve.py. Every HTTP response carries them and /_stcore/metrics
+    (live session counts and cache sizes, open to anyone by default) answers
+    404; the websocket passes through untouched. Driven as plain ASGI so the
+    test needs no HTTP client package (starlette's TestClient needs httpx2,
+    which CI does not install); the Live audit's security probe checks the
+    real server with --require-headers."""
+    import asyncio
 
     import serve
 
@@ -2447,17 +2450,42 @@ def test_every_response_carries_the_security_headers():
     assert "streamlit run serve.py" in (root / "Procfile").read_text(encoding="utf-8")
     assert 'App(Path(__file__).with_name("main.py")' in (root / "serve.py").read_text(
         encoding="utf-8"), "serve.py must serve main.py"
-    with TestClient(serve.app) as client:
-        for path in ("/", "/_stcore/health", "/app/static/app.css"):
-            got = client.get(path)
-            assert got.status_code == 200, (path, got.status_code)
-            for name, value in serve.HEADERS.items():
-                assert got.headers.get(name) == value, (path, name, got.headers.get(name))
-        assert "frame-ancestors 'self'" in serve.HEADERS["content-security-policy"]
-        assert serve.HEADERS["x-frame-options"] == "SAMEORIGIN"
-        assert "max-age=31536000" in serve.HEADERS["strict-transport-security"]
-        for path in ("/_stcore/metrics", "/_stcore/metrics?families=cache_memory_bytes"):
-            assert client.get(path).status_code == 404, path
+    assert any(m.cls is serve.SecurityHeaders for m in serve.app._user_middleware)
+
+    async def inner(scope, receive, send):
+        if scope["type"] == "websocket":
+            await send({"type": "websocket.accept"})
+            return
+        await send({"type": "http.response.start", "status": 200,
+                    "headers": [(b"content-type", b"text/html"), (b"x-frame-options", b"ALLOW")]})
+        await send({"type": "http.response.body", "body": b"ok"})
+
+    def call(path, kind="http"):
+        sent = []
+
+        async def send(message):
+            sent.append(message)
+
+        async def receive():
+            return {"type": "http.request"}
+
+        asyncio.run(serve.SecurityHeaders(inner)({"type": kind, "path": path}, receive, send))
+        return sent
+
+    for path in ("/", "/_stcore/health", "/app/static/app.css"):
+        start = call(path)[0]
+        assert start["status"] == 200, path
+        headers = {k.decode(): v.decode() for k, v in start["headers"]}
+        for name, value in serve.HEADERS.items():
+            assert headers.get(name) == value, (path, name, headers.get(name))
+    assert sum(k == b"x-frame-options" for k, _ in call("/")[0]["headers"]) == 1
+    for path in ("/_stcore/metrics", "/_stcore/metrics/families"):
+        assert call(path)[0]["status"] == 404, path
+    assert call("/_stcore/stream", "websocket") == [{"type": "websocket.accept"}]
+    assert "frame-ancestors 'self'" in serve.HEADERS["content-security-policy"]
+    assert serve.HEADERS["x-frame-options"] == "SAMEORIGIN"
+    assert "max-age=31536000" in serve.HEADERS["strict-transport-security"]
+    assert "permissions-policy" not in serve.HEADERS   # see serve.py
 
 
 # --- launch readiness (2026-08-26) ------------------------------------------

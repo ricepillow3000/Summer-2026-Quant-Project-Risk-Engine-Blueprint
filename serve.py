@@ -10,8 +10,10 @@ do (LAUNCH_CHECKLIST #89, corrected 2026-11-04):
 - X-Frame-Options + CSP frame-ancestors: no other site may frame this page and
   dress it up (clickjacking). 'self' rather than 'none', so a page of ours can
   still frame another, and the Risk Topology and glide iframes keep working.
-- nosniff, the referrer policy, and a Permissions-Policy that refuses camera,
-  microphone, location and payment: the app uses none of them.
+- nosniff and the referrer policy. No Permissions-Policy: Streamlit's own
+  frames ask for camera, microphone and location, and refusing them made the
+  browser log a warning on every page (deep scan, 2026-11-04) while guarding
+  nothing - the app calls none of them.
 - /_stcore/metrics answers 404: Streamlit serves live session counts and cache
   sizes there to anyone, and nobody here reads them.
 
@@ -34,7 +36,6 @@ HEADERS = {
                                 "base-uri 'self'; form-action 'self'"),
     "x-content-type-options": "nosniff",
     "referrer-policy": "strict-origin-when-cross-origin",
-    "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=()",
 }
 HIDDEN = ("/_stcore/metrics",)
 

@@ -15,7 +15,7 @@ have no surface here. This checks the surfaces that DO exist, from outside:
   if any, are reported, not failed - they are public open-source code);
 - the server banner and security headers are reported for the record;
 - with --require-headers, the headers serve.py adds (HSTS, frame-ancestors,
-  X-Frame-Options, nosniff, referrer and permissions policies) must be on the
+  X-Frame-Options, nosniff and the referrer policy) must be on the
   page and the health check, and /_stcore/metrics must answer 404. The Live
   audit requires them of this commit's own app always, and of the deployed
   site on main - a branch push still probes the old deployment.
@@ -52,7 +52,6 @@ REQUIRED = {           # serve.py's HEADERS, as an attacker sees them
     "content-security-policy": "frame-ancestors 'self'",
     "x-content-type-options": "nosniff",
     "referrer-policy": "strict-origin-when-cross-origin",
-    "permissions-policy": "camera=()",
 }
 
 
