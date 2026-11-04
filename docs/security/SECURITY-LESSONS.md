@@ -65,13 +65,13 @@ sit outside the app, in accounts John holds:
 
 | Power | Where | Who can use it |
 |---|---|---|
-| Change what is deployed | GitHub push to `main` (Railway deploys `main`) | Anyone with write access to the repo: keep it to John, with 2FA and branch protection on `main` |
+| Change what is deployed | GitHub push to `main` (Railway deploys `main`) | Anyone with write access to the repo: keep it to John, with 2FA. `main` takes changes only through a PR whose CodeQL and Live audit checks pass (RUNBOOK §8) |
 | Kill switch, beta channel, support address | Railway environment variables (`MELIONA_MAINTENANCE`, `MELIONA_CHANNEL`, `MELIONA_SUPPORT_EMAIL`, `MELIONA_SITE_URL`) | John's Railway login |
 | Warm or clear caches | A shell on the Railway service (`python -m tools.warm_cache`), or a restart | John's Railway login |
 
 So "only my laptop and desktop are admin" is enforced by **account security**, not by the app: GitHub and Railway
-each with 2FA (a passkey or authenticator, not SMS), signed in only on those two devices, and branch protection on
-`main` so nothing deploys without John's review. Streamlit's operator features are kept from visitors by
+each with 2FA (a passkey or authenticator, not SMS), signed in only on those two devices, and a ruleset on `main`
+so nothing deploys except through a pull request whose CodeQL and Live audit checks pass, merged by John. Streamlit's operator features are kept from visitors by
 `.streamlit/config.toml` (`toolbarMode = "viewer"`, `headless = true`, XSRF on, `showErrorDetails` off) and by
 `main.py` refusing the websocket `clear_cache` message.
 
@@ -111,8 +111,11 @@ about **knocking the site over** and **showing too much**. Fixed, each test-firs
 | Map rendered ticker names as HTML | A name like `<img src=x onerror=…>` reaching the map's `innerHTML` runs script (proved in Chromium before the fix) | `esc()` in `war_room.html`; feed columns that aren't ticker-shaped are dropped at the download chokepoint | `test_map_renders_ticker_names_as_text_not_markup`, `test_a_feed_column_that_is_not_ticker_shaped_never_reaches_the_page` |
 | Caches had no entry cap | A script cycling tickers or slider values grows memory without bound | `max_entries` on every visitor-keyed cache | `test_every_visitor_keyed_cache_has_an_entry_cap` |
 
-Open, for John to decide (measurement first): **one stranger can spend the whole day's Yahoo request budget**
-(`MAX_REQUESTS_PER_DAY` is shared; about 35 fresh 25-name baskets empty it) - a reserve for the presets would fix it;
-and **`server.maxMessageSize` is the 200 MB default** - lowering it needs the largest real page message measured
-first (the photos are no longer inlined since 2026-10-19 - `facade.jpg` was ~3.5 MB of one message; the largest left is the map payload, measure it). Lesson for future sweeps: **a hidden button is not a locked
+Closed 2026-11-04 (security review): **the shared Yahoo budget** no longer reaches the presets. The cache warmer
+runs in its own process with its own daily budget (the cap is per process), and `_prune_cache` now drops typed-in
+baskets before any preset download (`test_the_cache_budget_drops_typed_baskets_before_the_presets`), so a stranger who
+spends the web process's budget stops only other typed-in baskets, which get a plain message. **`server.maxMessageSize`**
+is 16 MB (`test_deploy_config_keeps_the_visitor_out_of_the_operator_seat`); the largest page message is the map at
+about 0.1 MB with the full 25 names (measured 2026-11-04, LAUNCH_CHECKLIST #110). **Real HTTP headers** (HSTS, frame-ancestors, nosniff) come from
+`serve.py`, and `/_stcore/metrics` is hidden (`test_every_response_carries_the_security_headers`). Lesson for future sweeps: **a hidden button is not a locked
 door** - Streamlit's protocol still answered messages the UI no longer showed.

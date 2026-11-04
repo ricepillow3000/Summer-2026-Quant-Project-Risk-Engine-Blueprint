@@ -13,27 +13,31 @@ on:
         default: https://summer-2026-quant-project-risk-engine-blueprint-production.up.railway.app
   push:
     branches: ["claude/**"]
+  # Daily on main (2026-11-04 security review): nothing watched the live site
+  # between pushes. On main, step 5 also proves Railway serves main's commit.
+  schedule:
+    - cron: "17 13 * * *"
 
 permissions:
   contents: read
 
 jobs:
   live-audit:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 150
     env:
       SITE_URL: ${{ inputs.site_url || 'https://summer-2026-quant-project-risk-engine-blueprint-production.up.railway.app' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
         with:
           python-version: "3.13"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
         with:
           node-version: "22"
       - name: Install
         run: |
-          python -m pip install -r requirements.txt ruff bandit pip-audit
+          python -m pip install -r requirements.txt ruff==0.17.3 bandit==1.9.4 pip-audit==2.10.1
           npm install --no-save playwright@1.56.1
           npx playwright install --with-deps chromium
 
@@ -68,21 +72,22 @@ jobs:
           node tools/site_check.mjs "$SITE_URL" site-shots
       - name: 6. Deployed site - outside-in security probe
         if: always()
-        run: python -m tools.security_probe "$SITE_URL"
+        # on main the deployed site is this commit, so its headers are required
+        run: python -m tools.security_probe "$SITE_URL" ${{ github.ref == 'refs/heads/main' && '--require-headers' || '' }}
 
       # This commit's own app, started here on live data - what merging will ship.
       - name: 7. Start this commit's app (launch files installed as in Procfile)
         if: always()
         run: |
           python -m tools.public_files
-          nohup streamlit run main.py --server.port 8501 --server.headless true > app.log 2>&1 &
+          nohup streamlit run serve.py --server.port 8501 --server.headless true > app.log 2>&1 &
           for i in $(seq 1 60); do curl -sf http://127.0.0.1:8501/_stcore/health && break; sleep 2; done
       - name: 8. This commit - launch basics (SEO, OG, 404, first paint), security, recruiter walk
         if: always()
         run: |
           mkdir -p site-shots/local walk/local
           SEO=1 node tools/site_check.mjs http://127.0.0.1:8501 site-shots/local
-          python -m tools.security_probe http://127.0.0.1:8501
+          python -m tools.security_probe http://127.0.0.1:8501 --require-headers
           node tools/recruiter_walk.mjs http://127.0.0.1:8501 walk/local
       - name: 8b. This commit - every phone, tablet and desktop (overlap, sideways, cut-off text, clickable)
         if: always()
@@ -107,7 +112,7 @@ jobs:
           status=0
           for b in 1 2 3 4 5; do
             rm -rf /tmp/cold/data /tmp/cold/logs
-            (cd /tmp/cold && nohup streamlit run main.py --server.port 8502 --server.headless true > /tmp/cold-$b.log 2>&1 &)
+            (cd /tmp/cold && nohup streamlit run serve.py --server.port 8502 --server.headless true > /tmp/cold-$b.log 2>&1 &)
             for i in $(seq 1 60); do curl -sf http://127.0.0.1:8502/_stcore/health >/dev/null && break; sleep 2; done
             ONLY=$b node tools/glide_load_check.mjs http://127.0.0.1:8502 early 1 || status=1
             pkill -f "server.port 8502" || true; sleep 2
@@ -147,7 +152,7 @@ jobs:
         if: always()
         run: grep -E "^FAIL|provenance checks pass" provenance.log || echo "provenance did not run"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         if: always()
         with:
           name: live-audit

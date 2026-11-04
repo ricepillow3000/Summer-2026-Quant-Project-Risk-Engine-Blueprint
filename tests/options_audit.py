@@ -592,7 +592,7 @@ def apply_row(at, row, mix_names):
         at.slider(key="watch_w").set_value(row["window"])
         at.slider(key="watch_t").set_value(row["threshold"])
     for label, idx in (("Anchor (the position you want to balance)", row["anchor"]),
-                       ("High-flyer (Circle 1: the volatile conviction position)", row["flyer"])):
+                       ("High-flyer (the volatile conviction position)", row["flyer"])):
         hits = [w for w in at.selectbox if w.label == label]
         if hits:
             _pick(hits[0], idx)

@@ -28,11 +28,12 @@ app holds, which is deliberately close to nothing.
 | Your ticker selections and slider settings | Your browser session, server memory | Until you close the tab or press **Clear this session's data** | Public ticker symbols |
 | A random session reference (e.g. `9F3A2B7C`) | Same session, shown in the footer | Same | Nothing linked to you - it is random |
 | Cached market data | Server disk, filename is a hash of the ticker set | Rotates on size; oldest first | Public Yahoo Finance prices, shared by every visitor who picks the same basket |
-| Error and session-start log lines | Server disk (`logs/`, size-capped, rotating) | Until rotated out (small) | Timestamp, session reference, ticker symbols, stack trace |
+| Error and session-start log lines | Server disk (`logs/`, size-capped, rotating) | Until rotated out (small), or the next redeploy | Timestamp, session reference, ticker symbols, stack trace |
+| Error lines only (no session starts) | Also the host's log stream (Railway), where Streamlit writes its own server errors | The host's log retention | The same error lines |
 
 The session reference exists for one purpose: if you email about a problem and
 quote it, the operator can find the matching stack trace. It is not a user ID,
-it is not stored anywhere else, and a new one is issued every visit.
+it is not stored anywhere beyond the logs above, and a new one is issued every visit.
 
 ## Cookies and browser storage
 
@@ -78,7 +79,9 @@ There is no account to delete. Closing the tab discards everything the session
 held; **Clear this session's data** (Lineage & Audit tab) does it immediately
 without closing the page. If you want the log lines carrying your session
 reference removed sooner than rotation removes them, email
-meleona.support@gmail.com with that reference and they will be purged.
+meleona.support@gmail.com with that reference and they will be purged from the
+server disk. Error lines in the host's log stream cannot be edited one by one;
+they expire with the host's retention.
 
 ## Changes
 

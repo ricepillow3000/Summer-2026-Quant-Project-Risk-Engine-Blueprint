@@ -13,7 +13,12 @@ have no surface here. This checks the surfaces that DO exist, from outside:
 - CORS does not echo a foreign origin;
 - no JavaScript source map leaks app internals (Streamlit's own bundle maps,
   if any, are reported, not failed - they are public open-source code);
-- the server banner and security headers are reported for the record.
+- the server banner and security headers are reported for the record;
+- with --require-headers, the headers serve.py adds (HSTS, frame-ancestors,
+  X-Frame-Options, nosniff and the referrer policy) must be on the
+  page and the health check, and /_stcore/metrics must answer 404. The Live
+  audit requires them of this commit's own app always, and of the deployed
+  site on main - a branch push still probes the old deployment.
 
 Exit code 1 on any FAIL.
 """
@@ -41,8 +46,19 @@ def get(url: str, headers: dict | None = None) -> tuple[int, dict, bytes]:
         return e.code, dict(e.headers), e.read(20_000)
 
 
+REQUIRED = {           # serve.py's HEADERS, as an attacker sees them
+    "strict-transport-security": "max-age=",
+    "x-frame-options": "SAMEORIGIN",
+    "content-security-policy": "frame-ancestors 'self'",
+    "x-content-type-options": "nosniff",
+    "referrer-policy": "strict-origin-when-cross-origin",
+}
+
+
 def main() -> int:
-    base = sys.argv[1].rstrip("/")
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    require = "--require-headers" in sys.argv
+    base = args[0].rstrip("/")
     _, _, home = get(base + "/")
 
     # A private file "leaks" only if the response is that file - the app answers
@@ -85,6 +101,16 @@ def main() -> int:
               "strict-transport-security", "referrer-policy"):
         print(f"INFO  header {h}: {low.get(h, '(not set)')}")
     print(f"INFO  xsrf cookie on first load: {'_streamlit_xsrf' in low.get('set-cookie', '')}")
+
+    if require:
+        for path in ("/", "/_stcore/health"):
+            _, hdr, _ = get(base + path)
+            low = {k.lower(): v for k, v in hdr.items()}
+            for name, want in REQUIRED.items():
+                check(f"header {name} on {path}", want in low.get(name, ""),
+                      low.get(name, "(not set)"))
+        status, _, _ = get(base + "/_stcore/metrics")
+        check("/_stcore/metrics is not served", status == 404, f"HTTP {status}")
 
     print(f"\n{'all security checks pass' if not fails else str(len(fails)) + ' FAILED'}")
     return 1 if fails else 0

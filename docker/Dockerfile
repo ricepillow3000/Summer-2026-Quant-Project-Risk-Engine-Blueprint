@@ -40,4 +40,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
   CMD python -c "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:%s/_stcore/health' % os.environ.get('PORT', '8501'), timeout=4)"
 
 # As the Procfile: the cache warmer beside the app, then the app.
-CMD ["sh", "-c", "(python -m tools.warm_cache --every 5 &) && exec streamlit run main.py --server.port=${PORT} --server.address=0.0.0.0"]
+CMD ["sh", "-c", "(python -m tools.warm_cache --every 5 &) && exec streamlit run serve.py --server.port=${PORT} --server.address=0.0.0.0"]
