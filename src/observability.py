@@ -28,6 +28,7 @@ and stack traces - no personal data - and rotate away on their own.
 import logging
 import os
 import secrets
+import sys
 import traceback
 from logging.handlers import RotatingFileHandler
 
@@ -53,7 +54,8 @@ def host_setting(name: str, default: str = "") -> str:
 
 def setup_logging(level: int = logging.INFO) -> str:
     """
-    Attach the rotating file handler once per process. Returns the log path.
+    Attach the rotating file handler (and an errors-only stream to the
+    host's log) once per process. Returns the log path.
 
     Safe to call on every Streamlit rerun - the second call is a no-op, which
     is why the guard exists: Streamlit re-executes the whole script on every
@@ -70,6 +72,14 @@ def setup_logging(level: int = logging.INFO) -> str:
     handler.setLevel(level)
     root = logging.getLogger()
     root.addHandler(handler)
+    # Errors also go to the host's log stream (2026-11-04 security review):
+    # the disk under logs/ is wiped by every redeploy, which took the
+    # tracebacks RUNBOOK §3 triages with it. Errors only - session starts stay
+    # on disk - and Streamlit already writes its own server errors there.
+    stream = logging.StreamHandler(sys.stderr)
+    stream.setFormatter(logging.Formatter(_FORMAT))
+    stream.setLevel(logging.ERROR)
+    root.addHandler(stream)
     if root.level > level or root.level == logging.NOTSET:
         root.setLevel(level)
     _configured = True

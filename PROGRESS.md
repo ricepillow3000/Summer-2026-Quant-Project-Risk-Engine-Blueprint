@@ -929,6 +929,23 @@ risk-engine/
   (`test_the_browser_audit_runs_on_an_os_its_playwright_supports`), and the
   Options audit's log-year check reads each path's own ending wealth.
 
+- ✅ **Ship hardening: John's 2026-11-04 security, UX and design lists**
+  (LAUNCH_CHECKLIST #99-138). Three read-only reviews (security, UX in a
+  browser, design tells), then the fixes:
+  - Security: `serve.py` puts real headers on every response (HSTS,
+    frame-ancestors, nosniff) and hides `/_stcore/metrics`; every package,
+    tool, GitHub Action and the runner image pinned exactly, Dependabot
+    weekly; websocket messages capped at 16 MB; errors kept in the host's
+    log; presets protected in the cache budget; a daily Live audit on main.
+  - UX: 44px touch targets, 16px phone inputs, 12px minimum text, rem
+    sizes, 20px phone gutters, the preset kept in the address, a
+    feed-down message, names on the map's switches.
+  - Design: panel subtitles fixed from 2.04:1 to 5.91:1 (and the contrast
+    test now checks each colour on its own ground), no negative kerning,
+    capitals only on the verdict label, no decorative gradients, glass or
+    grain, no pills, numbering, eyebrows or shouted words, fewer shades,
+    shorter captions.
+
 ## Non-negotiable constraints (the "why")
 
 1. **No LLM data, ever.** Every market number comes from Yahoo Finance via

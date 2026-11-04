@@ -167,7 +167,7 @@ SENTENCES: dict[SentenceKey, str] = {
         "({momentum_per_vol:+.2f}), and it has a recovery record: grit "
         "{grit_score:.0f} of 100 across {n_universe} names. Its anchor "
         "{partner} won the screen on factor independence and steadiness, but "
-        "its own tail is {tail_gap_abs_pts:.1f} points DEEPER at ES 97.5, so on "
+        "its own tail is {tail_gap_abs_pts:.1f} points deeper at ES 97.5, so on "
         "this measure the pairing does not thin the tail."
     ),
     SentenceKey.FLYER_UNPAIRED: (
@@ -194,7 +194,7 @@ SENTENCES: dict[SentenceKey, str] = {
         "{anchor_score:.0f} of 100 (least tied to the dominant factor, "
         "steadiest), with grit {grit_score:.0f} of 100 across {n_universe} "
         "names. It holds {final_weight:.1%} of the book and clears "
-        "{exit_bucket}. Its own tail is {tail_gap_abs_pts:.1f} points DEEPER at ES 97.5 "
+        "{exit_bucket}. Its own tail is {tail_gap_abs_pts:.1f} points deeper at ES 97.5 "
         "than the name it sits beside, so it earns its place on independence "
         "rather than on a thinner tail."
     ),
@@ -233,7 +233,7 @@ SENTENCES: dict[SentenceKey, str] = {
         "ES 97.5."
     ),
     SentenceKey.CUSHION_ANCHOR_EXTERNAL: (
-        "{ticker} is a defensive holding from OUTSIDE the chosen universe, "
+        "{ticker} is a defensive holding from outside the chosen universe, "
         "brought in as the anchor beside {partner} only because no name in "
         "that universe had a thinner tail. It scores {anchor_score:.0f} of 100 "
         "on the anchor screen, holds {final_weight:.1%} of the book, clears "
@@ -675,20 +675,21 @@ def role_label(d: TickerDossier) -> str:
 
     Role.EXCLUDED means "no lead or anchor role", not "not in the book": an
     eligible name below the momentum cut still holds its risk-parity size
-    (capped by liquidity). Labelling those "LEFT OUT" read as holding nothing
-    (ME-12). Only a name with no weight at all is left out.
+    (capped by liquidity). Labelling those "Left out" read as holding nothing
+    (ME-12). Only a name with no weight at all is left out. Sentence case, like
+    every label on the page (2026-11-04: the chips were shouted in capitals).
     """
     if d.role is Role.FLYER:
-        return "LEADS"
+        return "Leads"
     if d.role is Role.CUSHION:
-        return "ANCHOR"
-    return "NO ROLE" if d.final_weight > 0 else "LEFT OUT"
+        return "Anchor"
+    return "No role" if d.final_weight > 0 else "Left out"
 
 
 def role_note(d: TickerDossier) -> str:
-    """What a NO ROLE card holds, so "still held" can be checked on the card.
+    """What a "No role" card holds, so "still held" can be checked on the card.
     A sliver under a tenth of a percent reads "<0.1%", never "0.0%"."""
-    if role_label(d) != "NO ROLE":
+    if role_label(d) != "No role":
         return ""
     w = d.final_weight
     return (f"{w:.1%}" if w >= 0.0005 else "<0.1%") + " of the book"

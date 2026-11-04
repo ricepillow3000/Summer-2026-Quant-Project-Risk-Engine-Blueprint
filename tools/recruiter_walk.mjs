@@ -112,20 +112,20 @@ await step('scroll the whole page', async () => {
 
 const before = await verdict();
 await step('switch basket to Semiconductors', async () => {
-  await openDrawer('01 · Universe');
+  await openDrawer('Universe: which assets');
   await pick('Preset basket', 'Semiconductors');
   await page.waitForFunction(b => document.querySelector('.verdict-number')?.textContent.trim() !== b, before);
   return `CVaR ${before} -> ${await verdict()}`;
 }, async () => {
   // The visitor's FIRST change used to re-mount every drawer closed - the
   // one they were using snapped shut under the cursor.
-  const open = await page.locator('summary', { hasText: '01 · Universe' }).first()
+  const open = await page.locator('summary', { hasText: 'Universe: which assets' }).first()
     .evaluate(el => el.parentElement.open);
   return open || 'the Universe drawer closed itself after the first change';
 });
 
 await step('replay the COVID-19 crash', async () => {
-  await openDrawer('03 · Stress test');
+  await openDrawer('Stress test: shock');
   await pick('Scenario', 'COVID-19 crash (2020)');
   await page.waitForFunction(() => /Replaying/.test(document.querySelector('.verdict-sentence')?.textContent || ''));
   return `CVaR ${await verdict()}`;
@@ -134,7 +134,7 @@ await step('replay the COVID-19 crash', async () => {
 await step('switch to the jump-diffusion engine', async () => {
   const b = await verdict();
   // The drawer must still be open after the crisis rerun - it used to snap shut.
-  const open = await page.locator('summary', { hasText: '03 · Stress test' }).first()
+  const open = await page.locator('summary', { hasText: 'Stress test: shock' }).first()
     .evaluate(el => el.parentElement.open);
   if (!open) throw new Error('the Stress test drawer closed itself after the previous change');
   await page.getByText('Jump-diffusion (Merton)', { exact: true }).first().click();
@@ -206,7 +206,7 @@ async function addTicker(sym) {
 
 await step(`type in your own basket (+${typed.join(', ')})`, async () => {
   const b = await verdict();
-  await openDrawer('01 · Universe');
+  await openDrawer('Universe: which assets');
   for (const sym of typed) await addTicker(sym);
   return `CVaR ${b} -> ${await verdict()}`;
 }, async () => {

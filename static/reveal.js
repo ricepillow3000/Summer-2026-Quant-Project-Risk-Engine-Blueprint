@@ -40,8 +40,8 @@
   // name; every other block on the page - a control, a caption, a card, a
   // line of the Book - as Streamlit's own leaf container. Tagged as each one
   // is added to the page, before it is painted.
-  var NAMED = ['.reveal-item', '.showcase-eyebrow', '.showcase-title', '.showcase-body',
-    '.gungnir-sub', '.pillar-card', '.slab', '.cta-btn', '.cta-link', '.sec-mark',
+  var NAMED = ['.reveal-item', '.showcase-title', '.showcase-body',
+    '.gungnir-sub', '.pillar-card', '.slab', '.cta-btn', '.cta-link',
     '.panel-head', '.verdict-box', '.gungnir-plaque', '.orient', '.read-me', '.f-box',
     '[data-testid="stMetric"]', '[data-testid="stPlotlyChart"]',
     '[data-testid="stDataFrame"]'].join(',');

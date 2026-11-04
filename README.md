@@ -1,46 +1,38 @@
-# Meliona - Portfolio Optimization & Risk Engine
+# Meliona: portfolio optimization and risk engine
 
-A quantitative risk dashboard that lets anyone load a portfolio - equities, ETFs, FX, or futures - and stress-test it against thousands of simulated and historical market paths, live. Built by a 2nd-year Data Analytics student to recruiter-facing, quant-interview standards.
+A quantitative risk dashboard that lets anyone load a portfolio (equities, ETFs, FX or futures) and stress-test it against thousands of simulated and historical market paths, live. Built by a 2nd-year Data Analytics student to recruiter-facing, quant-interview standards.
 
-**Live:** https://summer-2026-quant-project-risk-engine-blueprint-production.up.railway.app
+Live: https://summer-2026-quant-project-risk-engine-blueprint-production.up.railway.app
 
----
+## What this is
 
-## What This Is
+Modular Python, math tested against the papers it comes from, data provenance on every pull, and a Streamlit dashboard that leads with one number, a headline CVaR verdict, with all the depth a step behind it.
 
-Most student finance projects pull data and plot a chart. This one checks its own numbers: modular Python, math tested against the papers it comes from, honest data provenance, and a Streamlit dashboard that leads with **one number** - a headline CVaR verdict - with all the depth a step behind it.
-
-Every market figure is fetched from Yahoo Finance at runtime and computed by the engine's own `numpy`/`scipy` code. **No value is ever hardcoded, estimated, or model-generated** - the provenance panel makes that auditable.
-
----
+Every market figure is fetched from Yahoo Finance at runtime and computed by the engine's own `numpy`/`scipy` code. No value is hardcoded, estimated or model-generated, and the provenance panel makes that auditable.
 
 ## Features (shipped)
 
-- **Configurable universe** - one-click preset baskets (mega-cap tech, 13F-popular names, sector ETFs, FX majors, futures) or type any Yahoo symbol.
-- **Freshness-aware data engine** - per-universe parquet cache with a UTC provenance record on every pull; a data-health check flags staleness, gaps, and insufficient history.
-- **Two allocation methods** - equal weight and risk parity (equal-risk-contribution), with an optional volatility-targeting overlay (leverage up/down to a target annual vol).
-- **Two Monte Carlo engines** - a stationary block bootstrap (crash weeks stay in one piece) *and* a Merton jump-diffusion process (Poisson jumps on Gaussian diffusion) for a fatter, more honest tail. Swappable live.
-- **Tail risk** - historical & parametric VaR, CVaR (expected shortfall), and a Kupiec proportion-of-failures backtest that validates the VaR model rather than just reporting it.
-- **Stress testing** - custom parametric shocks (drawdown + volatility) *or* replay of the actual daily returns of real crisis windows (dot-com, GFC, COVID, 2022, SVB, …), preserving real correlation breakdown.
-- **Risk decomposition** - per-asset risk-contribution vs. dollar-weight, named factor exposures (market/size/value/momentum via ETF proxies), and a correlation matrix.
-- **Liquidity modeling** - days-to-liquidate via a participation-rate model on average daily dollar volume; names with no volume feed are flagged, not faked.
-- **Grit Zone** - ranks each asset's own price history on drawdown-recovery speed, rolling 1-year consistency, and resilience across real historical crisis windows; a relative "perseverance" score, not a mood index.
+- Configurable universe: one-click preset baskets (mega-cap tech, 13F-popular names, sector ETFs, FX majors, futures), or type any Yahoo symbol.
+- Freshness-aware data engine: a per-universe parquet cache with a UTC provenance record on every pull; a data-health check flags staleness, gaps and insufficient history.
+- Two allocation methods: equal weight and risk parity (equal risk contribution), with an optional volatility-targeting overlay that levers up or down to a target annual vol.
+- Two Monte Carlo engines: a stationary block bootstrap, which keeps crash weeks in one piece, and a Merton jump-diffusion process (Poisson jumps on Gaussian diffusion), which can simulate a day worse than any in the sample. Swappable live.
+- Tail risk: historical and parametric VaR, CVaR (expected shortfall), and a Kupiec proportion-of-failures backtest that tests the VaR model instead of only reporting it.
+- Stress testing: custom parametric shocks (drawdown and volatility), or a replay of the actual daily returns of real crisis windows (dot-com, GFC, COVID, 2022, SVB, …), which keeps their real correlation breakdown.
+- Risk decomposition: per-asset risk contribution against dollar weight, named factor exposures (market, size, value, momentum via ETF proxies) and a correlation matrix.
+- Liquidity modeling: days to liquidate from a participation-rate model on average daily dollar volume; names with no volume feed are flagged, not filled in.
+- Grit Zone: ranks each asset's own price history on drawdown-recovery speed, rolling 1-year consistency and resilience across real crisis windows. The score is relative to the chosen basket.
 
----
-
-## Tech Stack
+## Tech stack
 
 | Layer | Tools |
 |---|---|
 | Data | `yfinance`, `pandas`, freshness-aware parquet cache (`pyarrow`) |
-| Math | `numpy`, `scipy` - covariance/eigen-decomposition, CVaR, Monte Carlo, jump-diffusion |
+| Math | `numpy`, `scipy`: covariance and eigen-decomposition, CVaR, Monte Carlo, jump-diffusion |
 | Allocation | Risk parity (ERC), volatility targeting |
 | Dashboard | `streamlit`, `plotly` |
 | Deployment | Railway (`Procfile`), static files served by Streamlit |
 
----
-
-## Run It
+## Run it
 
 ```powershell
 python -m pip install -r requirements.txt
@@ -50,8 +42,7 @@ Opens at http://localhost:8501.
 
 ### Run it anywhere (Docker)
 
-The same app in a box, on any machine with [Docker](https://docs.docker.com/get-docker/) -
-no Python, no packages, no "works on my machine":
+The same app in a box, on any machine with [Docker](https://docs.docker.com/get-docker/), with no Python or packages to install:
 
 ```bash
 docker run -p 8501:8501 ghcr.io/ricepillow3000/meliona:latest
@@ -77,11 +68,9 @@ python -m tests.test_engine      # standalone, no extra deps
 # or, if you have pytest installed:
 pytest
 ```
-Deterministic math-invariant tests (CVaR ≥ VaR, risk parity equalizes contributions, the jump-diffusion mean-consistency identity, vol targeting hits its target, liquidity monotonic in book size) plus a full-app boot test that self-skips when offline.
+Deterministic math-invariant tests (CVaR ≥ VaR, risk parity equalizes contributions, the jump-diffusion mean-consistency identity, vol targeting hits its target, liquidity monotonic in book size), plus a full-app boot test that skips itself when offline.
 
----
-
-## Project Structure
+## Project structure
 
 ```
 risk-engine/
@@ -101,74 +90,68 @@ risk-engine/
 ├── requirements.txt · Procfile · main.py
 ```
 
----
-
 ## Operations, support and policies
 
-- **Support:** meleona.support@gmail.com - quote the session reference shown in
+- Support: meleona.support@gmail.com. Quote the session reference shown in
   the page footer and it maps straight to that session's logs (`SUPPORT.md`).
-- **Policies:** `PRIVACY.md` (no accounts, no tracking, no third-party SDKs),
+- Policies: `PRIVACY.md` (no accounts, no tracking, no third-party SDKs),
   `TERMS.md` (educational analysis, not investment advice) and
   `ACCESSIBILITY.md` (WCAG 2.2 AA target, the measured contrast table, and the
-  four known gaps - stated rather than glossed).
-- **Runbook:** `RUNBOOK.md` - kill switch, hotfix/rollback, crash triage,
-  outbound spend caps, phased release, reviewer walkthrough.
-- **Launch checklist:** `LAUNCH_CHECKLIST.md` - every pre-launch item, what was
-  built, and what is deliberately not applicable to an app with no accounts,
-  no database, no payments and no email.
+  four known gaps).
+- Runbook: `RUNBOOK.md` covers the kill switch, hotfix and rollback, crash
+  triage, outbound spend caps, phased release and the reviewer walkthrough.
+- Launch checklist: `LAUNCH_CHECKLIST.md` lists every pre-launch item, what was
+  built, and what does not apply to an app with no accounts, no database, no
+  payments and no email.
 
 ## Security posture
 
 The app is public, anonymous and single-process, so the threat model is
-**resource exhaustion and injection, not authorization** - there are no
-accounts, no roles, no secrets and no database to protect. Controls are
-matched to that model rather than to a checklist:
+resource exhaustion and injection, not authorization: there are no accounts,
+no roles, no secrets and no database to protect. The controls match that
+model:
 
 | Control | Where | What it stops |
 |---|---|---|
 | Ticker funnel (`VALID_TICKER`) | `src/ingestion.py` | Free-text symbols reaching HTML sinks, fetch URLs or cache paths |
-| Egress allowlist | `src/netguard.py` | Any outbound request leaving the two enumerated market-data hosts, including via redirect - the SSRF control for an app with no user-supplied URLs |
+| Egress allowlist | `src/netguard.py` | Any outbound request leaving the two enumerated market-data hosts, including via redirect; the SSRF control for an app with no user-supplied URLs |
 | Complexity budget (`MAX_UNIVERSE`, cache size caps) | `src/ingestion.py` | One visitor spending the whole server's compute, or filling the disk with novel cache keys |
 | Script-splice escaping | `src/topology.py` | A payload string closing the map's `<script>` block early |
 | `toolbarMode = "viewer"` | `.streamlit/config.toml` | Visitors reaching Streamlit's operator actions (Rerun, Clear cache, Settings) |
 | XSRF + CORS on, tracebacks off | `.streamlit/config.toml` | Cross-site request forgery; stack traces leaking paths and versions |
 
 Each one has a regression test in `tests/test_engine.py`. Two things are
-deliberately NOT done, because they would be theatre here: constant-time
+deliberately not done because nothing here needs them: constant-time
 comparison (there is no secret to compare) and query depth limiting (there is
-no query language - the compute budget above is its real analogue).
+no query language; the compute budget above is its analogue).
 
-Known residual risks, stated rather than hidden: hiding the toolbar removes
-the affordance, not the underlying Streamlit protocol messages, so a crafted
-websocket frame could still force a rerun - bounded to denial-of-service over
-public market data; and cache hit/miss latency is a weak timing signal about
-which symbols other visitors requested.
+Known residual risks: hiding the toolbar removes the affordance, not the
+underlying Streamlit protocol messages, so a crafted websocket frame could
+still force a rerun, which is bounded to denial of service over public market
+data; and cache hit/miss latency is a weak timing signal about which symbols
+other visitors requested.
 
-## Design Principles
+## Design principles
 
-- **No LLM-originated data, ever.** Every number traces to Yahoo Finance at runtime; the provenance panel proves it.
-- **Honest labeling.** "Live end-of-day," not "real-time." Scenarios "replay actual returns." Excluded assets are disclosed, not silently dropped.
-- **Lead with one number.** One headline CVaR verdict; all depth collapsed into expanders.
-- **Defensible in an interview.** Every feature carries a "Quant Deep Dive" explaining the math - methodology depth over visual complexity.
-
----
+- No LLM-originated data, ever. Every number traces to Yahoo Finance at runtime, and the provenance panel shows it.
+- Labels claim no more than the data supports: "live end-of-day", not "real-time"; scenarios "replay actual returns"; excluded assets are disclosed, not silently dropped.
+- Lead with one number: one headline CVaR verdict, with the depth folded away below it.
+- Defensible in an interview: every feature carries a "Quant Deep Dive" explaining the math.
 
 ## Roadmap
 
 | Status | Milestone |
 |---|---|
-| ✅ | Data engine, caching, provenance, data-integrity checks |
-| ✅ | Covariance / correlation / eigen-decomposition |
-| ✅ | CVaR + bootstrap Monte Carlo; VaR methods + Kupiec backtest |
-| ✅ | Streamlit dashboard, beige/bronze theme, crest |
-| ✅ | Risk parity, vol targeting, risk contribution, named factors |
-| ✅ | Historical regime replay, liquidity modeling, jump-diffusion engine |
-| ✅ | **Live deployment to a public URL** (the recruiter link) |
-| ⬜ | Optional: auto executive-summary, further UI polish |
+| Done | Data engine, caching, provenance, data-integrity checks |
+| Done | Covariance, correlation and eigen-decomposition |
+| Done | CVaR and bootstrap Monte Carlo; VaR methods and the Kupiec backtest |
+| Done | Streamlit dashboard, beige/bronze theme, crest |
+| Done | Risk parity, vol targeting, risk contribution, named factors |
+| Done | Historical regime replay, liquidity modeling, jump-diffusion engine |
+| Done | Live deployment to a public URL (the recruiter link) |
+| Planned | Optional: an automatic executive summary, further UI polish |
 
-**Target ship date: August 23, 2026**
-
----
+Target ship date: August 23, 2026.
 
 ## Credits
 

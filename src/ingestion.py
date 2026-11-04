@@ -276,20 +276,28 @@ def _prune_cache(max_files: int = CACHE_MAX_FILES,
     Keep the parquet cache inside its budget, oldest entry first. Returns how
     many files were dropped. Cache entries are derived market data - dropping
     one costs a re-fetch, never information.
+
+    The presets' own downloads go last (2026-11-04 security review): oldest
+    first alone let a stranger typing new baskets push every preset name out
+    between two warm passes, so the next visitor paid the cold pulls. Typed-in
+    entries are dropped before any preset name's download; the presets are
+    dropped only if they alone overflow the budget.
     """
+    keep = _preset_raw_paths()
     try:
         names = [f for f in os.listdir(DATA_DIR)
                  if f.endswith(".parquet") or f.endswith(".meta.json")]
-        entries = [(os.path.getmtime(os.path.join(DATA_DIR, f)),
+        entries = [(os.path.join(DATA_DIR, f) in keep,
+                    os.path.getmtime(os.path.join(DATA_DIR, f)),
                     os.path.getsize(os.path.join(DATA_DIR, f)),
                     os.path.join(DATA_DIR, f)) for f in names]
     except OSError:
         return 0
-    entries.sort()                                   # oldest first
-    total_mb = sum(size for _, size, _ in entries) / 1e6
+    entries.sort()                       # typed-in first, then oldest first
+    total_mb = sum(e[2] for e in entries) / 1e6
     dropped = 0
     while entries and (len(entries) > max_files or total_mb > max_mb):
-        _, size, path = entries.pop(0)
+        _, _, size, path = entries.pop(0)
         try:
             os.unlink(path)
         except OSError:
@@ -297,6 +305,15 @@ def _prune_cache(max_files: int = CACHE_MAX_FILES,
         total_mb -= size / 1e6
         dropped += 1
     return dropped
+
+
+_PRESET_PERIODS = ("2y", "10y", "max")      # the periods a preset page pulls
+
+
+def _preset_raw_paths() -> set[str]:
+    """Each preset name's own download, in every period its page pulls."""
+    names = {t for basket in PRESETS.values() for t in basket} | {"SPY"}
+    return {_raw_path(t, p) for t in names for p in _PRESET_PERIODS}
 
 
 def _raw_path(ticker: str, period: str) -> str:

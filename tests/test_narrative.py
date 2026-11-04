@@ -259,9 +259,9 @@ def test_tail_wording_follows_the_sign_of_the_gap():
     # A gap between two ES figures is a difference of percentages: it is in
     # points, never "%" (ME-07's A6 rule; Council A review, 2026-10-22).
     for k in shallower:
-        assert "points shallower" in SENTENCES[k] and "DEEPER" not in SENTENCES[k]
+        assert "points shallower" in SENTENCES[k] and "deeper" not in SENTENCES[k]
     for k in deeper:
-        assert "points DEEPER" in SENTENCES[k]
+        assert "points deeper" in SENTENCES[k]   # said, not shouted (2026-11-04)
         assert "shallower" not in SENTENCES[k]
         # A deeper tail must be printed as a positive magnitude, never as a
         # negative number sitting next to the word DEEPER.
@@ -276,8 +276,8 @@ def test_tail_wording_follows_the_sign_of_the_gap():
             elif d.sentence_key in deeper:
                 assert d.tail_gap is not None and d.tail_gap <= 0, d.ticker
                 s_out = d.sentence()
-                assert "DEEPER" in s_out
-                assert "-" not in s_out.split("DEEPER")[0].split("tail is")[-1]
+                assert "deeper" in s_out
+                assert "-" not in s_out.split("deeper")[0].split("tail is")[-1]
             # A partner is only ever narrated when the gap was measurable.
             if d.partner is not None:
                 assert d.tail_gap is not None, d.ticker
@@ -444,7 +444,7 @@ def test_fallback_anchor_is_used_only_when_the_universe_cannot_cushion():
     defn = withfb["DEFN"]
     assert defn.role is Role.CUSHION and defn.is_fallback_anchor
     assert defn.sentence_key is SentenceKey.CUSHION_ANCHOR_EXTERNAL
-    assert "OUTSIDE the chosen universe" in defn.sentence()
+    assert "outside the chosen universe" in defn.sentence()
 
 
 def test_a_fallback_anchor_never_leads_the_book():
@@ -575,15 +575,15 @@ def test_a_held_name_is_never_labelled_left_out():
             label = role_label(d)
             seen.add(label)
             if d.final_weight > 0:
-                for word in ("LEFT OUT", "EXCLUDED"):
+                for word in ("LEFT OUT", "EXCLUDED"):   # compared upper-cased
                     assert word not in label.upper(), (d.ticker, d.final_weight, label)
             else:
-                assert label == "LEFT OUT", (d.ticker, label)
+                assert label == "Left out", (d.ticker, label)
             if d.role is Role.FLYER:
-                assert label == "LEADS"
+                assert label == "Leads"
             if d.role is Role.CUSHION:
-                assert label == "ANCHOR"
-    assert {"NO ROLE", "LEFT OUT"} <= seen, f"fixture no longer shows both: {seen}"
+                assert label == "Anchor"
+    assert {"No role", "Left out"} <= seen, f"fixture no longer shows both: {seen}"
 
 
 
@@ -615,7 +615,7 @@ def test_a_card_without_a_role_shows_the_weight_it_holds():
     for book_value in (1e6, 5e8):
         for d in build_book(prices, dv, book_value=book_value):
             note = role_note(d)
-            if role_label(d) == "NO ROLE":
+            if role_label(d) == "No role":
                 seen += 1
                 want = (f"{d.final_weight:.1%}" if d.final_weight >= 0.0005
                         else "<0.1%") + " of the book"
