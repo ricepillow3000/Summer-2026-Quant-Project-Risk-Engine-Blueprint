@@ -6004,6 +6004,11 @@ def test_the_cone_is_coloured_by_return_and_the_smoke_rides_the_computed_cone():
     assert "-M.a * M.kx * Math.cos(ph) * sinS" in js and "M.a * M.ks * Math.sin(ph) * cosS" in js
     assert js.index("prefers-reduced-motion") < js.index("function Tunnel(")
     assert "c.clip();" in js and js.index("c.clip();") < js.index("createRadialGradient")
+    # it never competes with a button's glide (it delayed a flick's wheel tail
+    # and the glide stopped 300px short, 2026-11-04), and it thins itself on a
+    # device too slow to draw it
+    assert "if (W.__melionaStop || now - inputAt < STILL_MS) { T.wake(); return; }" in js and "BUDGET_MS" in js
+    assert "['wheel', 'touchmove', 'scroll']" in js
     assert "pointer-events:none" in js and "z-index" not in js.split("cssText")[1].split(";\n")[0]
     reveal = (root / "static" / "reveal.js").read_text(encoding="utf-8")
     assert reveal.index("if (calm)") < reveal.index("windtunnel.js")

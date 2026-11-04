@@ -41,6 +41,8 @@
   // ---- tuning -------------------------------------------------------------
   var PER_PX = 1 / 170;      // particles per square px of plot area
   var MIN_P = 320, MAX_P = 1500;
+  var BUDGET_MS = 7;          // the most a frame of smoke may take before it thins
+  var STILL_MS = 320;        // the smoke waits this long after the last scroll input
   var WIND = 72;             // trading days per second the smoke travels
   var GUST = 0.32;           // +/- share of WIND one particle's own speed varies
   var TRAIL = 22;            // positions kept per particle: the length of a wisp
@@ -91,6 +93,7 @@
     T.cv.style.cssText = 'position:absolute;pointer-events:none;';   // page order puts it under the hover layer
     T.ctx = T.cv.getContext('2d');
     T.parts = []; T.puffs = []; T.ptr = null; T.gust = 0; T.on = false; T.last = 0; T.raf = 0; T.t = 0;
+    T.over = 0; T.cap = MAX_P;
     T.read();
     gd.on && gd.on('plotly_afterplot', function () { T.read(); });
     gd.addEventListener('mousemove', function (e) {
@@ -133,7 +136,7 @@
     }
     this.dpr = dpr;
     this.ok = s.w > 40 && s.h > 40;
-    var want = Math.max(MIN_P, Math.min(MAX_P, Math.round(s.w * s.h * PER_PX)));
+    var want = Math.max(MIN_P, Math.min(MAX_P, this.cap, Math.round(s.w * s.h * PER_PX)));
     while (this.parts.length < want) this.parts.push(this.spawn(true));
     this.parts.length = want;
     while (this.puffs.length < PUFFS) this.puffs.push(this.spawn(true, true));
@@ -179,8 +182,24 @@
     T.raf = 0;
     if (!T.gd.isConnected) { T.io.disconnect(); api.tunnels.splice(api.tunnels.indexOf(T), 1); return; }
     var dt = T.last ? Math.min(0.05, (now - T.last) / 1000) : 0.016;
-    T.last = now; T.t += dt;
+    T.last = now;
+    // A button's glide is flying (main.py sets __melionaStop): the smoke holds
+    // its frame and draws nothing, like the map. Drawing during a flight
+    // delayed a trackpad's tail of wheel events past the glide's 250 ms
+    // "the reader took over" gap, and the glide stopped 300px short.
+    // The same while the reader scrolls (wheel, touch, scroll): the page's
+    // own motion comes first, and the smoke picks up STILL_MS after it ends.
+    if (W.__melionaStop || now - inputAt < STILL_MS) { T.wake(); return; }
+    T.t += dt;
+    var c0 = performance.now();
     T.step(dt); T.draw();
+    // A device that cannot draw the smoke in BUDGET_MS a frame gets less of
+    // it, never a stuttering page: the cost is averaged and the particle
+    // count stepped down until the frame fits (never below MIN_P).
+    T.cost = T.cost === undefined ? 0 : T.cost * 0.9 + (performance.now() - c0) * 0.1;
+    if (T.cost > BUDGET_MS && T.parts.length > MIN_P && ++T.over > 20) {
+      T.parts.length = Math.max(MIN_P, Math.round(T.parts.length * 0.75)); T.over = 0; T.cap = T.parts.length;
+    }
     T.wake();
   };
 
@@ -330,6 +349,10 @@
   new MutationObserver(function () {
     if (!queued) queued = W.requestAnimationFrame(function () { queued = 0; find(); });
   }).observe(D.body, { childList: true, subtree: true });
+  var inputAt = -Infinity;
+  ['wheel', 'touchmove', 'scroll'].forEach(function (k) {
+    W.addEventListener(k, function () { inputAt = performance.now(); }, { capture: true, passive: true });
+  });
   D.addEventListener('visibilitychange', function () { api.tunnels.forEach(function (T) { T.wake(); }); });
   W.addEventListener('resize', function () { api.tunnels.forEach(function (T) { T.read(); }); });
   find();
