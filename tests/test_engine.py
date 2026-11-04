@@ -3021,14 +3021,15 @@ def test_no_decorative_gradients_glass_or_grain():
         assert "feTurbulence" not in text and "--grain" not in text, f"{name}: film grain is back"
     assert "gradient(" not in _style_of(page) + _style_of(p404), "a gradient in the map or the 404"
     assert "--bronzehi" not in page and "#C9A227" not in page, "the off-palette gold is back"
-    # main.py: only the photo scrims (each paired with a static/ photo) and the
-    # Slice's fade into its own ground
+    # main.py: only the photo scrims (each paired with a static/ photo), the
+    # Slice's fade into its own ground, and the cone's colour key - a legend
+    # sampled from the flow's own colour scale (FluidX3D's key), not a decoration
     tree = ast.parse(main)
     fade = {id(n.value) for n in ast.walk(tree) if isinstance(n, ast.Assign)
             and any(getattr(t, "id", "") == "_gungnir_fade" for t in n.targets)}
     for n in ast.walk(tree):
         if isinstance(n, ast.Constant) and isinstance(n.value, str) and "gradient(" in n.value:
-            assert "url(app/static/" in n.value or id(n) in fade, \
+            assert "url(app/static/" in n.value or id(n) in fade or n.value.startswith('<span class="flow-ramp"'), \
                 f"main.py line {n.lineno}: a gradient that is not a photo scrim"
     # no lift, sheen or halo on hover: feedback is a colour change
     for sel, body in _re.findall(r"([^{}]+)\{([^}]*)\}", clean):
@@ -6389,60 +6390,84 @@ def test_a_wide_block_never_turns_like_a_card_and_never_hangs_mid_turn():
 def test_the_cone_flow_is_a_lattice_boltzmann_solve_bound_to_the_data():
     """John, 2026-11-04: no fluid-looking loop - "every line, color, velocity
     vector, and animation timestep must be directly driven by and
-    deterministically bound to the provided data array", FluidX3D's engineering
-    look on the site's own background, red only where the flow collides with
-    the data, and a "Verification Overlay". static/windtunnel.js is a D2Q9
-    lattice Boltzmann solver (FluidX3D's method) whose walls are the chart's
-    five computed percentile paths; its clock and inflow come from the data;
-    colours come from main.py's stepped tables; check() proves the picture
-    against the computed state, pixel by pixel."""
+    deterministically bound to the provided data array", FluidX3D's look
+    ("grid cells with over 100,000 time steps") on the site's own background,
+    red only where the flow collides with the data, a "Verification Overlay",
+    and "each color, cell, line, animation and where it's going reflects the
+    chart". static/windtunnel.js is a D2Q9 lattice Boltzmann solver (FluidX3D's
+    method and its Smagorinsky subgrid model) whose walls are the chart's five
+    computed percentile paths; its clock and inflow come from the data; it is
+    drawn as FluidX3D draws a velocity field - one line per cell of a grid on
+    the chart's own axes, in FluidX3D's own colour scale - with FluidX3D's
+    tracer particles released per return level per trading-day cell; check()
+    proves the picture against the computed state."""
     import re
     root = pathlib.Path(__file__).resolve().parent.parent
     js = (root / "static" / "windtunnel.js").read_text(encoding="utf-8")
     src = (root / "main.py").read_text(encoding="utf-8")
-    # the solver: D2Q9 weights, BGK collision, halfway bounce-back, inflow, pressure outlet
+    # the solver: D2Q9 weights, BGK collision with FluidX3D's Smagorinsky-Lilly
+    # constant, halfway bounce-back, inflow, pressure outlet
     assert "const float WT[9]=float[9](4./9.,1./9.,1./9.,1./9.,1./9.,1./36.,1./36.,1./36.,1./36.);" in js
     assert "const int OPP[9]=int[9](0,3,4,1,2,7,8,5,6);" in js
-    assert "f[i]-=(f[i]-feq(i,rho,u))/tau;" in js
+    assert "for(int i=0;i<9;i++)f[i]-=(f[i]-fe[i])/te;" in js and ".76421222*sqrt(hxx*hxx+hyy*hyy+2.*hxy*hxy)/rho" in js
     assert "if(outY(q)||wall(q))f[i]=fAt(OPP[i],vUv);else f[i]=fAt(i,q);" in js
     assert "else if(vUv.x>1.-texel.x){rho=1.;" in js
-    # deterministic: no randomness, no wall-clock in the physics
+    # deterministic: no randomness, no wall-clock in the physics; the frame
+    # rate only changes how many steps are shown per frame
     body = js[js.index("(function () {"):]
     assert "Math.random" not in body and "sin(t" not in body and "Date.now" not in body
-    assert "for (var k = 0; k < LBM.STEPS_PER_FRAME; k++) T.step();" in js
-    # the data are the walls, the clock and the inflow
+    assert "for (var k = 0; k < T.spf; k++) T.step();" in js
+    # the data are the walls, the clock, the inflow, the grid and the particles' release
     assert "var LEVELS = ['p5', 'p25', 'median', 'p75', 'p95'];" in js and "_fullData" in js
     assert "T.stepsPerDay = T.L.pc / (LBM.U_IN * n);" in js
-    assert "return LBM.U_IN * (1 - LBM.U_SWING + LBM.U_SWING * w);" in js
-    # colours: the figure's stepped tables; at rest transparent; red never in the air
+    assert "return LBM.U_IN * (1 - LBM.U_SWING + LBM.U_SWING * w) * Math.min(1, step / (LBM.SPIN_UP * this.L.pc / LBM.U_IN));" in js
+    assert "for (var c = d[0]; c + nd <= d[n - 1] + 1e-9; c += nd) cols.push(c + nd / 2);" in js   # columns: trading days
+    assert "rowsv.push((r + 0.5) * dr);" in js                                                    # rows: steps of return, on 0%
+    assert "T.release = G.nd * T.stepsPerDay;" in js
+    # FluidX3D's own pieces, line for line
+    assert "draw_line(p - u/2|u|, p + u/2|u|)" in js and "(gl_VertexID==0?-1.:1.)*half_*vec2(d.x,-d.y)" in js
+    assert "if(bd<1.&&length(bf)>0.)un+=length(un)*normalize(bf);" in js        # particle_boundary_force
+    # colours: FluidX3D's colorscale_rainbow, the air on its cool part only;
+    # still air transparent; red never in the air, the top wall step red
     ns: dict = {}
-    exec(re.search(r"^FLOW_SPEED_STEPS = \(.*?\)\)\n", src, re.S | re.M).group(0)
+    exec(re.search(r"^FLOW_AIR = \{.*?\}\n", src, re.M).group(0)
          + re.search(r"^FLOW_WALL_STEPS = .*?\n", src, re.M).group(0), ns)
-    speed, wall = ns["FLOW_SPEED_STEPS"], ns["FLOW_WALL_STEPS"]
-    assert speed[0][2] == 0.0, "air at rest must be fully transparent"
-    assert [b for b, _, _ in speed] == sorted(b for b, _, _ in speed)
-    def redness(h):
-        r, g, b = (int(h[i:i + 2], 16) for i in (1, 3, 5))
+    air, wall = ns["FLOW_AIR"], ns["FLOW_WALL_STEPS"]
+    fns: dict = {"FLOW_AIR": air}
+    for name in ("fluidx3d_rainbow", "flow_air_rgba"):
+        exec(re.search(rf"^def {name}\(.*?(?=^\S)", src, re.S | re.M).group(0), fns)
+    rainbow, rgba = fns["fluidx3d_rainbow"], fns["flow_air_rgba"]
+    # FluidX3D's scale at its own landmarks: black, blue, cyan, green, yellow, red
+    for x, want in ((0.0, (0, 0, 0)), (1 / 3, (0, 0, 1)), (0.5, (0, 1, 1)), (2 / 3, (0, 1, 0)), (0.8, (1, 1, 0)), (1.0, (1, 0, 0))):
+        assert all(abs(g - w) < 1e-6 for g, w in zip(rainbow(x), want)), (x, rainbow(x))
+    def redness(r, g, b):
         return r > 180 and g < 80 and b < 90
-    assert not any(redness(c) for _, c, _ in speed), "the air is never red"
-    assert redness(wall[-1][1]), "the highest wall pressure is the red step"
-    assert '"flow": {"speed": [list(s) for s in FLOW_SPEED_STEPS],' in src
-    assert "for(int i=0;i<6;i++){if(s<sT[i]){k=sC[i];break;}}" in js     # stepped, not blended
+    for i in range(401):
+        (r, g, b), alpha = rgba(air["full"] * 2 * i / 400)
+        assert not redness(r, g, b), "the air is never red"
+        if i * 2 / 400 < air["rest"]:
+            assert alpha == 0.0, "still air is transparent"
+    r, g, b = (int(wall[-1][1][i:i + 2], 16) for i in (1, 3, 5))
+    assert redness(r, g, b), "the highest wall pressure is the red step"
+    assert '"flow": {"air": dict(FLOW_AIR),' in src
+    # the same scale in the browser, line for line
+    assert "if(x<1.2){r=1.;g=x*.83333333;}else if(x<2.){r=2.5-x*1.25;g=1.;}" in js
     # no glass, gloss, glow or blur anywhere in it
     code = re.sub(r"//[^\n]*|/\*.*?\*/", "", body, flags=re.S)
     for word in ("spec", "fresnel", "blur", "glow", "createRadialGradient", "shadowBlur"):
         assert word not in code, word
-    # the environment: lattice mesh, 1px domain box, transparent ground, the switch
+    # the environment: the grid's mesh, 1px domain box, transparent ground, the switch
     assert "x.strokeRect(0.5, 0.5, sz.w - 1, sz.h - 1);" in js
     assert "T.btn.textContent = 'Verification Overlay';" in js
     assert "plot_bgcolor" not in src[src.index("def fan_chart"):src.index("def panel_head")]
     # the proof
-    for key in ("colourMismatch", "redOffWall", "obstacleMiss", "wallMismatch", "peakIsRed"):
-        assert key in js
+    for key in ("colourMismatch", "gridMiss", "particleMoveMismatch", "particleColourMismatch",
+                "redOffWall", "obstacleMiss", "wallMismatch", "peakIsRed"):
+        assert key in js, key
     scan = (root / "tools" / "deep_scan.mjs").read_text(encoding="utf-8")
-    assert "await windAgrees(tag" in scan and "redOffWall" in scan and "obstacleMiss" in scan
+    assert "await windAgrees(tag" in scan and "redOffWall" in scan and "obstacleMiss" in scan and "gridMiss" in scan
     css = (root / "static" / "app.css").read_text(encoding="utf-8")
-    assert ".wt-verify" in css and ".flow-key" in css
+    assert ".wt-verify" in css and ".flow-key" in css and ".flow-ramp" in css
     reveal = (root / "static" / "reveal.js").read_text(encoding="utf-8")
     assert "windtunnel.js" in reveal
     # an emulated GPU also draws the page: the solve there froze it (Live audit,
@@ -6452,7 +6477,8 @@ def test_the_cone_flow_is_a_lattice_boltzmann_solve_bound_to_the_data():
     wf = (root / ".github" / "workflows" / "live-audit.yml").read_text(encoding="utf-8")
     assert "node tools/flow_check.mjs http://127.0.0.1:8501 flow-shots" in wf
     probe = (root / "tools" / "flow_check.mjs").read_text(encoding="utf-8")
-    for key in ("colourMismatch", "wallMismatch", "redOffWall", "obstacleMiss", "peakIsRed", "volatility-shock"):
+    for key in ("colourMismatch", "gridMiss", "particleMoveMismatch", "particleColourMismatch", "wallMismatch",
+                "redOffWall", "obstacleMiss", "peakIsRed", "volatility-shock"):
         assert key in probe, key
 
 

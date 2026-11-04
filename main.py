@@ -653,46 +653,83 @@ def _style_fig(fig, height: int = 300):
 
 # The cone in a wind tunnel (John, 2026-11-04): static/windtunnel.js runs a
 # D2Q9 lattice Boltzmann flow (FluidX3D's method) whose walls are the five
-# computed percentile paths below, and colours it by these two STEPPED tables
-# (no blended gradients), shipped to the browser in the figure's layout.meta:
-#   FLOW_SPEED_STEPS - a cell of moving air, by its speed as a multiple of the
-#     inflow speed U: (upper bound, colour, opacity). Air near rest is fully
-#     transparent, so the page shows through; then charcoal, deep blue, blue,
-#     teal. Never red.
-#   FLOW_WALL_STEPS - a wall cell (a percentile path), by the surface pressure
-#     the flow puts on it, the pressure coefficient Cp = (p - p_inflow) /
-#     (rho U^2 / 2): charcoal, crimson, then vivid red where the flow hits the
-#     data hardest. Red exists only on the data.
-# The last bound of each table is open-ended (1e9). The key under the chart
-# prints the same tables.
-FLOW_SPEED_STEPS = (
-    (0.20, "#3F3B35", 0.0), (0.55, "#3F3B35", 0.30), (0.85, "#1B3A6B", 0.55),
-    (1.10, "#1F6FD1", 0.70), (1.35, "#0E8F8F", 0.80), (1e9, "#0FB3A3", 0.90))
+# computed percentile paths below, and draws it as FluidX3D draws a velocity
+# field: one line per cell of a grid laid on the chart's own axes (columns of
+# trading days, rows of percent return), pointing where the computed air in
+# that cell goes, coloured by its speed. Both colour tables ship to the
+# browser in the figure's layout.meta, and the key under the chart prints them.
+#   FLOW_AIR - FluidX3D's own velocity scale, colorscale_rainbow in its
+#     kernel.cpp (black, violet, blue, cyan, green, yellow, red, slow to fast),
+#     of which the air takes only the cool part, up to `top` (green): the hot
+#     end, red, is left to the data. A cell's colour is
+#     shade x rainbow(top x min(1, s / full)), s its speed as a multiple of the
+#     inflow. FluidX3D leaves a lattice point undrawn when its scaled speed is
+#     under 0.1 (`rest`): still air is transparent. Up to `fade` a line fades
+#     into the page, as FluidX3D's dark slow colours fade into its black
+#     ground; `shade` darkens the scale for a light page.
+#   FLOW_WALL_STEPS - a percentile path, segment by segment, by the surface
+#     pressure the flow puts on it, Cp = (p - p_outflow) / (rho U^2 / 2), as
+#     FluidX3D colours a boundary by the force on it: charcoal, crimson, then
+#     vivid red where the flow hits the data hardest. Red exists only on the
+#     data. The last bound is open-ended (1e9).
+FLOW_AIR = {"full": 1.6, "rest": 0.10, "fade": 0.45, "top": 0.62, "shade": 0.78, "alpha": 0.9}
 FLOW_WALL_STEPS = ((0.10, "#3F3B35"), (0.40, "#8E1B2B"), (1e9, "#E0102F"))
 
 
+def fluidx3d_rainbow(x: float) -> tuple:
+    """FluidX3D's colorscale_rainbow (src/kernel.cpp), line for line: x in
+    [0, 1] -> (r, g, b) in [0, 1], black at 0, red at 1. static/windtunnel.js
+    runs the same function in its line shader and in its check()."""
+    x = min(6.0, max(0.0, 6.0 * (1.0 - x)))
+    r = g = b = 0.0
+    if x < 1.2:
+        r, g = 1.0, x * 0.83333333
+    elif x < 2.0:
+        r, g = 2.5 - x * 1.25, 1.0
+    elif x < 3.0:
+        g, b = 1.0, x - 2.0
+    elif x < 4.0:
+        g, b = 4.0 - x, 1.0
+    elif x < 5.0:
+        r, b = x * 0.4 - 1.6, 3.0 - x * 0.5
+    else:
+        r, b = 2.4 - x * 0.4, 3.0 - x * 0.5
+    return r, g, b
+
+
+def flow_air_rgba(s: float) -> tuple:
+    """The colour of a cell's line for a speed s (a multiple of the inflow):
+    (r, g, b) in 0..255 and its opacity."""
+    a = FLOW_AIR
+    q = s / a["full"]
+    alpha = a["alpha"] * min(1.0, max(0.0, (q - a["rest"]) / (a["fade"] - a["rest"])))
+    rgb = fluidx3d_rainbow(a["top"] * min(1.0, q))
+    return tuple(round(255 * min(1.0, a["shade"] * c)) for c in rgb), alpha
+
+
 def flow_key_html() -> str:
-    """The key under the cone: the solver's two stepped colour tables, in words."""
-    def chip(col, alpha, label):
-        r, g, b = (int(col[i:i + 2], 16) for i in (1, 3, 5))
-        fill = f"rgba({r},{g},{b},{alpha})" if alpha else "transparent"
-        return (f'<span class="flow-chip"><span class="flow-swatch" style="background:{fill}"></span>'
-                f'{label}</span>')
-    lo = 0.0
-    speed = []
-    for hi, col, alpha in FLOW_SPEED_STEPS:
-        rng = f"&lt;{hi:.2f}" if lo == 0 else (f"&ge;{lo:.2f}" if hi > 1e8 else f"{lo:.2f}-{hi:.2f}")
-        speed.append(chip(col, alpha, rng + (" (at rest)" if lo == 0 else "")))
-        lo = hi
+    """The key under the cone: what a cell, a line and each colour mean."""
+    full = FLOW_AIR["full"]
+    stops = []
+    for i in range(13):
+        s = full * i / 12
+        (r, g, b), alpha = flow_air_rgba(s)
+        stops.append(f"rgba({r},{g},{b},{alpha:.3f}) {100 * i / 12:.1f}%")
+    ramp = (f'<span class="flow-ramp" style="background:linear-gradient(90deg,{",".join(stops)})"></span>'
+            f'<span class="flow-ramp-ends"><span>still ({FLOW_AIR["rest"] * full:.2f}, not drawn)</span>'
+            f'<span>1.00 = inflow</span><span>{full:.1f}+</span></span>')
     lo = None
     wall = []
     for hi, col in FLOW_WALL_STEPS:
         rng = f"Cp &lt;{hi:.2f}" if lo is None else (f"Cp &ge;{lo:.2f}" if hi > 1e8 else f"Cp {lo:.2f}-{hi:.2f}")
-        wall.append(chip(col, 1, rng))
+        wall.append(f'<span class="flow-chip"><span class="flow-swatch" style="background:{col}"></span>{rng}</span>')
         lo = hi
     return ('<div class="flow-key">'
+            '<div class="flow-key-row"><span class="flow-key-label">Grid</span>'
+            '<span>one cell = a few trading days (x-axis) by a step of return (y-axis); '
+            'its line points where the air in that cell is going</span></div>'
             '<div class="flow-key-row"><span class="flow-key-label">Air speed, x inflow</span>'
-            + "".join(speed) + '</div>'
+            + ramp + '</div>'
             '<div class="flow-key-row"><span class="flow-key-label">Wall pressure on a path</span>'
             + "".join(wall) + '</div></div>')
 
@@ -710,9 +747,10 @@ def fan_chart(bands: dict):
 
     The flow: the five percentile paths are solid walls in a D2Q9 lattice
     Boltzmann grid laid over the plot; air enters on the left and is computed
-    step by step (FLOW_SPEED_STEPS / FLOW_WALL_STEPS colour it). It shows the
-    cone's SHAPE as an obstacle, not a market quantity; the numbers are the
-    paths, the hover and the headline.
+    step by step, one simulated year per crossing. It is drawn as one line per
+    cell of a grid on the chart's axes (FLOW_AIR colours the air,
+    FLOW_WALL_STEPS the paths). It shows the cone's SHAPE as an obstacle, not
+    a market quantity; the numbers are the paths, the hover and the headline.
     """
     d = bands["days"]
 
@@ -762,7 +800,7 @@ def fan_chart(bands: dict):
         transition=dict(duration=420, easing="cubic-in-out"),
         # static/windtunnel.js finds the cone by this, and reads its colour tables here
         meta={"meliona": "cone",
-              "flow": {"speed": [list(s) for s in FLOW_SPEED_STEPS],
+              "flow": {"air": dict(FLOW_AIR),
                        "wall": [list(s) for s in FLOW_WALL_STEPS]}},
     )
     fig = _style_fig(fig, height=360)
@@ -1904,7 +1942,9 @@ with f_col:
         "distribution, not a forecast. The curves interpolate between real "
         "computed percentiles." + _se_txt + " The moving air is a lattice "
         "Boltzmann (D2Q9) flow computed around the five percentile paths as solid "
-        "walls: it shows the cone's shape as an obstacle, not a market quantity. "
+        "walls, one line per grid cell of trading days by return: it shows the "
+        "cone's shape as an obstacle, not a market quantity. Air crosses the chart "
+        "in one simulated year, so the day it passes is the day it replays. "
         "Verification Overlay shows the solver's own numbers."
     )
 

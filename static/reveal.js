@@ -72,15 +72,16 @@
   var calm = !('IntersectionObserver' in W) ||
     (W.matchMedia && W.matchMedia('(prefers-reduced-motion: reduce)').matches);
   var api = W.__melionaReveal = { revealAll: function () {} };
-  if (calm) { H.classList.remove('reveal-on'); return; }   // everything as drawn, photos at once
-  // The cone's wind tunnel (static/windtunnel.js) comes with the motion: one
-  // entry point, so the head and main.py's fallback both bring it.
+  // The cone's wind tunnel (static/windtunnel.js) comes with this file: one
+  // entry point, so the head and main.py's fallback both bring it. Under
+  // reduced motion it loads too and draws one still frame of the same solve.
   if (!D.getElementById('meliona-wind')) {
     var wt = D.createElement('script'), me = D.getElementById('meliona-reveal');
     wt.id = 'meliona-wind';
     wt.src = (me && me.src ? me.src : 'app/static/reveal.js').replace(/reveal\.js(\?.*)?$/, 'windtunnel.js');
     D.head.appendChild(wt);
   }
+  if (calm) { H.classList.remove('reveal-on'); return; }   // everything as drawn, photos at once
 
   // ---- 1. reveals ----------------------------------------------------------
   var seen = new IntersectionObserver(function (entries) {

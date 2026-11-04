@@ -130,7 +130,7 @@ jobs:
       # volatility shock.
       - name: 8d. This commit - the cone's flow, solved and proven on the pixels
         if: always()
-        run: node tools/flow_check.mjs http://127.0.0.1:8501 flow-shots 1800
+        run: node tools/flow_check.mjs http://127.0.0.1:8501 flow-shots 6000
       - name: 9. Deployed site - recruiter walk (informational until this branch is deployed)
         if: always()
         continue-on-error: true

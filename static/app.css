@@ -951,6 +951,8 @@ a.cta-btn:focus-visible, a.cta-link:focus-visible, .meliona-footer a.f-box:focus
 .flow-key-label { color: #6A5030; font-size: 0.8125rem; min-width: 150px; }
 .flow-chip { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
 .flow-swatch { width: 14px; height: 10px; border: 1px solid #3F3B35; display: inline-block; }
+.flow-ramp { width: 180px; max-width: 100%; height: 10px; border: 1px solid #3F3B35; display: inline-block; }
+.flow-ramp-ends { display: inline-flex; flex-wrap: wrap; gap: 4px 12px; }
 /* The cone's "Verification Overlay" switch (static/windtunnel.js): the page's
    button grammar - matte, square, a 1px rule; pressed reads as filled. */
 .wt-verify { font: 0.75rem/1 Georgia, serif; color: #3F3B35;

@@ -1009,3 +1009,40 @@ two paid-vendor-dependent pieces remain explicit backlog items:
    (Polygon.io/Alpaca/IEX) is scoped and ready to wire in once an API key exists.
 3. Extend liquidity: per-asset liquidity-adjusted VaR, or a book-size slider
    preset that showcases a small/mid-cap basket where days-to-liquidate bites.
+
+- ✅ **The cone's flow, redrawn the way FluidX3D draws a field (2026-11-04,
+  second pass)**. John: the smooth coloured field was "not the design I was
+  looking for" - he wanted FluidX3D's grid cells and fluid motion, with "each
+  color, cell, line, animation and where it's going" reflecting the chart.
+  Studied FluidX3D's own source (`kernel.cpp`: `graphics_field`,
+  `colorscale_rainbow`, `integrate_particles`, `particle_boundary_force`, the
+  SUBGRID Smagorinsky-Lilly model; `defines.hpp`; the D2Q9 Karman setup).
+  `static/windtunnel.js` now:
+  - draws ONE LINE PER CELL of a grid laid on the chart's axes - columns of
+    ND trading days (1, 2, 3, 5, 10 or 21), rows of DR percent of return
+    aligned on 0% - centred in its cell, pointing where the computed air there
+    goes, coloured by FluidX3D's `colorscale_rainbow` (main.py `FLOW_AIR`: the
+    air takes the cool half, black to green; still air under FluidX3D's 0.1
+    cut-off is transparent; red is left to the data);
+  - releases FluidX3D's tracer particles, one per return-level row every ND
+    trading days, moved each solver step by the computed velocity: in
+    undisturbed air they ride one grid cell apart, so the cone's effect is
+    their departure from the grid;
+  - runs ~111,000 lattice cells on a desktop (open air computed above and
+    below the plot, so the cone is a body in a stream, not a plug in a pipe),
+    tau 0.52 with FluidX3D's subgrid model, a spin-up from still air, and a
+    step counter that passes 100,000 in about a minute;
+  - colours a path by Cp against the free stream at the same trading day,
+    counting only moving air: red lands on the cone's nose (day 1) and the
+    steep early face of the 95th path, never on the still interior;
+  - prints its state (lattice, step, trading day) on the frame; the
+    Verification Overlay adds the grid in days x percent, sample speeds with
+    arrowheads, the solid cells' outline (VIS_FLAG_LATTICE), the top Cp and
+    the solver's numbers;
+  - reduced motion now loads it and gets one still frame (it never loaded).
+  `check()` proves every line's colour and direction, every line's trading
+  day and return level, every particle's step (FluidX3D's integrate_particles
+  recomputed on the CPU) and colour, every path segment's pressure step, and
+  no red off the data. Local runs (offline market, 1440px, iPhone 15, reduced
+  motion; 1,800 / 6,000 / 15,000 steps, baseline and volatility shock): 0
+  mismatches everywhere. CI's flow_check now runs 6,000 steps (past spin-up).
