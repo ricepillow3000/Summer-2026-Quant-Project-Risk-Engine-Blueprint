@@ -16,6 +16,23 @@ There is no database, so there is no database restore. The recovery story is
 "redeploy the last good commit", and the recovery point is whatever is on
 `origin/main`.
 
+### Host settings (every environment variable the app reads)
+
+None of them is a secret; the app holds no keys. Set them in Railway ->
+service -> Variables; a change applies on the next page load, no redeploy.
+Each `MELIONA_*` name is also read under its pre-2026-10-28 spelling
+`MELEONA_*`.
+
+| Variable | Default | What it does |
+|---|---|---|
+| `MELIONA_MAINTENANCE` | unset | `1` serves the maintenance page and stops before any market-data call (section 1) |
+| `MELIONA_MAINTENANCE_NOTE` | unset | Optional line shown on the maintenance page |
+| `MELIONA_CHANNEL` | unset | `beta` shows the beta notice and the "report this session" link (section 5) |
+| `MELIONA_SUPPORT_EMAIL` | `meleona.support@gmail.com` | The contact address in the footer, the maintenance page and the privacy panel |
+| `MELIONA_SITE_URL` | the Railway production URL | Canonical URL, sitemap and link-preview tags written by `tools/public_files.py` at start |
+| `PORT` | set by Railway | The port `streamlit run serve.py` listens on |
+| `RAILWAY_GIT_COMMIT_SHA` | set by Railway | Stamped into `<meta name="meliona-build">`, which the Live audit on `main` checks |
+
 ## 1. Kill switch
 
 Set an environment variable on the host - no redeploy, no code change:
@@ -421,9 +438,13 @@ deliberately left out.
 **Access.** Add no collaborators. A repo owned by a personal account has no
 read-only collaborator role - adding someone grants *write*. Recruiters and
 reviewers already have exactly the read access they need, because the repo is
-public and needs no invitation. If a real code collaborator ever appears, that
-is the moment to add branch protection, not before: required review with one
-human means self-approval or a rule switched off at midnight.
+public and needs no invitation.
+
+**Branch protection (as set, checked 2026-11-04).** A ruleset on `main`:
+every change arrives through a pull request, the CodeQL and Live audit checks
+must pass first, and force-push and branch deletion are blocked, with no
+bypass. Required approvals are 0 on purpose: with one human, a required
+review means self-approval. John (or a Claude session he asks) merges.
 
 **Tokens.** Authenticate with `gh auth login`, which stores an OAuth token in
 the Windows credential keyring. Never create a *classic* personal access token
@@ -448,8 +469,10 @@ are GitHub Advanced Security and stay off on the free tier; a PATCH to enable
 them is accepted and silently ignored. The practical gap: default scanning
 matches known vendor token shapes (`ghp_`, `sk-`, AWS keys) and would not flag
 a home-made credential pasted into a tracked `.py`. Dependabot *version-update*
-PRs are deliberately not enabled - there is no CI here, and merging unverified
-dependency bumps into a live deploy is worse than stale pins.
+PRs are enabled since 2026-11-04 (`.github/dependabot.yml`, weekly, pip and
+GitHub Actions): every package and action is pinned exactly, so a bump only
+happens through a PR, and every PR runs the Live, Pair and Options audits
+before anyone merges it.
 
 **Two-factor auth.** Required on the GitHub account, TOTP or passkey rather
 than SMS, with the recovery codes stored off this machine.
