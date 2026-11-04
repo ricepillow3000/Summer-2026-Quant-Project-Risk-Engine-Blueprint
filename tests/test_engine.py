@@ -6490,6 +6490,9 @@ def test_the_cone_flow_is_a_lattice_boltzmann_solve_bound_to_the_data():
     assert "gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0)" in js and "gl.clientWaitSync(rb.sync, 0, 0)" in js
     assert "function gliding() { return !!(D.__melionaStop || W.__melionaStop); }" in js   # main.py's P is the document
     assert "R.moving() > 0" in js and "api.moving = function" in reveal
+    # a card that cannot keep up is HELD still: the same solve, so it stays
+    # "lbm" (Live audit, 2026-11-04: renaming it "lbm-still" failed step 8d)
+    assert "T.held = true; T.done = true;" in js and "T.mode = 'lbm-still'; T.done" not in js
     wf = (root / ".github" / "workflows" / "live-audit.yml").read_text(encoding="utf-8")
     assert "node tools/flow_check.mjs http://127.0.0.1:8501 flow-shots" in wf
     probe = (root / "tools" / "flow_check.mjs").read_text(encoding="utf-8")

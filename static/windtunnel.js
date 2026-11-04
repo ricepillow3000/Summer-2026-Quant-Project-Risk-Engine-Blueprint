@@ -864,7 +864,7 @@
       // the page's own motion comes first.
       if (T.lastFrame && now - T.lastFrame > 24) {
         if (++T.slow >= 6) {
-          if (T.spf === LBM.STEPS_MIN) { T.mode = 'lbm-still'; T.done = true; T.draw(); T.readAsync(); T.settle(); return; }
+          if (T.spf === LBM.STEPS_MIN) { T.held = true; T.done = true; T.draw(); T.readAsync(); T.settle(); return; }   // same solve, held still
           T.spf = Math.max(LBM.STEPS_MIN, Math.round(T.spf * 0.7)); T.slow = 0;
         }
       } else T.slow = 0;
@@ -1065,7 +1065,7 @@
                 maxSpeed: 0, maxCp: null, peakIsRed: null, p5End: null, p95End: null, frames: 0 };
     api.tunnels.forEach(function (T) {
       if (!T.ok || !T.L) return;
-      out.mode = T.mode; out.frames = T.frames;
+      out.mode = T.mode; out.held = !!T.held; out.frames = T.frames;
       out.p5End = T.lv[0][T.lv[0].length - 1]; out.p95End = T.lv[4][T.lv[4].length - 1];
       T.verify(out);
     });
