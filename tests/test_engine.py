@@ -6383,7 +6383,11 @@ def test_a_wide_block_never_turns_like_a_card_and_never_hangs_mid_turn():
     assert "Math.max(1000, 3 * el.offsetWidth)" in js
     assert re.search(r"\.reveal-item--card \{\s*transform: perspective\(var\(--reveal-depth, 1000px\)\)", css)
     assert "addEventListener('transitioncancel', end)" in js
-    assert "new ResizeObserver" in js and "grew.observe(el)" in js and "if (grew) grew.unobserve(el);" in js
+    assert "new ResizeObserver" in js and "if (grew) grew.unobserve(el);" in js
+    # only a CARD lands at once when it changes size: on a cold load nearly
+    # every block grows while it arrives, and landing those at once made the
+    # live page appear with no motion at all (John, 2026-11-04)
+    assert "if (grew && how === 'card') grew.observe(el);" in js
     assert "el.style.removeProperty('--reveal-depth');" in js
 
 
@@ -6473,7 +6477,19 @@ def test_the_cone_flow_is_a_lattice_boltzmann_solve_bound_to_the_data():
     # an emulated GPU also draws the page: the solve there froze it (Live audit,
     # 2026-11-04), so the page leaves the flow out on a software renderer, and
     # CI proves the solve in its own step
-    assert "if (!g || g.soft) { api.status" in js
+    assert "if (!g.gl || g.soft) {" in js and "api.status = g.gl ? 'software renderer: flow not run'" in js
+    # John, 2026-11-04 (live): the tunnel built at load and read the GPU back
+    # synchronously, and the page lost its arrivals and its buttons. Nothing
+    # is built until the cone is near and the page is calm; programs compile
+    # in the background; the live loop reads back through a fence, never a
+    # blocking readPixels; and it holds while a glide or an arrival moves.
+    assert "near.observe(gd)" in js and "requestIdleCallback(go" in js and "new Tunnel(gd, reduced)" not in js
+    assert "KHR_parallel_shader_compile" in js and "COMPLETION_STATUS_KHR" in js
+    loop = js[js.index("Tunnel.prototype.frame = function"):js.index("// ---- the proof")]
+    assert "T.readAsync()" in loop and "T.pollRead()" in loop and "T.paint()" not in loop.split("} else {")[1]
+    assert "gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0)" in js and "gl.clientWaitSync(rb.sync, 0, 0)" in js
+    assert "function gliding() { return !!(D.__melionaStop || W.__melionaStop); }" in js   # main.py's P is the document
+    assert "R.moving() > 0" in js and "api.moving = function" in reveal
     wf = (root / ".github" / "workflows" / "live-audit.yml").read_text(encoding="utf-8")
     assert "node tools/flow_check.mjs http://127.0.0.1:8501 flow-shots" in wf
     probe = (root / "tools" / "flow_check.mjs").read_text(encoding="utf-8")

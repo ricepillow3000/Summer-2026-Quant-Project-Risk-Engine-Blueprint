@@ -85,10 +85,17 @@
  * CPU and its colour against the air it is in, no red off a wall, the walls
  * on the data, and the peak pressure painted red.
  *
- * Performance: a graphics card runs it live (stopping off screen, in a hidden
- * tab, while the reader scrolls or a button's glide flies, and showing fewer
- * steps per frame on a slow card); under reduced motion the same calculation
- * is computed in small slices and shown as a still frame. A software renderer
+ * Performance - the page's own motion first (John, 2026-11-04: on the live
+ * site the tunnel cost the arrivals and the buttons). Nothing is built while
+ * the page loads: a cone's tunnel is built only once the cone comes within a
+ * screen of the view, in idle time, with no glide, arrival or scroll moving.
+ * Its programs compile in the background (KHR_parallel_shader_compile), and
+ * the live loop reads the GPU back through a fence, never a blocking
+ * readPixels. It runs only on screen, in a visible tab, and holds while the
+ * reader scrolls, a button's glide flies or a block arrives; a slow card
+ * shows fewer steps per frame, and one that cannot keep up even then keeps a
+ * still frame. Under reduced motion the same calculation is computed in
+ * small slices and shown as a still frame. A software renderer
  * (SwiftShader, llvmpipe) or no WebGL2: the chart alone - an emulated GPU also
  * draws the page, and the solve froze it. tools/flow_check.mjs runs and
  * proves the solve in CI.
@@ -130,6 +137,14 @@
   };
   var LEVELS = ['p5', 'p25', 'median', 'p75', 'p95'];
 
+  // a button's glide is flying: main.py's glide script keeps its stop handle
+  // on this page's document (its P), not on the window
+  function gliding() { return !!(D.__melionaStop || W.__melionaStop); }
+  // the page is moving: a glide, an arrival, or the reader's own scroll
+  function busy() {
+    var R = W.__melionaReveal;
+    return gliding() || (R && R.moving && R.moving() > 0) || performance.now() - inputAt < LBM.STILL_MS;
+  }
   function hex(c) { return [1, 3, 5].map(function (i) { return parseInt(c.slice(i, i + 2), 16); }); }
   function metaOf(gd) { return (gd._fullLayout && gd._fullLayout.meta) || (gd.layout && gd.layout.meta) || null; }
 
@@ -154,22 +169,18 @@
   }
 
   // ---- WebGL2 with float render targets, and whether it is a real GPU ----------
-  var GL_PROBE = null;
-  function glSupport() {
-    if (GL_PROBE !== null) return GL_PROBE;
-    GL_PROBE = false;
-    try {
-      var c = D.createElement('canvas'), gl = c.getContext('webgl2');
-      if (gl && gl.getExtension('EXT_color_buffer_float')) {
-        var ri = gl.getExtension('WEBGL_debug_renderer_info');
-        var name = String(ri ? gl.getParameter(ri.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
-        GL_PROBE = { soft: /swiftshader|llvmpipe|softpipe|software|basic render/i.test(name), name: name };
-      }
-      var lose = gl && gl.getExtension('WEBGL_lose_context');
-      if (lose) lose.loseContext();
-    } catch (e) { GL_PROBE = false; }
-    api.renderer = GL_PROBE ? GL_PROBE.name : 'none';
-    return GL_PROBE;
+  // One context per cone, made once and asked about its renderer: no
+  // throwaway probe context (making a context is not free).
+  var CTX = { alpha: true, premultipliedAlpha: true, antialias: true, depth: false, stencil: false };
+  function glContext(cv) {
+    var gl = null, name = 'none';
+    try { gl = cv.getContext('webgl2', CTX); } catch (e) { gl = null; }
+    if (gl && gl.getExtension('EXT_color_buffer_float')) {
+      var ri = gl.getExtension('WEBGL_debug_renderer_info');
+      name = String(ri ? gl.getParameter(ri.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+    } else gl = null;
+    api.renderer = name;
+    return { gl: gl, soft: /swiftshader|llvmpipe|softpipe|software|basic render/i.test(name) };
   }
 
   // ---- shaders -------------------------------------------------------------------
@@ -268,14 +279,15 @@
     'void main(){float r=length(gl_PointCoord-.5)*psize;o=vC*clamp(psize*.5-r+.5,0.,1.);}';
 
   // ---- one tunnel per cone -----------------------------------------------------------
-  function Tunnel(gd, still) {
+  function Tunnel(gd, still, cv, gl) {
     var T = this;
     T.gd = gd; gd.__wind = T; T.still = still; T.mode = still ? 'lbm-still' : 'lbm';
-    T.mesh = mk('wind-tunnel-grid'); T.cv = mk('wind-tunnel'); T.flow = mk('wind-tunnel-flow'); T.over = mk('wind-tunnel-verify');
-    var gl = T.gl = T.cv.getContext('webgl2', { alpha: true, premultipliedAlpha: true, antialias: true, depth: false, stencil: false });
-    if (!gl || !gl.getExtension('EXT_color_buffer_float')) { T.failed = true; return; }
+    T.mesh = mk('wind-tunnel-grid'); T.cv = cv; T.flow = mk('wind-tunnel-flow'); T.over = mk('wind-tunnel-verify');
+    T.gl = gl;
+    T.par = gl.getExtension('KHR_parallel_shader_compile');
     T.lbm = prog(gl, VS, LBM_FS); T.ndl = prog(gl, NEEDLE_VS, NEEDLE_FS);
     T.adv = prog(gl, VS, PART_FS); T.pshow = prog(gl, PSHOW_VS, PSHOW_FS);
+    T.compiling = true;
     T.quad = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, T.quad);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
@@ -289,7 +301,15 @@
       api.tunnels.forEach(function (t) { t.btn.setAttribute('aria-pressed', String(api.overlay)); t.drawOverlay(); });
     });
     T.frames = 0; T.steps = 0; T.raf = 0; T.ok = false; T.spf = LBM.STEPS_PER_FRAME; T.slow = 0; T.lastFrame = 0;
-    T.read();
+    (function poll() {                                   // the programs, then the lattice: nothing waits on the driver
+      if (!gd.isConnected) return;
+      var progs = [T.lbm, T.ndl, T.adv, T.pshow];
+      if (!progs.every(function (P) { return ready(gl, P, T.par); }) || busy()) { W.requestAnimationFrame(poll); return; }
+      try { progs.forEach(function (P) { finish(gl, P); }); } catch (e) { T.failed = true; api.status = 'shader: ' + e.message; return; }
+      T.compiling = false;
+      T.read();
+      T.wake();
+    })();
     if (gd.on) gd.on('plotly_afterplot', function () { T.read(); });
     T.io = new IntersectionObserver(function (es) { T.visible = es[0].isIntersecting; T.wake(); }, { threshold: 0.05 });
     T.io.observe(gd);
@@ -301,20 +321,28 @@
     c.style.cssText = 'position:absolute;pointer-events:none;';
     return c;
   }
+  // Programs are compiled in the background (KHR_parallel_shader_compile):
+  // asking a program for its status before the driver has finished blocks
+  // the page until it has, and on Windows (ANGLE) these shaders take long
+  // enough to freeze every button and arrival on the page (John,
+  // 2026-11-04). ready() is asked once per frame; finish() reads the
+  // uniforms only when the driver says the program is done.
   function prog(gl, vs, fs) {
-    function sh(type, s) {
-      var o = gl.createShader(type); gl.shaderSource(o, s); gl.compileShader(o);
-      if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(o));
-      return o;
-    }
-    var p = gl.createProgram();
-    gl.attachShader(p, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs));
+    function sh(type, s) { var o = gl.createShader(type); gl.shaderSource(o, s); gl.compileShader(o); return o; }
+    var p = gl.createProgram(), a = sh(gl.VERTEX_SHADER, vs), b = sh(gl.FRAGMENT_SHADER, fs);
+    gl.attachShader(p, a); gl.attachShader(p, b);
     if (vs === VS) gl.bindAttribLocation(p, 0, 'aPos'); else if (vs === NEEDLE_VS) gl.bindAttribLocation(p, 0, 'aN');
     gl.linkProgram(p);
-    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
-    var u = {}, n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
-    for (var i = 0; i < n; i++) { var name = gl.getActiveUniform(p, i).name; u[name.replace(/\[0\]$/, '')] = gl.getUniformLocation(p, name); }
-    return { p: p, u: u };
+    return { p: p, u: null, sh: [a, b] };
+  }
+  function ready(gl, P, par) { return !par || gl.getProgramParameter(P.p, par.COMPLETION_STATUS_KHR); }
+  function finish(gl, P) {
+    if (!gl.getProgramParameter(P.p, gl.LINK_STATUS)) {
+      throw new Error(P.sh.map(function (o) { return gl.getShaderInfoLog(o); }).join(' ') + gl.getProgramInfoLog(P.p));
+    }
+    var u = {}, n = gl.getProgramParameter(P.p, gl.ACTIVE_UNIFORMS);
+    for (var i = 0; i < n; i++) { var name = gl.getActiveUniform(P.p, i).name; u[name.replace(/\[0\]$/, '')] = gl.getUniformLocation(P.p, name); }
+    P.u = u;
   }
   function tex(gl, w, h, internal, format, type, data) {
     var t = gl.createTexture();
@@ -345,6 +373,7 @@
     if (L.chk) { gl.deleteTexture(L.chk.t); gl.deleteFramebuffer(L.chk.fb); }
     if (L.pchk) { gl.deleteTexture(L.pchk.t); gl.deleteFramebuffer(L.pchk.fb); }
     if (L.P) [L.P.cur, L.P.nxt].forEach(function (b) { gl.deleteTexture(b.t); gl.deleteFramebuffer(b.fb); });
+    if (this.rb) { gl.deleteSync(this.rb.sync); this.rb = null; }
     this.L = null;
   };
 
@@ -352,7 +381,7 @@
   // the colour tables. A new cone gets new walls, a new grid and a fresh lattice.
   Tunnel.prototype.read = function () {
     var T = this, gd = T.gd, fl = gd._fullLayout, fd = gd._fullData, meta = metaOf(gd);
-    if (T.failed) return;
+    if (T.failed || T.compiling) return;
     if (!fl || !fd || !fl.xaxis || !fl.yaxis || !meta || !meta.flow) { T.ok = false; return; }
     var q = {};
     for (var i = 0; i < fd.length; i++) if (fd[i].name && !(fd[i].name in q)) q[fd[i].name] = fd[i];
@@ -392,10 +421,10 @@
     T.clock();
     T.seed();
     T.steps = 0; T.done = false; T.lastState = null; T.segs = null; T.born = -1;
-    T.step(true);                                         // equilibrium at the inflow everywhere
+    T.step(true);                                         // still air everywhere
     T.layers();
     T.draw();
-    T.paint();
+    T.paint(null);                                        // the paths in their rest colour until the first reading
     T.wake();
   };
 
@@ -669,21 +698,54 @@
   // The data paths through their exact points, each segment in its pressure
   // step, and the solver's state line. Reads the computed state back.
   Tunnel.prototype.paint = function (cbuf) {
-    var T = this, sz = T.sz, dpr = T.dpr, u = cbuf || T.readState(), x = T.flow.getContext('2d');
-    T.reference(u);
+    var T = this, sz = T.sz, dpr = T.dpr, u = cbuf === undefined ? T.readState() : cbuf, x = T.flow.getContext('2d');
+    if (u) T.reference(u);
     x.setTransform(dpr, 0, 0, dpr, 0, 0); x.clearRect(0, 0, sz.w, sz.h);
     var W2 = T.wallSteps, segs = [];
     x.lineWidth = 2; x.lineCap = 'butt';                // square ends: a short segment keeps its own colour
     for (var q = 0; q < T.lv.length; q++) for (var d = 0; d + 1 < T.days.length; d++) {
       var X0 = T.xa.l2p(T.days[d]), Y0 = T.ya.l2p(T.lv[q][d]), X1 = T.xa.l2p(T.days[d + 1]), Y1 = T.ya.l2p(T.lv[q][d + 1]);
-      var cpv = T.pathCp(u, (X0 + X1) / 2, (Y0 + Y1) / 2), wb = cpv === null ? 0 : T.band(W2, cpv);
+      var cpv = u ? T.pathCp(u, (X0 + X1) / 2, (Y0 + Y1) / 2) : null, wb = cpv === null ? 0 : T.band(W2, cpv);
       segs.push([q, d, wb, cpv]);
       x.strokeStyle = W2[wb][1]; x.beginPath(); x.moveTo(X0, Y0); x.lineTo(X1, Y1); x.stroke();
     }
     T.segs = segs;
-    T.lastState = u;
+    if (u) T.lastState = u;
     T.hud(x);
-    if (api.overlay) T.drawOverlay(u);
+    if (api.overlay && u) T.drawOverlay(u);
+  };
+  // The live reading, without stopping the page: the state is copied into a
+  // pixel-pack buffer on the GPU and fetched once a fence says the copy is
+  // done (a plain readPixels waits for every queued step and freezes the
+  // page while it waits).
+  Tunnel.prototype.readAsync = function () {
+    var T = this, L = T.L, gl = T.gl, n = L.cols * L.rows * 4;
+    if (T.rb) return;
+    if (!T.pbo || T.pboN !== n) {
+      if (T.pbo) gl.deleteBuffer(T.pbo);
+      T.pbo = gl.createBuffer(); T.pboN = n;
+      gl.bindBuffer(gl.PIXEL_PACK_BUFFER, T.pbo); gl.bufferData(gl.PIXEL_PACK_BUFFER, n * 4, gl.STREAM_READ);
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, L.cur.fb);
+    gl.readBuffer(gl.COLOR_ATTACHMENT2);
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, T.pbo);
+    gl.readPixels(0, 0, L.cols, L.rows, gl.RGBA, gl.FLOAT, 0);
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+    gl.readBuffer(gl.COLOR_ATTACHMENT0);
+    T.rb = { sync: gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0), n: n, key: T.key };
+    gl.flush();
+  };
+  Tunnel.prototype.pollRead = function () {
+    var T = this, gl = T.gl, rb = T.rb;
+    if (!rb) return;
+    if (gl.clientWaitSync(rb.sync, 0, 0) === gl.TIMEOUT_EXPIRED) return;
+    gl.deleteSync(rb.sync); T.rb = null;
+    if (rb.key !== T.key || rb.n !== T.pboN) return;       // a new cone since: the reading is stale
+    if (!T.aBuf || T.aBuf.length !== rb.n) T.aBuf = new Float32Array(rb.n);
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, T.pbo);
+    gl.getBufferSubData(gl.PIXEL_PACK_BUFFER, 0, T.aBuf);
+    gl.bindBuffer(gl.PIXEL_PACK_BUFFER, null);
+    T.paint(T.aBuf);
   };
   // FluidX3D prints its solver state on the frame; so does this
   Tunnel.prototype.hud = function (x) {
@@ -790,21 +852,37 @@
     T.raf = 0;
     if (!T.gd.isConnected) { prune(); return; }
     // the page's own motion first: hold while a glide flies or the reader scrolls
-    if (W.__melionaStop || now - inputAt < LBM.STILL_MS) { T.lastFrame = 0; T.wake(); return; }
+    var R = W.__melionaReveal;
+    if (gliding() || now - inputAt < LBM.STILL_MS || (R && R.moving && R.moving() > 0)) { T.lastFrame = 0; T.wake(); return; }
     if (T.still) {
       var goal = Math.round(LBM.STILL_TRANSITS * T.L.pc / LBM.U_IN);
       for (var i = 0; i < LBM.STILL_CHUNK && T.steps < goal; i++) T.step();
       if (T.steps >= goal) { T.draw(); T.paint(); T.done = true; }
     } else {
       // a card that cannot keep up shows fewer steps per frame (never changes what a step computes)
-      if (T.lastFrame && now - T.lastFrame > 28) { if (++T.slow >= 20) { T.spf = Math.max(LBM.STEPS_MIN, Math.round(T.spf * 0.75)); T.slow = 0; } }
-      else T.slow = 0;
+      // ...and a card that cannot keep up even then keeps one still frame:
+      // the page's own motion comes first.
+      if (T.lastFrame && now - T.lastFrame > 24) {
+        if (++T.slow >= 6) {
+          if (T.spf === LBM.STEPS_MIN) { T.mode = 'lbm-still'; T.done = true; T.draw(); T.readAsync(); T.settle(); return; }
+          T.spf = Math.max(LBM.STEPS_MIN, Math.round(T.spf * 0.7)); T.slow = 0;
+        }
+      } else T.slow = 0;
       T.lastFrame = now;
       for (var k = 0; k < T.spf; k++) T.step();
       T.draw();
-      if (T.frames % LBM.WALL_EVERY === 0) T.paint();
+      T.pollRead();
+      if (T.frames % LBM.WALL_EVERY === 0) T.readAsync();
     }
     T.wake();
+  };
+
+  // a stopped tunnel's last reading still lands on its paths, without waiting
+  Tunnel.prototype.settle = function () {
+    var T = this;
+    if (!T.rb) return;
+    T.pollRead();
+    if (T.rb) W.setTimeout(function () { T.settle(); }, 50);
   };
 
   // ---- the proof, on the rendered output -------------------------------------------
@@ -1008,19 +1086,43 @@
       return false;
     });
   }
+  // Nothing is built while the page loads: a cone is watched, and its tunnel
+  // (the WebGL context, the programs, the lattice) is built only once the
+  // cone comes within a screen of the view, when the browser is idle and no
+  // button's glide or block's arrival is moving - the page's own motion
+  // first (John, 2026-11-04: the build at load froze the arrivals and the
+  // buttons).
+  var near = new IntersectionObserver(function (es) {
+    es.forEach(function (e) { if (e.isIntersecting) { near.unobserve(e.target); build(e.target); } });
+  }, { rootMargin: '100% 0px 100% 0px' });
+  function build(gd) {
+    var go = function () {
+      if (!gd.isConnected || gd.__wind) return;
+      if (busy()) { setTimeout(function () { build(gd); }, 300); return; }
+      var cv = mk('wind-tunnel'), g = glContext(cv);
+      // No GPU, no flow: a software renderer (SwiftShader, llvmpipe) runs the
+      // browser's own compositing on the same emulated GPU, and the solve froze
+      // the whole page on CI's machines (Live audit, 2026-11-04). The chart is
+      // complete without it. tools/flow_check.mjs proves the solve in CI.
+      if (!g.gl || g.soft) {
+        api.status = g.gl ? 'software renderer: flow not run' : 'no WebGL2: flow not run';
+        var lose = g.gl && g.gl.getExtension('WEBGL_lose_context');
+        if (lose) lose.loseContext();
+        return;
+      }
+      new Tunnel(gd, reduced, cv, g.gl);
+    };
+    if (W.requestIdleCallback) W.requestIdleCallback(go, { timeout: 1500 }); else setTimeout(go, 200);
+  }
   function find() {
     prune();
-    var g = glSupport();
-    // No GPU, no flow: a software renderer (SwiftShader, llvmpipe) runs the
-    // browser's own compositing on the same emulated GPU, and the solve froze
-    // the whole page on CI's machines (Live audit, 2026-11-04). The chart is
-    // complete without it. tools/flow_check.mjs proves the solve in CI.
-    if (!g || g.soft) { api.status = g ? 'software renderer: flow not run' : 'no WebGL2: flow not run'; return; }
     var plots = D.querySelectorAll('.js-plotly-plot');
     for (var i = 0; i < plots.length; i++) {
-      var gd = plots[i], m = metaOf(gd);
-      if (gd.__wind) { if (!gd.__wind.cv.isConnected) gd.__wind.read(); continue; }
-      if (m && m.meliona === 'cone') new Tunnel(gd, reduced);
+      var gd = plots[i];
+      if (gd.__wind) { if (!gd.__wind.compiling && !gd.__wind.cv.isConnected) gd.__wind.read(); continue; }
+      if (gd.__windSeen) continue;
+      var m = metaOf(gd);
+      if (m && m.meliona === 'cone') { gd.__windSeen = true; near.observe(gd); }
     }
   }
   var queued = 0;
