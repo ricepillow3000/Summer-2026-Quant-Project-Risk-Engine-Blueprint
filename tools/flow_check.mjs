@@ -43,7 +43,7 @@ async function run(tag) {
     await p.evaluate(n => { const t = window.__melionaWind.tunnels, T = t[t.length - 1]; for (let i = 0; i < n; i++) T.step(); }, Math.min(100, STEPS - done));
   await p.evaluate(() => { const t = window.__melionaWind.tunnels, T = t[t.length - 1]; T.draw(); T.paint(); });
   const w = await p.evaluate(() => window.__melionaWind.check()), c = await chart();
-  console.log(`INFO  ${tag}: ${JSON.stringify({ mode: w.mode, lattice: w.lattice, cells: w.cells, particles: w.particlesAlive, steps: w.steps, day: w.day, stepsPerDay: w.stepsPerDay, maxSpeed: w.maxSpeed, maxCp: w.maxCp })}`);
+  console.log(`INFO  ${tag}: ${JSON.stringify({ mode: w.mode, held: w.held, lattice: w.lattice, cells: w.cells, particles: w.particlesAlive, steps: w.steps, day: w.day, stepsPerDay: w.stepsPerDay, maxSpeed: w.maxSpeed, maxCp: w.maxCp })}`);
   ok(w.mode === 'lbm' && w.steps >= STEPS, `${tag}: the solver ran ${STEPS} steps`, `${w.steps}`);
   ok(Math.abs(w.p5End - c.p5) < 1e-9 && Math.abs(w.p95End - c.p95) < 1e-9, `${tag}: the walls are this cone's paths`, `5th ${w.p5End?.toFixed(3)} / 95th ${w.p95End?.toFixed(3)}`);
   ok(w.obstacleMiss === 0, `${tag}: every path point sits on a wall`, `${w.obstacleMiss} of ${w.obstacleChecks}`);

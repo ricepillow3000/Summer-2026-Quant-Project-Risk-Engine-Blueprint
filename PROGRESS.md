@@ -1046,3 +1046,23 @@ two paid-vendor-dependent pieces remain explicit backlog items:
   no red off the data. Local runs (offline market, 1440px, iPhone 15, reduced
   motion; 1,800 / 6,000 / 15,000 steps, baseline and volatility shock): 0
   mismatches everywhere. CI's flow_check now runs 6,000 steps (past spin-up).
+
+- ✅ **The page's own motion first: the cone's tunnel no longer costs the
+  arrivals or the buttons (2026-11-04, live report)**. John on the live site:
+  the page "felt instantly loaded", buttons did not work, scrolling had none of
+  the transitions. CI never runs the tunnel (its GPU is software), so this was
+  invisible there. `static/windtunnel.js` built its WebGL context, compiled
+  its programs and read the GPU back synchronously at load, off screen; on
+  Windows (ANGLE) that compile can freeze the page for seconds. Now nothing is
+  built while the page loads (an IntersectionObserver watches the cone; the
+  build waits for idle time with no glide, arrival or scroll), one context per
+  cone (no probe context), programs compile in the background
+  (`KHR_parallel_shader_compile`), the live loop reads back through a fence
+  and a pixel-pack buffer (never a blocking readPixels), the loop holds while
+  a glide flies (the glide's stop handle lives on the document: the old check
+  read the window and never held), while blocks arrive (`__melionaReveal.moving()`)
+  or the reader scrolls, and a card that cannot keep up even at 4 steps a
+  frame keeps a still frame. reveal.js: only a CARD lands at once when it
+  changes size mid-arrival. Local, with the GPU flag spoofed: no tunnel at
+  load, the build waits until after a button's glide lands; glide checks
+  (momentum, reader, steady, rest, cold early) and flow_check all pass.

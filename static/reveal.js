@@ -71,7 +71,7 @@
 
   var calm = !('IntersectionObserver' in W) ||
     (W.matchMedia && W.matchMedia('(prefers-reduced-motion: reduce)').matches);
-  var api = W.__melionaReveal = { revealAll: function () {} };
+  var api = W.__melionaReveal = { revealAll: function () {}, moving: function () { return 0; } };
   // The cone's wind tunnel (static/windtunnel.js) comes with this file: one
   // entry point, so the head and main.py's fallback both bring it. Under
   // reduced motion it loads too and draws one still frame of the same solve.
@@ -113,12 +113,15 @@
     el.addEventListener('transitionend', end);
     el.addEventListener('transitioncancel', end);     // interrupted: land, never hang mid-way
     el.__rvTimer = setTimeout(end, delay + 2200);     // a tab hidden mid-way never ends
-    // A block whose content is redrawn while it arrives (Streamlit fills a
+    // A CARD whose content is redrawn while it turns (Streamlit fills a
     // placeholder after a rerun: the Book's sentence, 2026-11-04) changes
-    // size mid-move. Its move was chosen for the old size, so it lands at
-    // once instead of finishing a turn meant for a different block.
+    // size mid-turn. Its turn was chosen for the old size, so it lands at
+    // once instead of finishing a turn meant for a different block. Only a
+    // card: a slide or a tip-up stays right whatever the size, and on a cold
+    // load nearly every block grows while it arrives - landing those at once
+    // made the whole page appear without its motion (John, 2026-11-04).
     el.__rvW = el.offsetWidth; el.__rvH = el.offsetHeight;
-    if (grew) grew.observe(el);
+    if (grew && how === 'card') grew.observe(el);
   }
   var grew = W.ResizeObserver ? new ResizeObserver(function (entries) {
     entries.forEach(function (e) {
@@ -157,6 +160,9 @@
   api.revealAll = function () {                       // the end state, at once (layout probes)
     [].forEach.call(D.querySelectorAll('.reveal-item'), function (el) { seen.unobserve(el); done(el); });
   };
+  // how many blocks are arriving right now (the cone's wind tunnel holds its
+  // GPU work until they have landed, so the arrivals keep the frames)
+  api.moving = function () { return D.querySelectorAll('.reveal-item.is-visible').length; };
 
   // ---- 2. scrubs (fallback only) -------------------------------------------
   var native = W.CSS && CSS.supports && CSS.supports('animation-timeline: view()');
