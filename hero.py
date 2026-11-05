@@ -16,10 +16,10 @@ from src.ingestion import MAX_UNIVERSE
 from src.scenarios import HISTORICAL_REGIMES
 
 HERO_TITLE_LINES = ("Meliona", "Portfolio Risk Engine")
-HERO_SUB = ("See how much a portfolio could lose in a bad year and what real market "
-            "crashes did to it, computed from live end-of-day prices. Every stock "
-            "falls sometimes. What sets a name apart is what happens after, and "
-            "that is what we call grit.")
+HERO_SUB = ("How much could a portfolio lose in a bad year, and what did real "
+            "crashes do to it? Worked out from live end-of-day prices. Every stock "
+            "falls sometimes. What sets a name apart is how it gets back up: we "
+            "call that grit.")
 HERO_CTA = "Start with the Grit Zone"
 # The two labels the banner's system adds (ME-28, John 2026-11-05: the site
 # takes the share banner's design): a kicker over the name, and the caps line
@@ -32,7 +32,7 @@ HERO_RECEIPT = "Inside the engine"
 N_PATHS = 10_000
 # Each simulated path is one year (TRADING_DAYS), so a path is a simulated year.
 HERO_STATS = ((f"{N_PATHS:,}", "Simulated years"), (str(len(HISTORICAL_REGIMES)), "Real crises replayed"),
-              ("2", "Simulation models"), (str(MAX_UNIVERSE), "Assets per portfolio"))
+              ("2", "Ways to simulate"), (str(MAX_UNIVERSE), "Most names per portfolio"))
 _CTA_ARROW = ('<span class="cta-arrow" aria-hidden="true"><svg viewBox="0 0 16 30" fill="none" '
               'xmlns="http://www.w3.org/2000/svg"><path class="shaft" d="M8 1 V22" '
               'stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path '

@@ -323,15 +323,18 @@ def test_the_momentum_sentence_names_the_days_it_skips():
     2026-10-22). The skip is a constant of the engine, so the sentence reads
     it from the dossier rather than restating it."""
     from src.narrative import MOMENTUM_LOOKBACK, MOMENTUM_SKIP
+    # 2026-11-05 (ME-28 copy pass): said in plain words, "its climb over the
+    # 60 trading days that ended 5 days ago" - the window and its skip both.
     for key, tpl in SENTENCES.items():
-        if "{momentum_lookback}-day return" in tpl:
-            assert "{momentum_skip}" in tpl, f"{key.value} hides the skipped days"
+        if "{momentum_lookback}" in tpl:
+            assert "{momentum_lookback} trading days that ended {momentum_skip} days ago" in tpl, \
+                f"{key.value} hides the skipped days"
     prices, dv = _book_fixture()
     said = [d.sentence() for d in build_book(prices, dv, book_value=1e6)
-            if "-day return" in d.sentence()]
+            if "trading days that ended" in d.sentence()]
     assert said, "no momentum sentence rendered"
     for s in said:
-        assert (f"{MOMENTUM_LOOKBACK}-day return to {MOMENTUM_SKIP} days ago"
+        assert (f"{MOMENTUM_LOOKBACK} trading days that ended {MOMENTUM_SKIP} days ago"
                 in s), s
 
 
@@ -428,7 +431,7 @@ def test_fallback_anchor_is_used_only_when_the_universe_cannot_cushion():
     assert fly.partner in ("WILD1", "WILD2"), fly.partner
     assert fly.tail_gap <= 0, "fixture no longer has a deeper in-universe anchor"
     assert fly.sentence_key is SentenceKey.FLYER_PAIRED_DEEPER
-    assert "does not thin the tail" in fly.sentence()
+    assert "does not soften the worst days" in fly.sentence()
     assert not any(d.is_fallback_anchor for d in inside_only.values())
 
     # With DEFN offered as a fallback the anchor switches, and says so.
@@ -439,12 +442,12 @@ def test_fallback_anchor_is_used_only_when_the_universe_cannot_cushion():
     assert fly2.partner == "DEFN", fly2.partner
     assert fly2.tail_gap > 0, "the fallback must actually thin the tail"
     assert fly2.sentence_key is SentenceKey.FLYER_PAIRED_EXTERNAL
-    assert "outside that universe" in fly2.sentence()
+    assert "not on your list" in fly2.sentence()
 
     defn = withfb["DEFN"]
     assert defn.role is Role.CUSHION and defn.is_fallback_anchor
     assert defn.sentence_key is SentenceKey.CUSHION_ANCHOR_EXTERNAL
-    assert "outside the chosen universe" in defn.sentence()
+    assert "from outside your list" in defn.sentence()
 
 
 def test_a_fallback_anchor_never_leads_the_book():

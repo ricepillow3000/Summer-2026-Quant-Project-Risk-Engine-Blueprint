@@ -89,7 +89,7 @@ def run(preset: str | None) -> int:
 
     # 3. the headline numbers must not contradict each other
     metrics = {m.label: m.value for m in at.metric}
-    p_loss = _pct(metrics, "Probability of loss")
+    p_loss = _pct(metrics, "Chance of a losing year")
     if p_loss is not None and not 0.0 <= p_loss <= 100.0:
         flag("NUMBER", f"probability of loss outside [0, 100]: {p_loss}")
     worst, median = _pct(metrics, "Worst simulated year"), _pct(metrics, "Median 1-year return")
@@ -99,7 +99,7 @@ def run(preset: str | None) -> int:
         value = _pct(metrics, label)
         if value is not None and value < 0:
             flag("NUMBER", f"{label} rendered negative ({value}%) - VaR is a loss")
-    vol = _pct(metrics, "Annualized volatility")
+    vol = _pct(metrics, "Volatility per year")
     if vol is not None and vol <= 0:
         flag("NUMBER", f"annualized volatility is {vol}%")
 

@@ -13,7 +13,7 @@ Three independent cross-checks against the LIVE feed (needs Yahoo access):
    way they have to: SPY vs IVV (both S&P 500), GLD vs gold futures, QQQ vs
    SPY. A mislabelled or synthetic series fails these.
 4. Every preset ticker still trades on Yahoo with a full 2-year history.
-5. The three crisis-record boxes under the hero ("Bought the scariest day",
+5. The three crisis-record boxes under the hero ("Bought at the bottom",
    "Three years on", "Worst possible timing"), worked out
    a second time from Yahoo's raw chart API with this file's own loop - no
    yfinance, no src.conviction - and compared as the page prints them.
@@ -206,8 +206,8 @@ def main() -> int:
           f"from {raw[BENCHMARK].index[0].date()}")
     mine = crisis_boxes(raw[BENCHMARK])
     page = page_boxes(load_conviction())
-    for key, label in (("t1", "Bought the scariest day: crises positive a year on"),
-                       ("t1_median", "Bought the scariest day: median return a year on"),
+    for key, label in (("t1", "Bought at the bottom: crises positive a year on"),
+                       ("t1_median", "Bought at the bottom: median return a year on"),
                        ("t3_median", "Three years on: median return"),
                        ("t3", "Three years on: crises positive"),
                        ("p3", "Worst possible timing: crises ahead three years on"),

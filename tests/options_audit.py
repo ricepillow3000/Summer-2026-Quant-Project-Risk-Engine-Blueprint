@@ -545,7 +545,7 @@ def apply_row(at, row, mix_names):
         vt.check()
         if go():                         # the slider is disabled until the box is ticked
             return
-        _widget(at.slider, "Target annual vol (%)").set_value(row["target"])
+        _widget(at.slider, "Target yearly volatility (%)").set_value(row["target"])
     _widget(at.radio, "Return model").set_value(row["engine"])
     _widget(at.selectbox, "Scenario").set_value(row["scenario"])
     if go():
@@ -659,8 +659,8 @@ def check_page(at, row, mix_names) -> list:
             f"cone median ends {y['p50'][-1]:.4f}% vs engine {b['p50'][-1] * 100:.4f}%")
 
     cols, w = list(exp["rets"].columns), exp["w"]
-    book = next((m.value for m in at.markdown if " book: " in m.value and "quiet-tape" in m.value), "")
-    bh = re.search(r"\$([\d,]+) book: (\d+) of your (\d+) names .* at (\d+)% of quiet-tape", book)
+    book = next((m.value for m in at.markdown if " book: " in m.value and "quiet day's volume" in m.value), "")
+    bh = re.search(r"\$([\d,]+) book: (\d+) of your (\d+) names .* at most (\d+)% of a quiet day's volume", book)
     rec("PAGE-04", bool(bh) and int(bh.group(1).replace(",", "")) == row["book"]
         and int(bh.group(4)) == row["book_part"] and int(bh.group(3)) == len(cols),
         f"book headline {re.sub('<[^>]+>', '', book)[:160]!r} for ${row['book']:,} at {row['book_part']}%")

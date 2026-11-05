@@ -4858,7 +4858,7 @@ def test_a_setting_that_loses_more_than_the_book_in_a_day_is_refused_in_words():
             "Bearish: short the book")
         next(c for c in at.checkbox if c.label == "Target volatility").check()
         at.run()
-        next(s for s in at.slider if s.label == "Target annual vol (%)").set_value(30)
+        next(s for s in at.slider if s.label == "Target yearly volatility (%)").set_value(30)
         next(s for s in at.slider if s.label == "Volatility shock").set_value(300)
         at.run()
         assert not at.exception, [e.message for e in at.exception]
@@ -4885,7 +4885,7 @@ def test_liquidity_adjustment_never_turns_a_tail_gain_into_a_bigger_gain():
     assert liquidity_adjusted_cvar(0.20, 60.0)["lvar"] > 0.20   # losses still widen
 
     src = (pathlib.Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
-    guarded = {"that tail widens to ": False}
+    guarded = {"(the tail) widens to ": False}
     for node in ast.walk(ast.parse(src)):
         if not isinstance(node, ast.If):
             continue
@@ -4941,17 +4941,17 @@ def test_fan_chart_caption_claims_block_resampling_only_when_it_happened():
 
     jd = caption(jump_diffusion_mc(long_hist, w, n_simulations=400))
     assert "resampled" not in jd and "crash weeks" not in jd, f"jump-diffusion: {jd}"
-    assert "parametric Merton paths" in jd, jd
+    assert "drawn from the jump model, not from real days" in jd, jd
     iid = caption(monte_carlo(short_hist, w, n_simulations=400))
     assert "crash weeks stay intact" not in iid, f"22-day replay (i.i.d.): {iid}"
-    assert "resampled day by day (window too short for blocks)" in iid, iid
+    assert "resampled one real day at a time (window too short for runs)" in iid, iid
     blk = monte_carlo(_clustered_returns(n=800), np.array([1.0]), n_simulations=400)
     assert blk["block_days"] > 1
     # A geometric block of mean N keeps nothing intact by construction, so the
     # caption says what the bootstrap does and claims nothing more (ME-03,
     # 2026-10-22: the default page printed "2-day blocks so crash weeks stay
     # intact").
-    assert f"resampled in blocks averaging {blk['block_days']} days" in caption(blk), caption(blk)
+    assert f"resampled from runs of real days averaging {blk['block_days']} days" in caption(blk), caption(blk)
     assert "crash weeks" not in caption(blk), caption(blk)
 
 
@@ -5132,7 +5132,7 @@ def test_the_book_lists_an_outside_etf_only_when_it_is_the_anchor():
         shelf = [t for t in DEFENSIVE_ANCHOR_TICKERS if t not in loaded]
         for t, (role, text) in cards.items():
             if t in shelf:
-                assert role == "Anchor" and "outside the chosen universe" in text, (t, role, text)
+                assert role == "Anchor" and "from outside your list" in text, (t, role, text)
         assert set(cards) - set(shelf) == set(loaded), sorted(cards)
     finally:
         restore()
@@ -5150,7 +5150,7 @@ def test_sharpe_does_not_move_with_the_vol_target_slider():
         plain = sharpe()
         [c for c in at.checkbox if c.label == "Target volatility"][0].check().run()
         for tv in (5, 10, 30):
-            [s for s in at.slider if s.label == "Target annual vol (%)"][0].set_value(tv).run()
+            [s for s in at.slider if s.label == "Target yearly volatility (%)"][0].set_value(tv).run()
             assert sharpe() == plain, (
                 f"Sharpe {sharpe()} at a {tv}% vol target vs {plain} unlevered")
         cap = " ".join(c.value for c in at.caption if c.value.startswith("Sharpe ="))
@@ -5991,10 +5991,11 @@ def test_a_difference_of_two_percentages_says_points_and_a_ratio_says_relative()
     text = _offline_page()["text"]
     # The Book's tail gap is a difference of two ES figures: points too
     # (Council A review, 2026-10-22: "2.4% shallower at ES 97.5").
-    gaps = [t for t in text if "shallower at ES" in t or "deeper at ES" in t]
+    gaps = [t for t in text if "shallower" in t or "deeper" in t]
     assert gaps, "no Book tail-gap sentence on the page"
     for t in gaps:
-        assert re.search(r"\d points (shallower|deeper) at ES", t), t
+        assert re.search(r"\d points (shallower|deeper)", t), t
+        assert not re.search(r"\d%\)? (shallower|deeper)", t), t
 
 
 def test_the_headline_unwind_names_its_book_size_and_participation():
@@ -6004,7 +6005,7 @@ def test_the_headline_unwind_names_its_book_size_and_participation():
     Book lets the visitor pick another size."""
     from src.narrative import DEFAULT_PARTICIPATION
     v = _verdict(_offline_page("thin volume", adv=5e4)["text"])
-    assert "tail widens to" in v, f"thin volume did not widen the tail: {v}"
+    assert "(the tail) widens to" in v, f"thin volume did not widen the tail: {v}"
     assert "$1,000,000 book" in v, v
     assert f"{DEFAULT_PARTICIPATION:.0%} of each name's average daily dollar volume" in v, v
 
@@ -6017,7 +6018,7 @@ def test_a_median_that_can_be_negative_is_called_a_return_not_a_gain():
     number that can take either."""
     import re
     page = " ".join(_offline_page()["text"])
-    assert re.search(r"median return -\d+%", page), \
+    assert re.search(r"\(median\) return: -\d+%", page), \
         "fixture no longer shows a negative median"
     for word in ("median gain", "Median 1y gain", "even a buyer"):
         assert word not in page, f"{word!r} on the page"
@@ -6037,7 +6038,8 @@ def test_the_page_points_only_to_controls_that_exist():
     for named in re.findall(r"in the (\w+(?: \w+)?) drawer", text):
         assert named in drawers, f"the page points to a '{named}' drawer that does not exist: {drawers}"
     # the risk-contribution caption names the Allocation drawer's control
-    assert "Allocation" in drawers and "switch Allocation to Risk parity" in text, drawers
+    # (2026-11-05, ME-28 copy pass: the drawer is "Weights: how the money is split")
+    assert "Weights" in drawers and "switch Weights to Risk parity" in text, drawers
 
 
 # --- ME-09 (2026-10-22): data-quality holes ---

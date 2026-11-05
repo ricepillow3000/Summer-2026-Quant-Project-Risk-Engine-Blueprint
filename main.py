@@ -695,7 +695,7 @@ def fan_chart(bands: dict):
         return go.Scatter(x=d, y=p(bands[key]), name=f"{key} readout", line=dict(width=0),
                           hovertemplate="%{y:.1f}% " + label + "<extra></extra>")
 
-    fig.add_trace(readout("p5", "· worst 5% start here"))
+    fig.add_trace(readout("p5", "· worst 5 in 100 start here"))
     fig.add_trace(readout("p25", "· bottom of the middle half"))
     # Median path - the centreline, drawn after the fills so it sits on top
     fig.add_trace(go.Scatter(
@@ -703,10 +703,10 @@ def fan_chart(bands: dict):
         line=dict(color=CHARCOAL, width=2.0, shape="spline", smoothing=1.0),
         hovertemplate="<b>%{y:.1f}%</b> median, trading day %{x}<extra></extra>"))
     fig.add_trace(readout("p75", "· top of the middle half"))
-    fig.add_trace(readout("p95", "· best 5% start here"))
+    fig.add_trace(readout("p95", "· best 5 in 100 start here"))
     fig.add_hline(y=0, line=dict(color=AXIS_LINE, width=1, dash="dot"))
     fig.update_layout(
-        xaxis_title="Trading days", yaxis_title="Cumulative return (%)",
+        xaxis_title="Trading days", yaxis_title="Total return so far (%)",
         hovermode="x unified",                 # one readout: all five levels on that day
         transition=dict(duration=420, easing="cubic-in-out"),
         meta={"meliona": "cone"},              # the audits find the cone by this
@@ -862,24 +862,24 @@ st.markdown("""
     <h2 class="showcase-title">The Grit Zone</h2>
     <div class="ar-rule"></div>
     <div class="showcase-body">
-      Grit measures whether an asset, once knocked down, gets back up, and
-      whether it does so consistently across real crises.
+      Grit asks one question: after a stock falls, does it get back up, and
+      does it do that in crisis after crisis?
     </div>
     <div class="pillar-row">
       <div class="pillar-card">
         <div class="pillar-label">Recovery</div>
-        <div class="pillar-desc">How fast and how completely a name claws
-          back from its own drawdowns.</div>
+        <div class="pillar-desc">How fast, and how fully, a stock wins back
+          what it lost in each fall of 5% or more.</div>
       </div>
       <div class="pillar-card">
         <div class="pillar-label">Consistency</div>
-        <div class="pillar-desc">The share of rolling 1-year holding periods
-          that ended positive.</div>
+        <div class="pillar-desc">How often a year of holding it ended in a
+          gain, counted over every one-year stretch.</div>
       </div>
       <div class="pillar-card">
         <div class="pillar-label">Resilience</div>
-        <div class="pillar-desc">How shallow the drawdown and how fast the
-          recovery across real historical crises.</div>
+        <div class="pillar-desc">How little it fell, and how fast it came
+          back, in the real crises we replay.</div>
       </div>
     </div>
   </div>
@@ -889,10 +889,10 @@ st.markdown("""
       <h2 class="showcase-title">The hardest trade is the one history rewards</h2>
       <div class="ar-rule"></div>
       <div class="showcase-body">
-        Buying in a crash feels wrong. Below is what a buyer actually earned in
-        every named crisis this engine stress-tests, computed live: on the
-        scariest day of each crisis, and at the worst-timed entry, the
-        pre-crash peak.
+        Buying in a crash feels wrong. Here is what a buyer of the S&amp;P 500
+        earned in each crisis we replay: once at the bottom, the lowest close
+        of the crisis, and once at the worst moment, the peak before the
+        fall.
       </div>
       <a href="#crisis-record" class="cta-btn on-dark" style="margin-top:22px;">
         See the crisis record<span class="cta-arrow" aria-hidden="true"><svg viewBox="0 0 16 30" fill="none" xmlns="http://www.w3.org/2000/svg"><path class="shaft" d="M8 1 V22" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path class="head" d="M2.5 16.5 L8 22.5 L13.5 16.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a>
@@ -926,26 +926,26 @@ try:
 
     _sl1, _sl2, _sl3 = st.columns(3)
     with _sl1:
-        st.markdown(f"""<div class="slab"><div class="slab-label">Bought the scariest day</div>
+        st.markdown(f"""<div class="slab"><div class="slab-label">Bought at the bottom</div>
         <div class="slab-num">{round(_t1["pct_positive"] * _t1["n"])} of {_t1["n"]}</div>
-        <div class="slab-note">crises were positive one year after the trough
-        (median return {_t1["median"]:+.0%}).</div></div>""", unsafe_allow_html=True)
+        <div class="slab-note">crises showed a gain one year later. Typical
+        (median) return: {_t1["median"]:+.0%}.</div></div>""", unsafe_allow_html=True)
     with _sl2:
         st.markdown(f"""<div class="slab"><div class="slab-label">Three years on</div>
         <div class="slab-num">{_t3["median"]:+.0%}</div>
-        <div class="slab-note">median return three years after the scariest day
-        ({round(_t3["pct_positive"] * _t3["n"])} of {_t3["n"]} positive).</div></div>""",
+        <div class="slab-note">typical (median) return three years after the
+        bottom. {round(_t3["pct_positive"] * _t3["n"])} of {_t3["n"]} showed a gain.</div></div>""",
                     unsafe_allow_html=True)
     with _sl3:
         st.markdown(f"""<div class="slab"><div class="slab-label">Worst possible timing</div>
         <div class="slab-num">{round(_p3["pct_positive"] * _p3["n"])} of {_p3["n"]}</div>
-        <div class="slab-note">crises: a buyer at the pre-crash peak
-        was ahead three years later (median return {_p3["median"]:+.0%}).</div></div>""",
+        <div class="slab-note">crises: a buyer at the peak before the fall
+        was ahead three years later. Typical (median) return: {_p3["median"]:+.0%}.</div></div>""",
                     unsafe_allow_html=True)
     st.caption(
-        "Computed live from Yahoo Finance adjusted closes (S&P 500 via SPY). "
-        "Historical record, not a forecast. The Crisis Conviction tab below has the full "
-        "tables, the definitions and the limits."
+        "From Yahoo Finance adjusted closing prices of SPY, a fund that tracks the "
+        "S&P 500. A record of the past, not a forecast. The Crisis Conviction tab "
+        "below has every crisis, row by row."
     )
     # This CTA used to sit at the end of the narrative block ABOVE - which put
     # it before the four evidence boxes and this caption, so clicking "from the
@@ -969,11 +969,11 @@ _gungnir_zone = st.container(key="gungnir_zone")
 with _gungnir_zone:
     st.markdown(
         '<div class="gungnir-head">'
-        '<div class="kicker">Two-asset risk parity</div>'
+        '<div class="kicker">Equal risk, two names</div>'
         '<h2 class="showcase-title">From evidence to allocation</h2>'
         '<div class="ar-rule"></div>'
         '<div class="gungnir-sub">Above is the evidence. Below is the tool: '
-        'choose a side, then pick a universe.</div>'
+        'choose a side, then choose your stocks.</div>'
         '</div>',
         unsafe_allow_html=True)
 
@@ -990,10 +990,10 @@ with _gungnir_zone:
             "Which side of the trade are you on?",
             ["Bullish: long the book", "Bearish: short the book"],
             horizontal=True, key="bv_direction",
-            help="Bearish mode re-runs every tail metric, Monte Carlo path and "
-                 "the defensive pairing on a synthetic daily-rebalanced short "
-                 "of the same assets. Borrow fees, margin interest and buy-ins "
-                 "are not modeled, so real short results are worse than shown.")
+            help="Bearish runs every number as if you had sold the same stocks "
+                 "short, reset each day. Borrowing fees, margin interest and "
+                 "forced buy-backs are not included, so a real short would do "
+                 "worse than shown.")
 bearish = direction.startswith("Bearish")
 _bv_sk_a, _bv_sk_b = ("the short position", "the squeeze cushion") if bearish \
     else ("the high-flyer", "the steady cushion")
@@ -1032,7 +1032,7 @@ with _gungnir_zone:
         f'<text x="268" y="184" text-anchor="middle" font-family="Georgia" font-size="11.5" fill="#5D574D">{_bv_sk_a}</text>'
         f'</svg>'
         f'<div style="font-family:Georgia;font-size:13px;color:#5D574D;max-width:560px;margin:2px auto 0;">'
-        f'{"Shorting flips the sketch: the tall block is the position you are against, the wide one a correlated long that cushions the squeeze. The areas are equal, so each carries the same share of the risk. Short losses can exceed 100%, and borrow costs are not modeled." if bearish else "The flyer is narrow and tall: little capital, high volatility. The cushion is wide and short. The areas are equal, so each name carries the same share of the risk."}'
+        f'{"Shorting flips the sketch: the tall block is the stock you bet against, the wide one a stock you own that tends to rise with it, softening a sudden jump. The areas match, so each carries the same share of the risk. A short can lose more than 100%, and borrowing costs are not included." if bearish else "The flyer is narrow and tall: little money, big price swings. The cushion is wide and short: more money, small swings. The areas match, so each name carries the same share of the risk."}'
         f'</div>'
         f'<a href="#engine" class="cta-btn" style="margin-top:14px;">'
         f'To the engine<span class="cta-arrow" aria-hidden="true"><svg viewBox="0 0 16 30" fill="none" xmlns="http://www.w3.org/2000/svg"><path class="shaft" d="M8 1 V22" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path class="head" d="M2.5 16.5 L8 22.5 L13.5 16.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a>'
@@ -1052,16 +1052,17 @@ with _gungnir_zone:
         f'<span class="gplaque-term"><span class="t">w<sub>2</sub>&sigma;<sub>2</sub></span>'
         f'<span class="c">cushion</span></span>'
         f'</div>'
-        f'<div class="gplaque-read">Capital times volatility is the same for both: '
-        f'a name three times as volatile gets a third of the capital.</div>'
+        f'<div class="gplaque-read">Money in a name (w) times how much its price '
+        f'swings (&sigma;, volatility) is the same for both: a stock that swings '
+        f'three times as much gets a third of the money.</div>'
         f'</div>',
         unsafe_allow_html=True)
 
 st.markdown(
     f'<div class="engine-heading" id="engine">'
-    f'<div class="kicker">Value at risk &middot; stress tests &middot; Monte Carlo</div>'
-    f'<h2 class="showcase-title">Stress-test any '
-    f'{"short book" if bearish else "portfolio"}, live</h2><div class="ar-rule"></div>'
+    f'<div class="kicker">Bad-year loss &middot; real crises &middot; simulated years</div>'
+    f'<h2 class="showcase-title">Test any '
+    f'{"short book" if bearish else "portfolio"} against a bad year</h2><div class="ar-rule"></div>'
     # "the analysis", not "the risk map": it lands on the analysis tab strip,
     # whichever tab the reader left open (ME-04). Styled by .cta-link.
     f'<a href="#analysis" class="cta-link">'
@@ -1078,11 +1079,11 @@ st.markdown(
     '<ol class="orient-l">'
     '<li>Pick what you own: choose a starter basket below, or type any ticker '
     'Yahoo Finance carries.</li>'
-    '<li>Replay a real crisis or move the sliders, and watch the headline '
-    'number move.</li>'
-    '<li>Read the verdict. It answers one question: in the worst 5% of '
-    'simulated years, how much of this portfolio goes away? Everything below '
-    'it is the working behind that answer.</li>'
+    '<li>Replay a real crisis or move the sliders, and watch the big number '
+    'move.</li>'
+    '<li>Read the big number. It answers one question: in a bad year, the '
+    'worst 5 of every 100 simulated years, how much does this portfolio lose '
+    'on average? Everything below it shows the working.</li>'
     '</ol>'
     '<div class="orient-f">Nothing here is advice. Every number is computed '
     'from live end-of-day prices, and every tab shows its method.</div>'
@@ -1092,7 +1093,7 @@ st.markdown(
 # ---- The cockpit: controls fold into three drawers so the verdict
 # leads the section. Widgets still execute when collapsed - zero logic change,
 # the reader just isn't bombarded with every dial at once. ----
-with st.expander("Universe: which assets", expanded=False):
+with st.expander("Portfolio: which names to test", expanded=False):
     # The preset rides in the address (?preset=...), so a reload or a shared
     # link opens the same basket (UX check, 2026-11-04: every choice was lost
     # on reload). Read once per session, and only a name in PRESETS is taken:
@@ -1129,8 +1130,8 @@ with st.expander("Universe: which assets", expanded=False):
         default=PRESETS[preset],
         key=f"tickers__{preset}",
         accept_new_options=True,
-        help="Pick a preset above, or add any Yahoo Finance symbol "
-             "(e.g. BRK-B, EURUSD=X for FX, GC=F for gold futures).",
+        help="Pick a starter basket above, or add any Yahoo Finance symbol "
+             "(for example BRK-B, EURUSD=X for a currency, GC=F for gold).",
     )
 
 _raw_syms = sorted({t.strip().upper() for t in chosen if t.strip()})
@@ -1168,8 +1169,8 @@ if len(tickers) > MAX_UNIVERSE:
     )
     tickers = tickers[:MAX_UNIVERSE]
 if len(tickers) < 2:
-    st.warning("Add at least two symbols to analyze a portfolio, or pick a "
-               "preset basket in the Universe drawer above.")
+    st.warning("Add at least two symbols to test a portfolio, or pick a "
+               "starter basket in the Portfolio drawer above.")
     st.stop()
 
 
@@ -1381,7 +1382,7 @@ else:
 
 # ---- Allocation + stress test: one control deck, side by side ----
 deck_alloc, deck_stress = st.columns(2, gap="medium")
-with deck_alloc, st.expander("Allocation: how capital is weighted",
+with deck_alloc, st.expander("Weights: how the money is split",
                              expanded=False):
     COV_LABELS = {
         "Ledoit-Wolf": "Ledoit-Wolf: steady (default)",
@@ -1391,36 +1392,39 @@ with deck_alloc, st.expander("Allocation: how capital is weighted",
     cov_method = st.selectbox(
         "Covariance estimator", ["Ledoit-Wolf", "Sample", "EWMA"],
         format_func=lambda m: COV_LABELS[m],
-        help="How the risk matrix is built; it feeds risk parity and vol "
-             "targeting. Ledoit-Wolf (default) shrinks noisy history "
-             "toward a stable target and is always invertible. Sample is plain "
-             "history. EWMA (RiskMetrics λ=0.94) weights the last two weeks heavily, "
-             "so it flinches at one bad day: use it to see the panic view, not as a "
+        help="How the engine measures the way these names move together (their "
+             "covariance), which sets the weights. Ledoit-Wolf (default) pulls "
+             "noisy history toward a steadier estimate. Sample uses history as it "
+             "is. EWMA (RiskMetrics, λ=0.94) leans hard on the last few weeks, so "
+             "one bad day moves it a lot: use it to see the panic view, not as a "
              "default.")
     cov, cov_info = estimate_covariance(returns, cov_method)  # annualized risk matrix
-    st.caption(f"Risk matrix: {cov_info}.")
+    st.caption(f"How the names move together: {cov_info}.")
     if cov_method == "EWMA":
         st.markdown(
             # the palette's warning mark in a Data Quality row, not a yellow
             # emoji in a 60%-opacity caption (2.63:1, Council B)
             '<div class="dq-row"><span class="dq-mark" role="img" aria-label="Warning" '
             'style="color:#6A5030;font-weight:700;">!</span> '
-            "Reactive lens: EWMA spikes on one bad day (≈11-day half-life; "
-            "at λ=0.94 about 73% of its weight sits in the last month, and it "
-            "takes ~37 trading days to reach 90%). It is the panic Crisis Conviction "
-            "argues against, shown so you can see how twitchy risk looks; the "
-            "engine does not recommend reacting to it.</div>",
+            "Panic view: EWMA jumps on one bad day. Half its weight sits in the "
+            "last ≈11 trading days, about 73% in the last month, and 90% in the "
+            "last ~37 (λ=0.94). It is the panic the Crisis Conviction tab argues "
+            "against, shown so you can see how jumpy risk looks; the engine does "
+            "not suggest acting on it.</div>",
             unsafe_allow_html=True,
         )
     acol1, acol2 = st.columns(2)
     method = acol1.radio(
         "Weighting", ["Equal weight", "Risk parity"], label_visibility="collapsed",
-        help="Risk parity equalizes each asset's risk contribution, so no single "
-             "name dominates (the Bridgewater All-Weather idea).")
+        help="Equal weight puts the same money in each name. Risk parity gives "
+             "each name the same share of the risk, so calmer names get more money "
+             "and no single name dominates (the idea behind Bridgewater's "
+             "All Weather fund).")
     use_vt = acol2.checkbox(
-        "Target volatility", help="Scale exposure to hold a constant annual vol "
-        "(AQR managed-vol style). Leverage < 1 de-risks; > 1 levers up.")
-    target_vol = acol2.slider("Target annual vol (%)", 5, 30, 10, step=1,
+        "Target volatility", help="Scales the whole portfolio up or down so its "
+        "yearly price swings (volatility) match the target. Below 1× invests less "
+        "than the full amount; above 1× borrows to invest more.")
+    target_vol = acol2.slider("Target yearly volatility (%)", 5, 30, 10, step=1,
                               disabled=not use_vt) / 100
 
 base_weights = risk_parity_weights(cov) if method == "Risk parity" else \
@@ -1455,24 +1459,26 @@ with deck_stress, st.expander("Stress test: shock or replay a crisis",
     engine = st.radio(
         "Return model", ["Bootstrap (empirical)", "Jump-diffusion (Merton)"],
         horizontal=True,
-        help="Bootstrap resamples real historical days, so it can only replay tails "
-             "it has already seen. Jump-diffusion (Merton 1976) adds Poisson jumps "
-             "on top of Gaussian diffusion, so a simulated day can fall further "
-             "than any day in the sample. Switch between the two to compare "
-             "their tails on this book.")
+        help="Bootstrap builds each simulated year from stretches of real past "
+             "days, so it can only repeat falls it has already seen. Jump-diffusion "
+             "(Merton 1976) adds rare, sudden jumps to ordinary daily moves, so a "
+             "simulated day can fall further than any real one. Switch between "
+             "the two to compare their worst years on this book.")
     mode = st.selectbox(
         "Scenario", ["Custom shock (sliders)"] + list(HISTORICAL_REGIMES.keys()),
-        help="Custom: set your own drawdown and volatility shock. Or replay the "
-             "actual daily returns of a real crisis, with its real correlations, "
-             "volatility and path.")
+        help="Custom: set your own market fall and extra turbulence. Or replay "
+             "the actual daily returns of a real crisis, with the way these names "
+             "really moved together in it.")
     if mode == "Custom shock (sliders)":
         col1, col2 = st.columns(2)
         drawdown_shock = col1.slider(
             "Market drawdown shock", -50, 0, 0, step=5,
-            help="Shifts every historical daily return down before resampling.")
+            help="Lowers every past daily return so the year as a whole falls "
+                 "by this much, before the simulation runs.")
         vol_shock = col2.slider(
             "Volatility shock", 0, 300, 0, step=10,
-            help="Scales the spread of daily returns to simulate a higher-vol regime.")
+            help="Widens the daily ups and downs by this much, to mimic a "
+                 "more turbulent market.")
     else:
         # Filled once the replay is built: the nominal window claimed the whole
         # crisis even when a late lister had cut the replay short.
@@ -1580,20 +1586,20 @@ except Exception:  # noqa: BLE001 - headline must still render if volume feed is
 # negative when even those years end up ahead - a crisis replay over a window
 # this book rallied through, or a short book replaying a crash - and "loses an
 # average of -57.6%" (found by the recruiter walkthrough) contradicts itself.
-_tail = (f"loses an average of <b>{mc['cvar']:.1%}</b>" if mc["cvar"] > 0 else
-         f"still ends up an average of <b>{-mc['cvar']:+.1%}</b> (this window gives "
-         f"the book no tail loss to measure)")
+_tail = (f"loses <b>{mc['cvar']:.1%}</b> on average" if mc["cvar"] > 0 else
+         f"still ends up <b>{-mc['cvar']:+.1%}</b> on average (this window gives "
+         f"the book no bad-year loss to measure)")
 if scenario_label:
     # Jump-diffusion replays nothing: it fits a model to the window. Either
     # way the N-day window becomes a year, and the sentence says so.
     verdict = (
-        f"With a jump-diffusion model calibrated to the actual returns of "
+        f"With a jump model calibrated to the actual returns of "
         f"{scenario_label} ({len(shocked_returns)} trading days) and run for a "
         f"year, " if use_jd else
         f"Replaying the actual returns of {scenario_label} "
         f"({len(shocked_returns)} trading days), resampled into a year, "
     ) + (f"{alloc_art} {alloc_label} portfolio{lev_txt} "
-         f"{_tail} in the worst 5% of simulated years.")
+         f"{_tail} in a bad year (the worst 5 of every 100 simulated years).")
     if excluded:
         # Ticker names are user-supplied and this string is rendered with
         # unsafe_allow_html. VALID_TICKER already forbids "<", so this escape
@@ -1601,20 +1607,20 @@ if scenario_label:
         # widening the regex later.
         verdict += (" (Excludes "
                     + ", ".join(html.escape(t) for t in excluded)
-                    + ": not trading for the whole period, or priced at or below zero in it.)")
+                    + ": it did not trade through the whole window, or its price fell to zero or below.)")
 else:
     verdict = (
-        f"In the worst 5% of simulated years, {alloc_art} {alloc_label} portfolio of these "
-        f"{len(loaded)} assets{lev_txt} {_tail}."
+        f"In a bad year (the worst 5 of every 100 simulated years), {alloc_art} "
+        f"{alloc_label} portfolio of these {len(loaded)} names{lev_txt} {_tail}."
     )
     if is_shocked:
-        verdict += " (under the stress scenario applied above)"
+        verdict += " (under the stress scenario set above)"
 if bearish:
     verdict += (
-        " <span style='font-size:13px;color:#6A5030;'>Synthetic daily-"
-        "rebalanced short: borrow fees, margin interest and buy-ins are not "
-        "modeled, so real short results are worse. Short losses can exceed "
-        "100% of capital.</span>"
+        " <span style='font-size:13px;color:#6A5030;'>A simulated short, reset "
+        "each day. Borrowing fees, margin interest and forced buy-backs are not "
+        "included, so a real short would do worse. A short can lose more than "
+        "100% of the money put in.</span>"
     )
 
 # Only surface the liquidity add-on when it materially fattens the tail
@@ -1623,10 +1629,10 @@ if bearish:
 if (mc["cvar"] > 0 and lvar and np.isfinite(lvar["lvar"])
         and lvar["multiplier"] > 1.005):
     verdict += (
-        f" Adjusted for the ~<b>{lvar['full_exit_days']:.0f} trading days</b> "
-        f"it takes to fully unwind a ${HEADLINE_BOOK:,.0f} book at "
-        f"{DEFAULT_PARTICIPATION:.0%} of each name's average daily dollar volume, "
-        f"that tail widens to "
+        f" Selling all of a ${HEADLINE_BOOK:,.0f} book takes about "
+        f"<b>{lvar['full_exit_days']:.0f} trading days</b> when you trade at most "
+        f"{DEFAULT_PARTICIPATION:.0%} of each name's average daily dollar volume; "
+        f"counting those days, the bad-year loss (the tail) widens to "
         f"<b>{lvar['lvar']:.1%}</b>."
     )
 
@@ -1673,8 +1679,8 @@ _scale = cvar_scale_html(_cv, st.session_state.get("_cvar_prev"))
 _marks = "".join(
     f' <span class="state-mark" title="{why}">{name}</span>'
     for name, why, on in (
-        ("Stressed", "A shock or a crisis replay is applied in the Stress test drawer", is_shocked),
-        ("Short book", "The bearish side: a synthetic daily-rebalanced short", bearish))
+        ("Stressed", "A shock or a crisis replay is set in the Stress test drawer", is_shocked),
+        ("Short book", "The bearish side: a simulated short, reset each day", bearish))
     if on)
 
 # ---- Verdict + the cone of simulated outcomes: one wide row ----
@@ -1693,29 +1699,32 @@ with v_col:
     with st.expander("How to read the cone"):
         st.markdown(
             '<div class="read-me">'
-            'Time runs left to right across one year of trading days. The dark '
-            'centreline is the median outcome. The darker inner cone holds the '
-            'middle 50% of outcomes and the pale outer cone 90%; it widens because '
-            'uncertainty compounds. Its bottom edge marks the worst 5%. The CVaR '
-            'headline is the average loss beyond that edge, so it sits deeper than '
-            'the cone shows.'
+            'Time runs left to right over one year of trading days. The dark line '
+            'is the middle outcome (the median): half the simulated years end above '
+            'it, half below. The darker band holds the middle half of all years, '
+            'the pale band 9 in 10. The cone widens because small daily moves add '
+            'up. Its bottom edge is where the worst 5 in 100 years begin; the big '
+            'number is the average loss below that edge, so it sits lower than the '
+            'cone shows.'
             '</div>', unsafe_allow_html=True)
 with f_col:
     st.plotly_chart(fan_chart(mc["path_bands"]), width="stretch", config=PLOTLY_CFG)
     # Jump-diffusion resamples nothing, and a replay under 30 days falls back to
     # i.i.d. (block_days=1): both used to claim "crash weeks stay intact".
-    _se_txt = (f" CVaR sampling error: ±{mc['cvar_se']:.2%} "
-               f"({mc['n_simulations']:,} paths, "
-               + ("parametric Merton paths" if mc.get("engine") == "jump-diffusion"
-                  else f"resampled in blocks averaging {mc['block_days']} days"
+    _se_txt = (f" Chance alone could move the bad-year loss by about "
+               f"±{mc['cvar_se']:.2%} (its sampling error; {mc['n_simulations']:,} "
+               f"simulated years, "
+               + ("drawn from the jump model, not from real days"
+                  if mc.get("engine") == "jump-diffusion"
+                  else f"resampled from runs of real days averaging {mc['block_days']} days"
                   if mc.get("block_days", 1) > 1
-                  else "resampled day by day (window too short for blocks)")
-               + "; a simulated estimate, not an exact truth)."
+                  else "resampled one real day at a time (window too short for runs)")
+               + "). It is an estimate, not an exact value."
                if np.isfinite(mc.get("cvar_se", float("nan"))) else "")
     st.caption(
-        "Each simulated path compounds a year of daily returns. Hypothetical "
-        "distribution, not a forecast. The curves interpolate between real "
-        "computed percentiles." + _se_txt
+        "Each simulated year chains together a year of daily returns. A range of "
+        "what could happen, not a forecast. The curves are smoothed between "
+        "computed points." + _se_txt
     )
 
 # ---- The Book: the guided arc, deliberately AHEAD of the tab strip ----
@@ -1725,18 +1734,20 @@ with f_col:
 # and only then is anything paired. See src/narrative.py.
 st.markdown('<div id="the-book"></div>', unsafe_allow_html=True)
 panel_head("The Book",
-           "Capital first, then the names that lead it, then what sits beside them")
+           "The names that lead, and the steady names beside them")
 _bk1, _bk2 = st.columns(2)
 _book_size = _bk1.number_input(
     "Book size ($)", min_value=10_000, max_value=5_000_000_000,
     value=1_000_000, step=100_000, key="book_size",
-    help="The parameter the whole section turns on. Raise it and names drop "
-         "out because you can no longer leave them.")
+    help="How much money the portfolio (the book) holds. This whole section "
+         "turns on it: raise it and names drop out, because a big position "
+         "cannot be sold quickly.")
 _book_part = _bk2.slider(
-    "Max daily participation (% of volume)", 5, 50,
+    "Most of a day's volume you trade (%)", 5, 50,
     round(DEFAULT_PARTICIPATION * 100), step=5, key="book_part",
-    help="How much of a name's daily dollar volume you would be before your own "
-         "trading moves the price. Risk desks use ~10-20%.") / 100
+    help="The most of a stock's daily trading you would make up when selling. "
+         "Trade more than that and your own selling starts to move the price. "
+         "Risk desks often use 10 to 20%.") / 100
 # Overwhelm audit (2026-10-29): the book leads with its paragraph and the
 # names that carry it - the leaders (grit) and their anchors (the pairing).
 # The names with no role, a run of near-identical sentences, fold into one
@@ -1748,16 +1759,17 @@ _bk_more = _bk_box.expander("The other names, line by line, and two finer settin
 _bk3, _bk4 = _bk_more.columns(2)
 _bk_floor = _bk3.toggle(
     "Flyers must be in the grittiest half", value=False, key="book_floor",
-    help="Off: a recovery record only has to exist, and momentum does the "
-         "ranking. On: a leader must also rank in the grittiest half. Both "
-         "readings of 'grittiest high-flyer' are defensible; this shows the "
+    help="Off: a leader only needs a recovery record, and its recent climb "
+         "sets the order. On: a leader must also be in the grittiest half. "
+         "Both readings of 'grittiest high-flyer' are fair; this shows the "
          "difference and leaves the choice to you.")
 _bk_fb = _bk4.toggle(
-    "Allow a defensive anchor from outside the universe", value=True,
+    "Allow a steady anchor from outside your list", value=True,
     key="book_fallback",
-    help="A basket of mega-caps contains nothing that thins a tail. When "
-         "nothing inside your universe cushions, this lets the engine reach "
-         "for TLT/GLD/XLP/XLU/USMV and say on screen that it did.")
+    help="A basket of big tech names may hold nothing calm enough to soften "
+         "its worst days. When nothing in your list does, this lets the engine "
+         "add one of TLT, GLD, XLP, XLU or USMV (Treasury bonds, gold, staples, "
+         "utilities, low-swing stocks) and say on screen that it did.")
 
 # One slot, whatever the basket: The Book writes one card per name, and
 # Streamlit keys elements by position, so a card count that changed with the
@@ -1811,12 +1823,12 @@ with _bk_more:
             _note = role_note(_d)
             if _note:
                 _lbl += f'<br><span class="role-note">{_note}</span>'
-            _flag = (' &middot; <span class="book-flag">outside the chosen '
-                     'universe</span>' if _d.is_fallback_anchor else "")
+            _flag = (' &middot; <span class="book-flag">from outside your '
+                     'list</span>' if _d.is_fallback_anchor else "")
             # Redundant on a card that was already excluded FOR capacity - the
             # sentence there already names the breakpoint.
-            _bind = (' &middot; <span class="book-flag">liquidity set this '
-                     'size, not risk</span>'
+            _bind = (' &middot; <span class="book-flag">trading volume, not '
+                     'risk, set this size</span>'
                      if _d.liquidity_binding and _d.role is not Role.EXCLUDED else "")
             # leaders and anchors stay on the page; the rest is in the drawer
             (_bk_lead if _d.role in (Role.FLYER, Role.CUSHION) else st).markdown(
@@ -1825,13 +1837,13 @@ with _bk_more:
                 unsafe_allow_html=True)
 
         read_me(
-            "Read it top to bottom. Each sentence is a fixed template filled "
-            "with the engine's measured numbers; the text never sees the price "
-            "data, so it cannot state anything the engine did not compute. Names "
-            "marked No role are still held, at the size risk parity and "
-            "liquidity give them, without a lead or anchor role; names marked "
-            "Left out hold nothing. Raise the book size and names drop out as "
-            "the liquidity limit binds.")
+            "Read it top to bottom. Each sentence is a fixed template filled in "
+            "with the engine's own numbers; the text never sees the prices, so it "
+            "cannot say anything the engine did not compute. Names marked No role "
+            "are still held, at the size equal-risk weighting and trading volume "
+            "allow, but neither lead nor anchor; names marked Left out hold nothing. Raise "
+            "the book size and names drop out once they can no longer be sold "
+            "quickly enough.")
     except Exception as _bk_exc:  # noqa: BLE001 - the page must never die on data
         # safe_err, not str(exc): the message can carry a server path (see safe_err).
         _bk_head.info(
@@ -1839,7 +1851,7 @@ with _bk_more:
             f"({safe_err('the-book', _bk_exc)}). No placeholder book is shown.")
 
 st.markdown('<div id="analysis"></div>', unsafe_allow_html=True)
-panel_head("Risk & conviction", "The analysis: where the risk lives")
+panel_head("Risk & conviction", "The working: where the risk sits and how names held up")
 tab_3d, tab_breakdown, tab_grit, tab_conviction = st.tabs([
     "Risk Topology", "Risk Breakdown", "Grit Zone", "Crisis Conviction",
 ])
@@ -1871,18 +1883,18 @@ with tab_3d:
         with st.container(key="risk-map"):
             st.iframe(war_room_html(_wr_payload), width="stretch", height=820)
         st.caption(
-            "The Monte Carlo drawn as a map of beta against realized volatility. "
-            "The lit terrain holds 68% of simulated 30-day end-states and night "
-            "falls at 99.7%; the perimeter is the disclosed hazard policy. Paths "
-            "come from dynamics calibrated on this book's own history, and the "
-            "pairing statistics replay real history. Simulated estimates, not "
-            "forecasts. Explain the map, on the map, defines every term."
+            "The simulation drawn as a map: across, how much the book moves with "
+            "the market (beta); up, how much it swings (volatility). The lit ground "
+            "holds 68 in 100 of the places the book could be in 30 days, and night "
+            "falls at 99.7 in 100; the outer line is a stated danger limit, not an "
+            "estimate. The paths are fitted to this book's own history. Estimates, "
+            "not forecasts. The Explain button on the map defines every term."
         )
     except Exception as _wr_exc:  # noqa: BLE001 - never fake the map
         st.info(
-            "Risk Topology needs live market history to calibrate "
-            f"({safe_err('risk-topology', _wr_exc)}). No demo numbers are "
-            "shown in the product; reload when data is available."
+            "The Risk Topology map needs live market history "
+            f"({safe_err('risk-topology', _wr_exc)}). No stand-in numbers are "
+            "shown; reload when the data is back."
         )
 
 with tab_breakdown:
@@ -1890,11 +1902,11 @@ with tab_breakdown:
 
     c1, c2, c3 = st.columns(3)
     c1.metric("Median 1-year return", f"{mc['median_return']:+.1%}")
-    c2.metric("Probability of loss", f"{mc['prob_loss']:.1%}")
+    c2.metric("Chance of a losing year", f"{mc['prob_loss']:.1%}")
     c3.metric("Worst simulated year", f"{mc['worst_case']:+.1%}")
 
     # --- Risk-contribution decomposition (where the risk actually lives) ---
-    panel_head("Risk contribution by asset", "Where the risk actually lives")
+    panel_head("Risk by name", "How much of the book's swings each name causes")
     # base_weights, NOT the vol-targeted ones: risk_pct is scale-invariant and
     # always sums to 100%, so plotting LEVERED dollar weights beside it put two
     # different denominators under one "% of portfolio" axis - at 0.6x leverage
@@ -1917,15 +1929,16 @@ with tab_breakdown:
     st.plotly_chart(rc_fig, width="stretch", config=PLOTLY_CFG)
     top = rc["risk_pct"].idxmax()
     st.caption(
-        f"Share of total portfolio volatility per asset. {top} contributes the most "
-        f"risk ({rc.loc[top, 'risk_pct']:.0%}). Equal dollar weight ≠ equal risk; "
-        "switch Allocation to Risk parity to flatten these bars."
+        f"Gold: the share of the money in each name. Dark: its share of the "
+        f"portfolio's swings (volatility). {top} causes the most "
+        f"({rc.loc[top, 'risk_pct']:.0%}). Equal money is not equal risk; switch "
+        "Weights to Risk parity to even out the dark bars."
         + (f" Both bars are shares of the book itself; the {leverage:.2f}× "
-           "vol-target overlay scales the whole book and does not change this "
+           "volatility target scales the whole book and does not change this "
            "split." if use_vt else "")
     )
 
-    panel_head("Risk-adjusted performance", "Sharpe vs the real T-bill rate")
+    panel_head("Return for the risk taken", "The Sharpe ratio, against the real T-bill rate")
     rf = load_risk_free_rate()
     ann_ret = float(port_returns.mean()) * TRADING_DAYS
     ann_vol = float(port_returns.std()) * np.sqrt(TRADING_DAYS)
@@ -1937,57 +1950,58 @@ with tab_breakdown:
                           rf if rf is not None else 0.0)
     s1, s2, s3 = st.columns(3)
     s1.metric("Sharpe ratio", f"{sharpe:.2f}")
-    s2.metric("Annualized return", f"{ann_ret:+.1%}")
-    s3.metric("Annualized volatility", f"{ann_vol:.1%}")
+    s2.metric("Return per year", f"{ann_ret:+.1%}")
+    s3.metric("Volatility per year", f"{ann_vol:.1%}")
     rf_txt = (f"{rf:.2%} (13-week T-bill, ^IRX)" if rf is not None
               else "unavailable, so Sharpe is computed against 0%")
     st.caption(
-        f"Sharpe = (annualized return − risk-free) / annualized volatility, on "
-        f"the real (unshocked) "
-        f"{'synthetic short book (daily-rebalanced; borrow costs not modeled)' if bearish else 'portfolio'}. "
+        f"Sharpe = (return per year − the risk-free rate) / volatility per year: "
+        f"how much return each unit of swing earned, on the real, unstressed "
+        f"{'simulated short book (reset daily; borrowing costs not included)' if bearish else 'portfolio'}. "
         f"Risk-free rate: {rf_txt}."
-        + (" Sharpe is taken on the unlevered book: the vol-target overlay only "
-           "rescales it, and with idle cash and borrowing at the risk-free rate "
-           "rescaling leaves Sharpe unchanged. Return and volatility beside it "
-           "are the levered book's." if use_vt else "")
+        + (" Sharpe is taken on the unlevered book, before the volatility target "
+           "scales it: with idle cash and borrowing at the risk-free rate, scaling "
+           "leaves Sharpe unchanged. Return and volatility beside it are the "
+           "scaled book's." if use_vt else "")
     )
 
     if mc.get("engine") == "jump-diffusion":
         jp = mc["jump_params"]
         st.caption(
-            f"Merton jump-diffusion: the engine flagged {jp['n_jumps']} jump days "
-            f"in {jp['n_days']} (moves beyond {jp['k']:.0f}σ), implying "
-            f"~{jp['lambda_daily'] * TRADING_DAYS:.1f} jumps/year on a diffusion vol of "
-            f"{jp['sigma_d'] * np.sqrt(TRADING_DAYS):.0%}. Poisson jumps let the tail run "
-            "further than any day in the sample; switch the return model to the "
-            "bootstrap to compare the two tails on this book."
+            f"Merton jump-diffusion: the engine found {jp['n_jumps']} jump days "
+            f"in {jp['n_days']} (moves beyond {jp['k']:.0f} standard deviations), "
+            f"about {jp['lambda_daily'] * TRADING_DAYS:.1f} jumps a year on top of "
+            f"ordinary swings of {jp['sigma_d'] * np.sqrt(TRADING_DAYS):.0%} a year. "
+            "Random jumps let a simulated day fall further than any real one; "
+            "switch the return model to the bootstrap to compare the two on this "
+            "book."
         )
 
 source_txt = f"the {scenario_label} window" if scenario_label else (
     f"the {len(shocked_returns)} daily returns loaded "
     f"({shocked_returns.index[0].date()} to {shocked_returns.index[-1].date()})")
 engine_txt = (
-    "Merton jump-diffusion (Poisson jumps on Gaussian diffusion), calibrated to"
-    if use_jd else "bootstrap Monte Carlo, resampled from"
+    "a Merton jump-diffusion model (ordinary daily moves plus rare random jumps), calibrated to"
+    if use_jd else "bootstrap Monte Carlo, redrawing real days at random from"
 )
 st.caption(
-    f"Methodology: {mc['n_simulations']:,}-path {engine_txt} {source_txt}, over a {mc['horizon_days']}-day horizon. "
-    f"{alloc_label.capitalize()} allocation{lev_txt}."
+    f"Methodology: {mc['n_simulations']:,} simulated years of {mc['horizon_days']} trading days each, "
+    f"from {engine_txt} {source_txt}. Weighting: {alloc_label}{lev_txt}."
 )
 
 with tab_grit:
     st.caption(
-        "Grit ranks your universe by how each name recovered from its own "
-        "drawdowns: how fast, how completely, and how consistently across real "
-        "crises. Every name here has drawdowns; this measures what happened next."
+        "Grit ranks your names by how each one came back from its own falls: "
+        "how fast, how fully, and how reliably across real crises. Every name "
+        "here has fallen; this measures what happened next."
     )
     try:
         grit = load_grit(tuple(loaded))
         gscores = grit["scores"]
         if gscores.empty:
             st.caption(
-                "Not enough price history in this universe to score grit "
-                f"(need ≥{MIN_HISTORY_DAYS} trading days per name)."
+                "Not enough price history in these names to score grit "
+                f"(each needs at least {MIN_HISTORY_DAYS} trading days)."
             )
         else:
             st.plotly_chart(
@@ -1996,42 +2010,41 @@ with tab_grit:
                 width="stretch", config=PLOTLY_CFG,
             )
             read_me(
-                "Longer bar, grittier name. The name at the top has, across its "
-                "own history, bounced back from drawdowns the fastest and most "
-                "reliably. Score is 0–100 relative to this basket: it ranks "
-                "these names against each other, not against the whole market.")
+                "Longer bar, grittier name. The name at the top has, over its own "
+                "history, come back from its falls the fastest and most reliably. "
+                "Scores run 0 to 100 within this basket: they rank these names "
+                "against each other, not against the whole market.")
             grittiest = gscores.index[0]
             g = gscores.loc[grittiest]
             # NaN here means "no drawdown episode deep enough to measure",
             # which is an unknown record - never render it as a perfect one.
             if pd.isna(g["pct_recovered"]):
-                _rec = ("has not yet had a drawdown deep enough to time a "
+                _rec = ("has not yet fallen far enough to time a "
                         "recovery from")
             else:
                 _med = g["median_recovery_days"]
-                _rec = (f"recovered {g['pct_recovered']:.0%} of its own drawdowns"
+                _rec = (f"won back the loss in {g['pct_recovered']:.0%} of its own falls"
                         + ("" if pd.isna(_med) else
-                           f" (median {_med:.0f} trading days to claw back)"))
+                           f" (half took {_med:.0f} trading days or fewer)"))
             st.caption(
-                f"{grittiest} ranks grittiest here: {_rec}, stayed positive "
-                f"over {g['consistency']:.0%} of rolling 1-year holding "
-                f"periods, and lived through {g['n_regimes_survived']:.0f} of "
-                f"the named crisis windows above."
+                f"{grittiest} ranks grittiest here: it {_rec}, ended "
+                f"{g['consistency']:.0%} of its one-year stretches with a gain, "
+                f"and lived through {g['n_regimes_survived']:.0f} of the named "
+                f"crises."
             )
 
-            panel_head("Grit breakdown", "Recovery · consistency · resilience")
+            panel_head("Grit, part by part", "Recovery · consistency · resilience")
             st.plotly_chart(grit_breakdown_fig(gscores), width="stretch", config=PLOTLY_CFG)
             st.caption(
-                "Each bar is ranked against the other names in this universe, "
-                "not scored on an absolute scale, so a different basket moves "
-                "every number. Recovery counts drawdowns of 5% or more; "
-                "resilience uses only the crisis windows this name traded "
-                "through."
+                "Each bar ranks a name against the others in this basket, not on "
+                "a fixed scale, so a different basket moves every number. Recovery "
+                "counts falls of 5% or more; resilience uses only the crises the "
+                "name traded through."
             )
 
             if grit["excluded"]:
                 st.caption(
-                    f"Excluded for insufficient history (<{MIN_HISTORY_DAYS} "
+                    f"Left out for too little history (under {MIN_HISTORY_DAYS} "
                     f"trading days): {', '.join(grit['excluded'])}."
                 )
     except Exception as exc:  # noqa: BLE001
@@ -2040,8 +2053,8 @@ with tab_grit:
 # ---- Crisis Conviction: the emotional problem, priced ----
 with tab_conviction:
     st.caption(
-        "For every named crisis this engine stress-tests, here is what "
-        "actually happened next, computed live from market data."
+        "For every crisis we replay, here is what actually happened next, "
+        "worked out from live market data."
     )
     try:
         conv = load_conviction_data()
@@ -2049,12 +2062,12 @@ with tab_conviction:
         t1 = summ["trough_1y_later"]
 
         h1, h2, h3 = st.columns(3)
-        h1.metric("Positive 1y after the trough",
+        h1.metric("Up one year after the bottom",
                   f"{round(t1['pct_positive'] * t1['n'])} / {t1['n']} crises")
-        h2.metric("Median 1y return from the trough", f"{t1['median']:+.0%}")
-        h3.metric("Median crash depth", f"{ctab['depth'].median():.0%}")
+        h2.metric("Typical return a year after the bottom", f"{t1['median']:+.0%}")
+        h3.metric("Typical fall, peak to bottom", f"{ctab['depth'].median():.0%}")
 
-        panel_head("What a buyer actually got", "Crisis by crisis, best day vs. worst day to buy")
+        panel_head("What a buyer actually got", "Crisis by crisis: the best day to buy and the worst")
         # By key, not position: a reordered table can never put one entry's
         # returns under the other's heading.
         show = ctab.rename(columns={
@@ -2083,11 +2096,11 @@ with tab_conviction:
             st.markdown(
                 '<div class="read-me">'
                 'Each row is a real crisis. Trough buy: you bought the S&amp;P '
-                '500 (SPY) on the single scariest day, the exact bottom. Peak '
-                'buy: you bought at the pre-crash top, the worst-timed entry '
-                'possible. The columns show where that money stood 1 and 3 '
-                'trading-years later. "-" means the crisis is too recent for that '
-                'horizon: excluded, not estimated.'
+                '500 (SPY) at the lowest close of the crisis, the exact bottom. '
+                'Peak buy: you bought at the top before the fall, the worst '
+                'possible timing. The columns show where that money stood 1 and 3 '
+                'trading years later. "-" means the crisis is too recent for that '
+                'span: left out, not estimated.'
                 '</div>', unsafe_allow_html=True)
             # The exceptions are READ from the table, never written in: which
             # crises leave a peak buyer behind depends on the live series, and
@@ -2095,9 +2108,9 @@ with tab_conviction:
             _p3y = pd.to_numeric(show["Peak buy, 3y later"], errors="coerce")
             _behind = show.loc[_p3y < 0, "Crisis"].tolist()
             st.caption(
-                "Nobody can time the exact trough, so that row measures the "
-                "direction of the edge, not an executable strategy. That's why "
-                "the peak row sits beside it: the worst-timed buyer was ahead "
+                "Nobody can time the exact bottom, so the trough columns show which "
+                "way the odds lean, not a strategy you could follow. That is why "
+                "the peak columns sit beside them: the worst-timed buyer was ahead "
                 f"three years later in {int((_p3y > 0).sum())} of "
                 f"{int(_p3y.notna().sum())} crises with three years of data"
                 + (f". The exception{'s' if len(_behind) > 1 else ''}: "
@@ -2121,11 +2134,11 @@ DQ_MESSAGES = {"DatetimeIndex confirmed.": "Every row carries a date.",
 
 with tab_dq:
     st.caption(
-        "Every price pull runs through an automated validation gate before "
-        "any risk number is computed from it: schema checks, positivity, "
-        "coverage, staleness, and an extreme-move flag. This validates "
-        "structure and plausibility, not truth: it catches a malformed or "
-        "implausible feed, not a wrong-but-plausible number."
+        "Every price download is checked before any risk number is worked out "
+        "from it: dates present and in order, prices above zero, enough history, "
+        "missing days, how recent it is, and any unusually large one-day move. These checks catch a "
+        "broken or implausible feed; they cannot catch a wrong number that "
+        "looks plausible."
     )
     report = validate_prices(prices)
     # Palette marks, not colour emoji - the emoji were the only bright colours
@@ -2144,7 +2157,7 @@ with tab_dq:
         st.markdown(f'<div class="dq-row">{mark[c["status"]]} {html.escape(_name)}'
                     f': {html.escape(_says)}</div>', unsafe_allow_html=True)
     verdict_dq = "passed" if report["passed"] else "failed"
-    panel_head("Overall data-quality gate", f"This feed {verdict_dq} the gate")
+    panel_head("Data checks, overall", f"This feed {verdict_dq} the checks")
 
 with tab_lineage:
     prov = provenance(tickers)
@@ -2175,9 +2188,9 @@ with tab_lineage:
 
     panel_head("This run's audit trail", "Every step this session took, in order")
     st.caption(
-        "Session-scoped: rebuilt fresh each rerun, not persisted across "
-        "sessions. A full compliance system would append this to durable "
-        "storage; this is the same concept at the scale this engine operates at."
+        "Kept for this visit only: rebuilt on every change, never stored. A "
+        "full compliance system would write it to permanent storage; this is "
+        "the same idea at this engine's scale."
     )
     st.dataframe(pd.DataFrame(audit_log), width="stretch", hide_index=True)
 
@@ -2230,11 +2243,11 @@ st.markdown("""
 <div class="meliona-footer">
   <div class="f-rail">
     <a class="f-box" href="#grit-showcase">The Grit Zone
-      <small>Which names got back up after their own falls.</small></a>
+      <small>Which names get back up after a fall.</small></a>
     <a class="f-box" href="#crisis-record">Crisis Conviction
-      <small>What buyers earned in __NCRISES__ named crises.</small></a>
+      <small>What buyers earned in __NCRISES__ real crises.</small></a>
     <a class="f-box" href="#engine">The engine
-      <small>Stress-test any basket live, from allocation to the CVaR verdict.</small></a>
+      <small>Test any basket against a bad year, from the weights to the big number.</small></a>
   </div>
   <div class="f-bar">
     <div>Meliona &middot; Portfolio Risk Engine &middot; &copy; 2026 John Nguyen</div>

@@ -367,7 +367,7 @@ await step('engine baseline', async () => {
 });
 
 await step('allocation', async () => {
-  await openDrawer('Allocation: how capital');
+  await openDrawer('Weights: how the money');
   for (const est of ['Sample: plain history', 'EWMA: reactive / panic lens', 'Ledoit-Wolf: steady (default)']) {
     const prev = await verdict();
     await pick('Covariance estimator', est);
@@ -395,7 +395,7 @@ await step('allocation', async () => {
   await choose('Target volatility');
   await newVerdict(prev);
   await settle();
-  const vol = pct(await metric('Annualized volatility'));
+  const vol = pct(await metric('Volatility per year'));
   const s = await sentence();
   ok(Math.abs(vol - 10) <= 1.5, 'allocation: vol target 10% lands near 10% realised', `${vol}% realised`);
   ok(/levered \d+\.\d\d×/.test(s), 'allocation: the verdict names the leverage', (s.match(/levered [\d.]+×/) || [''])[0]);
@@ -456,7 +456,7 @@ await step('stress test', async () => {
 });
 
 await step('every preset', async () => {
-  await openDrawer('Universe: which assets');
+  await openDrawer('Portfolio: which names');
   if (!PRESET_LIST) return say('FAIL', 'presets: list', 'SCAN_PRESETS not set');
   const names = PRESET_LIST;
   const list = FULL ? names : names.slice(0, 4);
@@ -499,7 +499,7 @@ async function bookState() {
              noteOk: cards.every(c => (lbl(c) === 'No role')
                === /^(\d+\.\d%|<0\.1%) of the book$/.test(note(c))),
              out: cards.filter(c => lbl(c) === 'Left out').length, total: cards.length, head,
-             outside: cards.filter(c => /outside the chosen universe/.test(c.textContent)).length };
+             outside: cards.filter(c => /from outside your list/.test(c.textContent)).length };
   });
 }
 await step('the book', async () => {
@@ -540,10 +540,10 @@ await step('the book', async () => {
   const bf = await bookState();
   ok(bf.leads <= b0.leads, 'book: the grit floor can only narrow the leaders', `${b0.leads} -> ${bf.leads}`);
   await choose('Flyers must be in the grittiest half'); await settle();
-  await choose('Allow a defensive anchor from outside the universe'); await settle();
+  await choose('Allow a steady anchor from outside your list'); await settle();
   const bn = await bookState();
   ok(bn.outside === 0, 'book: with the outside anchor off, nothing from outside appears', `${bn.outside} outside cards`);
-  await choose('Allow a defensive anchor from outside the universe'); await settle();
+  await choose('Allow a steady anchor from outside your list'); await settle();
 });
 
 // ---- 7. tabs, drawers ------------------------------------------------------------
