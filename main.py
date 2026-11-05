@@ -12,6 +12,7 @@ so the engine speaks to any audience - not just one watchlist.
 """
 
 from pathlib import Path
+import re
 import html
 
 import numpy as np
@@ -45,8 +46,8 @@ from src.pairing import (anchor_rank, backtest_pair, crisis_cushion,
                          tail_gap, DEFENSIVE_ANCHOR_TICKERS)
 from src.covariance import estimate_covariance, RISKMETRICS_LAMBDA, TRADING_DAYS
 from src.topology import anchor_frame, build_map_payload, war_room_html
-from src.observability import (host_setting, log_incident, log_session_start,
-                               new_session_ref, setup_logging)
+from src.observability import (count_preset, count_session, host_setting, log_incident,
+                               log_session_start, new_session_ref, setup_logging)
 from src.eigenrisk import eigen_factors, marcenko_pastur_bounds, pc1_exposure
 from src.scenarios import HISTORICAL_REGIMES, replay_returns
 from hero import N_PATHS, hero_html
@@ -90,6 +91,15 @@ AppSession._handle_clear_cache_request = _ignore_clear_cache_request
 # forwarded, filtered or handed on without touching a personal inbox.
 # MELIONA_SUPPORT_EMAIL overrides it per environment without a redeploy.
 SUPPORT_EMAIL = host_setting("SUPPORT_EMAIL", "meleona.support@gmail.com")
+# John's support phone (2026-11-04), shown as a tap-to-call link beside the
+# email. It is published on a public page, so it will be scraped like the
+# email: MELIONA_SUPPORT_PHONE on the host replaces it, and "off" hides it,
+# both without a redeploy.
+SUPPORT_PHONE = host_setting("SUPPORT_PHONE", "770-265-9930").strip()
+if SUPPORT_PHONE.lower() in {"off", "none", "0", ""}:
+    SUPPORT_PHONE = ""
+_digits = re.sub(r"\D", "", SUPPORT_PHONE)
+SUPPORT_TEL = f"+1{_digits}" if len(_digits) == 10 else (f"+{_digits}" if _digits else "")
 
 # What a visitor reads when Yahoo returns nothing for a preset basket. Those
 # names are known good, so the feed, not the spelling, is the likely cause.
@@ -110,7 +120,7 @@ if host_setting("MAINTENANCE").strip().lower() in {"1", "true", "yes", "on"}:
     st.title("Meliona is briefly offline")
     st.write(host_setting("MAINTENANCE_NOTE")
              or "The engine is paused for maintenance. Please check back shortly.")
-    st.caption(f"Questions: {SUPPORT_EMAIL}")
+    st.caption(f"Questions: {SUPPORT_EMAIL}" + (f" or {SUPPORT_PHONE}" if SUPPORT_PHONE else ""))
     st.stop()
 
 # Crash wire: attach the rotating log handler once, mint a per-session
@@ -122,6 +132,7 @@ setup_logging()
 if "session_ref" not in st.session_state:
     st.session_state.session_ref = new_session_ref()
     log_session_start(st.session_state.session_ref)
+    count_session()            # +1 to today's anonymous total (PRIVACY.md "Analytics")
 SESSION_REF = st.session_state.session_ref
 
 
@@ -1309,6 +1320,12 @@ with st.expander("Universe: which assets", expanded=False):
             del st.query_params["preset"]
     elif st.query_params.get("preset") != preset:
         st.query_params["preset"] = preset
+    # Usage: each preset basket a session opens counts once for that session,
+    # not once per rerun. A name from PRESETS only - never the typed tickers.
+    _opened = st.session_state.setdefault("_usage_presets", set())
+    if preset not in _opened:
+        _opened.add(preset)
+        count_preset(preset, PRESETS)
 
     # Keying the multiselect on the preset name makes it re-initialize with the
     # new default whenever the preset changes - while still letting users add or
@@ -3408,9 +3425,10 @@ with tab_lineage:
     panel_head("Your data", "What this app holds about you, and how to clear it")
     st.markdown(
         "There is no account to delete: Meliona has no sign-up, login or "
-        "password, and no analytics or advertising SDK. It stores two things "
-        "in your browser, both Streamlit's own: an anti-forgery cookie and your "
-        "light or dark theme (details in the privacy note).\n\n"
+        "password, and no analytics or advertising SDK. It stores at most three "
+        "things in your browser: Streamlit's anti-forgery cookie and your light "
+        "or dark theme, and, once you press OK on the cookie notice, a note that "
+        "you have seen it (details in the privacy note).\n\n"
         f"- This session, in memory only and gone when you close the tab: the "
         f"tickers you chose, the settings above, the preset in the address bar, "
         f"and the random reference {SESSION_REF}, which is not linked to you.\n"
@@ -3419,7 +3437,9 @@ with tab_lineage:
         "picks the same basket, and hold nothing about you.\n"
         "- Logs: errors and a session-start line, tagged with the reference "
         "above so a support email can be matched to a stack trace. They rotate "
-        "away on size and hold no personal data.\n"
+        "away on size and hold no personal data. Once an hour the server also "
+        "writes one line of anonymous totals: how many sessions started today "
+        "and how many opened each preset basket, with no reference in it.\n"
         "- Third parties: nothing about you. The server fetches prices from "
         "Yahoo Finance only, and your browser talks only to this app.\n\n"
         f"To have the logs for your reference purged early, email "
@@ -3432,11 +3452,18 @@ with tab_lineage:
         # does not clear the shared market-data cache - that is an operator
         # action, and visitors are viewers here (see .streamlit/config.toml).
         keep = st.session_state.session_ref
+        opened = st.session_state.get("_usage_presets", set())
         st.session_state.clear()
         st.query_params.clear()           # the preset in the address too
         st.session_state.session_ref = keep
-        st.success("Session settings cleared. Reloading with defaults.")
+        st.session_state["_usage_presets"] = opened   # still one session: no recount
+        st.session_state["_cleared"] = True
         st.rerun()
+    # Shown after the reload: a message written just before st.rerun() is
+    # wiped before anyone can read it (2026-11-04).
+    if st.session_state.pop("_cleared", False):
+        st.success("Done: this session's settings are cleared and the page is back "
+                   "to its defaults.")
 
 # ---- Closing band: three links onward, then copyright, support, accessibility ----
 st.markdown("""
@@ -3454,10 +3481,11 @@ st.markdown("""
     <div>Live end-of-day data: Yahoo Finance &middot; Educational analysis, not investment advice</div>
   </div>
   <div class="f-bar">
-    <div>Support: <a href="mailto:__SUPPORT__?subject=Meliona%20%E2%80%93%20session%20__REF__">__SUPPORT__</a>
+    <div class="f-links">Support: <a href="mailto:__SUPPORT__?subject=Meliona%20%E2%80%93%20session%20__REF__">__SUPPORT__</a>__PHONE__
       &middot; <a href="https://github.com/ricepillow3000/Summer-2026-Quant-Project-Risk-Engine-Blueprint/blob/main/PRIVACY.md">Privacy</a>
       &middot; <a href="https://github.com/ricepillow3000/Summer-2026-Quant-Project-Risk-Engine-Blueprint/blob/main/TERMS.md">Terms</a>
-      &middot; <a href="https://github.com/ricepillow3000/Summer-2026-Quant-Project-Risk-Engine-Blueprint/blob/main/ACCESSIBILITY.md">Accessibility</a></div>
+      &middot; <a href="https://github.com/ricepillow3000/Summer-2026-Quant-Project-Risk-Engine-Blueprint/blob/main/ACCESSIBILITY.md">Accessibility</a>
+      &middot; <a href="https://github.com/ricepillow3000/Summer-2026-Quant-Project-Risk-Engine-Blueprint">Source code on GitHub</a></div>
     <div>No accounts &middot; no tracking &middot; session reference <span class="f-ref">__REF__</span> (quote it when you write in)</div>
   </div>
   <div class="f-bar">
@@ -3468,6 +3496,7 @@ st.markdown("""
       with the reference above; a barrier is fixed as a defect.</div>
   </div>
 </div>
-""".replace("__SUPPORT__", SUPPORT_EMAIL).replace("__REF__", SESSION_REF)
+""".replace("__SUPPORT__", SUPPORT_EMAIL).replace("__REF__", SESSION_REF).replace(
+    "__PHONE__", f' &middot; <a href="tel:{SUPPORT_TEL}">{SUPPORT_PHONE}</a>' if SUPPORT_PHONE else "")
    .replace("__NCRISES__", str(len(HISTORICAL_REGIMES))),
     unsafe_allow_html=True)

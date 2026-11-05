@@ -196,7 +196,7 @@ async function settle(page, where = '') {
 async function landed(page) {
   for (let i = 0; i < 10; i++) {
     const left = await page.evaluate(() => new Promise(done => {
-      window.__melionaReveal?.revealAll();
+      window.__melionaReveal?.revealAll(); window.__melionaNotice?.dismiss();
       requestAnimationFrame(() => requestAnimationFrame(() => done(document.querySelectorAll('.reveal-item').length)));
     }));
     if (!left) return;
@@ -208,6 +208,10 @@ for (const dev of names) {
   const d = DEVICES[dev];
   const ctx = await browser.newContext({ viewport: { width: d.width, height: d.height },
     deviceScaleFactor: d.scale, isMobile: d.mobile, hasTouch: d.mobile });
+  // The cookie notice (static/dock.js) is answered the way a returning visitor
+  // answered it: OK pressed. It is a fixed, informational layer, not what this
+  // tool measures, and on a desktop it sits over the bottom-left corner.
+  await ctx.addInitScript(() => { try { localStorage.setItem('meliona-cookie-notice', 'ok'); } catch (e) { /* blocked */ } });
   const page = await ctx.newPage();
   page.setDefaultTimeout(180000);
   const errors = [];

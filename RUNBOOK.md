@@ -80,6 +80,11 @@ sweep of recent failures with no specific reference:
 Logs rotate at 1 MB x 3 files and hold tickers and stack traces - no personal
 data, which is what lets the privacy note say what it says.
 
+Usage: search Railway's log view (service -> Logs) for `meliona.usage`. One
+line an hour, e.g. `usage 2026-11-04: 37 sessions; presets: Mag-7 21, ...`; a
+day's last line (written at the first visit after midnight UTC, or at shutdown)
+is its total, and the counts restart at zero on every redeploy.
+
 ## 4. Spend and rate-limit control
 
 The engine calls no metered API and no LLM, so there is no credit balance to
@@ -120,6 +125,14 @@ lands:
 simultaneous first-time visitors see the headline within ~21s, 25 within ~53s,
 no errors, peak memory ~720 MB. Re-measure on Railway before quoting it as the
 live site's number. Report: `audit/stress_2026-10-15T020905Z.md`.
+
+**Repeatable since 2026-11-04:** `node tools/load_check.mjs <url> 10 240` opens
+ten visitors at once and fails on any error, refusal or missing headline; the
+Live audit runs it on every push (step 8e), then restores a fresh checkout
+with an empty cache and times it to its first headline. `serve.py` also caps
+each network address (60 new sessions a minute, 30 open, 3,000 requests a
+minute; health checks exempt), and the `Uptime` workflow checks the live site
+every 15 minutes.
 
 ### Reverse proxy / CDN (Cloudflare): decided against, 2026-10-15
 

@@ -23,6 +23,10 @@ let fails = 0;
 const ok = (c, name, note = '') => { if (!c) fails++; console.log(`${c ? 'PASS' : 'FAIL'}  ${name}${note ? ' - ' + note : ''}`); };
 const b = await chromium.launch();
 const p = await b.newPage({ viewport: { width: 1440, height: 900 } });
+// The cookie notice (static/dock.js) is answered the way a returning visitor
+// answered it: OK pressed. It is a fixed, informational layer, not what this
+// tool measures, and on a desktop it sits over the bottom-left corner.
+await p.addInitScript(() => { try { localStorage.setItem('meliona-cookie-notice', 'ok'); } catch (e) { /* blocked */ } });
 await p.addInitScript(() => {
   const g = WebGL2RenderingContext.prototype.getParameter;
   WebGL2RenderingContext.prototype.getParameter = function (k) { return k === 0x9246 ? 'ANGLE (flow_check hardware stand-in)' : g.call(this, k); };
@@ -36,7 +40,7 @@ const chart = () => p.evaluate(() => { const g = [...document.querySelectorAll('
   const d = g._fullData; return { p5: d[1].y[d[1].y.length - 1], p95: d[0].y[d[0].y.length - 1] }; });
 async function run(tag) {
   await cone(); await centre(); await p.waitForTimeout(800); await centre();
-  await p.evaluate(() => window.__melionaReveal?.revealAll());
+  await p.evaluate(() => { window.__melionaReveal?.revealAll(); window.__melionaNotice?.dismiss(); });
   await p.waitForFunction(() => { const t = window.__melionaWind?.tunnels; const T = t && t[t.length - 1];
     if (!T || !T.L || !T.gd.isConnected) return false; T.visible = false; T.wake(); return true; }, null, { timeout: 120000 });
   for (let done = 0; done < STEPS; done += 100)                     // in slices, so the page stays responsive

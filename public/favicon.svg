@@ -1,0 +1,28 @@
+<svg viewBox="-45 -45 90 90" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Meliona">
+  <defs>
+    <radialGradient id="mc-disc" cx="0" cy="-22" r="70" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4A443D"/>
+      <stop offset=".55" stop-color="#2E2A25"/>
+      <stop offset="1" stop-color="#1C1916"/>
+    </radialGradient>
+    <linearGradient id="mc-gold" x1="0" y1="-44" x2="0" y2="44" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#E6CC97"/>
+      <stop offset=".45" stop-color="#B8955E"/>
+      <stop offset=".7" stop-color="#8A6A3C"/>
+      <stop offset="1" stop-color="#C6A26B"/>
+    </linearGradient>
+    <linearGradient id="mc-ivory" x1="0" y1="-35" x2="0" y2="35" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FBF8F2"/>
+      <stop offset=".5" stop-color="#EDE9E3"/>
+      <stop offset="1" stop-color="#DCD3C4"/>
+    </linearGradient>
+  </defs>
+  <circle r="44" fill="url(#mc-disc)" stroke="url(#mc-gold)" stroke-width="1.4"/>
+  <g fill="url(#mc-ivory)">
+    <polygon points="0,-35 27.358,-19.205 0,-3.409 -27.358,-19.205"/>
+    <polygon points="0,-2.309 4,0 0,2.309 -4,0"/>
+    <polygon points="0,35 27.358,19.205 0,3.409 -27.358,19.205"/>
+    <polygon points="-5.905,0 -30.311,-14.091 -30.311,14.091"/>
+    <polygon points="5.905,0 30.311,-14.091 30.311,14.091"/>
+  </g>
+</svg>

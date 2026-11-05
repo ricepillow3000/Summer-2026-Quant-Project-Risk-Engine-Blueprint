@@ -20,10 +20,28 @@ do (LAUNCH_CHECKLIST #89, corrected 2026-11-04):
 Pure ASGI rather than BaseHTTPMiddleware, so streamed responses and the
 websocket pass straight through. Pinned by
 test_every_response_carries_the_security_headers.
+
+RateLimit (2026-11-04, John's pre-public list) caps what one network address
+can do: new sessions a minute, sessions open at once, and HTTP requests a
+minute. A visitor never comes near the caps - one page is one session and
+about forty requests - so they only stop a script flooding the one process
+every visitor shares. Over a cap: HTTP 429, or the websocket closed with
+1013 ("try again later"). The address is read from the last hop Railway's
+proxy appended to X-Forwarded-For (an address the client typed sits to its
+left), counted in memory for a minute and never written down; a refusal is
+logged with a scrambled form of it (PRIVACY.md). The health check is never
+limited, so Railway's own probe cannot be refused. Server errors (5xx) are
+logged too. Pinned by test_one_address_cannot_flood_the_shared_process.
 """
 
 from __future__ import annotations
 
+import hashlib
+import logging
+import secrets
+import sys
+import time
+from collections import defaultdict, deque
 from pathlib import Path
 
 from starlette.middleware import Middleware
@@ -67,4 +85,106 @@ class SecurityHeaders:
         await self.app(scope, receive, with_headers)
 
 
-app = App(Path(__file__).with_name("main.py"), middleware=[Middleware(SecurityHeaders)])
+# Per address. A page load is one session and about forty requests, so a
+# person - or a whole office behind one address - stays far below these.
+NEW_SESSIONS_PER_MINUTE = 60
+OPEN_SESSIONS = 30
+REQUESTS_PER_MINUTE = 3000
+NEVER_LIMITED = ("/_stcore/health",)
+WINDOW = 60.0
+MAX_TRACKED = 20_000            # addresses held at once; the oldest go first
+
+log = logging.getLogger("meliona.ratelimit")
+if not log.handlers:            # serve.py runs before main.py's setup_logging
+    _h = logging.StreamHandler(sys.stderr)
+    _h.setFormatter(logging.Formatter("%(asctime)s | %(levelname)-7s | %(name)s | %(message)s"))
+    _h.setLevel(logging.WARNING)
+    log.addHandler(_h)
+    log.setLevel(logging.WARNING)
+    log.propagate = False
+_SALT = secrets.token_bytes(16)  # new every start: a logged tag cannot be reversed
+
+
+def scrambled(addr: str) -> str:
+    """A short tag for an address: the same within one run, never the address."""
+    return hashlib.blake2s(addr.encode(), key=_SALT, digest_size=4).hexdigest()
+
+
+def client_address(scope) -> str:
+    for name, value in scope.get("headers", []):
+        if name == b"x-forwarded-for":
+            hops = [h.strip() for h in value.decode("latin-1").split(",") if h.strip()]
+            if hops:
+                return hops[-1]
+    client = scope.get("client")
+    return client[0] if client else "unknown"
+
+
+class RateLimit:
+    """Caps new sessions a minute, open sessions and requests a minute, per
+    address. Refusals are 429 (HTTP) or close code 1013 (websocket)."""
+
+    def __init__(self, app, clock=time.monotonic):
+        self.app, self.clock = app, clock
+        self.sessions = defaultdict(deque)   # address -> start times of sessions
+        self.requests = defaultdict(deque)   # address -> times of HTTP requests
+        self.open = defaultdict(int)          # address -> sessions open now
+        self.warned = {}                      # address -> last refusal logged
+
+    def _within(self, seen: deque, now: float, cap: int) -> bool:
+        while seen and now - seen[0] > WINDOW:
+            seen.popleft()
+        if len(seen) >= cap:
+            return False
+        seen.append(now)
+        return True
+
+    def _refused(self, addr: str, what: str, now: float) -> None:
+        if now - self.warned.get(addr, -WINDOW) >= WINDOW:     # once a minute
+            self.warned[addr] = now
+            log.warning("refused %s from client=%s", what, scrambled(addr))
+
+    def _tidy(self) -> None:
+        if len(self.requests) + len(self.sessions) > MAX_TRACKED:
+            now = self.clock()
+            for table in (self.requests, self.sessions):
+                for addr in [a for a, q in table.items() if not q or now - q[-1] > WINDOW]:
+                    del table[addr]
+            for addr in [a for a, n in self.open.items() if n <= 0]:
+                del self.open[addr]
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] not in ("http", "websocket") or scope["path"].startswith(NEVER_LIMITED):
+            await self.app(scope, receive, send)
+            return
+        addr, now = client_address(scope), self.clock()
+        self._tidy()
+        if scope["type"] == "http":
+            if not self._within(self.requests[addr], now, REQUESTS_PER_MINUTE):
+                self._refused(addr, "requests", now)
+                await send({"type": "http.response.start", "status": 429,
+                            "headers": [(b"content-type", b"text/plain"), (b"retry-after", b"60")]})
+                await send({"type": "http.response.body", "body": b"Too many requests - try again in a minute."})
+                return
+
+            async def watch(message):
+                if message["type"] == "http.response.start" and message["status"] >= 500:
+                    log.error("HTTP %s on %s", message["status"], scope["path"])
+                await send(message)
+
+            await self.app(scope, receive, watch)
+            return
+        if self.open[addr] >= OPEN_SESSIONS or not self._within(
+                self.sessions[addr], now, NEW_SESSIONS_PER_MINUTE):
+            self._refused(addr, "a session", now)
+            await send({"type": "websocket.close", "code": 1013})
+            return
+        self.open[addr] += 1
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            self.open[addr] -= 1
+
+
+app = App(Path(__file__).with_name("main.py"),
+          middleware=[Middleware(SecurityHeaders), Middleware(RateLimit)])
