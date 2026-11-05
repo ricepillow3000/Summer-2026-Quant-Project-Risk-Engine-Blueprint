@@ -10,16 +10,11 @@
      Design (John, 2026-11-05: weight, stability and defense; Swiss discipline,
      primitive shapes and chevrons, real architecture). Twelve columns between
      64px margins with 24px gutters; every edge below sits on a column line.
-     Three systems, each from a building, each drawn from the crest:
-     - THE FORTRESS PLAN. A six-bastion star fort in the manner of Vauban's
-       engraved plans (Neuf-Brisach, 1698): the crest's hexagon is the curtain
-       wall, a bastion stands on each corner, a ravelin before each wall, the
-       counterscarp and glacis beyond, and the crest itself as the keep. Fine
-       gold line on the charcoal, cropped by the edges so it reads as a
-       building too large for the frame. The receipt sits inside its walls.
-     - THE CHEVRON PILASTER. One gutter wide, bronze, cut with stacked
-       mirrored chevrons - the stepped ornament of the 1930 skyscraper lobbies.
-       It stands between paper and stone, the column the composition leans on.
+     Two systems (John, 2026-11-05, second pass: the star fort and the chevron
+     pilaster came out; the crest, faded into the stone, stays):
+     - THE STONE AND THE CREST. A charcoal block from column 8 to the edge,
+       the crest's five pieces engraved into it, large and faint, the audit
+       receipt set over them.
      - THE PLINTH. A dressed stone footing (the rusticated base of a bank or a
        Florentine palazzo), its joints on every second gutter of the grid.
      The site's type and colours only: Georgia's metric twin (Gelasio) for
@@ -95,9 +90,6 @@ h1 { font: 700 150px/0.88 var(--serif); letter-spacing: -0.035em; color: var(--i
   <!-- The stone: column 8 (x = 64 + 7 x 91.33) to the edge, down to the plinth. -->
   <rect x="703.33" y="0" width="496.67" height="561" fill="#2E2A25"/>
   <g id="fort" clip-path="url(#stone)" fill="none" stroke="#C6A26B"></g>
-  <!-- The pilaster: the gutter between columns 7 and 8 (679.33 .. 703.33). -->
-  <rect x="679.33" y="0" width="24" height="561" fill="#9A7B4F"/>
-  <g id="pilaster" fill="none" stroke="#2E2A25" stroke-width="3" stroke-linejoin="miter"></g>
   <!-- The plinth: full width, a gold cap, joints on every second gutter. -->
   <rect x="0" y="561" width="1200" height="66" fill="#26221E"/>
   <rect x="0" y="561" width="1200" height="3" fill="#B8955E"/>
@@ -127,8 +119,6 @@ h1 { font: 700 150px/0.88 var(--serif); letter-spacing: -0.035em; color: var(--i
 </div>
 
 <script>
-// Every shape below is computed, mirror symmetric about the fort's vertical
-// axis, and drawn from the crest's hexagon (pointy top, like assets/logo.svg).
 const NS = 'http://www.w3.org/2000/svg';
 const add = (parent, tag, attrs) => {
   const el = document.createElementNS(NS, tag);
@@ -136,60 +126,19 @@ const add = (parent, tag, attrs) => {
   parent.appendChild(el); return el;
 };
 const pts = P => P.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(' ');
-const scale = (P, s, c) => P.map(([x, y]) => [c[0] + (x - c[0]) * s, c[1] + (y - c[1]) * s]);
 
-// The fortress plan: centred on the receipt, a little below its middle.
+// The crest engraved into the stone, centred behind the receipt.
 const fort = document.getElementById('fort');
-const C = [940, 300], R = 158;
-const V = [...Array(6)].map((_, k) => {
-  const a = (-90 + 60 * k) * Math.PI / 180;
-  return [C[0] + R * Math.cos(a), C[1] + R * Math.sin(a)];
-});
-const unit = ([x, y]) => { const l = Math.hypot(x, y); return [x / l, y / l]; };
-const sub = (a, b) => [a[0] - b[0], a[1] - b[1]];
-const at = (p, d, s) => [p[0] + d[0] * s, p[1] + d[1] * s];
-const outward = (a, b) => { const m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]; return unit(sub(m, C)); };
-
-// The enceinte: per corner, shoulder - flank - salient - flank - shoulder.
-const trace = [];
-V.forEach((v, k) => {
-  const prev = V[(k + 5) % 6], next = V[(k + 1) % 6];
-  const p = at(v, unit(sub(prev, v)), 0.24 * R), q = at(v, unit(sub(next, v)), 0.24 * R);
-  trace.push(p, at(p, outward(prev, v), 0.17 * R), at(v, unit(sub(v, C)), 0.58 * R),
-             at(q, outward(v, next), 0.17 * R), q);
-});
-add(fort, 'polygon', { points: pts(trace), 'stroke-width': 1.8, 'stroke-opacity': .34 });
-add(fort, 'polygon', { points: pts(scale(trace, 0.94, C)), 'stroke-width': .8, 'stroke-opacity': .18 });
-// Ravelins: a detached triangle - a chevron - before every curtain wall.
-V.forEach((v, k) => {
-  const w = V[(k + 1) % 6], m = [(v[0] + w[0]) / 2, (v[1] + w[1]) / 2];
-  const n = outward(v, w), t = unit(sub(w, v));
-  const b1 = at(at(m, n, 0.2 * R), t, -0.22 * R), b2 = at(at(m, n, 0.2 * R), t, 0.22 * R);
-  add(fort, 'polygon', { points: pts([b1, at(m, n, 0.46 * R), b2]), 'stroke-width': 1.2, 'stroke-opacity': .24 });
-});
-// Counterscarp (the moat's far edge) and the glacis beyond it.
-add(fort, 'polygon', { points: pts(scale(trace, 1.14, C)), 'stroke-width': 1, 'stroke-opacity': .16,
-                       'stroke-dasharray': '7 5' });
-add(fort, 'polygon', { points: pts(scale(trace, 1.34, C)), 'stroke-width': .8, 'stroke-opacity': .09 });
-// Capitals: the lines of fire from the keep through each salient.
-V.forEach(v => add(fort, 'line', { x1: C[0], y1: C[1], ...Object.fromEntries(
-  [['x2', at(C, unit(sub(v, C)), 700)[0]], ['y2', at(C, unit(sub(v, C)), 700)[1]]]),
-  'stroke-width': .7, 'stroke-opacity': .06 }));
-// The keep: the crest's own five pieces (assets/logo.svg, scaled about its centre).
+const C = [951.67, 290];
+// The crest's own five pieces (assets/logo.svg), scaled about its centre.
 const crest = [
   [[0,-35],[27.358,-19.205],[0,-3.409],[-27.358,-19.205]], [[0,-2.309],[4,0],[0,2.309],[-4,0]],
   [[0,35],[27.358,19.205],[0,3.409],[-27.358,19.205]],
   [[-5.905,0],[-30.311,-14.091],[-30.311,14.091]], [[5.905,0],[30.311,-14.091],[30.311,14.091]],
 ];
-const ks = 0.5 * R / 35;
+const ks = 6.4;              // the crest's radius 35 -> 224px: it fills the stone
 crest.forEach(P => add(fort, 'polygon', { points: pts(P.map(([x, y]) => [C[0] + x * ks, C[1] + y * ks])),
-                                          'stroke-width': 1, 'stroke-opacity': .1 }));
-
-// The pilaster: mirrored chevrons, pointing up, one every 14px of its height.
-const pil = document.getElementById('pilaster');
-for (let y = 10; y < 561; y += 14) {
-  add(pil, 'polyline', { points: pts([[683.33, y + 7], [691.33, y], [699.33, y + 7]]) });
-}
+                                          'stroke-width': 1.6, 'stroke-opacity': .17 }));
 
 // Plinth joints: the gutter centre after every second column, top and foot.
 const joints = document.getElementById('joints');
