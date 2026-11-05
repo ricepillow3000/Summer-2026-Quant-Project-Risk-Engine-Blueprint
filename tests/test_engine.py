@@ -6493,15 +6493,14 @@ def test_what_the_reader_opens_never_animates_and_touch_screens_move_flat():
     assert css.index(".reveal-on.reveal-flat .reveal-item--left") < css.index(".reveal-on .reveal-item.is-visible")
 
 
-def test_drawers_keep_the_hairline_box_in_bold_with_the_rules_key():
-    """John, 2026-11-05: a stone plaque, then a beige plaque, were "not
-    something I am looking for" - "the old designs were good but bold the
-    words ... keeping the same elements, uplift this". So: the hairline box
-    with no fill, the label in bold serif, the chevron in text bronze, and the
-    page's own signature - the charcoal key of every section heading's rule -
-    on the drawer's top edge, drawn out (a transform, not a width) while the
-    drawer is hovered or open. The tabs keep the old label voice with a
-    charcoal underline. No dark or tinted fill on either."""
+def test_drawers_are_the_old_hairline_box_made_clean_and_corporate():
+    """John, 2026-11-05: a stone plaque, a beige plaque and a partial rule on
+    the top edge were each turned down ("the old designs were good but bold
+    the words", "the partial line on top looks a little tacky ... clean,
+    minimal, corporate"). The old elements only: a hairline frame with no
+    fill, the label in bold serif on the left, the chevron in text bronze on
+    the right edge; hover and open turn the frame charcoal; an open header
+    stands on a hairline. No partial rule, no plaque fill, no pattern."""
     import re
     root = pathlib.Path(__file__).resolve().parent.parent
     css = (root / "static" / "app.css").read_text(encoding="utf-8")
@@ -6509,16 +6508,14 @@ def test_drawers_keep_the_hairline_box_in_bold_with_the_rules_key():
     assert "1px solid #C4BDAE" in frame and "background: transparent" in frame
     label = re.search(r'\[data-testid="stExpander"\] summary \[data-testid="stMarkdownContainer"\] p \{([^}]*)\}', css).group(1)
     assert "font-weight: 700" in label and "Helvetica" not in label, "bold serif, not the label voice"
-    key = re.search(r'\[data-testid="stExpander"\]::before \{([^}]*)\}', css).group(1)
-    assert "background-color: #2E2A25" in key and "height: 3px" in key and "scaleX(" in key
-    assert "transition: transform" in key and "transition: width" not in key
-    assert '[data-testid="stExpander"]:has(details[open])::before { transform: scaleX(1); }' in css
-    summ = re.search(r'\[data-testid="stExpander"\] summary \{([^}]*)\}', css).group(1)
-    assert "background: transparent" in summ
+    row = re.search(r'\[data-testid="stExpander"\] summary > span \{([^}]*)\}', css).group(1)
+    assert "row-reverse" in row and "space-between" in row, "the chevron sits on the right edge"
+    assert '[data-testid="stExpander"]:has(details[open]) { border-color: #2E2A25 !important; }' in css
+    assert '[data-testid="stExpander"]::before' not in css, "the partial rule on the top edge is back"
+    assert "stExpanderDetails\"]::before" not in css, "the rhombus row is back"
+    for body in re.findall(r'\[data-testid="stExpander"\] summary(?::hover)? \{([^}]*)\}', css):
+        assert not re.search(r"background(-color)?:\s*#(2E2A25|26221E|E9E4DB|E1DACE)", body), "a plaque fill"
     assert '[data-testid="stTab"] .react-aria-SelectionIndicator { background-color: #2E2A25' in css
-    for sel in (r'\[data-testid="stExpander"\] summary', r'\[data-testid="stTab"\]'):
-        for body in re.findall(sel + r'(?::hover)? \{([^}]*)\}', css):
-            assert not re.search(r"background(-color)?:\s*#(2E2A25|26221E|E9E4DB|E1DACE)", body), "a fill"
 
 
 def test_the_contact_form_writes_to_john_and_linkedin_is_the_second_way():

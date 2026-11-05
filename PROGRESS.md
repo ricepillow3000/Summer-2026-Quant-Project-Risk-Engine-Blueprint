@@ -1116,9 +1116,10 @@ two paid-vendor-dependent pieces remain explicit backlog items:
   anchor "contact" beside the section's own (now a heading by role). Drawers:
   John turned down a stone plaque and a beige plaque ("the old designs were
   good but bold the words ... keeping the same elements, uplift this"), so
-  they keep the hairline box with bold serif labels, a text-bronze chevron,
-  and the section rule's charcoal key on the top edge, drawn out while
-  hovered or open; tabs keep their label voice. The contact section lists
+  they keep the hairline box with bold serif labels; a partial rule on the
+  top edge read as "tacky", so the uplift is corporate instead: the chevron
+  on the right edge in text bronze, room in the header, the frame charcoal on
+  hover and when open. Tabs keep their label voice. The contact section lists
   both addresses, each with its job. John's bio now reads Computer Information Systems,
   specializing in AI & Analytics; the contact form writes to his own Gmail
   (his choice) with LinkedIn as the second way to reach him.

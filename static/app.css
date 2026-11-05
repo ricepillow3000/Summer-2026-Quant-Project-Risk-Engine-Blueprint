@@ -118,32 +118,32 @@ h1, h2, h3 { color: #3F3B35; font-weight: 400; }
     color: #3F3B35 !important; font-family: 'Helvetica Neue', sans-serif !important;
     font-size: 0.75rem !important; }
 
-/* DRAWERS (st.expander) - the page's own hairline box, its words in bold
-   (John, 2026-11-05: "the old designs were good but bold the words ...
-   keeping the same elements, uplift this"). The uplift is the page's own
-   signature: the charcoal key of every section heading's rule (.ar-rule)
-   sits on the drawer's top edge, and draws itself out along the edge while
-   the drawer is hovered or open - a transform on the GPU, nothing reflows.
-   The chevron takes the text bronze; the frame darkens to charcoal on hover;
-   an open drawer's header stands on a hairline. Square, flat, no fill. */
-[data-testid="stExpander"] { position: relative; border: 1px solid #C4BDAE !important;
+/* DRAWERS (st.expander) - the page's own hairline box, made corporate
+   (John, 2026-11-05: "the old designs were good but bold the words", then
+   "clean, minimal, corporate, and most importantly visually appealing" - the
+   partial rule on the top edge read as tacky). The elements are the old
+   ones: a hairline frame, the label, the chevron, no fill. The label is bold
+   serif on the left; the chevron moves to the right edge, in text bronze;
+   the header has room to breathe. Hover: the frame turns charcoal and the
+   ground warms to the lighter paper. Open: the frame stays charcoal and the
+   header stands on a hairline. Colour changes only - nothing lifts. */
+[data-testid="stExpander"] { border: 1px solid #C4BDAE !important;
     background: transparent !important; box-shadow: none !important; margin-top: 12px;
     transition: border-color .25s ease; }
-[data-testid="stExpander"]::before { content: ""; position: absolute; left: -1px; top: -1px;
-    width: min(160px, 40%); height: 3px; background-color: #2E2A25; pointer-events: none; z-index: 1;
-    transform: scaleX(.35); transform-origin: left; transition: transform .6s cubic-bezier(0.16, 1, 0.3, 1); }
-[data-testid="stExpander"]:hover::before,
-[data-testid="stExpander"]:has(details[open])::before { transform: scaleX(1); }
-[data-testid="stExpander"]:hover { border-color: #2E2A25 !important; }
+[data-testid="stExpander"]:hover,
+[data-testid="stExpander"]:has(details[open]) { border-color: #2E2A25 !important; }
 /* Streamlit draws a second, rounded border on the <details> inside: one frame */
 [data-testid="stExpander"] details { border: none !important; background: transparent !important; }
-[data-testid="stExpander"] summary { background: transparent !important; }
+[data-testid="stExpander"] summary { background: transparent !important; padding: 14px 20px !important;
+    transition: background-color .25s ease; }
+[data-testid="stExpander"] summary:hover { background-color: #F1EDE5 !important; color: #3F3B35; }
+[data-testid="stExpander"] summary > span { flex-direction: row-reverse; justify-content: space-between;
+    width: 100%; gap: 16px; }
 [data-testid="stExpander"] summary [data-testid="stMarkdownContainer"] p { font-weight: 700;
-    color: #3F3B35; }
+    font-size: 1.0625rem; color: #3F3B35; }
 [data-testid="stExpander"] summary [data-testid="stIconMaterial"] { color: #6A5030 !important; }
 [data-testid="stExpander"] details[open] > summary { border-bottom: 1px solid #D4CDBF; }
 [data-testid="stExpander"] summary:focus-visible { outline: 2px solid #6A5030; outline-offset: -4px; }
-@media (prefers-reduced-motion: reduce) { [data-testid="stExpander"]::before { transition: none; } }
 
 /* ---- Presentation flow: hero, showcase, CTAs (reveals: search "REVEAL") ---- */
 html { scroll-behavior: smooth; }
