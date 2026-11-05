@@ -150,8 +150,15 @@ async function covered(page) {
       }
       const b = e.getBoundingClientRect();
       if (b.width < 2 || b.height < 2 || cs.pointerEvents === 'none' || e.disabled) return null;
+      // Land every arrival, then scroll the control into view, then land what
+      // started arriving on the way and scroll once more: a landed block moves
+      // (it loses its arrival offset), so scrolling before landing measured a
+      // control that had just moved off screen (Live audit on 8b27727).
+      const land = () => window.__melionaReveal?.revealAll();
+      land();
       e.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });   // the site scrolls smoothly; measure where it lands
-      window.__melionaReveal?.revealAll();   // a block that starts arriving as it scrolls in: measure where it lands
+      land();
+      e.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });
       const c = e.getBoundingClientRect();
       const x = c.left + c.width / 2, y = c.top + c.height / 2;
       if (x < 0 || y < 0 || x > innerWidth || y > innerHeight) return `${(e.innerText || e.getAttribute('aria-label') || e.tagName).trim().slice(0, 30)} off screen`;
