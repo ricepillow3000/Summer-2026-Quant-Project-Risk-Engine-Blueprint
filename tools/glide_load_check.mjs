@@ -28,6 +28,7 @@ const LINKS = [
   ['a.cta-btn[href="#the-slice"]', 'From the record to the allocation'],
   ['a.cta-btn[href="#engine"]', 'To the engine'],
   ['a[href="#analysis"]', 'Skip to the analysis'],
+  ['#hero a[href="#contact"]', 'Contact John'],
   ['.meliona-footer a[href="#grit-showcase"]', 'Footer 01'],
   ['.meliona-footer a[href="#crisis-record"]', 'Footer 02'],
   ['.meliona-footer a[href="#engine"]', 'Footer 03'],

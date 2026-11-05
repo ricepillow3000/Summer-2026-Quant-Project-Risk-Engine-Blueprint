@@ -2922,10 +2922,12 @@ def test_captions_and_small_labels_clear_aa_after_their_opacity():
 BEIGE_GROUNDS = ("#EDE9E3", "#F1EDE5", "#E9E4DB", "#D4CDBF")
 CHARCOAL = "#3F3B35"
 # Selectors whose words sit on a charcoal band: the showcase band, the footer,
-# the boot veil's status line (painted over the band's stand-in) and the
-# hero's receipt. #3F3B35 is the lightest stone on the page (the bands are now
-# #2E2A25 and #26221E), so clearing it clears them all.
-ON_DARK = (".showcase-row", ".meliona-footer", ".sk-load", ".hero-stats", ".hreceipt", ".hstat")
+# the boot veil's status line (painted over the band's stand-in), the hero's
+# receipt, the About block (ME-28 part 4) and the stone half of
+# public/thanks.html. #3F3B35 is the lightest stone on the page (the bands are
+# now #2E2A25 and #26221E), so clearing it clears them all.
+ON_DARK = (".showcase-row", ".meliona-footer", ".sk-load", ".hero-stats", ".hreceipt", ".hstat",
+           ".about-band", ".stone")
 
 
 def _text_colour_failures(css: str) -> list:
@@ -2966,6 +2968,7 @@ def test_text_colours_meet_wcag_aa():
     root = pathlib.Path(__file__).resolve().parent.parent
     css = (root / "static" / "app.css").read_text(encoding="utf-8")
     page404 = (root / "public" / "404.html").read_text(encoding="utf-8")
+    thanks = (root / "public" / "thanks.html").read_text(encoding="utf-8")
 
     # sanity: the formula agrees with the published reference pair
     assert abs(_contrast("#FFFFFF", "#000000") - 21.0) < 0.01
@@ -2976,7 +2979,7 @@ def test_text_colours_meet_wcag_aa():
     assert _text_colour_failures(".x { color: #B4AB9B; }")
     assert _text_colour_failures(".b:hover { background-color: #9A7B4F; color: #241F1A; }")
 
-    bad = _text_colour_failures(css) + _text_colour_failures(page404)
+    bad = _text_colour_failures(css) + _text_colour_failures(page404) + _text_colour_failures(thanks)
     assert not bad, bad
     sub = _re.search(r"\.panel-head \.s\s*\{[^}]*?(?<![-\w])color:\s*(#[0-9A-Fa-f]{6})", css)
     assert sub and _contrast(sub.group(1), "#EDE9E3") >= 4.5, \
@@ -4278,13 +4281,16 @@ def test_blocks_reveal_on_arrival_on_the_gpu_and_never_hide_without_script():
     assert head.index("classList.add('reveal-on')") < head.index('src="./app/static/reveal.js"')
     assert "IntersectionObserver' in window" in head and "prefers-reduced-motion" in head
     assert "DOMContentLoaded" in head and "!window.__melionaReveal" in head
-    # no image is inlined into the websocket, and no photograph is loaded at
-    # all (ME-28, 2026-11-05: flat paper and stone, like the share banner) -
-    # nor the lazy-loading plates and parallax that only served photographs
+    # no image is inlined into the websocket, and no photograph is a
+    # backdrop (ME-28, 2026-11-05: flat paper and stone, like the share
+    # banner) - nor the lazy-loading plates and parallax that only served
+    # photographs. The one photograph is John's portrait in the About block
+    # (ME-28 part 4): a real <img>, served as files, never a CSS background.
     assert ";base64," not in main, "an image is inlined into the websocket again"
-    assert "url(app/static/" not in main + css + hero, "a photograph is loaded again"
-    assert not [p.name for p in (root / "static").iterdir()
-                if p.suffix in (".jpg", ".jpeg", ".png", ".webp", ".avif")], "a photograph is served again"
+    assert "url(app/static/" not in main + css + hero, "a photograph is a backdrop again"
+    assert sorted(p.name for p in (root / "static").iterdir()
+                  if p.suffix in (".jpg", ".jpeg", ".png", ".webp", ".avif")) == \
+        ["john-nguyen.avif", "john-nguyen.jpg", "john-nguyen.webp"], "a photograph other than the portrait is served"
     assert "PLATES" not in js and "has-band" not in js + css + main and "plate-drift" not in css
 
 
@@ -5553,7 +5559,8 @@ def test_the_skeleton_paints_first_and_the_hero_lifts_it():
     cfg = tomllib.loads((root / ".streamlit" / "config.toml").read_text(encoding="utf-8"))
     assert cfg["server"].get("enableStaticServing") is True
     served = sorted(p.name for p in (root / "static").iterdir())
-    assert served == ["app.css", "dock.js", "reveal.js"], \
+    assert served == ["app.css", "dock.js", "john-nguyen.avif", "john-nguyen.jpg",
+                      "john-nguyen.webp", "reveal.js"], \
         f"static/ is served to the public; keep it to public files: {served}"
 
 
@@ -6709,6 +6716,204 @@ def test_the_tab_strip_tells_one_story():
     for gone in ("Correlation Watch", "Model validation", "AI-capex race", "Verification Overlay"):
         assert gone not in code, gone
     assert not (root / "static" / "windtunnel.js").exists()
+
+
+
+# ---- ME-28 part 4 (John, 2026-11-05): the builder, a contact form, a
+# thank-you state and page, case studies, five questions and the schema ----
+
+def test_the_contact_form_prepares_an_email_and_keeps_nothing():
+    """There is no mail server and no database, so the form's honest analogue
+    prepares an email the visitor sends from their own app. Every rule is
+    checked on the server (topic from the closed list, a message that is not
+    empty and at most CONTACT_MAX characters, a short optional name); the
+    visitor's words leave only percent-encoded inside a mailto: link, never
+    reach the page as markup, are never logged, and a valid submit shows the
+    thank-you state with the response time and the session reference."""
+    import re
+    from urllib.parse import unquote, urlsplit, parse_qs
+    import hero
+    attack = 'Hi <script>alert(1)</script> "q" \'s & a=b?c#d\n</a><img src=x onerror=alert(1)>'
+    url, why = hero.contact_mailto("help@example.test", "Ann <b>", "Recruiting", attack, "ABCD1234")
+    assert why is None and url.startswith("mailto:help@example.test?subject=")
+    query = url.split("?", 1)[1]
+    assert re.fullmatch(r"subject=[A-Za-z0-9_.~%-]+&body=[A-Za-z0-9_.~%-]+", query), \
+        "the visitor's text is not fully percent-encoded"
+    fields = parse_qs(urlsplit(url).query)
+    assert attack in unquote(query.split("&body=")[1]) and "ABCD1234" in fields["subject"][0]
+    assert hero.contact_mailto("a@b.c", "", "Question", "  \n ", "R") == (
+        None, "Write a message first: the box is empty.")
+    long, why = hero.contact_mailto("a@b.c", "", "Question", "x" * (hero.CONTACT_MAX + 1), "R")
+    assert long is None and f"{hero.CONTACT_MAX:,}" in why
+    assert hero.contact_mailto("a@b.c", "", "Free text", "hi", "R")[0] is None, "topic outside the list"
+    assert hero.contact_mailto("a@b.c", "n" * (hero.CONTACT_NAME_MAX + 1), "Question", "hi", "R")[0] is None
+    assert hero.contact_mailto("a@b.c", "", "Question", "x" * hero.CONTACT_MAX, "R")[0], "the limit itself is allowed"
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    main = (root / "main.py").read_text(encoding="utf-8")
+    block = main[main.index('id="contact"'):main.index("# ---- Closing band")]
+    for leak in ("log_incident", "logging", "open(", "write_text", "_c_msg}", "_c_name}"):
+        assert leak not in block, f"the contact block {leak!r}: the visitor's words must not be kept or printed"
+    assert "max_chars=CONTACT_MAX" in block and "max_chars=CONTACT_NAME_MAX" in block
+
+    at, restore = _offline_app()
+    try:
+        at.button(key="contact_send").click().run()
+        assert [e.value for e in at.error] == ["Write a message first: the box is empty."]
+        at.text_area(key="contact_message").set_value(attack)
+        at.text_input(key="contact_name").set_value("Ann <b>")
+        at.selectbox(key="contact_topic").set_value("Recruiting")
+        at.button(key="contact_send").click().run()
+        assert not at.exception and not at.error
+        card = [m.value for m in at.markdown if "thanks-card" in m.value and "<style" not in m.value]
+        assert card and "Thank you" in card[0] and hero.RESPONSE_WINDOW in card[0]
+        assert at.session_state.session_ref in card[0], "the thank-you state does not show the session reference"
+        assert all("<script>alert" not in m.value and "onerror" not in m.value for m in at.markdown), \
+            "the visitor's words reached the page as markup"
+        links = at.get("link_button")
+        assert len(links) == 1 and links[0].proto.url.startswith("mailto:")
+        assert "<" not in links[0].proto.url and " " not in links[0].proto.url
+        assert any('href="/thanks.html"' in m.value for m in at.markdown), "no link to the page to keep"
+        at.button(key="contact_again").click().run()
+        assert at.text_area(key="contact_message") is not None and not at.get("link_button")
+    finally:
+        restore()
+
+
+def test_the_thank_you_page_is_branded_noindexed_and_says_when_john_replies():
+    """public/thanks.html: copied to the site root by tools/public_files.py
+    like the 404, kept out of search results, in the banner's paper and
+    stone, with the response time, the address and a way back."""
+    import tempfile
+    import hero
+    import tools.public_files as pf
+    root = pathlib.Path(__file__).resolve().parent.parent
+    page = (root / "public" / "thanks.html").read_text(encoding="utf-8")
+    assert '<meta name="robots" content="noindex">' in page
+    assert hero.RESPONSE_WINDOW in page and "meleona.support@gmail.com" in page
+    assert 'href="/"' in page and "#2E2A25" in page and "#B8955E" in page
+    for _, url, _ in hero.PROFILE_LINKS:
+        assert url in page
+    with tempfile.TemporaryDirectory() as tmp:
+        d = pathlib.Path(tmp)
+        (d / "index.html").write_text("<html><head><title>Streamlit</title></head><body>"
+                                      "<noscript>x</noscript></body></html>", encoding="utf-8")
+        pf.install(d, "https://example.test")
+        assert (d / "thanks.html").read_text(encoding="utf-8") == page
+        assert "thanks" not in (d / "sitemap.xml").read_text(encoding="utf-8"), "a noindex page is in the sitemap"
+
+
+def test_the_schema_parses_and_its_faq_is_the_pages():
+    """The served head carries schema.org JSON-LD: the Person (with the three
+    profile links as sameAs and the portrait as image), the web app (free,
+    FinanceApplication, its source repository) and the FAQPage. It parses as
+    JSON, holds no raw "<", and its five questions are the page's own."""
+    import html as _html
+    import json
+    import re
+    import hero
+    import tools.public_files as pf
+    head = pf.head_tags("https://example.test")
+    blocks = re.findall(r'<script type="application/ld\+json">(.*?)</script>', head, re.S)
+    assert len(blocks) == 1 and "<" not in blocks[0]
+    graph = {n["@type"]: n for n in json.loads(blocks[0])["@graph"]}
+    person, app, faq = graph["Person"], graph["WebApplication"], graph["FAQPage"]
+    assert person["name"] == "John Nguyen" and person["sameAs"] == [
+        "https://www.linkedin.com/in/johnnguyen3000/", "https://github.com/ricepillow3000",
+        "https://app.joinhandshake.com/profiles/74fwhv"]
+    assert person["image"] == "https://example.test/app/static/john-nguyen.jpg"
+    assert app["applicationCategory"] == "FinanceApplication" and app["offers"]["price"] == "0"
+    assert app["author"] == {"@id": person["@id"]} and hero.REPO_URL in app["sameAs"]
+    assert app["isBasedOn"]["codeRepository"] == hero.REPO_URL
+    qa = [(q["name"], q["acceptedAnswer"]["text"]) for q in faq["mainEntity"]]
+    assert len(qa) == 5 and qa == list(hero.FAQS)
+    shown = hero.faq_html()
+    for q, a in hero.FAQS:
+        assert _html.escape(q) in shown and _html.escape(a) in shown
+    main = (pathlib.Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
+    assert "st.markdown(faq_html()" in main, "the page does not render the questions the schema states"
+    assert "investment advice" in qa[2][0] and qa[2][1].startswith("No.")
+
+
+def test_the_builder_block_shows_the_portrait_and_links_out_safely():
+    """John's portrait and three clickable marks (LinkedIn, GitHub,
+    Handshake): a real <img> with alt text, its size and lazy loading, the
+    AVIF/WebP/JPEG set at twice the drawn size; every mark opens a new tab
+    with noopener noreferrer, names itself for a screen reader and is a 44px
+    target. The hero carries the contact link above the fold, and every
+    <img> the site draws has alt text."""
+    import re
+    from PIL import Image
+    import hero
+    root = pathlib.Path(__file__).resolve().parent.parent
+    about = hero.about_html()
+    img = re.search(r"<img [^>]*>", about).group(0)
+    for attr in ('alt="John Nguyen, the builder of Meliona, in a navy blazer"', 'width="240"',
+                 'height="300"', 'loading="lazy"', 'decoding="async"'):
+        assert attr in img, attr
+    for ext in ("avif", "webp", "jpg"):
+        f = root / "static" / f"john-nguyen.{ext}"
+        assert f"./app/static/john-nguyen.{ext}" in about
+        assert f.stat().st_size < 60_000, f"{f.name} is {f.stat().st_size} bytes"
+        if ext != "avif":
+            assert Image.open(f).size == (480, 600)
+    marks = re.findall(r"<a [^>]*>", hero.profile_marks())
+    assert len(marks) == 3
+    for (name, url, _), a in zip(hero.PROFILE_LINKS, marks):
+        assert f'href="{url}"' in a and 'target="_blank"' in a and 'rel="noopener noreferrer me"' in a
+        assert f'aria-label="John Nguyen on {name}"' in a
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    svg = re.search(r"\.about-band \.pmark svg \{([^}]*)\}", css).group(1)
+    side = (int(re.search(r"width: (\d+)px", svg).group(1)) + 2 * int(re.search(r"padding: (\d+)px", svg).group(1)) + 2)
+    assert side >= 44 and "min-height: 44px" in css[css.index(".about-band .pmark {"):][:300]
+    main = (root / "main.py").read_text(encoding="utf-8")
+    assert "st.markdown(about_html()" in main and 'profile_marks("f-mark")' in main
+    assert main.index("st.markdown(about_html()") > main.index("st.tabs(["), "the builder sits above the tab strip"
+    assert 'href="#contact" class="cta-link">' in hero.hero_html() and hero.HERO_CONTACT in hero.boot_skeleton_html()
+    for f in ("main.py", "hero.py", "public/404.html", "public/thanks.html"):
+        text = (root / f).read_text(encoding="utf-8")
+        for tag in re.findall(r"<img\s[^>]*>", text):
+            assert re.search(r'\balt="[^"]+"', tag) or "{PORTRAIT_ALT}" in tag, f"{f}: <img> without alt: {tag[:80]}"
+
+
+def test_the_case_studies_read_the_live_record():
+    """Crisis Conviction's case studies name three crises from
+    HISTORICAL_REGIMES and print only numbers the crisis table computed: the
+    fall, the trading days from the bottom back to the old peak (and the
+    date), and a bottom-day buyer's return a year on. Checked on a hand-built
+    path, and on the page against the table for the same market."""
+    import re
+    from src.conviction import crisis_forward_returns, load_conviction
+    from src.scenarios import HISTORICAL_REGIMES
+    root = pathlib.Path(__file__).resolve().parent.parent
+    main = (root / "main.py").read_text(encoding="utf-8")
+    import ast
+    names = ast.literal_eval(re.search(r"(?m)^CASE_STUDIES = (.*)$", main).group(1))
+    assert len(names) == 3 and all(n in HISTORICAL_REGIMES for n in names)
+    idx = pd.bdate_range("2019-06-03", "2021-12-31")
+    px = pd.Series(100.0, index=idx)
+    px.loc["2020-02-19"] = 120.0
+    px.loc["2020-03-23"] = 60.0
+    px.loc["2020-03-24":"2020-06-30"] = 105.0
+    px.loc["2020-07-01":] = 121.0                       # first close back above the peak
+    covid = crisis_forward_returns(px).set_index("crisis").loc["COVID-19 crash (2020)"]
+    assert covid["recovery_days"] == idx.get_loc(pd.Timestamp("2020-07-01")) - idx.get_loc(pd.Timestamp("2020-03-23"))
+    assert str(covid["recovery_date"]) == "2020-07-01"
+    at, restore = _offline_app()
+    try:
+        table = load_conviction()["table"].set_index("crisis")
+        page = next(m.value for m in at.markdown if 'class="case-list"' in m.value)
+        rows = re.findall(r'<div class="case-name">([^<]+)</div>(.*?)(?=<div class="case-row">|</div></div>$)', page)
+        shown = [n for n, _ in rows]
+        assert shown == [n for n in names if n in table.index] and shown, shown
+        for name, body in rows:
+            r = table.loc[name]
+            values = re.findall(r'<div class="case-v">([^<]+)</div>', body)
+            assert values[0] == f"{r['depth']:.0%}"
+            assert values[1] == (f"{int(r['recovery_days'])} days" if pd.notna(r["recovery_days"]) else "Not back")
+            assert values[2] == (f"{r['trough_1y later']:+.0%}" if pd.notna(r["trough_1y later"]) else "Too recent")
+    finally:
+        restore()
 
 
 if __name__ == "__main__":

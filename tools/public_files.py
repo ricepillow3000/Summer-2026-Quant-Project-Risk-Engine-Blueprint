@@ -9,8 +9,10 @@ things to Streamlit's static root:
 
 1. copies `public/` - the icon set, web app manifest, Open Graph image - and writes
    robots.txt and sitemap.xml for the deployed URL;
-2. adds a title, meta description, canonical URL, Open Graph / Twitter tags and
-   a <noscript> description to index.html's <head>, once (idempotent);
+2. adds a title, meta description, canonical URL, Open Graph / Twitter tags,
+   the JSON-LD a search engine reads (the Person who built it, the app, the
+   five questions) and a <noscript> description to index.html's <head>, once
+   (idempotent);
 3. paints the hero's boot skeleton straight from index.html (with app.css
    linked in the head), so a visitor sees the page's shape from the first
    frame, before Streamlit's JavaScript has started.
@@ -24,6 +26,7 @@ runs exactly as before.
 import datetime
 import hashlib
 import html
+import json
 import os
 import pathlib
 import shutil
@@ -35,8 +38,10 @@ SITE_URL = (os.environ.get("MELIONA_SITE_URL") or os.environ.get("MELEONA_SITE_U
     "https://summer-2026-quant-project-risk-engine-blueprint-production.up.railway.app"
 ).rstrip("/")
 TITLE = "Meliona · Portfolio Risk Engine"
-DESCRIPTION = ("VaR, CVaR, Monte Carlo stress testing and factor exposures, computed "
-               "live from Yahoo Finance data. Every number traces back to its source.")
+# What the page does today (ME-28 part 4: "factor exposures" left the page
+# with the 2026-10-29 cuts, so the description no longer names them).
+DESCRIPTION = ("How much could a portfolio lose in a bad year? VaR, CVaR, Monte Carlo and "
+               "real crises replayed on live Yahoo Finance data. Every number traces to its source.")
 MARK, END = "<!-- meliona-head -->", "<!-- /meliona-head -->"
 BOOT_MARK, BOOT_END = "<!-- meliona-boot -->", "<!-- /meliona-boot -->"
 # The commit this process was built from. Railway sets RAILWAY_GIT_COMMIT_SHA
@@ -105,6 +110,36 @@ def icon_tags() -> str:
     )
 
 
+def schema_json(site_url: str) -> str:
+    """The page as structured data (schema.org JSON-LD): the Person who built
+    it, the web app, and the five questions. Read from hero.py, the same
+    source the page renders, so the schema can never say what the page does
+    not. Every "<" is written as \\u003c - JSON-equal, and nothing in the data
+    can close the <script> block it sits in or open a comment there."""
+    import hero
+    person = f"{site_url}/#john-nguyen"
+    graph = [
+        {"@type": "Person", "@id": person, "name": hero.PERSON_NAME,
+         "jobTitle": hero.PERSON_ROLE, "description": hero.ABOUT_BIO,
+         "image": f"{site_url}/app/static/{hero.PORTRAIT}.jpg", "url": f"{site_url}/#about",
+         "sameAs": [url for _, url, _ in hero.PROFILE_LINKS]},
+        {"@type": "WebApplication", "@id": f"{site_url}/#app", "name": "Meliona",
+         "alternateName": TITLE, "url": f"{site_url}/", "description": DESCRIPTION,
+         "applicationCategory": "FinanceApplication", "operatingSystem": "Any",
+         "isAccessibleForFree": True, "image": f"{site_url}/og-image.png",
+         "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"},
+         "author": {"@id": person}, "sameAs": [hero.REPO_URL],
+         "isBasedOn": {"@type": "SoftwareSourceCode", "codeRepository": hero.REPO_URL,
+                       "programmingLanguage": "Python", "author": {"@id": person}}},
+        {"@type": "FAQPage", "@id": f"{site_url}/#faq",
+         "mainEntity": [{"@type": "Question", "name": q,
+                         "acceptedAnswer": {"@type": "Answer", "text": a}}
+                        for q, a in hero.FAQS]},
+    ]
+    text = json.dumps({"@context": "https://schema.org", "@graph": graph}, ensure_ascii=False)
+    return text.replace("<", "\\u003c")
+
+
 def head_tags(site_url: str, build: str = "") -> str:
     t, d, u = html.escape(TITLE), html.escape(DESCRIPTION), html.escape(site_url)
     b = html.escape(build[:12] or "unknown")
@@ -138,6 +173,9 @@ def head_tags(site_url: str, build: str = "") -> str:
         f'<meta property="og:image:alt" content="The Meliona crest and name beside '
         f'its live audit on Yahoo Finance data: 727 of 728 checks passed">\n'
         f'<meta name="twitter:card" content="summary_large_image">\n'
+        # Structured data: a data block, never run - the meta CSP above sets no
+        # script policy, and application/ld+json is not executed in any case.
+        f'<script type="application/ld+json">{schema_json(site_url)}</script>\n'
         # Single-page app: every unknown path is served this same index.html,
         # whose relative script paths break below the root - a mistyped
         # /a/b link was a blank white page. Send it to the branded 404 instead.

@@ -37,7 +37,9 @@ from src.topology import build_map_payload, war_room_html
 from src.observability import (count_preset, count_session, host_setting, log_incident,
                                log_session_start, new_session_ref, setup_logging)
 from src.scenarios import HISTORICAL_REGIMES, replay_returns
-from hero import N_PATHS, crest_engraving, hero_html
+from hero import (N_PATHS, CONTACT_MAX, CONTACT_NAME_MAX, CONTACT_TOPICS, RESPONSE_TIME,
+                  RESPONSE_WINDOW, about_html, contact_mailto, crest_engraving, faq_html,
+                  hero_html, profile_marks)
 from src.liquidity import (days_to_liquidate, liquidity_profile,
                            liquidity_adjusted_cvar)
 from src.grit import grit_scores, MIN_HISTORY_DAYS
@@ -827,6 +829,7 @@ if not st.session_state.get("_booted"):
   #hero .hline:nth-child(2) { animation-delay: .85s; }
   #hero .hero-sub { animation: from-left .95s cubic-bezier(.16,1,.3,1) 1.01s backwards; }
   #hero .cta-btn { animation: from-left .95s cubic-bezier(.16,1,.3,1) 1.15s backwards; }
+  #hero .hero-ctas .cta-link { animation: from-left .95s cubic-bezier(.16,1,.3,1) 1.27s backwards; }
   #hero .hstat { animation: lift-face .85s cubic-bezier(.2,.8,.2,1) backwards; }
   #hero .hstat:nth-child(1) { animation-delay: .89s; }
   #hero .hstat:nth-child(2) { animation-delay: .99s; }
@@ -2050,6 +2053,40 @@ with tab_grit:
     except Exception as exc:  # noqa: BLE001
         st.caption(f"Grit Zone unavailable: {safe_err('grit-zone-unavailable', exc)}")
 
+# The three crises the case studies tell, by their names in
+# HISTORICAL_REGIMES (test_the_case_studies_read_the_live_record).
+CASE_STUDIES = ("COVID-19 crash (2020)", "2022 bear market", "Global Financial Crisis (2008)")
+
+
+def _long_date(d) -> str:
+    """23 March 2020 - built by hand: %-d is not portable to Windows."""
+    return f"{d.day} {d:%B %Y}"
+
+
+def case_row(r) -> str:
+    """One case study as a ruled row: the crisis, then three cells - the
+    fall, the way back and the bottom-day buyer a year on - each a label,
+    the number and one line of what it means."""
+    def cell(label, value, note):
+        return (f'<div class="case-cell"><div class="case-k">{label}</div>'
+                f'<div class="case-v">{value}</div><div class="case-n">{note}</div></div>')
+    days, back = r.get("recovery_days"), r.get("recovery_date")
+    year = r.get("trough_1y later")
+    way = (cell("The way back", f"{int(days)} days",
+                f"trading days to close at the old peak again, on {_long_date(back)}")
+           if days is not None and not pd.isna(days) else
+           cell("The way back", "Not back",
+                "no close at the old peak within three trading years of the bottom, "
+                "as far as the record runs"))
+    later = (cell("A year later", f"{year:+.0%}", "for a buyer on the bottom day")
+             if year is not None and not pd.isna(year) else
+             cell("A year later", "Too recent", "less than a trading year of record after the bottom"))
+    return (f'<div class="case-row"><div class="case-name">{html.escape(str(r["crisis"]))}</div>'
+            + cell("The fall", f"{r['depth']:.0%}",
+                   f"peak to bottom; the bottom was {_long_date(r['trough_date'])}")
+            + way + later + "</div>")
+
+
 # ---- Crisis Conviction: the emotional problem, priced ----
 with tab_conviction:
     st.caption(
@@ -2066,6 +2103,21 @@ with tab_conviction:
                   f"{round(t1['pct_positive'] * t1['n'])} / {t1['n']} crises")
         h2.metric("Typical return a year after the bottom", f"{t1['median']:+.0%}")
         h3.metric("Typical fall, peak to bottom", f"{ctab['depth'].median():.0%}")
+
+        # Case studies (ME-28 part 4): three named crises told as one ruled
+        # row each - the fall, the way back, a bottom-day buyer a year on.
+        # Every figure is read from this live table; a crisis the record does
+        # not cover is skipped, never filled in.
+        panel_head("Case studies", "Three crashes, and the way back")
+        _cases = [ctab[ctab["crisis"] == c].iloc[0] for c in CASE_STUDIES
+                  if (ctab["crisis"] == c).any()]
+        if _cases:
+            st.markdown('<div class="case-list">' + "".join(case_row(r) for r in _cases)
+                        + "</div>", unsafe_allow_html=True)
+            st.caption(
+                "Read from the record of SPY, a fund that tracks the S&P 500 (adjusted "
+                "closes). The way back counts trading days from the lowest close to the "
+                "first close at or above the peak before the fall.")
 
         panel_head("What a buyer actually got", "Crisis by crisis: the best day to buy and the worst")
         # By key, not position: a reordered table can never put one entry's
@@ -2238,6 +2290,78 @@ with tab_lineage:
         st.success("Done: this session's settings are cleared and the page is back "
                    "to its defaults.")
 
+# ---- The builder, five questions, and a way to write in (ME-28 part 4) ----
+# All below the tab strip, so nothing here moves an element above it.
+st.markdown(about_html(), unsafe_allow_html=True)
+st.markdown(faq_html(), unsafe_allow_html=True)
+
+# Contact. There is no mail server and no database, so nothing is sent from
+# here: the form checks the words, then prepares an email the visitor sends
+# from their own app (hero.contact_mailto). Their text is held only while this
+# visit lasts, is never printed into the page, never logged, never stored.
+st.markdown(
+    '<div class="contact-head" id="contact"><div class="kicker">Write to John</div>'
+    '<h2 class="showcase-title">Contact</h2><div class="ar-rule"></div>'
+    f'<p class="contact-sub">{RESPONSE_TIME} Questions, feedback, recruiting or a '
+    'problem with a number: write it here and your own email app sends it.</p></div>',
+    unsafe_allow_html=True)
+_contact_slot = st.container(key="contact_zone")
+with _contact_slot:
+    if st.session_state.get("_contact_mail"):
+        # The thank-you state: one step is left, and it is the visitor's own.
+        st.markdown(
+            '<div class="thanks-card" role="status"><div class="thanks-t">Thank you</div>'
+            '<p class="thanks-p">Your email is ready. Open your email app with the button '
+            'below and press send: nothing has left this page yet, and nothing you wrote '
+            'is kept.</p>'
+            '<div class="thanks-row"><span>Response time</span>'
+            f'<b>{RESPONSE_WINDOW}</b></div>'
+            '<div class="thanks-row"><span>Your session reference</span>'
+            f'<b>{SESSION_REF}</b></div>'
+            f'<div class="thanks-row"><span>Or write to</span><b><a href="mailto:{SUPPORT_EMAIL}">'
+            f'{SUPPORT_EMAIL}</a></b></div></div>',
+            unsafe_allow_html=True)
+        _ty1, _ty2 = st.columns([1, 1], width=720)
+        with _ty1:
+            st.link_button("Open your email app", st.session_state["_contact_mail"],
+                           type="primary", width="stretch")
+        with _ty2:
+            if st.button("Write another message", key="contact_again", width="stretch"):
+                st.session_state.pop("_contact_mail", None)
+                st.rerun()
+        st.markdown('<p class="thanks-keep">Want the reply details for later? Keep '
+                    '<a href="/thanks.html" target="_blank" rel="noopener">a page you can '
+                    'bookmark</a>.</p>', unsafe_allow_html=True)
+    else:
+        _form_col, _aside_col = st.columns([3, 2], gap="large")
+        with _form_col:
+            with st.form("contact_form", clear_on_submit=False, border=False):
+                _c_name = st.text_input("Your name (optional)", max_chars=CONTACT_NAME_MAX,
+                                        key="contact_name")
+                _c_topic = st.selectbox("Topic", CONTACT_TOPICS, key="contact_topic")
+                _c_msg = st.text_area("Message", max_chars=CONTACT_MAX, height=160,
+                                      key="contact_message",
+                                      placeholder="What would you like to say?")
+                _c_go = st.form_submit_button("Prepare my email", type="primary",
+                                              key="contact_send")
+            if _c_go:
+                _mail, _why = contact_mailto(SUPPORT_EMAIL, _c_name, _c_topic, _c_msg, SESSION_REF)
+                if _why:
+                    st.error(_why, icon=":material/error:")
+                else:
+                    st.session_state["_contact_mail"] = _mail
+                    st.rerun()
+        with _aside_col:
+            st.markdown(
+                '<div class="contact-aside"><div class="thanks-row"><span>Response time</span>'
+                f'<b>{RESPONSE_WINDOW}</b></div>'
+                f'<div class="thanks-row"><span>Email</span><b><a href="mailto:{SUPPORT_EMAIL}">'
+                f'{SUPPORT_EMAIL}</a></b></div>'
+                '<p class="contact-note">Nothing is sent from this page. The button opens an '
+                'email in your own app with your words filled in, so you see exactly what '
+                f'goes out. The limit is {CONTACT_MAX:,} characters.</p></div>',
+                unsafe_allow_html=True)
+
 # ---- Closing band: three links onward, then copyright, support, accessibility ----
 st.markdown("""
 <div class="meliona-footer">
@@ -2251,6 +2375,9 @@ st.markdown("""
   </div>
   <div class="f-bar">
     <div>Meliona &middot; Portfolio Risk Engine &middot; &copy; 2026 John Nguyen</div>
+    <div class="f-marks">__MARKS__</div>
+  </div>
+  <div class="f-bar">
     <div>Live end-of-day data: Yahoo Finance &middot; Educational analysis, not investment advice</div>
   </div>
   <div class="f-bar">
@@ -2269,7 +2396,8 @@ st.markdown("""
       with the reference above; a barrier is fixed as a defect.</div>
   </div>
 </div>
-""".replace("__SUPPORT__", SUPPORT_EMAIL).replace("__REF__", SESSION_REF).replace(
+""".replace("__MARKS__", profile_marks("f-mark")).replace("__SUPPORT__", SUPPORT_EMAIL)
+   .replace("__REF__", SESSION_REF).replace(
     "__PHONE__", f' &middot; <a href="tel:{SUPPORT_TEL}">{SUPPORT_PHONE}</a>' if SUPPORT_PHONE else "")
    .replace("__NCRISES__", str(len(HISTORICAL_REGIMES))),
     unsafe_allow_html=True)

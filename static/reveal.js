@@ -52,7 +52,7 @@
   // and any section a button flies to - the glide lands on it, and it must
   // not fade as it lands (deep_scan: "destination never fades").
   var SKIP = '#hero, #boot-skel, .st-key-risk-map, .st-key-glide';
-  var DEST = '#grit-showcase, #conviction, #crisis-record, #the-slice, #engine, #analysis, #the-book';
+  var DEST = '#grit-showcase, #conviction, #crisis-record, #the-slice, #engine, #analysis, #the-book, #contact';
   // Where a block sits decides how it arrives: its centre in the left or right
   // share of the page slides in from that side; in the middle it turns over.
   var SIDE = 0.42;        // left of 42% (or right of 58%) of the page's width
