@@ -26,9 +26,12 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('..', import.meta.url));
 const logo = readFileSync(root + 'assets/logo.svg', 'utf8');
 
-// The tab icon: the same file, rings removed, viewBox tightened to the bezel.
-const tab = logo
-  .replace(/<!--[\s\S]*?-->\s*/g, '')
+// The tab icon: the same file, comments and rings removed, viewBox tightened
+// to the bezel. Comments are stripped until none is left (one pass can join
+// the halves of a nested one into a new opener).
+let bare = logo, before;
+do { before = bare; bare = bare.replace(/<!--[\s\S]*?-->\s*/g, ''); } while (bare !== before);
+const tab = bare
   .replace(/\s*<circle class="crest-ring"[^>]*\/>/g, '')
   .replace('viewBox="-60 -60 120 120"', 'viewBox="-45 -45 90 90"')
   .replace(/aria-label="[^"]*"/, 'aria-label="Meliona"');
