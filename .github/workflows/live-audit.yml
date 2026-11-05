@@ -71,6 +71,8 @@ jobs:
         env:
           # on main the deployed site must be serving this very commit
           EXPECT_BUILD: ${{ github.ref == 'refs/heads/main' && github.sha || '' }}
+          # new page features are required of the deployed site only once main is deployed
+          DOCK: ${{ github.ref == 'refs/heads/main' && 'required' || 'optional' }}
         run: |
           mkdir -p site-shots
           node tools/site_check.mjs "$SITE_URL" site-shots
