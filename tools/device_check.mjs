@@ -164,6 +164,11 @@ async function covered(page) {
       if (x < 0 || y < 0 || x > innerWidth || y > innerHeight) return `${(e.innerText || e.getAttribute('aria-label') || e.tagName).trim().slice(0, 30)} off screen`;
       const top = document.elementFromPoint(x, y);
       if (!top || e === top || e.contains(top) || top.contains(e)) return '';
+      // A help bubble is where the pointer rests, like measure()'s toolbars: the
+      // emulated phone's pointer stays where its last tap was, the page scrolled
+      // a "?" icon under it and its bubble opened over the centre of the screen
+      // (iPhone SE, Live audit on 49ee8d3). A finger leaves no such hover.
+      if (top.closest('[data-testid=stTooltipContent], [role=tooltip]')) return '';
       return `${(e.innerText || e.getAttribute('aria-label') || e.tagName).trim().replace(/\s+/g, ' ').slice(0, 30)} covered by ${top.tagName.toLowerCase()}.${String(top.className).slice(0, 30)}`;
     }).catch(() => null);
     if (r) bad.push(r);
