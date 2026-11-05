@@ -13,7 +13,7 @@
      Two systems (John, 2026-11-05, second pass: the star fort and the chevron
      pilaster came out; the crest, faded into the stone, stays):
      - THE STONE AND THE CREST. A charcoal block from column 8 to the edge,
-       the crest's five pieces engraved into it, large and faint, the audit
+       the crest's five pieces engraved into it, small and faint, the audit
        receipt set over them.
      - THE PLINTH. A dressed stone footing (the rusticated base of a bank or a
        Florentine palazzo), its joints on every second gutter of the grid.
@@ -129,16 +129,16 @@ const pts = P => P.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(' ');
 
 // The crest engraved into the stone, centred behind the receipt.
 const fort = document.getElementById('fort');
-const C = [951.67, 290];
+const C = [940, 300];
 // The crest's own five pieces (assets/logo.svg), scaled about its centre.
 const crest = [
   [[0,-35],[27.358,-19.205],[0,-3.409],[-27.358,-19.205]], [[0,-2.309],[4,0],[0,2.309],[-4,0]],
   [[0,35],[27.358,19.205],[0,3.409],[-27.358,19.205]],
   [[-5.905,0],[-30.311,-14.091],[-30.311,14.091]], [[5.905,0],[30.311,-14.091],[30.311,14.091]],
 ];
-const ks = 6.4;              // the crest's radius 35 -> 224px: it fills the stone
+const ks = 79 / 35;          // small and faint, as it sat at the star fort's heart (John, 2026-11-05)
 crest.forEach(P => add(fort, 'polygon', { points: pts(P.map(([x, y]) => [C[0] + x * ks, C[1] + y * ks])),
-                                          'stroke-width': 1.6, 'stroke-opacity': .17 }));
+                                          'stroke-width': 1, 'stroke-opacity': .1 }));
 
 // Plinth joints: the gutter centre after every second column, top and foot.
 const joints = document.getElementById('joints');
