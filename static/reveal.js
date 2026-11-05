@@ -72,15 +72,19 @@
   var calm = !('IntersectionObserver' in W) ||
     (W.matchMedia && W.matchMedia('(prefers-reduced-motion: reduce)').matches);
   var api = W.__melionaReveal = { revealAll: function () {}, moving: function () { return 0; } };
-  // The cone's wind tunnel (static/windtunnel.js) comes with this file: one
-  // entry point, so the head and main.py's fallback both bring it. Under
-  // reduced motion it loads too and draws one still frame of the same solve.
-  if (!D.getElementById('meliona-wind')) {
-    var wt = D.createElement('script'), me = D.getElementById('meliona-reveal');
-    wt.id = 'meliona-wind';
-    wt.src = (me && me.src ? me.src : 'app/static/reveal.js').replace(/reveal\.js(\?.*)?$/, 'windtunnel.js');
-    D.head.appendChild(wt);
-  }
+  // The cone's wind tunnel (static/windtunnel.js) and the bottom dock - the
+  // phone shortcut and the cookie notice (static/dock.js) - come with this
+  // file: one entry point, so the head and main.py's fallback both bring
+  // them. Under reduced motion they load too (the tunnel draws one still
+  // frame of the same solve; the dock shows without its slide).
+  [['meliona-wind', 'windtunnel.js'], ['meliona-dock', 'dock.js']].forEach(function (f) {
+    var id = f[0], file = f[1];
+    if (D.getElementById(id)) return;
+    var s = D.createElement('script'), me = D.getElementById('meliona-reveal');
+    s.id = id;
+    s.src = (me && me.src ? me.src : 'app/static/reveal.js').replace(/reveal\.js(\?.*)?$/, file);
+    D.head.appendChild(s);
+  });
   if (calm) { H.classList.remove('reveal-on'); return; }   // everything as drawn, photos at once
 
   // ---- 1. reveals ----------------------------------------------------------

@@ -1,0 +1,12 @@
+{
+  "name": "Meliona · Portfolio Risk Engine",
+  "short_name": "Meliona",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ],
+  "theme_color": "#EDE9E3",
+  "background_color": "#EDE9E3",
+  "display": "browser",
+  "start_url": "/"
+}

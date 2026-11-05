@@ -1,9 +1,10 @@
 # Support
 
-**Email: meleona.support@gmail.com**
+**Email: meleona.support@gmail.com** · **Phone: [770-265-9930](tel:+17702659930)**
 
 This is a student portfolio project run by one person. Support is best-effort:
-expect a reply in days, not minutes, and no service-level guarantee.
+expect a reply in days, not minutes, and no service-level guarantee. Email is
+best for a problem report, because the session reference below travels with it.
 
 ## Reporting a problem
 

@@ -180,6 +180,10 @@ for (const dev of names) {
   const d = DEVICES[dev];
   const ctx = await browser.newContext({ viewport: { width: d.width, height: d.height },
     deviceScaleFactor: d.scale, isMobile: d.mobile, hasTouch: d.mobile });
+  // The cookie notice (static/dock.js) is answered the way a returning visitor
+  // answered it: OK pressed. It is a fixed, informational layer, not what this
+  // tool measures, and on a desktop it sits over the bottom-left corner.
+  await ctx.addInitScript(() => { try { localStorage.setItem('meliona-cookie-notice', 'ok'); } catch (e) { /* blocked */ } });
   const page = await ctx.newPage();
   page.setDefaultTimeout(180000);
   const errors = [];
@@ -223,7 +227,7 @@ for (const dev of names) {
     // state each one lands in. A reveal moves only opacity and transform, never
     // layout, so this is the page the visitor sees once scrolled to each block -
     // and a block still waiting below the screen (opacity 0) is not skipped.
-    await page.evaluate(() => window.__melionaReveal?.revealAll());
+    await page.evaluate(() => { window.__melionaReveal?.revealAll(); window.__melionaNotice?.dismiss(); });
     const m = await page.evaluate(measure);
     sideways = Math.max(sideways, m.sideways);
     m.words.forEach(x => found.words.add(x));

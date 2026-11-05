@@ -34,17 +34,17 @@ notices fastest.
 | 22 | CTA above the fold | **Verified** | `site_check` asserts it at 1440x900 (bottom 587px) and 390x844 (454px). |
 | 23 | Meta description | **Built** | One page, one description. `tools/public_files.py` writes it into the served HTML at start, with title and canonical URL - crawlers do not run the JavaScript that sets Streamlit's own title. |
 | 24 | Open Graph image | **Built** | `public/og-image.png` (1200x627) plus og:/twitter: tags, so a LinkedIn post of the link shows the card. Its audit figure is the latest live run's, not a stale one. |
-| 25 | Favicon set | **Built** | Crest rendered to `favicon.png` (64px, also the tab icon) and `apple-touch-icon.png` (180px). |
+| 25 | Favicon set | **Built** | Every icon rendered from the crest by `tools/brand_icons.mjs`: vector `favicon.svg`, `favicon.ico` (16/32/48, each drawn at its size), `favicon.png` 96px, `apple-touch-icon.png` 180px, `icon-192/512.png` in `site.webmanifest`. Linked with a hash of their bytes, so a new icon is a new address: browsers had kept the old lion by its fixed address (2026-11-05, `test_the_tab_icon_is_the_crest_at_an_address_no_browser_has_cached`). |
 | 26 | robots.txt and sitemap.xml | **Built** | Written at start for `MELIONA_SITE_URL`; served from the site root. |
 | 27 | Alt text on every image | **Verified** | `site_check` fails on any `<img>` without alt. Photos are decorative CSS backgrounds; the crest SVG carries `role="img"` and a label. |
 | 28 | Mobile breakpoints | **Verified** | 390px: no sideways scroll, crest and CTA on screen; short-viewport tiers in `main.py`. |
-| 29 | Sticky mobile CTA | **N/A by design** | The page has one job and its CTA is above the fold on a phone; a pinned bar would cover the headline verdict on a 390px screen. Revisit if a real visitor study says otherwise. |
+| 29 | Sticky mobile CTA | **Built 2026-11-04 (#163)** | First decided against (it would cover the headline verdict on a 390px screen); built on 2026-11-04 in a form that cannot: it shows only between the hero and the engine. |
 | 30 | Loads under 2 seconds | **Built** | First paint under 200ms: the hero's boot skeleton, painted from the served HTML before Streamlit's JavaScript (2026-10-19; before that a plain screen, and on a phone ~7 s of blank page). Disclosed rather than hidden: the hero follows in ~2 s on a laptop, ~5.6 s on a 9 Mbps phone, and the live-data headline after that; an "Updating…" sign shows while the page works. |
 | 31 | Form error states | **Built** | The ticker box is the form. Mistyped or dead symbols, more than 25 symbols, an invalid symbol, a constant-price asset and fewer than two usable symbols each get a specific message, each covered by a test. |
-| 32 | Thank-you pages | **N/A** | Nothing is submitted: no sign-up, no order, no form post. |
+| 32 | Thank-you pages | **Built as confirmations (#166)** | Nothing is submitted (no sign-up, order or form post), so there is no page to land on; the one action, clearing the session, confirms itself in words. |
 | 33 | Privacy pages | **Built** | `PRIVACY.md`, `TERMS.md`, `ACCESSIBILITY.md`, linked from the footer. |
-| 34 | Cookie banner | **N/A** | Measured 2026-11-02: one cookie (`_streamlit_xsrf`, anti-forgery, session) and one local-storage key (`stActiveTheme-/-v2`, the theme), both Streamlit's and strictly necessary; no analytics or advertising cookies exist. Adding analytics would make a banner necessary. |
-| 35 | Analytics installed | **N/A by decision** | `PRIVACY.md` promises no analytics SDK and a test asserts Streamlit telemetry is off. Traffic is read from the host's own request metrics instead. |
+| 34 | Cookie banner | **Built 2026-11-04 as a notice (#164)** | One cookie (`_streamlit_xsrf`, anti-forgery) and the theme key, both strictly necessary, so no consent is needed; an informational notice says so once. |
+| 35 | Analytics installed | **Built 2026-11-04, first-party and anonymous (#165)** | Still no analytics SDK, cookie or third party. |
 | 36 | Real contact details | **Built** | `meleona.support@gmail.com`; `site_check` fails if the page stops showing it. |
 | 37 | Security sweep | **Built** | XSS: `VALID_TICKER` funnel + escapes. CSRF: XSRF on. SSRF: `src/netguard.py` allowlist. Path traversal, exposed `.env`/`.git`/logs/source/secrets, permissive CORS, source maps: `tools/security_probe.py`, run on every live audit (all pass). Dependencies: `pip-audit` clean. Code: `bandit` clean. N/A, no surface: uploads, passwords and resets, sessions/JWT, default credentials, IDOR/BOLA, payments, webhooks. Headers: real HSTS, X-Frame-Options and `frame-ancestors` since 2026-11-04 (`serve.py`, #102); before that this row said Streamlit could not set them, which stopped being true with 1.66. |
 
@@ -86,7 +86,7 @@ built where there is a surface, N/A with the reason where there is none.
 | 66 | Terms of service | **Updated 2026-11-02** | `TERMS.md`: who runs it, Price, Images. |
 | 67 | Refund policy | **N/A** | Free: nothing is sold, so nothing is refunded (`TERMS.md` "Price"). |
 | 68 | Cookie policy | **Built** | `PRIVACY.md` "Cookies and browser storage", measured in a browser. |
-| 69 | Cookie consent banner | **N/A** | See #34. |
+| 69 | Cookie consent banner | **Notice, not consent (#164)** | Nothing needs consent; see #34. |
 | 70 | Form consents | **N/A** | No form collects personal data. |
 | 71 | Collect no unnecessary data | **Verified** | Nothing personal is collected (#5). |
 | 72 | Audit third-party SDKs | **Done 2026-11-02** | None in the browser. On the server only `yfinance`, to Yahoo; the allowlist dropped its unused Business Insider entry. |
@@ -177,6 +177,57 @@ has a regression test in `tests/test_engine.py`, so the tell cannot come back.
 | 136 | Many colour shades and opacities | **Fixed** | Nine beige grounds -> three, five muted inks -> two, five hairlines -> one. |
 | 137 | Verbose text, code breadcrumbs, section numbering, eyebrows, periods in titles | **Fixed** | The ten longest captions were shortened, keeping every number and limit; the data-quality checks print plain names instead of code IDs; the 01/02/03 numbering, the eyebrows and the period on a title are gone, on the page, the map and the 404 page (`test_visitor_copy_has_no_numbers_eyebrows_honest_or_shouting`). |
 | 138 | Dithering, ASCII images | **Fixed / verified** | The map's grain texture is gone; no ASCII art exists. |
+
+### 2026-11-04 (later): 20 protections before going public
+
+| # | Asked for | Status | Where it lives / why not |
+|---|---|---|---|
+| 139 | Rate limiting | **Built 2026-11-04** | `serve.py`'s `RateLimit`, per network address: 60 new sessions a minute, 30 open at once, 3,000 HTTP requests a minute - far above one person's page (one session, ~40 requests) - so only a script flooding the shared process is refused (HTTP 429, or the websocket closed with "try again later"). The health probe is never limited. The address is read from the hop Railway's proxy appended, counted in memory for a minute and never stored; a refusal is logged once a minute with a scrambled tag (`test_one_address_cannot_flood_the_shared_process`, `PRIVACY.md`). |
+| 140 | A set API limit; caching repeated requests | **Built** | 5,000 Yahoo requests a day per process (#8); every fetch cached in memory and on disk (#39). |
+| 141 | Error handling; failed requests; API timeouts | **Built** | `safe_err()` (#90); a feed-down message for presets (#126); dropped names retried once, then named (ME-14); a 30 s timeout on every outbound call (#48); the budget degrades to cached data (#8). |
+| 142 | Loading states, empty states, "empathy" states | **Built** | #30, #121, #124; messages say what happened and what to do next in plain words (#126). |
+| 143 | Prevent duplicate submissions and payments | **Verified / N/A** | No form posts and no payments; the only action button gives the same result twice (#123). |
+| 144 | Optimize database queries, add indexes, paginate large results | **N/A** | No database (#44, #53); long tables use Streamlit's virtualized grid (#41, #58). |
+| 145 | Compress files; limit upload sizes | **Built** | AVIF images and a compressed websocket (#38, #45); uploads capped at 1 MB with no uploader (#114); messages capped at 16 MB (#110). |
+| 146 | Uptime monitoring | **Built 2026-11-04** | The `Uptime` workflow checks the live site every 15 minutes - health check (three tries), the page, its HSTS header and its build stamp - and a failed run emails the owner. Under it: the daily Live audit and Railway's restart-on-crash (#97) (`test_the_live_site_is_watched_every_fifteen_minutes`). |
+| 147 | Error logging | **Built 2026-11-04** | Handled failures with session references (#1); errors also in the host's log (#105); now also every server error (HTTP 5xx) and every rate-limit refusal. |
+| 148 | Test simultaneous users | **Built 2026-11-04** | `tools/load_check.mjs` opens ten visitors at the same moment on this commit's app, through the rate limiter, and fails on any server error, refusal, error box or missing headline; Live audit step 8e, every push and daily. The 2026-10-15 stress test (RUNBOOK §4) was a one-off; this one is repeatable. |
+| 149 | Test backup restores | **Built 2026-11-04** | There is no user data to back up (#10). What can be lost is the container and its cache, and step 8e restores exactly that on every run: a fresh checkout of the commit, empty `data/` and `logs/`, started and timed to its first headline. The `Container` workflow does the same from the published image's recipe. |
+
+### 2026-11-04: legal list
+
+| # | Asked for | Status | Where it lives / why not |
+|---|---|---|---|
+| 150 | A privacy policy page; where data is collected | **Built** | `PRIVACY.md`, linked in the footer: what is not collected, a table of everything held, where and for how long (now including the rate limiter's one-minute counts), cookies, deletion (#3, #65). |
+| 151 | Where AI is used | **Built 2026-11-04** | `PRIVACY.md` "Artificial intelligence": no AI model runs in the app, nothing a visitor does reaches an AI service, no number comes from a language model, and the code was written with AI coding assistants and is checked by tests. |
+| 152 | Third parties named | **Built** | Yahoo Finance (server-side prices), Railway (host), and GitHub (where the footer's policy links open) - named in `PRIVACY.md` with what each sees. |
+| 153 | Uploads kept out of storage; no public storage buckets per user | **N/A, verified** | The app takes no uploads (#114) and has no storage buckets or per-user storage of any kind. |
+| 154 | No fake testimonials | **Verified** | None exist (#73). |
+| 155 | An AI chat's self-harm response | **N/A** | There is no chat and no AI (#151). If one is ever added, it needs a crisis response (e.g. 988 in the US) before it ships. |
+
+### 2026-11-04: seventeen site fixes
+
+| # | Asked for | Status | Where it lives / why not |
+|---|---|---|---|
+| 156 | No horizontal scrolling; no mobile overflow; test on mobile devices | **Verified** | `tools/device_check.mjs` on 13 devices every push (#64, #118). |
+| 157 | Meta description, page title, favicon, compressed images | **Built** | #23, #25, #38. |
+| 158 | Clickable email; clickable phone | **Built 2026-11-04** | The support email is a `mailto:` link; John's support phone (770-265-9930) is a `tel:+17702659930` link beside it in the footer, on the maintenance page and in `SUPPORT.md`. `MELIONA_SUPPORT_PHONE` changes it on the host, and `off` hides it, without a redeploy. |
+| 159 | Fix broken links; remove placeholder text | **Built 2026-11-04** | `test_every_link_on_the_page_goes_somewhere_and_no_placeholder_is_left`: every in-page link lands on an id, every link to the repository's files names a file that exists, and no lorem ipsum, TODO, TBD or "coming soon" reaches a page. |
+| 160 | Mobile menu | **Built (fitting form)** | One page, no separate sections to switch between: the phone's "menu" is the tab strip, which scrolls sideways with a labelled button, the jump buttons in the hero and the skip link. A hamburger menu would hide the page's only navigation behind a tap. |
+| 161 | A mobile-optimized empty state; error and success messages | **Built** | An emptied basket says what to do (#124); errors explain (#126); "Clear this session's data" now confirms itself after the reload - its message used to be wiped by the reload before anyone saw it (`test_clearing_the_session_says_so_after_the_reload`). |
+| 162 | A 404 page | **Built** | `public/404.html` (#21). |
+
+### 2026-11-04: twenty launch items, at enterprise quality
+
+| # | Asked for | Status | Where it lives / why not |
+|---|---|---|---|
+| 163 | Sticky mobile CTA | **Built 2026-11-04** | `static/dock.js`: on phones (640px and under), a slim charcoal bar with one "Run the risk engine" button, shown only once the hero's own button has left the screen and hidden as soon as the engine or anything below it is on screen, so it never covers the verdict, the Book or the tabs. It is a plain link to `#engine`, flown by the page's existing glide. 44px target, safe-area inset, square corners, a pressed state, a focus ring, 5.14:1 contrast; outside Streamlit's elements, so nothing above the tab strip moves (`test_the_phone_shortcut_flies_to_the_engine_and_never_covers_it`; site_check checks it on a phone). |
+| 164 | Cookie banner | **Built 2026-11-04 (informational)** | Shown once at the bottom: "This site uses one cookie, needed for security, and no tracking", a link to the privacy policy and OK. It asks for no consent because nothing needs any: the one cookie is Streamlit's anti-forgery token. OK is remembered in browser storage (`meliona-cookie-notice`, listed in `PRIVACY.md`); it never covers the hero's CTA or the phone bar (`test_the_cookie_notice_informs_once_and_never_blocks`). |
+| 165 | Analytics | **Built 2026-11-04, first-party** | `src/observability.UsageCounter`: browser sessions started today and how often each preset is picked - a closed list, never a typed ticker - held in memory and written as one aggregate line to the host's log each hour, at midnight UTC and at shutdown. No SDK, no cookie, no identifier, no address; `PRIVACY.md` "Analytics" says exactly this (`test_usage_counts_are_anonymous_hourly_and_reset_at_midnight`). RUNBOOK §3 says where to read it. |
+| 166 | Thank-you page | **Built as confirmations** | See #32 and #161. |
+| 167 | A GitHub repository users can freely see | **Built** | The repository is public; the footer now links "Source code on GitHub" beside Privacy, Terms and Accessibility (`test_the_footer_links_to_the_source_code`). |
+| 168 | Real contact details | **Built** | Email and phone, both clickable (#158). A postal address is not published: this is a free student project run by one person, with no business address, and a home address on a public page is a safety risk. |
+| 169 | Custom 404, CTA above the fold, meta title and description, Open Graph image, favicon set, robots.txt, sitemap.xml, alt text, mobile breakpoints, loading states, form error states, privacy and terms pages | **Built and checked on every push** | #21-#31, #33, #65-#66. One page, so one title and one description. The CTA-above-the-fold check now also runs with the cookie notice showing. |
 
 ## Before the link goes public
 

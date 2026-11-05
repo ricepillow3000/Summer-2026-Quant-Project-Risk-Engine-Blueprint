@@ -4,76 +4,144 @@
      assets/logo.svg where the CREST comment sits and renders it.
 
      Every figure on it is copied from audit/live_audit_2026-10-15T025826Z.md (a
-     Live audit run on real Yahoo Finance data) and dated on the image. When a
-     newer live audit is committed, update the figures and the date together. -->
+     Live audit run on real Yahoo Finance data). The image carries no date (John,
+     2026-11-05); when a newer live audit is committed, update the figures here.
+
+     Design (John, 2026-11-05: weight, stability and defense; Swiss discipline,
+     primitive shapes and chevrons, real architecture). Twelve columns between
+     64px margins with 24px gutters; every edge below sits on a column line.
+     Two systems (John, 2026-11-05, second pass: the star fort and the chevron
+     pilaster came out; the crest, faded into the stone, stays):
+     - THE STONE AND THE CREST. A charcoal block from column 8 to the edge,
+       the crest's five pieces engraved into it, small and faint, the audit
+       receipt set over them.
+     - THE PLINTH. A full-width stone footing with a gold cap: one clean band.
+     The site's type and colours only: Georgia's metric twin (Gelasio) for
+     words, Helvetica's design (FreeSans) for labels, beige, charcoal, bronze
+     and the crest's gold. No gradients outside the crest, no rounded cards,
+     no glow, no shadow. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=Inter:wght@400;500&display=block" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Gelasio:wght@400;600;700&display=block" rel="stylesheet">
 <style>
-/* Hallmark · macrostructure: Ledger (typography only) · tone: austere editorial ·
- * theme: the site's own (beige paper, charcoal ink, bronze rules) · enrichment: the crest
- * pre-emit critique: P5 H4 E5 S5 R5 V4 */
 :root {
-  --color-paper: #EDE9E3;
-  --color-ink: #3F3B35;
-  --color-ink-2: #5D574D;
-  --color-bronze-text: #6A5030;
-  --color-rule: #9A7B4F;
-  --color-rule-soft: #CFC6B6;
-  --font-display: 'Source Serif 4', Georgia, serif;
-  --font-label: 'Inter', 'Helvetica Neue', sans-serif;
+  --paper: #EDE9E3;
+  --ink: #3F3B35;
+  --ink-2: #5D574D;
+  --bronze-text: #6A5030;     /* words on beige (AA) */
+  --bronze: #9A7B4F;          /* ornament only */
+  --charcoal: #2E2A25;        /* the crest's disc */
+  --stone: #26221E;           /* the plinth, one step heavier */
+  --gold-text: #C6A26B;       /* words on charcoal (AA) */
+  --gold-rule: #B8955E;
+  --serif: 'Gelasio', Georgia, serif;
+  /* FreeSans (GNU FreeFont, drawn from Nimbus Sans: Helvetica's design) first,
+     because on the render machine 'Helvetica Neue' resolves to Inter. */
+  --sans: FreeSans, 'Helvetica Neue', Helvetica, Arial, sans-serif;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { width: 1200px; height: 627px; overflow: hidden; background: var(--color-paper); }
-body { color: var(--color-ink); font-family: var(--font-display);
-       font-variant-numeric: tabular-nums lining-nums; -webkit-font-smoothing: antialiased; }
-.sheet { position: relative; height: 100%; padding: 58px 64px 0;
-         display: grid; grid-template-columns: 520px 1fr; column-gap: 60px; }
+html, body { width: 1200px; height: 627px; overflow: hidden; background: var(--paper); }
+body { position: relative; color: var(--ink); font-family: var(--serif);
+       font-variant-numeric: lining-nums tabular-nums; -webkit-font-smoothing: antialiased; }
+svg.stage { position: absolute; inset: 0; width: 1200px; height: 627px; }
 
-.mark { display: flex; align-items: center; gap: 18px; }
-.mark svg { width: 92px; height: 92px; flex: none; }
-.mark p { font: 400 17px/1.45 var(--font-label); color: var(--color-ink-2); max-width: 380px; }
-h1 { font: 600 156px/0.9 var(--font-display); font-optical-sizing: auto;
-     letter-spacing: -0.035em; margin: 62px 0 0 -6px; }
-.claim { font: 400 27px/1.38 var(--font-display); color: var(--color-ink-2);
-         margin-top: 30px; max-width: 500px; }
-.claim b { font-weight: 600; color: var(--color-ink); }
+/* Left field: columns 1-6 (64 .. 588). */
+.field { position: absolute; left: 64px; top: 58px; width: 524px; }
+.mark { display: flex; align-items: center; gap: 20px; }
+.mark svg { width: 88px; height: 88px; flex: none; }
+.kicker { font: 700 14px/1.5 var(--sans); letter-spacing: .2em; text-transform: uppercase;
+          color: var(--bronze-text); border-left: 3px solid var(--charcoal); padding-left: 14px; }
+h1 { font: 700 150px/0.88 var(--serif); letter-spacing: -0.035em; color: var(--ink);
+     margin: 52px 0 0 -7px; }
+/* The rule under the name: a hairline across the field (columns 1-6) with a
+   heavier key over its first two columns - the ruled line of a printed annual
+   report. No ornament (John, 2026-11-05: sleek, corporate, minimal). */
+.datum { position: relative; height: 3px; margin-top: 34px; }
+.datum::before { content: ""; position: absolute; left: 0; right: 0; top: 1px; height: 1px;
+                 background: var(--ink); opacity: .28; }
+.datum::after { content: ""; position: absolute; left: 0; top: 0; height: 3px; width: 158.67px;
+                background: var(--charcoal); }
+.claim { font: 400 26px/1.4 var(--serif); color: var(--ink-2); margin-top: 22px; max-width: 520px; }
+.claim b { font-weight: 700; color: var(--ink); }
 
-.receipt { align-self: start; margin-top: 10px; border-top: 2px solid var(--color-rule); }
-.receipt h2 { font: 500 16px/1 var(--font-label); color: var(--color-bronze-text);
-              padding: 16px 0 14px; letter-spacing: 0.01em; }
-.row { display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 18px;
-       padding: 15px 0 14px; border-top: 1px solid var(--color-rule-soft); }
-.row span { font: 400 20px/1.3 var(--font-display); color: var(--color-ink-2); }
-.row b { font: 600 22px/1.3 var(--font-display); color: var(--color-ink); white-space: nowrap; }
-.row.lead b { font-size: 38px; line-height: 1; }
-.note { font: 400 16px/1.45 var(--font-label); color: var(--color-ink-2);
-        border-top: 1px solid var(--color-rule-soft); padding-top: 14px; }
+/* Receipt inside the fort: columns 8-12, inset 40px from the stone's edge. */
+.receipt { position: absolute; top: 150px; left: 743px; right: 64px; color: var(--paper); }
+.receipt h2 { font: 700 14px/1.4 var(--sans); letter-spacing: .2em; text-transform: uppercase;
+              color: var(--gold-text); padding-bottom: 14px; border-bottom: 3px solid var(--gold-rule); }
+.row { display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 12px;
+       padding: 16px 0 15px; border-bottom: 1px solid rgba(237, 233, 227, .18); }
+.row span { font: 400 17px/1.3 var(--serif); color: #D8D1C5; white-space: nowrap; }
+.row b { font: 700 21px/1.3 var(--serif); color: var(--paper); white-space: nowrap; }
+.row.lead { padding: 18px 0 16px; }
+.row.lead b { font-size: 40px; line-height: 1; color: var(--gold-text); }
+.note { font: 400 15px/1.5 var(--sans); color: #CFC7BA; margin-top: 18px; }
 
-.foot { position: absolute; left: 64px; right: 64px; bottom: 34px;
-        display: flex; justify-content: space-between; align-items: baseline;
-        border-top: 1px solid var(--color-rule-soft); padding-top: 14px;
-        font: 400 16px/1 var(--font-label); color: var(--color-ink-2); }
+.plinth p { position: absolute; top: 586px; font: 700 13px/1 var(--sans);
+            letter-spacing: .2em; text-transform: uppercase; color: var(--gold-text); }
+.plinth .l { left: 64px; }
+.plinth .r { right: 64px; color: var(--paper); font-weight: 400; font-size: 16px;
+             letter-spacing: .04em; text-transform: none; top: 584px; }
 </style>
 </head>
 <body>
-<div class="sheet">
-  <div>
-    <div class="mark"><!--CREST--><p>A portfolio risk engine on live<br>end-of-day market data</p></div>
-    <h1>Meliona</h1>
-    <p class="claim">Value at risk, stress tests and Monte Carlo, with <b>every number traced to its source</b> and checked against its paper.</p>
-  </div>
-  <div class="receipt">
-    <h2>Live audit on Yahoo Finance data, 15 October 2026</h2>
-    <div class="row lead"><span>Audit checks passed</span><b>727 of 728</b></div>
-    <div class="row"><span>Prices vs Yahoo's raw feed</span><b>identical</b></div>
-    <div class="row"><span>T-bill rate, Yahoo vs Treasury</span><b>4.085% / 4.100%</b></div>
-    <div class="row"><span>SPY vs IVV, daily correlation</span><b>0.9995</b></div>
-    <p class="note">Across every preset basket. No check failed: the one that did not pass is a warning, and the audit says why.</p>
-  </div>
+<svg class="stage" viewBox="0 0 1200 627" aria-hidden="true">
+  <defs>
+    <clipPath id="stone"><rect x="703.33" y="0" width="496.67" height="561"/></clipPath>
+  </defs>
+  <!-- The stone: column 8 (x = 64 + 7 x 91.33) to the edge, down to the plinth. -->
+  <rect x="703.33" y="0" width="496.67" height="561" fill="#2E2A25"/>
+  <g id="fort" clip-path="url(#stone)" fill="none" stroke="#C6A26B"></g>
+  <!-- The plinth: full width, a gold cap. -->
+  <rect x="0" y="561" width="1200" height="66" fill="#26221E"/>
+  <rect x="0" y="561" width="1200" height="3" fill="#B8955E"/>
+  <rect x="0" y="564" width="1200" height="1" fill="#3A352F"/>
+</svg>
+
+<div class="field">
+  <div class="mark"><!--CREST--><p class="kicker">Portfolio risk engine<br>on live end-of-day data</p></div>
+  <h1>Meliona</h1>
+  <div class="datum"></div>
+  <p class="claim">Value at risk, stress tests and Monte Carlo, with <b>every number traced to its source</b> and checked against its paper.</p>
 </div>
-<div class="foot"><span>Built by John Nguyen</span><span>VaR · CVaR · 10 crises replayed · 2 Monte Carlo engines</span></div>
+
+<div class="receipt">
+  <h2>Live audit on Yahoo Finance data</h2>
+  <div class="row lead"><span>Audit checks passed</span><b>727 of 728</b></div>
+  <div class="row"><span>Prices vs Yahoo's raw feed</span><b>identical</b></div>
+  <div class="row"><span>T-bill, Yahoo vs Treasury</span><b>4.085% / 4.100%</b></div>
+  <div class="row"><span>SPY vs IVV, daily correlation</span><b>0.9995</b></div>
+  <p class="note">Across every preset basket. No check failed: the one that did not pass is a warning, and the audit says why.</p>
+</div>
+
+<div class="plinth">
+  <p class="l">Built by John Nguyen</p>
+  <p class="r">VaR · CVaR · 10 crises replayed · 2 Monte Carlo engines</p>
+</div>
+
+<script>
+const NS = 'http://www.w3.org/2000/svg';
+const add = (parent, tag, attrs) => {
+  const el = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+  parent.appendChild(el); return el;
+};
+const pts = P => P.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(' ');
+
+// The crest engraved into the stone, centred behind the receipt.
+const fort = document.getElementById('fort');
+const C = [940, 300];
+// The crest's own five pieces (assets/logo.svg), scaled about its centre.
+const crest = [
+  [[0,-35],[27.358,-19.205],[0,-3.409],[-27.358,-19.205]], [[0,-2.309],[4,0],[0,2.309],[-4,0]],
+  [[0,35],[27.358,19.205],[0,3.409],[-27.358,19.205]],
+  [[-5.905,0],[-30.311,-14.091],[-30.311,14.091]], [[5.905,0],[30.311,-14.091],[30.311,14.091]],
+];
+const ks = 79 / 35;          // small and faint, as it sat at the star fort's heart (John, 2026-11-05)
+crest.forEach(P => add(fort, 'polygon', { points: pts(P.map(([x, y]) => [C[0] + x * ks, C[1] + y * ks])),
+                                          'stroke-width': 1, 'stroke-opacity': .1 }));
+
+</script>
 </body>
 </html>
