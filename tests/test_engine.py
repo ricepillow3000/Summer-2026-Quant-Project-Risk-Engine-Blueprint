@@ -4868,16 +4868,16 @@ def test_a_setting_that_loses_more_than_the_book_in_a_day_is_refused_in_words():
     try:
         next(r for r in at.radio if r.label.startswith("Which side")).set_value(
             "Bearish: short the book")
-        next(c for c in at.checkbox if c.label == "Target volatility").check()
+        next(c for c in at.checkbox if c.label == "Aim for a set level of yearly swings").check()
         at.run()
-        next(s for s in at.slider if s.label == "Target yearly volatility (%)").set_value(30)
-        next(s for s in at.slider if s.label == "Volatility shock").set_value(300)
+        next(s for s in at.slider if s.label == "Yearly swings to aim for (%)").set_value(30)
+        next(s for s in at.slider if s.label == "Extra turbulence (%)").set_value(300)
         at.run()
         assert not at.exception, [e.message for e in at.exception]
         warns = " ".join(w.value for w in at.warning)
         assert "more than everything it holds" in warns, warns
         assert not any('class="verdict-box"' in m.value for m in at.markdown)
-        next(s for s in at.slider if s.label == "Volatility shock").set_value(0)
+        next(s for s in at.slider if s.label == "Extra turbulence (%)").set_value(0)
         at.run()
         assert not at.exception and any('class="verdict-box"' in m.value for m in at.markdown)
     finally:
@@ -5160,9 +5160,9 @@ def test_sharpe_does_not_move_with_the_vol_target_slider():
         def sharpe():
             return [m.value for m in at.metric if m.label == "Sharpe ratio"][0]
         plain = sharpe()
-        [c for c in at.checkbox if c.label == "Target volatility"][0].check().run()
+        [c for c in at.checkbox if c.label == "Aim for a set level of yearly swings"][0].check().run()
         for tv in (5, 10, 30):
-            [s for s in at.slider if s.label == "Target yearly volatility (%)"][0].set_value(tv).run()
+            [s for s in at.slider if s.label == "Yearly swings to aim for (%)"][0].set_value(tv).run()
             assert sharpe() == plain, (
                 f"Sharpe {sharpe()} at a {tv}% vol target vs {plain} unlevered")
         cap = " ".join(c.value for c in at.caption if c.value.startswith("Sharpe ="))
@@ -5946,9 +5946,9 @@ def _crisis_pages():
             [s for s in at.selectbox if s.label == "Scenario"][0].set_value(
                 "COVID-19 crash (2020)").run()
             boot = _page_text(at)
-            [r for r in at.radio if r.label == "Return model"][0].set_value(
+            [r for r in at.radio if r.label == "How bad years are simulated"][0].set_value(
                 "Jump-diffusion (Merton)").run()
-            radio = [r for r in at.radio if r.label == "Return model"][0]
+            radio = [r for r in at.radio if r.label == "How bad years are simulated"][0]
             _PAGES["crisis"] = {"bootstrap": boot, "jump": _page_text(at),
                                 "engine_help": radio.help}
         finally:
@@ -6525,6 +6525,32 @@ def test_drawers_are_the_old_hairline_box_made_clean_and_corporate():
     for body in re.findall(r'\[data-testid="stExpander"\] summary(?::hover)? \{([^}]*)\}', css):
         assert not re.search(r"background(-color)?:\s*#(2E2A25|26221E|E9E4DB|E1DACE)", body), "a plaque fill"
     assert '[data-testid="stTab"] .react-aria-SelectionIndicator { background-color: #2E2A25' in css
+
+
+def test_the_engines_controls_speak_plain_words_first():
+    """John, 2026-11-05: "simpler and easy for a user with limited technical
+    skills". Every control a visitor sets reads in plain words, the method's
+    own name kept beside it in brackets (or in its help) so the page still
+    holds up in a quant interview. Only what a visitor reads changed: the
+    values behind each choice - which the engine, the Options audit and the
+    tests set - are the same."""
+    import re
+    src = (pathlib.Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
+    for label in ("How the names move together", "Aim for a set level of yearly swings",
+                  "Yearly swings to aim for (%)", "How bad years are simulated",
+                  "Market fall over the year (%)", "Extra turbulence (%)"):
+        assert f'"{label}"' in src, label
+    for jargon in ("Covariance estimator", "Return model", "Market drawdown shock",
+                   "Volatility shock", "Target yearly volatility"):
+        assert not re.search(r'st\.\w+\(\s*"' + re.escape(jargon), src) and \
+            not re.search(r'\.(slider|checkbox|radio|selectbox)\(\s*"' + re.escape(jargon), src), jargon
+    for shown in ("Steady (Ledoit-Wolf, default)", "Plain history (sample)", "Quick to react (EWMA)",
+                  "Real past days (bootstrap)", "Real days plus sudden jumps (Merton)",
+                  "Equal risk (risk parity)", "My own shock (set it below)"):
+        assert shown in src, shown
+    # the values behind the words are unchanged
+    assert '["Bootstrap (empirical)", "Jump-diffusion (Merton)"]' in src
+    assert '["Equal weight", "Risk parity"]' in src and '["Ledoit-Wolf", "Sample", "EWMA"]' in src
 
 
 def test_the_contact_form_writes_to_john_and_linkedin_is_the_second_way():

@@ -1103,6 +1103,19 @@ two paid-vendor-dependent pieces remain explicit backlog items:
   excluded. A planted error in each part fails its check
   (`test_the_batch_audit_re_derives_every_grit_zone_number`).
 
+- ✅ **The engine's controls in plain words (2026-11-05)**. John: "simpler
+  and easy for a user with limited technical skills". Each control a visitor
+  sets now reads plain words first, the method's name in brackets: "How the
+  names move together" (Steady - Ledoit-Wolf / Plain history / Quick to react
+  - EWMA), "Equal risk (risk parity)", "Aim for a set level of yearly
+  swings", "How bad years are simulated" (Real past days - bootstrap / Real
+  days plus sudden jumps - Merton), "My own shock", "Market fall over the
+  year (%)", "Extra turbulence (%)"; the estimator's caption says in a line
+  what it does before naming the method. Only the visible words changed: the
+  values behind each choice are the same, and the Options audit, deep scan,
+  recruiter walk and tests find the controls by their new names
+  (`test_the_engines_controls_speak_plain_words_first`).
+
 - ✅ **Nothing freezes when a drawer opens; drawers and tabs stand out
   (2026-11-05)**. John's iPhone screenshots: the Weights and Stress test
   drawers, the Book's drawer and the contact form showed blocks frozen
