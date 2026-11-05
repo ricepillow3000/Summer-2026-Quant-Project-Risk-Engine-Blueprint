@@ -118,30 +118,33 @@ h1, h2, h3 { color: #3F3B35; font-weight: 400; }
     color: #3F3B35 !important; font-family: 'Helvetica Neue', sans-serif !important;
     font-size: 0.75rem !important; }
 
-/* DRAWERS (st.expander) - the banner's stone block: a stone header under a
-   3px gold cap line, its words in paper, the chevron in gold; open, a row of
-   gold rhombuses (the crest's own rhombus, repeated) runs under the header
-   and the body sits on paper inside a stone hairline frame. John,
-   2026-11-05: "make the drop down / tabs more noticeable, using our design
-   direction and color scheme and geometric patterns". Square, flat: hover
-   deepens the stone, nothing lifts. */
-[data-testid="stExpander"] { border: 1px solid #2E2A25 !important;
+/* DRAWERS (st.expander) - beige, like the page, made to be seen (John,
+   2026-11-05: "more noticeable ... relevant to the overall design", then
+   "don't make it a dark color, keep it ... a beige"). The header is a shade
+   darker than the page under the banner's 3px gold cap line, its words in
+   ink; the chevron sits in a square bronze-ruled box; the frame is a bronze
+   hairline. Open, a row of gold rhombuses - the crest's own rhombus,
+   repeated - runs under the header. Square, flat: hover darkens the beige,
+   nothing lifts. */
+[data-testid="stExpander"] { border: 1px solid #9A7B4F !important;
     background: transparent !important; box-shadow: none !important; margin-top: 12px; }
 /* Streamlit draws a second, rounded border on the <details> inside: one frame */
 [data-testid="stExpander"] details { border: none !important; background: transparent !important; }
-[data-testid="stExpander"] summary { position: relative; background-color: #2E2A25 !important;
-    color: #EDE9E3 !important; border-top: 3px solid #B8955E; padding: 12px 16px !important;
+[data-testid="stExpander"] summary { background-color: #E9E4DB !important;
+    color: #3F3B35 !important; border-top: 3px solid #B8955E; padding: 12px 16px !important;
     transition: background-color .2s ease; }
-[data-testid="stExpander"] summary:hover { background-color: #26221E !important; color: #EDE9E3 !important; }
+[data-testid="stExpander"] summary:hover { background-color: #E1DACE !important; color: #2E2A25 !important; }
+[data-testid="stExpander"] details[open] > summary { border-bottom: 1px solid #C4BDAE; }
 [data-testid="stExpander"] summary [data-testid="stMarkdownContainer"] p { color: inherit !important;
     font-size: 1.0625rem; }
-[data-testid="stExpander"] summary [data-testid="stIconMaterial"] { color: #C6A26B !important;
-    background-color: #2E2A25; }
-[data-testid="stExpander"] summary:hover [data-testid="stIconMaterial"] { color: #C6A26B !important;
-    background-color: #26221E; }
-[data-testid="stExpander"] summary:focus-visible { outline: 2px solid #C6A26B; outline-offset: -5px; }
+[data-testid="stExpander"] summary [data-testid="stIconMaterial"] { color: #6A5030 !important;
+    background-color: #E9E4DB; border: 1px solid #9A7B4F; box-sizing: content-box; padding: 2px;
+    margin-right: 6px; }
+[data-testid="stExpander"] summary:hover [data-testid="stIconMaterial"] { color: #6A5030 !important;
+    background-color: #E1DACE; }
+[data-testid="stExpander"] summary:focus-visible { outline: 2px solid #6A5030; outline-offset: -5px; }
 [data-testid="stExpanderDetails"]::before { content: ""; display: block; height: 7px;
-    margin: 2px 0 18px; pointer-events: none;
+    margin: 4px 0 18px; pointer-events: none;
     background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='7'%3E%3Cpath d='M7 0L10.5 3.5L7 7L3.5 3.5Z' fill='%23B8955E'/%3E%3C/svg%3E") 0 0 / 14px 7px repeat-x; }
 
 /* ---- Presentation flow: hero, showcase, CTAs (reveals: search "REVEAL") ---- */
@@ -330,29 +333,30 @@ html { scroll-behavior: smooth; }
 .engine-heading .showcase-title { font-size: clamp(1.75rem, 3.2vw, 2.375rem); }
 
 /* TABS - Streamlit 1.66 draws its tab strip with react-aria ([data-testid=
-   "stTab"]). A stone strip under a 3px gold cap line, like the banner; the
-   tabs speak in the label voice (ME-28), gold at rest, paper when hovered;
-   the open tab is a paper face cut into the stone, a gold rhombus before
-   its name and a 3px gold line under it (John, 2026-11-05: "more
-   noticeable"). Hover changes colour only. */
+   "stTab"]). A beige strip a shade darker than the page, under the banner's
+   3px gold cap line and over a hairline; the tabs speak in the label voice
+   (ME-28), ink at rest, charcoal when hovered; the open tab is a lighter
+   paper face, a gold rhombus before its name and a 3px gold line under it
+   (John, 2026-11-05: "more noticeable", "keep it a beige"). Hover changes
+   colour only. */
 [data-testid="stTabs"] { margin-top: 10px; }
-[data-testid="stTabs"] [role="tablist"] { background-color: #2E2A25 !important; border-top: 3px solid #B8955E;
-    padding: 0 6px; gap: 2px; }
-[data-testid="stTab"] { background-color: #2E2A25 !important; color: #C6A26B !important; padding: 0 16px !important;
+[data-testid="stTabs"] [role="tablist"] { background-color: #E9E4DB !important; border-top: 3px solid #B8955E;
+    border-bottom: 1px solid #C4BDAE; padding: 0 6px; gap: 2px; }
+[data-testid="stTab"] { background-color: #E9E4DB !important; color: #5D574D !important; padding: 0 16px !important;
     transition: background-color .2s ease, color .2s ease; }
-[data-testid="stTab"]:hover { background-color: #26221E !important; color: #EDE9E3 !important; }
-[data-testid="stTab"][aria-selected="true"] { background-color: #EDE9E3 !important; color: #2E2A25 !important; }
+[data-testid="stTab"]:hover { background-color: #E1DACE !important; color: #2E2A25 !important; }
+[data-testid="stTab"][aria-selected="true"] { background-color: #F1EDE5 !important; color: #2E2A25 !important; }
 [data-testid="stTab"] [data-testid="stMarkdownContainer"] p {
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 700;
     font-size: 0.75rem; letter-spacing: .2em; text-transform: uppercase; color: inherit !important; }
 [data-testid="stTab"][aria-selected="true"] [data-testid="stMarkdownContainer"] p::before {
     content: ""; display: inline-block; width: 6px; height: 6px; margin: 0 11px 1px 1px;
-    border: 1.5px solid #B8955E; transform: rotate(45deg); }
+    border: 1.5px solid #B8955E; background-color: #B8955E; transform: rotate(45deg); }
 [data-testid="stTab"] .react-aria-SelectionIndicator { background-color: #B8955E !important;
     height: 3px !important; }
-[data-testid="stTab"]:focus-visible { outline: 2px solid #C6A26B; outline-offset: -4px; }
-[data-testid="stTabsScrollRight"], [data-testid="stTabsScrollLeft"] { color: #C6A26B !important;
-    background-color: #2E2A25 !important; }
+[data-testid="stTab"]:focus-visible { outline: 2px solid #6A5030; outline-offset: -4px; }
+[data-testid="stTabsScrollRight"], [data-testid="stTabsScrollLeft"] { color: #6A5030 !important;
+    background-color: #E9E4DB !important; }
 
 /* ============================================================
    SLABS - ruled columns: a 3px charcoal rule, no box; the label in the

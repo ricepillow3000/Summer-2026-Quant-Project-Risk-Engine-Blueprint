@@ -58,8 +58,9 @@ close the tab.
 An email you do send from the contact form is an ordinary email to John's own
 Gmail address, `john4000.nguyen@gmail.com`, and is kept there as email, under
 Google's own privacy policy, like any message you write to anyone. Support
-mail (the address in the page footer) goes to the project mailbox,
-`meleona.support@gmail.com`, a Gmail mailbox forwarded to John. Ask for it to be
+mail (the address in the page footer, also listed beside the form as
+"Meliona support") goes to the project mailbox, `meleona.support@gmail.com`,
+a Gmail mailbox forwarded to John. Ask for it to be
 deleted by replying to the thread.
 
 ## The portrait and the profile links

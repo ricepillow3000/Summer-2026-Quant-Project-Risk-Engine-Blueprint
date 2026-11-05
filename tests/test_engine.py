@@ -6493,23 +6493,29 @@ def test_what_the_reader_opens_never_animates_and_touch_screens_move_flat():
     assert css.index(".reveal-on.reveal-flat .reveal-item--left") < css.index(".reveal-on .reveal-item.is-visible")
 
 
-def test_drawers_and_tabs_are_stone_plaques_in_the_banners_palette():
+def test_drawers_and_tabs_stand_out_in_the_banners_beige():
     """John, 2026-11-05: "make the drop down / tabs more noticeable, using our
-    design direction and color scheme and geometric patterns". A drawer's
-    header is stone under a 3px gold cap line with its words in paper; an open
-    drawer shows a row of the crest's rhombuses; the tab strip is stone under
-    the same cap line, the open tab a paper face with a gold rhombus. Every
-    colour is the banner's; nothing lifts on hover."""
+    design direction and color scheme and geometric patterns", then "don't
+    make it a dark color, keep it ... a beige". A drawer's header is a beige
+    a step deeper than the page under a 3px gold cap line, words in ink, in
+    a bronze hairline frame; an open drawer shows a row of the crest's
+    rhombuses; the tab strip is the same beige under the same cap line, the
+    open tab a lighter paper face with a gold rhombus. No stone (dark) fill;
+    every colour is the banner's; nothing lifts on hover."""
     import re
     root = pathlib.Path(__file__).resolve().parent.parent
     css = (root / "static" / "app.css").read_text(encoding="utf-8")
     summ = re.search(r'\[data-testid="stExpander"\] summary \{([^}]*)\}', css).group(1)
-    assert "#2E2A25" in summ and "#EDE9E3" in summ and "3px solid #B8955E" in summ
+    assert "background-color: #E9E4DB" in summ and "color: #3F3B35" in summ and "3px solid #B8955E" in summ
     rhombus = re.search(r'\[data-testid="stExpanderDetails"\]::before \{([^}]*)\}', css).group(1)
     assert "M7 0L10.5 3.5L7 7L3.5 3.5Z" in rhombus and "%23B8955E" in rhombus and "gradient(" not in rhombus
     strip = re.search(r'\[data-testid="stTabs"\] \[role="tablist"\] \{([^}]*)\}', css).group(1)
-    assert "#2E2A25" in strip and "3px solid #B8955E" in strip
-    assert re.search(r'\[data-testid="stTab"\]\[aria-selected="true"\] \{[^}]*#EDE9E3', css)
+    assert "background-color: #E9E4DB" in strip and "3px solid #B8955E" in strip
+    assert re.search(r'\[data-testid="stTab"\]\[aria-selected="true"\] \{[^}]*#F1EDE5', css)
+    for sel in (r'\[data-testid="stExpander"\] summary', r'\[data-testid="stTab"\]',
+                r'\[data-testid="stTabs"\] \[role="tablist"\]'):
+        body = re.search(sel + r' \{([^}]*)\}', css).group(1)
+        assert "#2E2A25 !important;\n" not in body and "background-color: #2E2A25" not in body, "a dark fill"
     assert re.search(r'aria-selected="true"\] \[data-testid="stMarkdownContainer"\] p::before \{[^}]*rotate\(45deg\)', css)
 
 
@@ -6526,6 +6532,10 @@ def test_the_contact_form_writes_to_john_and_linkedin_is_the_second_way():
     assert 'CONTACT_EMAIL = host_setting("CONTACT_EMAIL", _CONTACT_DEFAULT)' in src
     assert "contact_mailto(CONTACT_EMAIL," in src and "contact_mailto(SUPPORT_EMAIL" not in src
     assert src.count("mailto:{CONTACT_EMAIL}") == 2 and src.count("{LINKEDIN_URL}") == 2
+    # both addresses, each with its job, in the aside and the thank-you state
+    assert src.count('<span>Meliona support</span><b><a href="mailto:{SUPPORT_EMAIL}">') == 2
+    page = (root / "public" / "thanks.html").read_text(encoding="utf-8")
+    assert hero.CONTACT_EMAIL in page and "meleona.support@gmail.com" in page
     assert '<div class="showcase-title" role="heading" aria-level="2">Contact</div>' in src
     assert hero.LINKEDIN_URL in dict((n, u) for n, u, _ in hero.PROFILE_LINKS).values()
     assert "Computer Information Systems" in hero.PERSON_ROLE and "AI & Analytics" in hero.ABOUT_BIO

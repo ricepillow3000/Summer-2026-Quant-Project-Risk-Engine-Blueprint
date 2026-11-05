@@ -1114,9 +1114,11 @@ two paid-vendor-dependent pieces remain explicit backlog items:
   device_check now fails on a tagged block inside opened content and on two
   elements sharing an id - the Contact heading had Streamlit's automatic
   anchor "contact" beside the section's own (now a heading by role). Drawers
-  became the banner's stone plaques (gold cap line, paper words, a row of the
-  crest's rhombuses when open) and the tab strip a stone band with a paper
-  face for the open tab. John's bio now reads Computer Information Systems,
+  and tabs stand out but stay beige (John: "don't make it a dark color"): a
+  deeper-beige header under a 3px gold cap line, the chevron in a square
+  bronze box, a bronze hairline frame, a row of the crest's gold rhombuses
+  when open; the open tab a lighter paper face with a gold rhombus. The
+  contact section lists both addresses, each with its job. John's bio now reads Computer Information Systems,
   specializing in AI & Analytics; the contact form writes to his own Gmail
   (his choice) with LinkedIn as the second way to reach him.
 

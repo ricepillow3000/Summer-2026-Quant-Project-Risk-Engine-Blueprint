@@ -2355,8 +2355,10 @@ with _contact_slot:
             f'<b>{RESPONSE_WINDOW}</b></div>'
             '<div class="thanks-row"><span>Your session reference</span>'
             f'<b>{SESSION_REF}</b></div>'
-            f'<div class="thanks-row"><span>Or write to</span><b><a href="mailto:{CONTACT_EMAIL}">'
+            f'<div class="thanks-row"><span>Or write to John</span><b><a href="mailto:{CONTACT_EMAIL}">'
             f'{CONTACT_EMAIL}</a></b></div>'
+            f'<div class="thanks-row"><span>Meliona support</span><b><a href="mailto:{SUPPORT_EMAIL}">'
+            f'{SUPPORT_EMAIL}</a></b></div>'
             '<div class="thanks-row"><span>Or message John</span><b><a href="'
             f'{LINKEDIN_URL}" target="_blank" rel="noopener noreferrer me">on LinkedIn</a></b></div>'
             '</div>',
@@ -2395,8 +2397,12 @@ with _contact_slot:
             st.markdown(
                 '<div class="contact-aside"><div class="thanks-row"><span>Response time</span>'
                 f'<b>{RESPONSE_WINDOW}</b></div>'
-                f'<div class="thanks-row"><span>Email</span><b><a href="mailto:{CONTACT_EMAIL}">'
+                # Both addresses, each with its job (John, 2026-11-05): his
+                # own for writing to him, the project's for the site itself.
+                f'<div class="thanks-row"><span>Email John</span><b><a href="mailto:{CONTACT_EMAIL}">'
                 f'{CONTACT_EMAIL}</a></b></div>'
+                f'<div class="thanks-row"><span>Meliona support</span><b><a href="mailto:{SUPPORT_EMAIL}">'
+                f'{SUPPORT_EMAIL}</a></b></div>'
                 '<div class="thanks-row"><span>LinkedIn</span><b><a href="'
                 f'{LINKEDIN_URL}" target="_blank" rel="noopener noreferrer me">Message John</a>'
                 '</b></div>'
