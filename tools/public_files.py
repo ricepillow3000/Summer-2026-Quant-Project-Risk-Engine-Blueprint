@@ -7,7 +7,7 @@ search crawlers do not run JavaScript, so anything the app sets at runtime is
 invisible to them. This step, run once at container start (Procfile), does two
 things to Streamlit's static root:
 
-1. copies `public/` - favicon, apple-touch icon, Open Graph image - and writes
+1. copies `public/` - the icon set, web app manifest, Open Graph image - and writes
    robots.txt and sitemap.xml for the deployed URL;
 2. adds a title, meta description, canonical URL, Open Graph / Twitter tags and
    a <noscript> description to index.html's <head>, once (idempotent);
@@ -22,6 +22,7 @@ runs exactly as before.
 """
 
 import datetime
+import hashlib
 import html
 import os
 import pathlib
@@ -79,6 +80,31 @@ def boot_block() -> str:
     return f"{BOOT_MARK}\n{fallback}{skel}\n{BOOT_END}\n"
 
 
+# Streamlit's own index.html links its favicon as "shortcut icon" at a fixed
+# address. A browser keeps a tab icon for months by its address, so visitors
+# who came before the crest kept seeing the old lion (John, 2026-11-05). The
+# line is removed; the icons below are linked with their own content hash
+# (v=), so a new icon is a new address and every browser fetches it at once.
+STREAMLIT_ICON = '<link rel="shortcut icon" href="./favicon.png" />'
+
+
+def versioned(name: str) -> str:
+    """/<name>?v=<first 10 hex of the file's sha256>: changes when the file does."""
+    digest = hashlib.sha256((PUBLIC / name).read_bytes()).hexdigest()[:10]
+    return f"/{name}?v={digest}"
+
+
+def icon_tags() -> str:
+    """The tab, home-screen and install icons (all rendered by tools/brand_icons.mjs)."""
+    return (
+        f'<link rel="icon" href="{versioned("favicon.ico")}" sizes="16x16 32x32 48x48">\n'
+        f'<link rel="icon" type="image/svg+xml" href="{versioned("favicon.svg")}">\n'
+        f'<link rel="icon" type="image/png" sizes="96x96" href="{versioned("favicon.png")}">\n'
+        f'<link rel="apple-touch-icon" sizes="180x180" href="{versioned("apple-touch-icon.png")}">\n'
+        f'<link rel="manifest" href="{versioned("site.webmanifest")}">\n'
+    )
+
+
 def head_tags(site_url: str, build: str = "") -> str:
     t, d, u = html.escape(TITLE), html.escape(DESCRIPTION), html.escape(site_url)
     b = html.escape(build[:12] or "unknown")
@@ -97,8 +123,7 @@ def head_tags(site_url: str, build: str = "") -> str:
         f'<meta name="meliona-build" content="{b}">\n'
         f'<meta name="description" content="{d}">\n'
         f'<link rel="canonical" href="{u}/">\n'
-        f'<link rel="icon" type="image/png" href="/favicon.png">\n'
-        f'<link rel="apple-touch-icon" href="/apple-touch-icon.png">\n'
+        f'{icon_tags()}'
         f'<meta name="theme-color" content="#EDE9E3">\n'
         # The boot skeleton below the <body> tag is styled by this sheet, so it
         # must be in place for the first paint (served by enableStaticServing).
@@ -164,6 +189,7 @@ def install(static_dir: pathlib.Path, site_url: str = SITE_URL,
         new = new.replace(
             "<noscript>", f"<noscript><p>{html.escape(TITLE)}. {html.escape(DESCRIPTION)}</p>", 1)
         new = new.replace("<body>", "<body>\n" + boot_block(), 1)
+    new = new.replace(STREAMLIT_ICON + "\n", "").replace(STREAMLIT_ICON, "")
     if BOOT_MARK in new:                   # the skeleton follows the hero's copy
         i, j = new.index(BOOT_MARK), new.index(BOOT_END) + len(BOOT_END) + 1
         new = new[:i] + boot_block() + new[j:]

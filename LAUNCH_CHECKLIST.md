@@ -34,7 +34,7 @@ notices fastest.
 | 22 | CTA above the fold | **Verified** | `site_check` asserts it at 1440x900 (bottom 587px) and 390x844 (454px). |
 | 23 | Meta description | **Built** | One page, one description. `tools/public_files.py` writes it into the served HTML at start, with title and canonical URL - crawlers do not run the JavaScript that sets Streamlit's own title. |
 | 24 | Open Graph image | **Built** | `public/og-image.png` (1200x627) plus og:/twitter: tags, so a LinkedIn post of the link shows the card. Its audit figure is the latest live run's, not a stale one. |
-| 25 | Favicon set | **Built** | Crest rendered to `favicon.png` (64px, also the tab icon) and `apple-touch-icon.png` (180px). |
+| 25 | Favicon set | **Built** | Every icon rendered from the crest by `tools/brand_icons.mjs`: vector `favicon.svg`, `favicon.ico` (16/32/48, each drawn at its size), `favicon.png` 96px, `apple-touch-icon.png` 180px, `icon-192/512.png` in `site.webmanifest`. Linked with a hash of their bytes, so a new icon is a new address: browsers had kept the old lion by its fixed address (2026-11-05, `test_the_tab_icon_is_the_crest_at_an_address_no_browser_has_cached`). |
 | 26 | robots.txt and sitemap.xml | **Built** | Written at start for `MELIONA_SITE_URL`; served from the site root. |
 | 27 | Alt text on every image | **Verified** | `site_check` fails on any `<img>` without alt. Photos are decorative CSS backgrounds; the crest SVG carries `role="img"` and a label. |
 | 28 | Mobile breakpoints | **Verified** | 390px: no sideways scroll, crest and CTA on screen; short-viewport tiers in `main.py`. |

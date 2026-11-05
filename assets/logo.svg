@@ -1,14 +1,37 @@
-<svg viewBox="-60 -60 120 120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Meliona crest - a hexagon cut by an X into two triangles and three rhombuses, on a charcoal disc with three fading rings">
+<svg viewBox="-60 -60 120 120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Meliona crest - a hexagon cut by an X into two triangles and three rhombuses, on a charcoal disc with a gold bezel and three fading rings">
   <!-- Drawn about the centre (0,0): every left/right and top/bottom pair is the
        same number with the sign flipped. Regular hexagon, circumradius 35, cut
        along the diagonals joining opposite side vertices; pieces never touch
        (1.1 to the keystone, 5.9 across the X). The rings fade outward and
-       ripple on hover (static/app.css, main.py). -->
-  <circle class="crest-ring" r="47.2" fill="none" stroke="#2E2A25" stroke-width="1.8" stroke-opacity="0.85"/>
-  <circle class="crest-ring" r="51.4" fill="none" stroke="#2E2A25" stroke-width="1.3" stroke-opacity="0.5"/>
-  <circle class="crest-ring" r="55.6" fill="none" stroke="#2E2A25" stroke-width="0.9" stroke-opacity="0.22"/>
-  <circle r="44" fill="#2E2A25"/>
-  <g fill="#EDE9E3">
+       ripple on hover (static/app.css, main.py).
+       Finish (John, 2026-11-05: "premium, make it look expensive"): the disc is
+       lit from above like lacquer, its edge is a hairline of brushed gold, the
+       pieces are satin ivory and the rings are dark bronze. Every gradient runs
+       straight down the vertical axis, so the mark stays mirror symmetric.
+       Ids carry an mc- prefix: the crest is inlined into the page. -->
+  <defs>
+    <radialGradient id="mc-disc" cx="0" cy="-22" r="70" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4A443D"/>
+      <stop offset=".55" stop-color="#2E2A25"/>
+      <stop offset="1" stop-color="#1C1916"/>
+    </radialGradient>
+    <linearGradient id="mc-gold" x1="0" y1="-44" x2="0" y2="44" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#E6CC97"/>
+      <stop offset=".45" stop-color="#B8955E"/>
+      <stop offset=".7" stop-color="#8A6A3C"/>
+      <stop offset="1" stop-color="#C6A26B"/>
+    </linearGradient>
+    <linearGradient id="mc-ivory" x1="0" y1="-35" x2="0" y2="35" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FBF8F2"/>
+      <stop offset=".5" stop-color="#EDE9E3"/>
+      <stop offset="1" stop-color="#DCD3C4"/>
+    </linearGradient>
+  </defs>
+  <circle class="crest-ring" r="47.2" fill="none" stroke="#4A3A25" stroke-width="1.8" stroke-opacity="0.85"/>
+  <circle class="crest-ring" r="51.4" fill="none" stroke="#4A3A25" stroke-width="1.3" stroke-opacity="0.5"/>
+  <circle class="crest-ring" r="55.6" fill="none" stroke="#4A3A25" stroke-width="0.9" stroke-opacity="0.22"/>
+  <circle r="44" fill="url(#mc-disc)" stroke="url(#mc-gold)" stroke-width="1.4"/>
+  <g fill="url(#mc-ivory)">
     <polygon points="0,-35 27.358,-19.205 0,-3.409 -27.358,-19.205"/>
     <polygon points="0,-2.309 4,0 0,2.309 -4,0"/>
     <polygon points="0,35 27.358,19.205 0,3.409 -27.358,19.205"/>

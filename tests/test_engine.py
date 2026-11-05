@@ -4399,6 +4399,59 @@ def test_public_files_give_crawlers_and_link_previews_a_real_head(tmp_path=None)
     assert 'name="robots" content="noindex"' in (d / "404.html").read_text()
 
 
+def test_the_tab_icon_is_the_crest_at_an_address_no_browser_has_cached(tmp_path=None):
+    """John, 2026-11-05: the browser tab still showed the old lion. The icon
+    file had been redrawn as the crest, but at the same address, and browsers
+    keep a tab icon by its address for months. Every icon is now linked with a
+    hash of its own bytes, Streamlit's fixed "shortcut icon" line is removed,
+    and every icon is rendered from assets/logo.svg by tools/brand_icons.mjs
+    at the size it is shown (16-512px, plus a vector one)."""
+    import hashlib
+    import json
+    import re
+    import tempfile
+
+    import tools.public_files as pf
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    pub = root / "public"
+    d = pathlib.Path(tmp_path or tempfile.mkdtemp())
+    (d / "index.html").write_text(
+        "<!doctype html><html><head><title>Streamlit</title>"
+        '<link rel="shortcut icon" href="./favicon.png" /></head><body></body></html>',
+        encoding="utf-8")
+    pf.install(d, "https://example.test")
+    page = (d / "index.html").read_text(encoding="utf-8")
+    assert "shortcut icon" not in page, "Streamlit's fixed-address icon is still linked"
+    links = re.findall(r'<link rel="(icon|apple-touch-icon|manifest)"[^>]*href="/([^"?]+)\?v=([0-9a-f]+)"', page)
+    assert {n for _, n, _ in links} == {"favicon.ico", "favicon.svg", "favicon.png",
+                                        "apple-touch-icon.png", "site.webmanifest"}, links
+    for _, name, v in links:
+        assert v == hashlib.sha256((pub / name).read_bytes()).hexdigest()[:10], name
+        assert (d / name).read_bytes() == (pub / name).read_bytes(), name
+
+    def png_size(name):
+        b = (pub / name).read_bytes()
+        assert b[:8] == b"\x89PNG\r\n\x1a\n", name
+        return int.from_bytes(b[16:20], "big"), int.from_bytes(b[20:24], "big")
+    for name, side in (("favicon.png", 96), ("apple-touch-icon.png", 180),
+                       ("icon-192.png", 192), ("icon-512.png", 512)):
+        assert png_size(name) == (side, side), name
+    ico = (pub / "favicon.ico").read_bytes()
+    count = int.from_bytes(ico[4:6], "little")
+    assert sorted(ico[6 + 16 * i] for i in range(count)) == [16, 32, 48]
+    manifest = json.loads((pub / "site.webmanifest").read_text(encoding="utf-8"))
+    assert {i["src"] for i in manifest["icons"]} == {"/icon-192.png", "/icon-512.png"}
+
+    # The vector tab icon is the crest itself: the same pieces and disc, cropped.
+    logo = (root / "assets" / "logo.svg").read_text(encoding="utf-8")
+    tab = (pub / "favicon.svg").read_text(encoding="utf-8")
+    assert re.findall(r"<polygon[^>]*>", tab) == re.findall(r"<polygon[^>]*>", logo)
+    assert '<circle r="44"' in tab and "crest-ring" not in tab
+    src = (root / "main.py").read_text(encoding="utf-8")
+    assert '"public" / "favicon.png"' in src, "the page icon must stay the rendered crest"
+
+
 def test_the_deployed_page_names_the_commit_it_was_built_from(tmp_path=None):
     """"Did Railway deploy it?" was answered by guesswork twice (2026-09-03,
     2026-09-09): the host posts nothing back to GitHub. Railway sets
