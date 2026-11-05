@@ -163,7 +163,7 @@ for (const name of ['Risk Topology', 'Risk Breakdown', 'Grit Zone', 'Crisis Conv
     await tab(name).scrollIntoViewIfNeeded(); await tab(name).click(); await page.waitForTimeout(1200);
   }, async () => {
     const len = await page.evaluate(n => {
-      const t = [...document.querySelectorAll('[role="tab"]')].find(e => e.innerText.trim() === n);
+      const t = [...document.querySelectorAll('[role="tab"]')].find(e => e.textContent.trim() === n);
       const panel = t && document.getElementById(t.getAttribute('aria-controls'));
       return panel ? panel.innerText.trim().length + panel.querySelectorAll('iframe, canvas, svg').length * 100 : 0;
     }, name);

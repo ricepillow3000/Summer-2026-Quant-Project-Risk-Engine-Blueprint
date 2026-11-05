@@ -559,7 +559,7 @@ await step('tabs', async () => {
   for (const name of TABS) {
     await openTab(name);
     const len = await page.evaluate(n => {
-      const t = [...document.querySelectorAll('[role="tab"]')].find(e => e.innerText.trim() === n);
+      const t = [...document.querySelectorAll('[role="tab"]')].find(e => e.textContent.trim() === n);
       const p = t && document.getElementById(t.getAttribute('aria-controls'));
       return p ? p.innerText.trim().length + p.querySelectorAll('iframe, canvas, svg').length * 100 : 0;
     }, name);
