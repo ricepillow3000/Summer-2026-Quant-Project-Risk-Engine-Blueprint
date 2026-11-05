@@ -2742,6 +2742,12 @@ def test_launch_documents_exist_and_say_the_load_bearing_things():
 
     for doc in (privacy, terms, support, checklist):
         assert "meleona.support@gmail.com" in doc
+    # John chose (2026-11-05) to take contact-form mail at his own Gmail; the
+    # privacy policy must then say so, where it says where that email goes.
+    # Everywhere else support stays on the project mailbox, and his address
+    # appearing in any other public document is still a leak.
+    assert "john4000.nguyen@gmail.com" in privacy, "the policy must name where contact mail goes"
+    for doc in (terms, support, checklist):
         assert "john4000.nguyen@gmail.com" not in doc, (
             "a personal address leaked into a public document")
     # The mailbox is a manual, pre-launch step - the runbook must carry it.
@@ -5702,6 +5708,15 @@ def test_a_press_waits_for_its_section_as_long_as_the_page_is_still_being_writte
         "(the old frame's timers die with it: 'Skip to the analysis' did nothing, Live audit on main 42163e6)"
     assert "P.__melionaSetY = y; if (waitA) waitTop = waitA.getBoundingClientRect().top; return;" in scroll, \
         "a clamp under a shrinking page must rebase where the button sits, or the next anchoring shift ends the wait"
+    # A press before the glide frame exists (the skip link was drawn 229ms
+    # before it; Live audit 8c early, four times): reveal.js, in the <head>,
+    # keeps it as the same pending record and the glide flies it on arrival.
+    rv = (pathlib.Path(__file__).resolve().parent.parent / "static" / "reveal.js").read_text(encoding="utf-8")
+    early = rv[rv.index("A press before the glide script exists"):rv.index("if (calm)")]
+    assert "if (D.__melionaGlide || e.defaultPrevented" in early and "e.preventDefault();" in early
+    assert "D.__melionaPending = { a: a, id: id, ms: Date.now() }" in early, "the record the glide resumes"
+    assert "el.scrollIntoView()" in early, "no glide at all: the browser's own jump, once the section exists"
+    assert "}, true);" in early, "capture: before the page's own handlers"
 
 
 def test_only_a_decaying_flick_is_forgiven_and_every_exit_restores_the_page():
@@ -6461,6 +6476,80 @@ def test_a_wide_block_never_turns_like_a_card_and_never_hangs_mid_turn():
     assert "el.style.removeProperty('--reveal-depth');" in js
 
 
+def test_what_the_reader_opens_never_animates_and_touch_screens_move_flat():
+    """John, 2026-11-05 (five iPhone screenshots): opening the Weights and
+    Stress test drawers, the Book's drawer, and the contact form left blocks
+    frozen part-way through their turn - squeezed, sideways, cut off at the
+    edge - and they stayed that way. Two rules: what a reader opens (a
+    drawer's body, a tab's panel) is never tagged for an arrival, and WebKit
+    (every iPhone/iPad browser, Safari) and touch screens get the same
+    arrivals as flat slides and rises, never a perspective turn."""
+    import re
+    root = pathlib.Path(__file__).resolve().parent.parent
+    js = (root / "static" / "reveal.js").read_text(encoding="utf-8")
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    opened = re.search(r"var OPENED = '([^']+)';", js).group(1)
+    assert '[data-testid="stExpanderDetails"]' in opened and '[data-testid="stTabPanel"]' in opened
+    assert "if (el.__rv || el.closest(SKIP) || el.closest(OPENED)) return;" in js
+    assert "var flat = 'GestureEvent' in W || !!(W.matchMedia && W.matchMedia('(pointer: coarse)').matches);" in js
+    assert js.index("if (calm)") < js.index("H.classList.add('reveal-flat')"), "flat is a kind of motion"
+    flat = re.findall(r"\.reveal-on\.reveal-flat \.reveal-item--(\w+)[^{]*\{([^}]*)\}", css)
+    kinds = set(re.findall(r"\.reveal-on\.reveal-flat \.reveal-item--(\w+)", css))
+    assert {"left", "right", "card", "flip"} <= kinds, kinds
+    for _, body in flat:
+        assert "perspective" not in body and "rotate" not in body and "scale" not in body, body
+    # same specificity as the landed state, so it must come first or it wins
+    assert css.index(".reveal-on.reveal-flat .reveal-item--left") < css.index(".reveal-on .reveal-item.is-visible")
+
+
+def test_drawers_are_the_old_hairline_box_made_clean_and_corporate():
+    """John, 2026-11-05: a stone plaque, a beige plaque and a partial rule on
+    the top edge were each turned down ("the old designs were good but bold
+    the words", "the partial line on top looks a little tacky ... clean,
+    minimal, corporate"). The old elements only: a hairline frame with no
+    fill, the label in bold serif on the left, the chevron in text bronze on
+    the right edge; hover and open turn the frame charcoal; an open header
+    stands on a hairline. No partial rule, no plaque fill, no pattern."""
+    import re
+    root = pathlib.Path(__file__).resolve().parent.parent
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    frame = re.search(r'\[data-testid="stExpander"\] \{([^}]*)\}', css).group(1)
+    assert "1px solid #C4BDAE" in frame and "background: transparent" in frame
+    label = re.search(r'\[data-testid="stExpander"\] summary \[data-testid="stMarkdownContainer"\] p \{([^}]*)\}', css).group(1)
+    assert "font-weight: 700" in label and "Helvetica" not in label, "bold serif, not the label voice"
+    row = re.search(r'\[data-testid="stExpander"\] summary > span \{([^}]*)\}', css).group(1)
+    assert "row-reverse" in row and "space-between" in row, "the chevron sits on the right edge"
+    assert '[data-testid="stExpander"]:has(details[open]) { border-color: #2E2A25 !important; }' in css
+    assert '[data-testid="stExpander"]::before' not in css, "the partial rule on the top edge is back"
+    assert "stExpanderDetails\"]::before" not in css, "the rhombus row is back"
+    for body in re.findall(r'\[data-testid="stExpander"\] summary(?::hover)? \{([^}]*)\}', css):
+        assert not re.search(r"background(-color)?:\s*#(2E2A25|26221E|E9E4DB|E1DACE)", body), "a plaque fill"
+    assert '[data-testid="stTab"] .react-aria-SelectionIndicator { background-color: #2E2A25' in css
+
+
+def test_the_contact_form_writes_to_john_and_linkedin_is_the_second_way():
+    """John, 2026-11-05: his personal email for contact ("I'm more active
+    there") and LinkedIn as a way of communicating too. The form, its aside,
+    the thank-you state and public/thanks.html use CONTACT_EMAIL; support mail
+    stays on the project mailbox. The title is a heading by role, so the page
+    has one #contact (Streamlit's automatic heading anchor made a second)."""
+    import hero
+    root = pathlib.Path(__file__).resolve().parent.parent
+    src = (root / "main.py").read_text(encoding="utf-8")
+    assert hero.CONTACT_EMAIL == "john4000.nguyen@gmail.com"
+    assert 'CONTACT_EMAIL = host_setting("CONTACT_EMAIL", _CONTACT_DEFAULT)' in src
+    assert "contact_mailto(CONTACT_EMAIL," in src and "contact_mailto(SUPPORT_EMAIL" not in src
+    assert src.count("mailto:{CONTACT_EMAIL}") == 2 and src.count("{LINKEDIN_URL}") == 2
+    # both addresses, each with its job, in the aside and the thank-you state
+    assert src.count('<span>Meliona support</span><b><a href="mailto:{SUPPORT_EMAIL}">') == 2
+    page = (root / "public" / "thanks.html").read_text(encoding="utf-8")
+    assert hero.CONTACT_EMAIL in page and "meleona.support@gmail.com" in page
+    assert '<div class="showcase-title" role="heading" aria-level="2">Contact</div>' in src
+    assert hero.LINKEDIN_URL in dict((n, u) for n, u, _ in hero.PROFILE_LINKS).values()
+    assert "Computer Information Systems" in hero.PERSON_ROLE and "AI & Analytics" in hero.ABOUT_BIO
+    assert "&amp; Analytics" in hero.about_html(), "the bio's ampersand is escaped in the page"
+
+
 def test_the_browser_audit_runs_on_an_os_its_playwright_supports():
     """2026-11-04: GitHub's ubuntu-latest became 26.04 and Playwright 1.56.1
     refused to install Chromium there, so every browser step of the Live audit
@@ -6818,7 +6907,7 @@ def test_the_thank_you_page_is_branded_noindexed_and_says_when_john_replies():
     root = pathlib.Path(__file__).resolve().parent.parent
     page = (root / "public" / "thanks.html").read_text(encoding="utf-8")
     assert '<meta name="robots" content="noindex">' in page
-    assert hero.RESPONSE_WINDOW in page and "meleona.support@gmail.com" in page
+    assert hero.RESPONSE_WINDOW in page and hero.CONTACT_EMAIL in page
     assert 'href="/"' in page and "#2E2A25" in page and "#B8955E" in page
     for _, url, _ in hero.PROFILE_LINKS:
         assert url in page

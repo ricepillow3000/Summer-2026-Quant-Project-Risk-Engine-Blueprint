@@ -55,9 +55,12 @@ for this session only, are never printed into the page, never logged and never
 written to disk; they go when you write another message, clear the session or
 close the tab.
 
-An email you do send is an ordinary email to `meleona.support@gmail.com` (a
-Gmail mailbox, forwarded to John) and is kept there as email, under Google's
-own privacy policy, like any message you write to anyone. Ask for it to be
+An email you do send from the contact form is an ordinary email to John's own
+Gmail address, `john4000.nguyen@gmail.com`, and is kept there as email, under
+Google's own privacy policy, like any message you write to anyone. Support
+mail (the address in the page footer, also listed beside the form as
+"Meliona support") goes to the project mailbox, `meleona.support@gmail.com`,
+a Gmail mailbox forwarded to John. Ask for it to be
 deleted by replying to the thread.
 
 ## The portrait and the profile links

@@ -119,10 +119,17 @@ def boot_skeleton_html() -> str:
 # same three addresses are the Person's sameAs in the served head's JSON-LD
 # (tools/public_files.py), so the page and the schema cannot disagree.
 PERSON_NAME = "John Nguyen"
-PERSON_ROLE = "Data Analytics student"
-ABOUT_BIO = ("John Nguyen is a second-year Data Analytics student. He built "
-             "Meliona: the price feed, the risk engine and this page. Its code "
-             "is public, so every number can be checked.")
+PERSON_ROLE = "Computer Information Systems student specializing in AI & Analytics"
+ABOUT_BIO = ("John Nguyen is a Computer Information Systems student specializing "
+             "in AI & Analytics. He built Meliona: the price feed, the risk engine "
+             "and this page. Its code is public, so every number can be checked.")
+# Where the contact form's email goes (John, 2026-11-05: his personal inbox,
+# "I'm more active there"), with LinkedIn as the second way to reach him.
+# main.py reads it through host_setting("CONTACT_EMAIL", ...) so a deployment
+# can change it without a code change. Support mail (the session reference,
+# the kill switch page) stays on the project mailbox, SUPPORT_EMAIL.
+CONTACT_EMAIL = "john4000.nguyen@gmail.com"
+LINKEDIN_URL = "https://www.linkedin.com/in/johnnguyen3000/"
 PORTRAIT = "john-nguyen"              # static/john-nguyen.{avif,webp,jpg}, 480x600
 PORTRAIT_ALT = "John Nguyen, the builder of Meliona, in a navy blazer"
 REPO_URL = "https://github.com/ricepillow3000/Summer-2026-Quant-Project-Risk-Engine-Blueprint"
@@ -132,7 +139,7 @@ REPO_URL = "https://github.com/ricepillow3000/Summer-2026-Quant-Project-Risk-Eng
 # Simple Icons carries no LinkedIn mark, so its "in" in a square is drawn here
 # (the letters cut out of the square, fill-rule evenodd).
 PROFILE_LINKS = (
-    ("LinkedIn", "https://www.linkedin.com/in/johnnguyen3000/",
+    ("LinkedIn", LINKEDIN_URL,
      "M0 0h24v24H0zM5.4 3.3a2.05 2.05 0 1 0 0 4.1a2.05 2.05 0 1 0 0-4.1zM3.6 9h3.6v11.5H3.6z"
      "M9.5 9h3.45v1.6c.5-.95 1.7-1.9 3.5-1.9 3.75 0 4.45 2.45 4.45 5.65v6.15h-3.6v-5.45"
      "c0-1.3-.05-2.95-1.8-2.95-1.8 0-2.1 1.4-2.1 2.85v5.55H9.5z"),
@@ -186,7 +193,7 @@ def about_html() -> str:
         f'alt="{PORTRAIT_ALT}"></picture></figure>'
         '<div class="about-text"><div class="kicker">About the builder</div>'
         f'<h2 class="showcase-title">{PERSON_NAME}</h2><div class="ar-rule"></div>'
-        f'<p class="about-bio">{ABOUT_BIO}</p></div>'
+        f'<p class="about-bio">{_html.escape(ABOUT_BIO)}</p></div>'
         '<div class="about-find"><div class="about-find-h">Find John online</div>'
         f'{profile_marks(arrow=True)}</div></div></div>')
 

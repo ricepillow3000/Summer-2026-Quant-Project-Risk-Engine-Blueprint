@@ -57,7 +57,8 @@
 html, body, [class*="css"] { font-family: Georgia, 'Times New Roman', serif; }
 h1, h2, h3 { color: #3F3B35; font-weight: 400; }
 /* Square corners everywhere - Streamlit rounds its widgets, tags and alerts */
-[data-testid="stExpander"], [data-testid="stExpander"] details, .stButton>button,
+[data-testid="stExpander"], [data-testid="stExpander"] details, [data-testid="stExpander"] summary,
+.stButton>button,
 .stFormSubmitButton>button, .stLinkButton>a, [data-testid="stTextAreaRootElement"],
 [data-testid="stTextInputRootElement"], [data-testid="stTextArea"] textarea,
 [data-testid="stSelectbox"] [role="group"],
@@ -117,16 +118,32 @@ h1, h2, h3 { color: #3F3B35; font-weight: 400; }
     color: #3F3B35 !important; font-family: 'Helvetica Neue', sans-serif !important;
     font-size: 0.75rem !important; }
 
-/* Expanders: square, a hairline, no fill; the line darkens to charcoal when
-   it can be opened */
+/* DRAWERS (st.expander) - the page's own hairline box, made corporate
+   (John, 2026-11-05: "the old designs were good but bold the words", then
+   "clean, minimal, corporate, and most importantly visually appealing" - the
+   partial rule on the top edge read as tacky). The elements are the old
+   ones: a hairline frame, the label, the chevron, no fill. The label is bold
+   serif on the left; the chevron moves to the right edge, in text bronze;
+   the header has room to breathe. Hover: the frame turns charcoal and the
+   ground warms to the lighter paper. Open: the frame stays charcoal and the
+   header stands on a hairline. Colour changes only - nothing lifts. */
 [data-testid="stExpander"] { border: 1px solid #C4BDAE !important;
-    background: transparent !important; box-shadow: none !important; margin-top: 10px;
+    background: transparent !important; box-shadow: none !important; margin-top: 12px;
     transition: border-color .25s ease; }
-[data-testid="stExpander"] details, [data-testid="stExpander"] summary {
-    background: transparent !important; }
+[data-testid="stExpander"]:hover,
+[data-testid="stExpander"]:has(details[open]) { border-color: #2E2A25 !important; }
 /* Streamlit draws a second, rounded border on the <details> inside: one frame */
-[data-testid="stExpander"] details { border: none !important; }
-[data-testid="stExpander"]:hover { border-color: #2E2A25 !important; }
+[data-testid="stExpander"] details { border: none !important; background: transparent !important; }
+[data-testid="stExpander"] summary { background: transparent !important; padding: 14px 20px !important;
+    transition: background-color .25s ease; }
+[data-testid="stExpander"] summary:hover { background-color: #F1EDE5 !important; color: #3F3B35; }
+[data-testid="stExpander"] summary > span { flex-direction: row-reverse; justify-content: space-between;
+    width: 100%; gap: 16px; }
+[data-testid="stExpander"] summary [data-testid="stMarkdownContainer"] p { font-weight: 700;
+    font-size: 1.0625rem; color: #3F3B35; }
+[data-testid="stExpander"] summary [data-testid="stIconMaterial"] { color: #6A5030 !important; }
+[data-testid="stExpander"] details[open] > summary { border-bottom: 1px solid #D4CDBF; }
+[data-testid="stExpander"] summary:focus-visible { outline: 2px solid #6A5030; outline-offset: -4px; }
 
 /* ---- Presentation flow: hero, showcase, CTAs (reveals: search "REVEAL") ---- */
 html { scroll-behavior: smooth; }
@@ -314,13 +331,16 @@ html { scroll-behavior: smooth; }
 .engine-heading .showcase-title { font-size: clamp(1.75rem, 3.2vw, 2.375rem); }
 
 /* TABS - Streamlit 1.66 draws its tab strip with react-aria ([data-testid=
-   "stTab"]). In the label voice (ME-28): tracked capitals, the quiet ink at
-   rest, charcoal and a 3px charcoal underline on the open tab, the strip
-   standing on one hairline. */
+   "stTab"]). In the label voice (ME-28): tracked bold capitals, the quiet
+   ink at rest, charcoal when hovered and on the open tab, a 3px charcoal
+   underline on the open tab, the strip standing on one hairline (John,
+   2026-11-05: the old design, kept). */
 [data-testid="stTabs"] { margin-top: 10px; }
 [data-testid="stTab"] [data-testid="stMarkdownContainer"] p {
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 700;
-    font-size: 0.75rem; letter-spacing: .2em; text-transform: uppercase; color: #5D574D; }
+    font-size: 0.75rem; letter-spacing: .2em; text-transform: uppercase; color: #5D574D;
+    transition: color .2s ease; }
+[data-testid="stTab"]:hover [data-testid="stMarkdownContainer"] p,
 [data-testid="stTab"][aria-selected="true"] [data-testid="stMarkdownContainer"] p { color: #2E2A25; }
 [data-testid="stTab"] .react-aria-SelectionIndicator { background-color: #2E2A25 !important;
     height: 3px !important; }
@@ -613,6 +633,15 @@ ul[role="listbox"] li:hover { background: rgba(154,123,79,.12) !important; }
 .reveal-on .reveal-item--flip {
     transform: perspective(1600px) translate3d(0, calc(var(--reveal-y) * .6), 0) rotateX(-68deg);
     transform-origin: 50% 100%; }
+/* Flat motion (html.reveal-flat: WebKit - every iPhone and iPad browser,
+   and Safari - and any touch screen; reveal.js sets it). The same arrivals
+   with no perspective turn: a side block slides in, a middle one rises.
+   WebKit froze turned blocks part-way, squeezed and sideways (John's
+   iPhone, 2026-11-05). Placed before .is-visible, which outranks it. */
+.reveal-on.reveal-flat .reveal-item--left { transform: translate(calc(-1 * var(--reveal-x)), 0); }
+.reveal-on.reveal-flat .reveal-item--right { transform: translate(var(--reveal-x), 0); }
+.reveal-on.reveal-flat .reveal-item--card,
+.reveal-on.reveal-flat .reveal-item--flip { transform: translate(0, var(--reveal-y)); }
 .reveal-on .reveal-item.is-visible {
     opacity: 1; transform: translate3d(0, 0, 0);
     will-change: transform, opacity;

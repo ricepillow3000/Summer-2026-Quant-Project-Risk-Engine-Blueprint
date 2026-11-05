@@ -7,7 +7,7 @@ Paste this into a new chat session to bring it up to speed instantly.
 ## What this project is
 
 **Meliona** is an institutional-grade **Portfolio Optimization & Risk Engine**
-with a live Streamlit dashboard, built by a 2nd-year Data Analytics student to
+with a live Streamlit dashboard, built by a Computer Information Systems student (AI & Analytics) to
 be recruiter-facing (the goal is a public live link on a resume). The name
 merges "Durand" (Old French, "enduring/built to withstand hard times") with
 "Mereoleona" (mother lioness) - it ties into the existing lion-crest logo and
@@ -1103,6 +1103,27 @@ two paid-vendor-dependent pieces remain explicit backlog items:
   excluded. A planted error in each part fails its check
   (`test_the_batch_audit_re_derives_every_grit_zone_number`).
 
+- ✅ **Nothing freezes when a drawer opens; drawers and tabs stand out
+  (2026-11-05)**. John's iPhone screenshots: the Weights and Stress test
+  drawers, the Book's drawer and the contact form showed blocks frozen
+  part-way through their arrival - squeezed, sideways, cut off at the edge -
+  and a drawer header frozen as a sliver. Chromium never froze (no WebKit
+  here to run), so the fix removes the conditions: what a reader opens (a
+  drawer's body, a tab's panel) is never tagged for an arrival, and WebKit
+  and touch screens get flat slides and rises with no perspective turn.
+  device_check now fails on a tagged block inside opened content and on two
+  elements sharing an id - the Contact heading had Streamlit's automatic
+  anchor "contact" beside the section's own (now a heading by role). Drawers:
+  John turned down a stone plaque and a beige plaque ("the old designs were
+  good but bold the words ... keeping the same elements, uplift this"), so
+  they keep the hairline box with bold serif labels; a partial rule on the
+  top edge read as "tacky", so the uplift is corporate instead: the chevron
+  on the right edge in text bronze, room in the header, the frame charcoal on
+  hover and when open. Tabs keep their label voice. The contact section lists
+  both addresses, each with its job. John's bio now reads Computer Information Systems,
+  specializing in AI & Analytics; the contact form writes to his own Gmail
+  (his choice) with LinkedIn as the second way to reach him.
+
 - ✅ **An early button press is never lost (2026-11-05)**. The Live audit
   (step 8c, early) saw "Skip to the analysis" pressed while the page was still
   loading move 5px and stop 2443px short, three times. Two causes, both in the
@@ -1113,7 +1134,12 @@ two paid-vendor-dependent pieces remain explicit backlog items:
   (2) the wait's timers lived in the glide frame, and a run that replaced the
   frame took them with it - the wait now lives on the page
   (`P.__melionaPending`, wall-clock press time) and the next frame carries it
-  on. Browser probes reproduce both on the old script and land on the new one;
+  on. A fourth failure (after both fixes) found the root: the skip link is
+  drawn ~230ms before the glide frame loads, so a quick press fell to the
+  browser's own jump to a section not yet written. static/reveal.js, in the
+  <head>, now keeps such a press as the same pending record and the glide
+  flies it on arrival (probe: old script dead, section 2213px away; new one
+  lands at 27px). Browser probes reproduce each cause on the old script and land on the new one;
   a reader's own scroll still ends the wait
   (`test_the_glide_follows_a_moving_target_and_yields_to_the_reader`).
 

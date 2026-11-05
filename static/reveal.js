@@ -53,6 +53,11 @@
   // not fade as it lands (deep_scan: "destination never fades").
   var SKIP = '#hero, #boot-skel, .st-key-risk-map, .st-key-glide';
   var DEST = '#grit-showcase, #conviction, #crisis-record, #the-slice, #engine, #analysis, #the-book, #contact';
+  // What the reader opens - a drawer's body, a tab's panel - is simply there
+  // when it opens: an arrival inside it is motion the reader did not ask for,
+  // and it is where iPhones froze blocks mid-turn (John's screenshots,
+  // 2026-11-05: the Weights and Stress test drawers, the Book's drawer).
+  var OPENED = '[data-testid="stExpanderDetails"], [data-testid="stTabPanel"]';
   // Where a block sits decides how it arrives: its centre in the left or right
   // share of the page slides in from that side; in the middle it turns over.
   var SIDE = 0.42;        // left of 42% (or right of 58%) of the page's width
@@ -76,7 +81,38 @@
     s.src = (me && me.src ? me.src : 'app/static/reveal.js').replace(/reveal\.js(\?.*)?$/, file);
     D.head.appendChild(s);
   });
+  // A press before the glide script exists. main.py's glide ships in a frame
+  // that loads after the first links are drawn - "Skip to the analysis" was
+  // on screen 229ms before it, so a quick press fell to the browser's own
+  // jump to a section not written yet, which went nowhere (Live audit 8c
+  // early, four times on 2026-11-05: moved 5px, ended 2400px short). This
+  // file is in the <head>, there first: it keeps the press on the page
+  // (__melionaPending, the same record the glide resumes a wait from), and
+  // the glide flies it as it arrives. Should the glide never come, the
+  // browser's own jump is made once the section exists.
+  D.addEventListener('click', function (e) {
+    if (D.__melionaGlide || e.defaultPrevented || e.button || e.metaKey || e.ctrlKey ||
+        e.shiftKey || e.altKey) return;
+    var a = e.target.closest && e.target.closest('a[href^="#"]');
+    var id = a ? a.getAttribute('href').slice(1) : '';
+    if (!id) return;
+    e.preventDefault();
+    var p = D.__melionaPending = { a: a, id: id, ms: Date.now() };
+    (function wait() {
+      if (D.__melionaGlide || D.__melionaPending !== p) return;   // the glide took it over
+      var el = D.getElementById(id);
+      if (el && Date.now() - p.ms > 3000) { D.__melionaPending = null; el.scrollIntoView(); return; }
+      if (Date.now() - p.ms < 180000) setTimeout(wait, 100);
+    })();
+  }, true);
   if (calm) { H.classList.remove('reveal-on'); return; }   // everything as drawn
+  // Flat motion on WebKit (every iPhone and iPad browser, and Safari: only
+  // WebKit has GestureEvent) and on any touch screen: the same arrivals as
+  // slides and rises, with no perspective turn. WebKit left 3D-turned blocks
+  // frozen part-way, squeezed and sideways (John's iPhone, 2026-11-05); a
+  // phone gains nothing from a turn anyway - every block is the full width.
+  var flat = 'GestureEvent' in W || !!(W.matchMedia && W.matchMedia('(pointer: coarse)').matches);
+  if (flat) H.classList.add('reveal-flat');
 
   // ---- 1. reveals ----------------------------------------------------------
   var seen = new IntersectionObserver(function (entries) {
@@ -243,7 +279,7 @@
     var found = root.matches(ALL) ? [root] : [];
     found.push.apply(found, root.querySelectorAll(ALL));
     found.forEach(function (el) {
-      if (el.__rv || el.closest(SKIP)) return;
+      if (el.__rv || el.closest(SKIP) || el.closest(OPENED)) return;
       el.__rv = 1;
       if (el.matches(SCRUB) && onScreen) onScreen.observe(el);
       if (!el.matches(ITEMS) || el.matches(DEST) || el.querySelector(DEST) || el.querySelector(SKIP)) return;
