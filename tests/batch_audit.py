@@ -36,8 +36,11 @@ from scipy import stats as sstats
 from src import data_quality
 from src.analytics import correlation_matrix, covariance_matrix, portfolio_volatility
 from src.ingestion import PRESETS, average_dollar_volume, fetch_prices
+from src.grit import (DEFAULT_CONSISTENCY_WINDOW, DEFAULT_DD_THRESHOLD, MIN_HISTORY_DAYS,
+                      REGIME_RECOVERY_HORIZON_DAYS, grit_scores)
 from src.liquidity import days_to_liquidate, liquidity_adjusted_cvar
 from src.pairing import DEFENSIVE_ANCHOR_TICKERS, REBALANCE_DAYS
+from src.scenarios import HISTORICAL_REGIMES
 from src.risk import (calibrate_jump_diffusion, cvar, jump_diffusion_mc,
                       mcneil_frey_tail, monte_carlo, portfolio_daily_returns,
                       var, var_backtest)
@@ -70,6 +73,9 @@ SOURCES = {
              "over a participation-rate unwind model",
     "markowitz": "Markowitz (1952), portfolio variance identity w' Sigma w",
     "engine": "This engine's own code, re-derived independently by this audit",
+    "grit": "The Grit Zone's stated definitions (src/grit.py: recovery, "
+            "consistency, crisis resilience, peer percentile ranks), re-derived "
+            "here from the raw full-history closes by a separate method",
 }
 
 results: list[dict] = []
@@ -807,6 +813,129 @@ def audit_traceability() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Grit Zone - every number the Grit Zone prints, re-derived from the raw
+# full-history closes the page itself loads (period="max", unaligned)
+# ---------------------------------------------------------------------------
+
+def _underwater_spells(p: np.ndarray, thr: float) -> list[dict]:
+    """Drawdown episodes found a second way: every maximal run of days strictly
+    below the prior high-water mark is one spell; it counts as an episode when
+    its low is at least `thr` under that mark. Recovered = the run ends before
+    the data does; recovery days = trading days from the run's first low to the
+    first day back at the mark."""
+    hwm = np.maximum.accumulate(p)
+    prior = np.concatenate([[p[0]], hwm[:-1]])
+    under = p < prior
+    out, i, n = [], 1, len(p)
+    while i < n:
+        if not under[i]:
+            i += 1
+            continue
+        j = i
+        while j < n and p[j] < prior[i]:
+            j += 1
+        seg = p[i:j]
+        low = int(np.argmin(seg)) + i
+        if seg.min() <= prior[i] * (1.0 - thr):
+            out.append({"recovered": j < n, "days": (j - low) if j < n else None})
+        i = j
+    return out
+
+
+def _regime(p: pd.Series, start: str, end: str) -> dict | None:
+    w = p.loc[start:end].dropna()
+    if w.empty:
+        return None
+    v = w.to_numpy(float)
+    mdd = float((v / np.maximum.accumulate(v) - 1.0).min())
+    after = p.loc[w.index[-1]:].iloc[1:1 + REGIME_RECOVERY_HORIZON_DAYS].dropna().to_numpy(float)
+    hit = np.nonzero(after >= v[0])[0]
+    return {"mdd": mdd, "days": int(hit[0]) + 1 if len(hit) else None}
+
+
+def _pct_rank(x: pd.Series, higher: bool) -> pd.Series:
+    """Peer percentile rank in [0, 1] (average ties); an unknown scores 0, a
+    lone known scores 1 - the Grit Zone's stated convention."""
+    out = pd.Series(0.0, index=x.index)
+    ok = x.dropna()
+    if len(ok) == 1:
+        out[ok.index] = 1.0
+    elif len(ok) > 1:
+        out[ok.index] = sstats.rankdata(ok if higher else -ok, method="average") / len(ok)
+    return out
+
+
+def audit_grit(name: str, tickers: list[str], prices_full: pd.DataFrame | None = None) -> None:
+    if prices_full is None:
+        try:
+            prices_full = fetch_prices(tickers, period="max", align=False)
+        except Exception as exc:  # noqa: BLE001 - offline / feed outage
+            record("GRIT-00", name, "full histories load", False,
+                   f"{type(exc).__name__}: {exc}", "engine", warn=True)
+            return
+    eng = grit_scores(tickers, prices_full)
+    sc = eng["scores"]
+
+    # GRIT-05 who is scored: exactly the names with enough history
+    lens = {t: int(prices_full[t].dropna().shape[0]) for t in prices_full.columns}
+    want_ex = sorted(t for t, n_ in lens.items() if n_ < MIN_HISTORY_DAYS)
+    record("GRIT-05", name, f"names under {MIN_HISTORY_DAYS} days of history are excluded, the rest scored",
+           sorted(eng["excluded"]) == want_ex and sorted(sc.index) == sorted(set(lens) - set(want_ex)),
+           f"{len(sc)} scored, excluded {want_ex or 'none'}", "grit")
+    if sc.empty:
+        return
+
+    raw, bad = {}, {"cons": [], "rec": [], "res": []}
+    W = DEFAULT_CONSISTENCY_WINDOW
+    for t in sc.index:
+        s_ = prices_full[t].dropna()
+        p = s_.to_numpy(float)
+        # GRIT-01 consistency
+        cons = float(np.mean(p[W:] / p[:-W] - 1.0 > 0)) if len(p) > W else float("nan")
+        e = sc.loc[t]
+        if not (np.isnan(cons) and np.isnan(e["consistency"])) and not close(cons, e["consistency"], 1e-12):
+            bad["cons"].append(f"{t} {cons:.4f} vs {e['consistency']:.4f}")
+        # GRIT-02 recovery record
+        sp = _underwater_spells(p, DEFAULT_DD_THRESHOLD)
+        rec_days = [x["days"] for x in sp if x["recovered"]]
+        pct = len(rec_days) / len(sp) if sp else float("nan")
+        med = float(np.median(rec_days)) if rec_days else float("nan")
+        for a_, b_ in ((pct, e["pct_recovered"]), (med, e["median_recovery_days"])):
+            if not (np.isnan(a_) and np.isnan(float(b_))) and not close(a_, b_, 1e-12):
+                bad["rec"].append(f"{t} {a_} vs {b_}")
+                break
+        # GRIT-03 crisis resilience
+        regs = [r for r in (_regime(prices_full[t], s0, e0) for s0, e0 in HISTORICAL_REGIMES.values()) if r]
+        avg = float(np.mean([r["mdd"] for r in regs])) if regs else float("nan")
+        prc = float(np.mean([r["days"] is not None for r in regs])) if regs else float("nan")
+        if len(regs) != int(e["n_regimes_survived"]) or any(
+                not (np.isnan(a_) and np.isnan(float(b_))) and not close(a_, b_, 1e-12)
+                for a_, b_ in ((avg, e["avg_regime_drawdown"]), (prc, e["pct_regime_recovered"]))):
+            bad["res"].append(f"{t} {len(regs)} crises, avg {avg:.4f}, {prc:.2f} back")
+        raw[t] = {"pct_recovered": pct, "median_recovery_days": med, "consistency": cons,
+                  "avg_regime_drawdown": avg, "pct_regime_recovered": prc}
+    k = len(sc)
+    record("GRIT-01", name, "consistency = share of 1-year holding periods that ended positive",
+           not bad["cons"], "; ".join(bad["cons"][:3]) or f"{k} names agree", "grit")
+    record("GRIT-02", name, "recovery: drawdowns of 5%+ recovered, median trading days trough to reclaim",
+           not bad["rec"], "; ".join(bad["rec"][:3]) or f"{k} names agree", "grit")
+    record("GRIT-03", name, "resilience: each crisis window's max drawdown, back to the pre-crisis price within 2 years",
+           not bad["res"], "; ".join(bad["res"][:3]) or f"{k} names agree over {len(HISTORICAL_REGIMES)} crises", "grit")
+
+    # GRIT-04 the scores the page prints: peer ranks, the stated blend
+    r_ = pd.DataFrame(raw).T.astype(float)
+    rec = 0.6 * _pct_rank(r_["pct_recovered"], True) + 0.4 * _pct_rank(r_["median_recovery_days"], False)
+    con = _pct_rank(r_["consistency"], True)
+    res = 0.5 * _pct_rank(r_["avg_regime_drawdown"], True) + 0.5 * _pct_rank(r_["pct_regime_recovered"], True)
+    worst = 0.0
+    for col, comp in (("recovery_score", rec), ("consistency_score", con), ("resilience_score", res),
+                      ("grit_score", (rec + con + res) / 3)):
+        worst = max(worst, float((sc[col].astype(float) - comp * 100).abs().max()))
+    record("GRIT-04", name, "grit, recovery, consistency and resilience scores are the stated peer-rank blend",
+           worst <= 0.05 + 1e-9, f"largest gap {worst:.3f} points (scores print to 0.1)", "grit")
+
+
+# ---------------------------------------------------------------------------
 
 def main() -> int:
     ap = argparse.ArgumentParser()
@@ -826,6 +955,7 @@ def main() -> int:
         if ctx is None:
             continue
         bt_rows += audit_backtests(name, ctx)
+        audit_grit(name, PRESETS[name])
         if not args.no_map:
             try:
                 audit_map(name, ctx, n_paths)
