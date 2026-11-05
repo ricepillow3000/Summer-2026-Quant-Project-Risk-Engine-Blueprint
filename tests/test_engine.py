@@ -5599,6 +5599,12 @@ def test_a_press_waits_for_its_section_as_long_as_the_page_is_still_being_writte
     assert "requestAnimationFrame(poll)" not in wait, "a long wait polls gently, not every frame"
     assert "P.__melionaScroller = scroller" in wait and "P.__melionaSetY = scroller.scrollTop" in wait, \
         "a scroll the reader makes while the press waits must end the wait"
+    scroll = script[script.index("function onScroll"):script.index("function go(")]
+    assert "waitA = a; waitTop = a.getBoundingClientRect().top" in wait and "waitA = null" in wait, \
+        "the wait must remember where the pressed button sat, and forget it when it ends"
+    assert "Math.abs(waitA.getBoundingClientRect().top - waitTop) <= 2" in scroll, \
+        "scroll anchoring under a page still loading is not the reader: only a scroll that moves " \
+        "the pressed button may end the wait (Live audit 8c, 'Skip to the analysis' twice)"
 
 
 def test_only_a_decaying_flick_is_forgiven_and_every_exit_restores_the_page():
