@@ -5694,6 +5694,14 @@ def test_a_press_waits_for_its_section_as_long_as_the_page_is_still_being_writte
     assert "Math.abs(waitA.getBoundingClientRect().top - waitTop) <= 2" in scroll, \
         "scroll anchoring under a page still loading is not the reader: only a scroll that moves " \
         "the pressed button may end the wait (Live audit 8c, 'Skip to the analysis' twice)"
+    assert "P.__melionaPending = { a: a, id: id, ms: Date.now()" in wait and "P.__melionaPending = null" in wait, \
+        "a waiting press must live on the page, not only in its frame (cleared when it flies or ends)"
+    tail = script[script.index("P.__melionaGlide = { onTab"):]
+    assert "const pend = P.__melionaPending" in tail and "waitFor(pend.a, pend.id, performance.now() - (Date.now() - pend.ms))" in tail, \
+        "a frame that replaces the last one mid-wait must carry the press on from its own press time " \
+        "(the old frame's timers die with it: 'Skip to the analysis' did nothing, Live audit on main 42163e6)"
+    assert "P.__melionaSetY = y; if (waitA) waitTop = waitA.getBoundingClientRect().top; return;" in scroll, \
+        "a clamp under a shrinking page must rebase where the button sits, or the next anchoring shift ends the wait"
 
 
 def test_only_a_decaying_flick_is_forgiven_and_every_exit_restores_the_page():

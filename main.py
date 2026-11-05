@@ -464,10 +464,16 @@ _script_frame("""
        twice on the Live audit (step 8c early, 2026-11-05). A reader's scroll
        moves the button with the page. */
     if (waitA && Math.abs(waitA.getBoundingClientRect().top - waitTop) <= 2) {
-      P.__melionaSetY = y; return;
+      P.__melionaSetY = y; waitTop = waitA.getBoundingClientRect().top; return;
     }
     if (performance.now() - forgivenAt < 300) { P.__melionaSetY = y; return; }
-    if (y >= sc.scrollHeight - sc.clientHeight - 2 && P.__melionaSetY > y) return;
+    /* The page shrinking under us clamps scrollTop: not the reader either.
+       Take the new position as the base, the button's included, or the next
+       anchoring shift compares against where the button sat before the clamp
+       and ends a wait the reader never touched. */
+    if (y >= sc.scrollHeight - sc.clientHeight - 2 && P.__melionaSetY > y) {
+      P.__melionaSetY = y; if (waitA) waitTop = waitA.getBoundingClientRect().top; return;
+    }
     yieldNow();
   }
   function go(a, el) {
@@ -501,20 +507,26 @@ _script_frame("""
      (onScroll, measured from where the page stood at the press). No anchor
      can be written early instead: #analysis has to sit right above the tab
      strip, which only exists once the engine has run. */
-  function waitFor(a, id) {
+  function waitFor(a, id, since) {
     supersede();                          // a flight still running lands first
     const w = P.__melionaFlight = (P.__melionaFlight || 0) + 1;
     const scroller = findScroller(a);
-    P.__melionaStop = function () { P.__melionaStop = null; P.__melionaScroller = null; waitA = null; };   // nothing else to restore
+    P.__melionaStop = function () {       // nothing else to restore
+      P.__melionaStop = null; P.__melionaScroller = null; P.__melionaPending = null; waitA = null;
+    };
     P.__melionaScroller = scroller;       // so a scroll the reader makes while it waits ends the wait
     P.__melionaSetY = scroller.scrollTop;
     waitA = a; waitTop = a.getBoundingClientRect().top;   // ...and only the reader's (onScroll)
-    const t0 = performance.now();
+    const t0 = since || performance.now();
+    /* The wait lives on the page, not only in this frame: a run that replaces
+       the frame mid-wait takes this frame's timers with it, and the press did
+       nothing. The next frame picks the wait up (end of this script). */
+    P.__melionaPending = { a: a, id: id, ms: Date.now() - (performance.now() - t0) };   // wall clock: each frame's performance.now() starts at its own load
     let idleSince = null;
     (function poll() {
       if (w !== P.__melionaFlight) return;   // a newer press, or the reader took over
       const el = P.getElementById(id);
-      if (el) { go(a, el); return; }
+      if (el) { P.__melionaPending = null; go(a, el); return; }
       const now = performance.now();
       idleSince = pageRunning() ? null : (idleSince === null ? now : idleSince);
       if (now - t0 < 10000 || idleSince === null || now - idleSince < 2000) setTimeout(poll, 100);
@@ -552,6 +564,11 @@ _script_frame("""
   });
   P.addEventListener('scroll', onScroll, { capture: true, passive: true });
   P.__melionaGlide = { onTab: onTab, onLink: onLink, onYield: onYield, onScroll: onScroll };
+  /* A press still waiting for its section when this frame replaced the last
+     one: carry it on from its own press time. */
+  const pend = P.__melionaPending;
+  if (pend && pend.a.isConnected) waitFor(pend.a, pend.id, performance.now() - (Date.now() - pend.ms));
+  else P.__melionaPending = null;
 })();
 /* Page motion lives in static/reveal.js, which <head> loads before the first
    paint on the deployed page (tools/public_files.py). Where the head was not
