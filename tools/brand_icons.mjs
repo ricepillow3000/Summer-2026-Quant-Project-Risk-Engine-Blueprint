@@ -17,10 +17,12 @@
 //                              needs it opaque and rounds the corners itself).
 //   public/og-image.png        1200x627 link preview, from tools/og_image.html
 //                              (its fonts load from Google Fonts).
+//   docs/brand/linkedin-banner.png (1584x396) and linkedin-banner@2x.png
+//                              John's LinkedIn cover, from tools/linkedin_banner.html.
 //
 //   node tools/brand_icons.mjs
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -78,4 +80,13 @@ await og.setContent(readFileSync(root + 'tools/og_image.html', 'utf8').replace('
                     { waitUntil: 'networkidle' });
 await og.evaluate(() => document.fonts.ready);
 await og.screenshot({ path: root + 'public/og-image.png' });
+mkdirSync(root + 'docs/brand', { recursive: true });
+for (const [scale, name] of [[1, 'linkedin-banner.png'], [2, 'linkedin-banner@2x.png']]) {
+  const li = await browser.newPage({ viewport: { width: 1584, height: 396 }, deviceScaleFactor: scale });
+  await li.setContent(readFileSync(root + 'tools/linkedin_banner.html', 'utf8').replace('<!--CREST-->', logo),
+                      { waitUntil: 'networkidle' });
+  await li.evaluate(() => document.fonts.ready);
+  await li.screenshot({ path: root + 'docs/brand/' + name });
+  await li.close();
+}
 await browser.close();
