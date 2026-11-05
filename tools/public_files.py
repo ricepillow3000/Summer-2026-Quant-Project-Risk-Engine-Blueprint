@@ -136,8 +136,7 @@ def head_tags(site_url: str, build: str = "") -> str:
         f'<meta property="og:image:width" content="1200">\n'
         f'<meta property="og:image:height" content="627">\n'
         f'<meta property="og:image:alt" content="The Meliona crest and name beside '
-        f'its live audit of 15 October 2026: 727 of 728 checks passed on Yahoo '
-        f'Finance data">\n'
+        f'its live audit on Yahoo Finance data: 727 of 728 checks passed">\n'
         f'<meta name="twitter:card" content="summary_large_image">\n'
         # Single-page app: every unknown path is served this same index.html,
         # whose relative script paths break below the root - a mistyped
