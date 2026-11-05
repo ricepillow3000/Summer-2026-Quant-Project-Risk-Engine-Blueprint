@@ -2921,9 +2921,11 @@ def test_captions_and_small_labels_clear_aa_after_their_opacity():
 # (#F1EDE5) and a tile (#E9E4DB). Dark: the charcoal bands and the footer.
 BEIGE_GROUNDS = ("#EDE9E3", "#F1EDE5", "#E9E4DB", "#D4CDBF")
 CHARCOAL = "#3F3B35"
-# Selectors whose words sit on a charcoal band: the showcase band, the footer
-# and the boot veil's status line (painted over the band's stand-in).
-ON_DARK = (".showcase-row", ".meliona-footer", ".sk-load")
+# Selectors whose words sit on a charcoal band: the showcase band, the footer,
+# the boot veil's status line (painted over the band's stand-in) and the
+# hero's receipt. #3F3B35 is the lightest stone on the page (the bands are now
+# #2E2A25 and #26221E), so clearing it clears them all.
+ON_DARK = (".showcase-row", ".meliona-footer", ".sk-load", ".hero-stats", ".hreceipt", ".hstat")
 
 
 def _text_colour_failures(css: str) -> list:
@@ -3128,22 +3130,38 @@ def test_no_negative_letter_spacing_anywhere():
         assert not hits, f"{name}: negative letter-spacing {hits}"
 
 
-def test_uppercase_is_kept_to_the_verdict_label():
+def test_capitals_speak_only_in_the_banners_label_voice():
     """2026-11-04: 19 rules set labels, buttons, CTAs, the footer and the
-    "Updating" tag in tracked capitals, and the map spelled its canvas labels
-    out letter by letter (spacedText). Capitals are kept for the verdict's
-    label alone. (The tab strip was meant to be the other place, but its rules
-    targeted Streamlit's old baseweb tabs and had matched nothing since 1.66,
-    so the strip has read in sentence case all along; it stays that way.)"""
+    "Updating" tag in tracked capitals, each its own size, weight and
+    spacing, and the map spelled its canvas labels out letter by letter
+    (spacedText) - the generated-page look. Capitals were kept for the
+    verdict's label alone.
+
+    2026-11-05 (ME-28, John: "the entire website's design matches the design
+    of our banner"): the share banner speaks its labels in ONE voice - bold
+    Helvetica, 12-14px, capitals tracked .2em - and the site now takes that
+    voice for its kickers, the labels over numbers, buttons and tabs. So
+    capitals are allowed in exactly that shape and no other: every rule that
+    sets capitals sets the Helvetica stack, weight 700, .2em tracking and a
+    12-14px size; nothing is tracked without being that label; and the map,
+    the 404 and the copy in main.py still never set capitals themselves."""
     import re as _re
     css, page, p404, main = _design_files()
-    allowed = (".verdict-label",)
     rules = _re.findall(r"([^{}]+)\{([^}]*)\}", _re.sub(r"/\*.*?\*/", "", css, flags=_re.S))
-    caps = [sel.strip() for sel, body in rules if _re.search(r"text-transform:\s*uppercase", body)]
-    assert caps and all(sel in allowed for sel in caps), f"capitals outside the allowed two: {caps}"
+    caps = [(sel.strip(), body) for sel, body in rules if _re.search(r"text-transform:\s*uppercase", body)]
+    assert len(caps) >= 8, "the label voice is missing from the stylesheet"
+    for sel, body in caps:
+        where = sel[-70:]
+        assert "Helvetica" in body, f"{where}: capitals outside the label voice's Helvetica"
+        assert _re.search(r"font-weight:\s*700", body), f"{where}: capitals that are not bold"
+        assert _re.search(r"letter-spacing:\s*\.2em", body), f"{where}: capitals not tracked .2em"
+        size = _re.search(r"font-size:\s*([\d.]+)rem", body)
+        assert size and 12 <= float(size.group(1)) * 16 <= 14, f"{where}: a label outside 12-14px"
+    voiced = {sel for sel, _ in caps}
     tracked = [sel.strip() for sel, body in rules
-               if _re.search(r"letter-spacing:\s*0?\.\d*[1-9]", body) and sel.strip() not in allowed]
-    assert not tracked, f"tracked (letter-spaced) text outside the capitals: {tracked}"
+               if _re.search(r"letter-spacing:\s*0?\.\d*[1-9]", body) and sel.strip() not in voiced
+               and "inherit" not in body]
+    assert not tracked, f"tracked (letter-spaced) text outside the label voice: {tracked}"
     for name, text in (("war_room.html", page), ("404.html", p404), ("main.py", main)):
         assert not _re.search(r"text-transform:\s*uppercase", text), f"{name} sets capitals"
     assert "toUpperCase" not in page and "spacedText" not in page, "the map spells labels out in capitals"
@@ -3171,16 +3189,12 @@ def test_no_decorative_gradients_glass_or_grain():
         assert "feTurbulence" not in text and "--grain" not in text, f"{name}: film grain is back"
     assert "gradient(" not in _style_of(page) + _style_of(p404), "a gradient in the map or the 404"
     assert "--bronzehi" not in page and "#C9A227" not in page, "the off-palette gold is back"
-    # main.py: only the photo scrims (each paired with a static/ photo), the
-    # Slice's fade into its own ground, and the cone's colour key - a legend
-    # sampled from the flow's own colour scale (FluidX3D's key), not a decoration
+    # main.py: none at all (ME-28, 2026-11-05: the photo scrims and the
+    # Slice's fade went with the photographs; the page is flat paper and stone)
     tree = ast.parse(main)
-    fade = {id(n.value) for n in ast.walk(tree) if isinstance(n, ast.Assign)
-            and any(getattr(t, "id", "") == "_gungnir_fade" for t in n.targets)}
     for n in ast.walk(tree):
-        if isinstance(n, ast.Constant) and isinstance(n.value, str) and "gradient(" in n.value:
-            assert "url(app/static/" in n.value or id(n) in fade or n.value.startswith('<span class="flow-ramp"'), \
-                f"main.py line {n.lineno}: a gradient that is not a photo scrim"
+        if isinstance(n, ast.Constant) and isinstance(n.value, str):
+            assert "gradient(" not in n.value, f"main.py line {n.lineno}: a decorative gradient"
     # no lift, sheen or halo on hover: feedback is a colour change
     for sel, body in _re.findall(r"([^{}]+)\{([^}]*)\}", clean):
         if ":hover" in sel:
@@ -3313,8 +3327,9 @@ def test_type_follows_the_readers_font_size_and_stays_readable():
     map_sizes += [float(v) for v in _re.findall(r"font = '([\d.]+)px", page)]
     map_sizes += [float(v) for v in _re.findall(r'font-size="([\d.]+)"', page)]
     assert map_sizes and min(map_sizes) >= 10, f"map text under 10px: {min(map_sizes)}"
-    role = _re.search(r"flex:0 0 86px;font-family:Helvetica Neue,sans-serif;'\s*f'font-size:([\d.]+)px", main)
-    assert role and float(role.group(1)) >= 11, "the Book's role labels are under 11px"
+    role = _re.search(r"\.book-role \{[^}]*font-size:\s*([\d.]+)rem", css)
+    assert role and float(role.group(1)) * 16 >= 11, "the Book's role labels are under 11px"
+    assert 'class="book-role"' in main, "the Book's role label moved out of its rule"
 
 
 # --- pre-deploy red-team findings, 2026-08-27 --------------------------------
@@ -4263,13 +4278,14 @@ def test_blocks_reveal_on_arrival_on_the_gpu_and_never_hide_without_script():
     assert head.index("classList.add('reveal-on')") < head.index('src="./app/static/reveal.js"')
     assert "IntersectionObserver' in window" in head and "prefers-reduced-motion" in head
     assert "DOMContentLoaded" in head and "!window.__melionaReveal" in head
-    # heavy pictures are files, AVIF first, the bands' attached on approach
+    # no image is inlined into the websocket, and no photograph is loaded at
+    # all (ME-28, 2026-11-05: flat paper and stone, like the share banner) -
+    # nor the lazy-loading plates and parallax that only served photographs
     assert ";base64," not in main, "an image is inlined into the websocket again"
-    for name, fallback in (("facade", "jpg"), ("band", "jpg"), ("gungnir", "webp")):
-        small, big = root / "static" / f"{name}.avif", root / "static" / f"{name}.{fallback}"
-        assert small.stat().st_size < big.stat().st_size, f"{name}.avif is not the light copy"
-        assert f"url(app/static/{name}.avif)" in main
-    assert "html.has-band .showcase-row::before" in main and "html.has-gungnir" in main
+    assert "url(app/static/" not in main + css + hero, "a photograph is loaded again"
+    assert not [p.name for p in (root / "static").iterdir()
+                if p.suffix in (".jpg", ".jpeg", ".png", ".webp", ".avif")], "a photograph is served again"
+    assert "PLATES" not in js and "has-band" not in js + css + main and "plate-drift" not in css
 
 
 def test_corners_are_square_and_the_maps_rings_stay_in_the_plot():
@@ -4363,6 +4379,50 @@ def test_the_crest_is_symmetric_and_its_pieces_never_touch():
     assert re.search(r"prefers-reduced-motion: reduce\) \{\s*\.hero-crest:hover \.crest-ring", css)
     src = (root / "main.py").read_text(encoding="utf-8")
     assert "P.__melionaRipple" in src and "updateTiming({ iterations: pass + 1 })" in src
+
+
+def test_the_crest_engraving_is_the_banners_and_used_sparingly():
+    """ME-28 (John, 2026-11-05): "the entire website's design matches the
+    design of our banner" - flat paper and flat charcoal stone, no photographs,
+    the Slice's faded watermark logo gone, and the banner's one ornament: the
+    crest's five pieces engraved as a faint gold outline into the stone. It
+    must stay that ornament, not grow back into a watermark: the logo's own
+    pieces, outline only, at the banner's 10%, once per stone block (the
+    hero's receipt and the dark band), never on the paper."""
+    import re
+    import xml.etree.ElementTree as ET
+    import hero
+    root = pathlib.Path(__file__).resolve().parent.parent
+    svg = ET.fromstring((root / "assets" / "logo.svg").read_text(encoding="utf-8"))
+    ns = "{http://www.w3.org/2000/svg}"
+    logo = [poly.get("points") for poly in svg.findall(f".//{ns}polygon")]
+    assert list(hero.CREST_PIECES) == logo, "the engraving is not the crest's own five pieces"
+    banner = (root / "tools" / "og_image.html").read_text(encoding="utf-8")
+    assert "'stroke-opacity': .1" in banner and hero.ENGRAVING_OPACITY == ".1", \
+        "the engraving's opacity drifted from the banner's"
+    mark = hero.crest_engraving()
+    assert 'fill="none"' in mark and 'aria-hidden="true"' in mark and "<text" not in mark
+    assert mark.count("<polygon") == 5 and "gradient" not in mark.lower()
+    # once in the hero (inside the stone receipt), once in main.py (the band)
+    page = hero.hero_html()
+    assert page.count('class="crest-engraving"') == 1
+    assert page.index('class="hero-stats"') < page.index('class="crest-engraving"')
+    main = (root / "main.py").read_text(encoding="utf-8")
+    assert main.count("crest_engraving()") == 1
+    band = main[main.index('<div class="showcase-row">'):main.index('.replace("__ENGRAVING__", crest_engraving())')]
+    assert band.count("__ENGRAVING__") == 1, "the band's engraving is not inside the band"
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    rule = lambda sel: " ".join(re.findall(r"(?m)^" + re.escape(sel) + r" \{([^}]*)\}", css))
+    # the stone blocks are flat stone; the band and the plinth wear the gold cap
+    for sel in (".hero-stats", ".showcase-row"):
+        assert "background: #2E2A25" in rule(sel), f"{sel} is not flat stone"
+    assert "border-top: 3px solid #B8955E" in rule(".showcase-row")
+    assert "border-bottom: 3px solid #B8955E" in rule(".showcase-row")
+    assert "background: #26221E" in rule(".meliona-footer") and \
+        "border-top: 3px solid #B8955E" in rule(".meliona-footer")
+    # the paper is flat: the Slice's topography and its faded mark are gone
+    assert ".st-key-gungnir_zone::before" not in css and "_gungnir_bg" not in main
+    assert ".showcase-row::before" not in css, "a plate is drawn behind the band again"
 
 
 def test_public_files_give_crawlers_and_link_previews_a_real_head(tmp_path=None):
@@ -5009,7 +5069,7 @@ def _book_grit(at) -> dict:
     import re
     out = {}
     for m in at.markdown:
-        hit = re.search(r'line-height:1\.55;">([A-Z0-9.^=-]+) .*?grit (\d+) of 100',
+        hit = re.search(r'class="book-text">([A-Z0-9.^=-]+) .*?grit (\d+) of 100',
                         m.value)
         if hit:
             out[hit.group(1)] = int(hit.group(2))
@@ -5063,7 +5123,7 @@ def test_the_book_lists_an_outside_etf_only_when_it_is_the_anchor():
         for m in at.markdown:
             hit = re.match(r"\s*(Leads|Anchor|No role|Left out)\s+((?:\d+\.\d%|<0\.1%) of the book\s+)?"
                            r"([A-Z0-9.^=-]+) (.*)",
-                           re.sub(r"<[^>]+>", " ", m.value)) if "border-left:2px solid" in m.value else None
+                           re.sub(r"<[^>]+>", " ", m.value)) if 'class="book-row' in m.value else None
             if hit:
                 # a NO ROLE card, and only that one, says what it holds (ME-12 review)
                 assert bool(hit.group(2)) == (hit.group(1) == "No role"), hit.group(0)[:80]
@@ -5474,8 +5534,6 @@ def test_the_skeleton_paints_first_and_the_hero_lifts_it():
         hero = next(i for i, v in first if 'id="hero"' in v)
         assert not any("data:image/jpeg;base64" in v for _, v in first), \
             "a photo is inlined into the websocket again"
-        assert any("url(app/static/facade.jpg)" in v for _, v in first)
-        assert any("url(app/static/band.jpg)" in v for _, v in first)
         assert re.search(r"#boot-skel\s*\{[^}]*opacity:\s*0", dict(first)[hero]), \
             "the hero does not lift the skeleton when it arrives"
         # The full-bleed hero swallows the 1rem flex gap of each block above it
@@ -5495,8 +5553,7 @@ def test_the_skeleton_paints_first_and_the_hero_lifts_it():
     cfg = tomllib.loads((root / ".streamlit" / "config.toml").read_text(encoding="utf-8"))
     assert cfg["server"].get("enableStaticServing") is True
     served = sorted(p.name for p in (root / "static").iterdir())
-    assert served == ["app.css", "band.avif", "band.jpg", "dock.js", "facade.avif", "facade.jpg",
-                      "gungnir.avif", "gungnir.webp", "reveal.js"], \
+    assert served == ["app.css", "dock.js", "reveal.js"], \
         f"static/ is served to the public; keep it to public files: {served}"
 
 
@@ -5998,7 +6055,7 @@ def test_a_day_with_no_volume_reported_is_skipped_not_read_as_zero():
         return dv
     at, restore = _offline_app(dollar_volume=gappy)
     try:
-        cards = [m.value for m in at.markdown if "border-left:2px solid" in m.value]
+        cards = [m.value for m in at.markdown if 'class="book-row' in m.value]
         v = [c for c in cards if ">V " in c]
         assert v, "no Book card for V"
         assert "reports no volume" not in v[0], v[0]
@@ -6465,7 +6522,7 @@ def test_the_phone_shortcut_flies_to_the_engine_and_never_covers_it():
     assert "env(safe-area-inset-bottom)" in rule(".m-dock")
     btn = rule(".m-dock-btn")
     assert "min-height: 44px" in btn and "border-radius: 0" in btn and "box-shadow: none" in btn
-    assert "background-color: #3F3B35" in rule(".m-dock"), "a charcoal bar"
+    assert "background-color: #2E2A25" in rule(".m-dock"), "a stone bar, as the banner's"
     assert ".m-dock-btn:active" in css and ".m-dock-btn:focus-visible" in css
     assert re.search(r"prefers-reduced-motion: reduce\)\s*\{\s*\.m-dock \{ animation: none", css)
     assert not re.search(r"\.m-[\w-]+[^{}]*\{[^}]*box-shadow:(?!\s*none)", css), "no glow on the dock"

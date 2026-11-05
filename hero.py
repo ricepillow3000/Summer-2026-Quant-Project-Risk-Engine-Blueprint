@@ -21,6 +21,11 @@ HERO_SUB = ("See how much a portfolio could lose in a bad year and what real mar
             "falls sometimes. What sets a name apart is what happens after, and "
             "that is what we call grit.")
 HERO_CTA = "Start with the Grit Zone"
+# The two labels the banner's system adds (ME-28, John 2026-11-05: the site
+# takes the share banner's design): a kicker over the name, and the caps line
+# over the receipt of engine facts. The copy pass owns their words.
+HERO_KICKER = ("Live end-of-day data", "from Yahoo Finance")
+HERO_RECEIPT = "Inside the engine"
 # The tiles quote the engine, so they read its constants rather than restate
 # them: add a crisis to HISTORICAL_REGIMES and the hero, the footer and the
 # replay list all move together.
@@ -35,12 +40,39 @@ _CTA_ARROW = ('<span class="cta-arrow" aria-hidden="true"><svg viewBox="0 0 16 3
               'stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>')
 
 
+# The crest's five pieces (assets/logo.svg, drawn about 0,0), engraved as a
+# faint gold outline into a charcoal block - the share banner's one ornament
+# (tools/og_image.html). test_the_crest_engraving_is_the_banners_and_used_sparingly
+# holds these to the logo's own points and the opacity to the banner's.
+CREST_PIECES = (
+    "0,-35 27.358,-19.205 0,-3.409 -27.358,-19.205", "0,-2.309 4,0 0,2.309 -4,0",
+    "0,35 27.358,19.205 0,3.409 -27.358,19.205",
+    "-5.905,0 -30.311,-14.091 -30.311,14.091", "5.905,0 30.311,-14.091 30.311,14.091",
+)
+ENGRAVING_OPACITY = ".1"
+
+
+def crest_engraving() -> str:
+    """The crest as a hairline engraving: no fill, gold at 10%, 1px at any size."""
+    pieces = "".join(f'<polygon points="{p}" vector-effect="non-scaling-stroke"/>' for p in CREST_PIECES)
+    return ('<svg class="crest-engraving" viewBox="-36 -36 72 72" aria-hidden="true" focusable="false" '
+            f'xmlns="http://www.w3.org/2000/svg"><g fill="none" stroke="#C6A26B" '
+            f'stroke-opacity="{ENGRAVING_OPACITY}" stroke-width="1">{pieces}</g></svg>')
+
+
 def hero_html(skeleton: bool = False, crest: str = "") -> str:
-    """The hero, or its boot skeleton: same classes, same copy, words masked."""
+    """The hero, or its boot skeleton: same classes, same copy, words masked.
+
+    The banner's layout (tools/og_image.html): on the paper, the crest beside
+    a kicker, the name, the annual-report rule, the sentence and the button;
+    on a charcoal block to the right, the engine's facts as a receipt - a gold
+    caps line, a gold rule, then rows of label and value - over the crest's
+    faint engraving."""
     ink = (lambda t: f'<span class="sk-ink">{t}</span>') if skeleton else (lambda t: t)
     title = "".join(f'<span class="hline">{ink(line)}</span>' for line in HERO_TITLE_LINES)
-    stats = "".join(f'<div class="hstat"><div class="n">{ink(n)}</div>'
-                    f'<div class="l">{ink(label)}</div></div>' for n, label in HERO_STATS)
+    kicker = "<br>".join(ink(line) for line in HERO_KICKER)
+    stats = "".join(f'<div class="hstat"><div class="l">{ink(label)}</div>'
+                    f'<div class="n">{ink(n)}</div></div>' for n, label in HERO_STATS)
     if skeleton:
         # Streamlit appends its heading-link icon to a markdown <h1>, after the
         # two block lines, so the real title holds a third (empty) line box. The
@@ -52,10 +84,12 @@ def hero_html(skeleton: bool = False, crest: str = "") -> str:
     else:
         head = '<div class="hero-section" id="hero">'
         cta = f'<a href="#grit-showcase" class="cta-btn">{HERO_CTA}{_CTA_ARROW}</a>'
-    return (f'{head}<div class="hero-left"><div class="hero-crest">{crest}</div>'
-            f'<h1 class="hero-title">{title}</h1>'
+    return (f'{head}<div class="hero-left"><div class="hero-mark"><div class="hero-crest">{crest}</div>'
+            f'<div class="kicker">{kicker}</div></div>'
+            f'<h1 class="hero-title">{title}</h1><div class="ar-rule"></div>'
             f'<div class="hero-sub">{ink(HERO_SUB)}</div>{cta}</div>'
-            f'<div class="hero-stats">{stats}</div></div>')
+            f'<div class="hero-stats">{crest_engraving()}<div class="hreceipt-h">{ink(HERO_RECEIPT)}</div>'
+            f'<div class="hstat-list">{stats}</div></div></div>')
 
 
 def boot_skeleton_html() -> str:

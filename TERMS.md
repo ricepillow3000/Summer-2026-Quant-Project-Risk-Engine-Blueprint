@@ -35,9 +35,8 @@ availability, and no number here should be relied on for trading.
 
 ## Images
 
-The two photographs (the hero and the dark band) are from Unsplash and used
-under the Unsplash License, which allows free commercial use. The topographic
-background and the crest were made for this project.
+The app shows no photographs (since 5 November 2026). Its crest and drawings
+were made for this project.
 
 ## Acceptable use
 

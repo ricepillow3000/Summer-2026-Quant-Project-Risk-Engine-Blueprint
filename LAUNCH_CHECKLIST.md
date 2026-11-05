@@ -55,11 +55,11 @@ built where there is a surface, N/A with the reason where there is none.
 
 | # | Asked for | Status | Where it lives / why not |
 |---|---|---|---|
-| 38 | Images as WebP or AVIF | **Built** | AVIF first, JPEG/WebP fallback via `image-set()`: 4.4 MB of photos -> 0.3 MB (2026-10-30). The link-preview image and favicons stay PNG, which is what LinkedIn and iOS read. |
+| 38 | Images as WebP or AVIF | **Built** | AVIF first, JPEG/WebP fallback via `image-set()`: 4.4 MB of photos -> 0.3 MB (2026-10-30). Since 2026-11-05 (ME-28) the page loads no photograph at all: flat paper and stone blocks like the share banner, the crest drawn as inline SVG. The link-preview image and favicons stay PNG, which is what LinkedIn and iOS read. |
 | 39 | No duplicate API calls | **Built** | Every fetch is behind `st.cache_data`, each name's download is kept on disk, and only names not held are fetched - in one `yf.download` per basket. |
 | 40 | Debounce search and autocomplete | **N/A** | The ticker box (`st.multiselect`) filters its suggestions in the browser as you type and tells the server nothing until a symbol is picked; there is no autocomplete endpoint to call. |
 | 41 | Paginate API results | **N/A** | The app serves no API. Long tables use Streamlit's virtualized grid. |
-| 42 | Static files through a CDN | **N/A, decided** | RUNBOOK §4: Cloudflare was rejected for this app. Streamlit's own bundle is cached for a year; our files are gzipped and revalidated by ETag; photos are AVIF. |
+| 42 | Static files through a CDN | **N/A, decided** | RUNBOOK §4: Cloudflare was rejected for this app. Streamlit's own bundle is cached for a year; our files are gzipped and revalidated by ETag; there are no photos (ME-28). |
 | 43 | Slow tasks on a background queue | **Built (fitting form)** | The slow task is the Yahoo pull. `tools.warm_cache --every 5` refreshes every preset beside the app, so a visitor rarely waits on the network. One process: a job queue would have no workers to feed. |
 | 44 | Fix N+1 queries | **N/A, analogue fixed** | No database. The analogue - one request per ticker - is already one download per basket (#39). |
 | 45 | Brotli or gzip | **Built 2026-11-02** | `server.enableWebsocketCompression = true`: every chart, table and the map reach the browser over the websocket, and a page load's 107 KB of messages deflate to ~44 KB. Our static files are gzipped. Known limit: Streamlit serves its root HTML and its own bundle uncompressed by design (its source explains why); the bundle is cached for a year. |
@@ -68,7 +68,7 @@ built where there is a surface, N/A with the reason where there is none.
 | 48 | Timeouts on external calls | **Built 2026-11-02** | Every outbound request goes through `netguard.guarded_session()`, now with an explicit 30 s timeout (yfinance's handshake passed none). Tested. |
 | 49 | Stream AI responses | **N/A** | No AI anywhere (constraint #1). |
 | 50 | Update the UI before the server answers | **Built (fitting form)** | The skeleton paints from the served HTML before the server answers, and an "Updating..." rail appears the instant a rerun starts. No write action exists to apply optimistically. |
-| 51 | Lazy-load images below the screen | **Built** | The band photo and the topography attach within 600px of the screen (`static/reveal.js`). |
+| 51 | Lazy-load images below the screen | **N/A since 2026-11-05** | The page has no images below the screen to load: the band photo and the topography (once attached within 600px by `static/reveal.js`) went with ME-28; what remains is inline SVG. |
 | 52 | Run independent requests in parallel | **Built** | `yf.download` fetches a basket's names in parallel threads (`threads=True`, yfinance's default). |
 | 53 | Database indexes, only needed columns, pooling, server near the DB | **N/A** | No database. Downloads ask for prices and volume only. |
 | 54 | Trace slow requests with OpenTelemetry | **N/A, decided** | A hosted tracer is a new processor of visitor data (`PRIVACY.md`). Slowness is measured by the stress test (RUNBOOK §4) and the deep scan instead. |
@@ -98,7 +98,7 @@ built where there is a surface, N/A with the reason where there is none.
 | 78 | Business details | **Added 2026-11-02** | Operator named in `PRIVACY.md` and `TERMS.md`; contact address (#13). |
 | 79 | Age consent for children's data | **N/A** | No data is collected from anyone (`PRIVACY.md` "Children"). |
 | 80 | Unsubscribe link in emails | **N/A** | The app sends no email (#6). |
-| 81 | License stock images | **Documented** | Unsplash License, in `TERMS.md` and the README's Credits. Open item: record each photo's Unsplash page link (below). |
+| 81 | License stock images | **N/A since 2026-11-05** | The Unsplash photographs were removed (ME-28); the page carries no stock image. |
 | 82 | Data deletion requests | **Built** | See #2. |
 | 83 | Hide API keys; check env variables | **N/A / verified** | The app holds no keys (#18). Its only host settings are non-secret `MELIONA_*` switches. |
 | 84 | Protect admin routes | **N/A, by policy** | None exist and none may be added (`docs/security/SECURITY-LESSONS.md`). |
@@ -154,7 +154,7 @@ has a regression test in `tests/test_engine.py`, so the tell cannot come back.
 
 | # | Asked for | Status | Where it lives / why not |
 |---|---|---|---|
-| 116 | Purple gradients, gradient backgrounds | **Fixed** | Never purple. The decorative gradients (sheens, glints, a gradient-filled numeral, glass, page "lacquer", band fades, gold bars on the map) are gone; the only ones left do a job: the loading shimmer, the "Updating" rail and the scrims that keep text readable over photos (`test_no_decorative_gradients_glass_or_grain`). |
+| 116 | Purple gradients, gradient backgrounds | **Fixed** | Never purple. The decorative gradients (sheens, glints, a gradient-filled numeral, glass, page "lacquer", band fades, gold bars on the map) are gone; the only ones left do a job: the loading shimmer and the "Updating" rail; the photo scrims went with the photos on 2026-11-05 (`test_no_decorative_gradients_glass_or_grain`). |
 | 117 | Too much padding, floating elements | **Fixed** | Phone gutters 56px -> 20px, the map still 8px from the phone's edges; hover lifts and floating shadows removed. |
 | 118 | The keyboard covering input fields; buttons too small | **Fixed** | No bar is pinned to the bottom of the screen. On touch, tabs, selects, number fields, drawer headers, radio and checkbox rows, buttons and the map's controls are 44px tall, and the small marks (help, clear-all, slider thumbs) get an invisible 44px hit area. Phone inputs are 16px, so iOS no longer zooms in on focus (`test_touch_targets_phone_fields_and_gutters`). |
 | 119 | Text too small; text scaling breaks the UI | **Fixed** | Smallest text raised to 12px on the page (footer, session reference, Book role labels) and 10px on the map. Every font size is in rem, so a reader's own font-size setting reaches the page; the hero fits at 200% zoom on a phone (`test_type_follows_the_readers_font_size_and_stays_readable`). |
@@ -172,7 +172,7 @@ has a regression test in `tests/test_engine.py`, so the tell cannot come back.
 | 131 | Panel subtitles too faint | **Fixed** | About 25 subtitles were `#ABA499` on beige, 2.04:1: the contrast test passed them because it checked each colour against the darkest ground on the page, not its own. Now `#5D574D` (5.91:1), and `test_text_colours_meet_wcag_aa` checks every text colour on the ground it actually sits on. It also caught the CTA hover at 4.14:1 (now 6.42:1). |
 | 132 | Tags and pills, squircles, containers with borders | **Fixed** | The pair diagram's rounded pill and Streamlit's rounded tags and alert boxes are square; cards keep only the house's top rule instead of a full box. |
 | 133 | Excessive italics, Instrument Serif, excessive monospace | **Fixed / verified** | No italics left in the copy; no web font at all (Georgia, #62); ticker names and the session reference are plain text, not code font. |
-| 134 | Negative kerning, all-caps subtitles | **Fixed** | No negative letter-spacing anywhere; capitals only on the headline verdict label (`test_no_negative_letter_spacing_anywhere`, `test_uppercase_is_kept_to_the_verdict_label`). |
+| 134 | Negative kerning, all-caps subtitles | **Fixed** | No negative letter-spacing anywhere; capitals only in the share banner's one label voice - bold Helvetica, 12-14px, tracked .2em - since 2026-11-05 (`test_no_negative_letter_spacing_anywhere`, `test_capitals_speak_only_in_the_banners_label_voice`). |
 | 135 | Over-detailed UI, overly detailed diagrams, dividers | **Fixed** | The pair diagram is down to two circles, a dashed line and the weights; the hero, band and footer lost their extra hairlines and the `<hr>`. |
 | 136 | Many colour shades and opacities | **Fixed** | Nine beige grounds -> three, five muted inks -> two, five hairlines -> one. |
 | 137 | Verbose text, code breadcrumbs, section numbering, eyebrows, periods in titles | **Fixed** | The ten longest captions were shortened, keeping every number and limit; the data-quality checks print plain names instead of code IDs; the 01/02/03 numbering, the eyebrows and the period on a title are gone, on the page, the map and the 404 page (`test_visitor_copy_has_no_numbers_eyebrows_honest_or_shouting`). |
@@ -254,9 +254,6 @@ has a regression test in `tests/test_engine.py`, so the tell cannot come back.
       and confirm `/_stcore/health` answers.
 - [ ] Walk the deployed page once end to end, then trigger one deliberate error
       and confirm the footer reference finds it in the logs.
-- [ ] Record each photo's Unsplash page link (`static/facade.*`, `static/band.*`)
-      beside its credit in the README - the licence needs no attribution, but the
-      link is the proof of where each came from.
 - [ ] After the first `Container` run on `main`, make the image public once:
       GitHub -> your profile -> Packages -> meliona -> Package settings ->
       Change visibility -> Public. (A new package starts private; until then

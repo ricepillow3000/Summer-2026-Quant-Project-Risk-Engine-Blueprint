@@ -157,7 +157,6 @@ Target ship date: August 23, 2026.
 
 ## Credits
 
-The hero and band photographs are from [Unsplash](https://unsplash.com), used
-under the Unsplash License (free commercial use, no attribution required). The
-topographic background in `static/gungnir.*` is generated in-repo, and the
-crest (`assets/logo.svg`) was drawn for this project.
+The page uses no photographs: its blocks are flat paper and stone, after the
+share banner (`tools/og_image.html`). The crest (`assets/logo.svg`) was drawn
+for this project.

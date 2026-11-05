@@ -37,7 +37,7 @@ from src.topology import build_map_payload, war_room_html
 from src.observability import (count_preset, count_session, host_setting, log_incident,
                                log_session_start, new_session_ref, setup_logging)
 from src.scenarios import HISTORICAL_REGIMES, replay_returns
-from hero import N_PATHS, hero_html
+from hero import N_PATHS, crest_engraving, hero_html
 from src.liquidity import (days_to_liquidate, liquidity_profile,
                            liquidity_adjusted_cvar)
 from src.grit import grit_scores, MIN_HISTORY_DAYS
@@ -600,13 +600,16 @@ _script_frame("""
 </script>
 """)
 
-# ---- Themed Plotly palette + chart helpers (institutional beige/bronze) ----
+# ---- Themed Plotly palette + chart helpers (the share banner's system) ----
+# Charts sit on the flat paper with no fill of their own, hairline axes and
+# three inks only: charcoal, bronze and the crest's gold (ME-28, 2026-11-05).
 BRONZE = "#9A7B4F"
-BRONZE_DK = "#8A6A3C"
 CHARCOAL = "#3F3B35"
+STONE = "#2E2A25"          # the banner's charcoal block
+GOLD = "#C6A26B"           # the crest's gold
 BAND_OUTER = "rgba(154,123,79,0.14)"   # light bronze - 5–95 percentile cone
 BAND_INNER = "rgba(154,123,79,0.30)"   # medium bronze - 25–75 percentile cone
-GRID = "rgba(63,59,53,0.12)"
+GRID = "rgba(63,59,53,0.08)"
 AXIS_LINE = "rgba(63,59,53,0.28)"
 
 # responsive=True is not cosmetic. Plotly defaults it to FALSE, which means a
@@ -634,15 +637,20 @@ def _style_fig(fig, height: int = 300):
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         font=dict(family="Georgia, 'Times New Roman', serif", color=CHARCOAL, size=13),
+        legend_font=dict(color="#5D574D"),
         showlegend=False,
         bargap=0.12,
-        hoverlabel=dict(bgcolor="#F4F1EA", bordercolor=BRONZE,
-                        font=dict(family="Georgia, serif", color=CHARCOAL, size=13)),
+        # the readout is a small receipt: charcoal stone, paper words
+        hoverlabel=dict(bgcolor=STONE, bordercolor=STONE,
+                        font=dict(family="Georgia, serif", color="#EDE9E3", size=13)),
         transition=dict(duration=380, easing="cubic-in-out"),
     )
-    fig.update_xaxes(gridcolor=GRID, zeroline=False, linecolor=AXIS_LINE, ticks="outside",
-                     tickcolor=AXIS_LINE)
-    fig.update_yaxes(gridcolor=GRID, zeroline=True, zerolinecolor=AXIS_LINE, linecolor=AXIS_LINE)
+    fig.update_xaxes(gridcolor=GRID, gridwidth=1, zeroline=False, linecolor=AXIS_LINE, linewidth=1,
+                     ticks="outside", tickcolor=AXIS_LINE, tickfont=dict(color="#5D574D", size=12),
+                     title_font=dict(color="#5D574D", size=13))
+    fig.update_yaxes(gridcolor=GRID, gridwidth=1, zeroline=True, zerolinecolor=AXIS_LINE,
+                     zerolinewidth=1, linecolor=AXIS_LINE, linewidth=1,
+                     tickfont=dict(color="#5D574D", size=12), title_font=dict(color="#5D574D", size=13))
     return fig
 
 
@@ -712,11 +720,13 @@ def fan_chart(bands: dict):
 
 
 def panel_head(title: str, subtitle: str = "") -> None:
-    """Ruled section lintel inside a tab - replaces bare `###### ` markdown
-    headers so every block reads as a titled stone panel, not a run-on wall."""
+    """A section heading in the share banner's system (ME-28): the title as a
+    caps kicker with its charcoal bar, the subtitle as the serif line under
+    it, then the annual-report rule - a hairline with a charcoal key that
+    draws itself across as the section comes up the screen."""
     sub = f'<span class="s">{subtitle}</span>' if subtitle else ""
-    st.markdown(f'<div class="panel-head"><span class="t">{title}</span>{sub}</div>',
-                unsafe_allow_html=True)
+    st.markdown(f'<div class="panel-head"><span class="t">{title}</span>{sub}'
+                f'<span class="ar-rule"></span></div>', unsafe_allow_html=True)
 
 
 def read_me(html: str) -> None:
@@ -736,11 +746,11 @@ def hbar(series: pd.Series, pct: bool = False, title_x: str = "",
     the reader - and the caption - expects it."""
     x = series.values * (100 if pct else 1)
     span = float(np.max(np.abs(x))) or 1.0
-    def _shade(v):  # lerp #CBBB94 (light) -> #8A6A3C (deep) by |value|
+    def _shade(v):  # lerp the crest's gold #C6A26B (light) -> stone #2E2A25 (deep) by |value|
         f = abs(v) / span
-        r = int(0xCB + (0x8A - 0xCB) * f)
-        g = int(0xBB + (0x6A - 0xBB) * f)
-        b = int(0x94 + (0x3C - 0x94) * f)
+        r = int(0xC6 + (0x2E - 0xC6) * f)
+        g = int(0xA2 + (0x2A - 0xA2) * f)
+        b = int(0x6B + (0x25 - 0x6B) * f)
         return f"rgb({r},{g},{b})"
     fig = go.Figure(go.Bar(
         x=x, y=list(series.index), orientation="h",
@@ -758,7 +768,7 @@ def grit_breakdown_fig(scores: pd.DataFrame):
     fig = go.Figure()
     fig.add_trace(go.Bar(
         y=list(scores.index), x=scores["recovery_score"].values, orientation="h",
-        name="recovery", marker=dict(color="#CBBB94"),
+        name="recovery", marker=dict(color=GOLD),
         hovertemplate="%{y} recovery: %{x:.0f}<extra></extra>"))
     fig.add_trace(go.Bar(
         y=list(scores.index), x=scores["consistency_score"].values, orientation="h",
@@ -766,11 +776,11 @@ def grit_breakdown_fig(scores: pd.DataFrame):
         hovertemplate="%{y} consistency: %{x:.0f}<extra></extra>"))
     fig.add_trace(go.Bar(
         y=list(scores.index), x=scores["resilience_score"].values, orientation="h",
-        name="resilience", marker=dict(color=BRONZE_DK),
+        name="resilience", marker=dict(color=STONE),
         hovertemplate="%{y} resilience: %{x:.0f}<extra></extra>"))
     fig = _style_fig(fig, height=max(220, 50 * len(scores)))
     fig.update_layout(
-        barmode="group", xaxis_title="score (0–100, relative to this universe)",
+        barmode="group", xaxis_title_text="score (0–100, relative to this universe)",
         showlegend=True, legend=dict(orientation="h", y=1.12, x=0, font=dict(size=11)))
     return fig
 
@@ -778,7 +788,6 @@ def grit_breakdown_fig(scores: pd.DataFrame):
 # Anchored on this file, not the working directory: `streamlit run` from any
 # other folder used to crash here on the very first line of the hero.
 ASSETS = Path(__file__).parent / "assets"
-STATIC = Path(__file__).parent / "static"   # served at /app/static/
 
 # ---- Hero: the pitch, not the dashboard ----
 with open(ASSETS / "logo.svg", "r", encoding="utf-8") as f:
@@ -831,59 +840,11 @@ else:
     # visitor changed snapped shut under their cursor (recruiter walkthrough).
     st.markdown("", unsafe_allow_html=True)
 
-# Architectural plate behind the hero stat deck (replaces the watermark crest).
-# static/facade.jpg - Unsplash (free commercial license, no attribution
-# required). Duotoned toward the palette in CSS, so the photo can never clash.
-# Served as a file from static/ (config.toml enableStaticServing): inlined as
-# base64 it put ~3.5 MB on the websocket AHEAD of the boot skeleton, which then
-# arrived with the hero it stands in for (2026-10-19). Paint only - the hero's
-# layout (full-bleed margin, padding, ledger frame) lives in app.css, so the
-# skeleton has the hero's shape before this arrives. A missing photo holds the
-# slot, so nothing below moves.
-if (STATIC / "facade.jpg").is_file():
-    st.markdown(
-        # The architecture washes across the WHOLE hero, melting into beige
-        # toward the text side - the building emerges from the page's own
-        # color. Luminosity blend: the photo keeps only its LIGHT - its hue
-        # comes entirely from the base color beneath, which is CITY-STONE
-        # BEIGE in the crest's own warm family (not gray, not orange).
-        "<style>.hero-section { background-color: #C9AF87; "
-        "background-image: linear-gradient(90deg, "
-        "#EDE9E3 0%, rgba(237,233,227,.96) 40%, rgba(237,233,227,.62) 66%, "
-        "rgba(237,233,227,.22) 100%), url(app/static/facade.jpg); "
-        "background-size: auto, cover; "
-        "background-position: left, right 78%; "
-        "background-blend-mode: normal, luminosity; } "
-        # Same layers, AVIF first: 164 KB against the JPEG's 757 KB. A browser
-        # without image-set() type() keeps the declaration above.
-        "@supports (background-image: image-set(url(x.avif) type('image/avif'))) { "
-        ".hero-section { background-image: linear-gradient(90deg, "
-        "#EDE9E3 0%, rgba(237,233,227,.96) 40%, rgba(237,233,227,.62) 66%, "
-        "rgba(237,233,227,.22) 100%), image-set(url(app/static/facade.avif) "
-        "type('image/avif'), url(app/static/facade.jpg) type('image/jpeg')); } }</style>",
-        unsafe_allow_html=True)
-else:
-    st.markdown("", unsafe_allow_html=True)
-
-# Dark-band plate: the charcoal showcase band gets its own architectural
-# photograph (static/band.jpg - Unsplash, free commercial license): fog-bound
-# towers, duotoned near-charcoal in CSS with a scrim baked in so the beige
-# text stays the loudest thing on the band. A file, not base64 (see above).
-if (STATIC / "band.jpg").is_file():
-    st.markdown(
-        # html.has-band: reveal.js sets it once the band is within 600px of
-        # the screen (lazy); without reveal-on (no script, reduced motion) the
-        # photo is attached at once. AVIF 80 KB, the JPEG fallback 315 KB.
-        "<style>html:not(.reveal-on) .showcase-row::before, "
-        "html.has-band .showcase-row::before { background-image: "
-        "linear-gradient(165deg, rgba(59,50,40,.42), rgba(45,39,32,.68)), "
-        "url(app/static/band.jpg); background-image: "
-        "linear-gradient(165deg, rgba(59,50,40,.42), rgba(45,39,32,.68)), "
-        "image-set(url(app/static/band.avif) type('image/avif'), "
-        "url(app/static/band.jpg) type('image/jpeg')); }</style>",
-        unsafe_allow_html=True)
-else:
-    st.markdown("", unsafe_allow_html=True)  # band stays plain charcoal
+# (2026-11-05, ME-28: the hero and band photographs went - John chose flat
+# charcoal and beige blocks with the crest's faint engraving, exactly like the
+# share banner. Their two <style> slots went with them: the hero's full-bleed
+# margin in app.css counts the blocks above it, see
+# test_the_skeleton_paints_first_and_the_hero_lifts_it.)
 
 # The hero lifts its own skeleton when it arrives - state, not a timer. The
 # veil used to fade on a fixed 2.1 s clock whether or not anything was ready,
@@ -895,8 +856,11 @@ st.markdown(hero_html(crest=logo_svg) + _LIFT_SKELETON, unsafe_allow_html=True)
 # ---- Showcase: the Grit Zone innovation, explained before you touch a slider ----
 st.markdown("""
 <div class="showcase-row">
-  <div class="showcase-section" id="grit-showcase" style="position:relative;">
+  __ENGRAVING__
+  <div class="showcase-section" id="grit-showcase">
+    <div class="kicker">Scored on each name's full price history</div>
     <h2 class="showcase-title">The Grit Zone</h2>
+    <div class="ar-rule"></div>
     <div class="showcase-body">
       Grit measures whether an asset, once knocked down, gets back up, and
       whether it does so consistently across real crises.
@@ -921,7 +885,9 @@ st.markdown("""
   </div>
   <div class="showcase-section" id="conviction">
     <div class="conv-core">
-      <h2 class="showcase-title" style="font-size:34px;">The hardest trade is the one history rewards</h2>
+      <div class="kicker">S&amp;P 500 via SPY, computed live</div>
+      <h2 class="showcase-title">The hardest trade is the one history rewards</h2>
+      <div class="ar-rule"></div>
       <div class="showcase-body">
         Buying in a crash feels wrong. Below is what a buyer actually earned in
         every named crisis this engine stress-tests, computed live: on the
@@ -933,7 +899,7 @@ st.markdown("""
     </div>
   </div>
 </div>
-""", unsafe_allow_html=True)
+""".replace("__ENGRAVING__", crest_engraving()), unsafe_allow_html=True)
 
 
 # ---- Showcase: Crisis Conviction - the emotional problem, answered in numbers ----
@@ -996,27 +962,16 @@ except Exception as _exc:  # noqa: BLE001 - landing page must never crash on dat
                "The Crisis Conviction tab retries on load.")
 
 # ---- Gungnir - the slice: reading ends, allocation begins ----
-# static/gungnir.webp (+ .avif) is generated in-repo (procedural topographic
-# contours from a single scalar field + the bound-rune engraving), 3200px wide.
-# A served file attached when the zone comes near (reveal.js sets
-# html.has-gungnir), no longer 750 KB of base64 PNG on every first websocket.
-_gungnir_fade = ("linear-gradient(90deg, rgba(241,237,229,0) 0%, rgba(241,237,229,.22) 36%, "
-                 "rgba(241,237,229,.9) 64%, #F1EDE5 82%)")
-_gungnir_bg = (
-    f"background-image:{_gungnir_fade}, url(app/static/gungnir.webp);"
-    f"background-image:{_gungnir_fade}, image-set(url(app/static/gungnir.avif) "
-    "type('image/avif'), url(app/static/gungnir.webp) type('image/webp'));"
-) if (STATIC / "gungnir.webp").is_file() else ""  # missing: plain band, honest fallback
-st.markdown(
-    f'<div id="the-slice"></div>'
-    f'<style>html:not(.reveal-on) .st-key-gungnir_zone::before, '
-    f'html.has-gungnir .st-key-gungnir_zone::before {{ {_gungnir_bg} }}</style>',
-    unsafe_allow_html=True)
+# Flat paper (ME-28, 2026-11-05): the topographic plate and the faded mark
+# behind the zone went with the photographs.
+st.markdown('<div id="the-slice"></div>', unsafe_allow_html=True)
 _gungnir_zone = st.container(key="gungnir_zone")
 with _gungnir_zone:
     st.markdown(
         '<div class="gungnir-head">'
-        '<h2 class="showcase-title" style="font-size:30px;">From evidence to allocation</h2>'
+        '<div class="kicker">Two-asset risk parity</div>'
+        '<h2 class="showcase-title">From evidence to allocation</h2>'
+        '<div class="ar-rule"></div>'
         '<div class="gungnir-sub">Above is the evidence. Below is the tool: '
         'choose a side, then pick a universe.</div>'
         '</div>',
@@ -1104,8 +1059,9 @@ with _gungnir_zone:
 
 st.markdown(
     f'<div class="engine-heading" id="engine">'
-    f'<h2 class="showcase-title" style="font-size:26px;">Stress-test any '
-    f'{"short book" if bearish else "portfolio"}, live</h2>'
+    f'<div class="kicker">Value at risk &middot; stress tests &middot; Monte Carlo</div>'
+    f'<h2 class="showcase-title">Stress-test any '
+    f'{"short book" if bearish else "portfolio"}, live</h2><div class="ar-rule"></div>'
     # "the analysis", not "the risk map": it lands on the analysis tab strip,
     # whichever tab the reader left open (ME-04). Styled by .cta-link.
     f'<a href="#analysis" class="cta-link">'
@@ -1837,49 +1793,35 @@ with _bk_more:
             load_grit(tuple(loaded)),
             load_grit(tuple(_bk_px.columns)) if _bk_anchors else None)
 
-        _bk_head.markdown(
-            f'<div style="background:#F1EDE5;'
-            f'border-top:2px solid #9A7B4F;border-radius:0;padding:18px 22px;'
-            f'margin:6px 0 18px;font-family:Georgia,serif;font-size:17px;'
-            f'color:#3F3B35;line-height:1.5;">{headline(_the_book)}</div>',
-            unsafe_allow_html=True)
+        _bk_head.markdown(f'<div class="book-lede">{headline(_the_book)}</div>',
+                          unsafe_allow_html=True)
 
-        # Border tone carries the role (decorative, so bronze is allowed); the
-        # LABEL is words, so it uses the sanctioned on-beige text tone written as a
-        # LITERAL. test_text_colours_meet_wcag_aa scans main.py for `color:#RRGGBB`
-        # and an f-string placeholder hides the value from it - #8A6A3C sat at
-        # ~3.1:1 here unseen because it arrived through a variable.
-        # The chip's words come from narrative.role_label: a name with no role
-        # can still hold capital, so "Left out" is only for a name holding none.
-        _CHIP = {Role.FLYER: ("#8A6A3C", "#F1EDE5"),
-                 Role.CUSHION: ("#3F3B35", "#E9E4DB"),
-                 Role.EXCLUDED: ("#5D574D", "#EDE9E3")}
+        # Ruled rows (ME-28): each name is a row under a hairline whose key -
+        # the 3px mark over the role column - carries the role's tone
+        # (decorative, so the light bronze may draw it); the words take the
+        # AA text tones in app.css (.book-role, .book-text). The chip's words
+        # come from narrative.role_label: a name with no role can still hold
+        # capital, so "Left out" is only for a name holding none.
+        _ROW = {Role.FLYER: "is-flyer", Role.CUSHION: "is-cushion", Role.EXCLUDED: "is-excluded"}
         for _d in _the_book:
-            (_col, _bg), _lbl = _CHIP[_d.role], role_label(_d)
+            _lbl = role_label(_d)
             # A "No role" card shows what it holds, so "still held" can be
-            # checked on the card; on its own line, so the 86px chip wraps
+            # checked on the card; on its own line, so the role column wraps
             # rather than cuts at 360px.
             _note = role_note(_d)
             if _note:
                 _lbl += f'<br><span class="role-note">{_note}</span>'
-            _flag = (' &middot; <span style="color:#6A5030;">outside the chosen '
+            _flag = (' &middot; <span class="book-flag">outside the chosen '
                      'universe</span>' if _d.is_fallback_anchor else "")
             # Redundant on a card that was already excluded FOR capacity - the
             # sentence there already names the breakpoint.
-            _bind = (' &middot; <span style="color:#6A5030;">liquidity set this '
+            _bind = (' &middot; <span class="book-flag">liquidity set this '
                      'size, not risk</span>'
                      if _d.liquidity_binding and _d.role is not Role.EXCLUDED else "")
             # leaders and anchors stay on the page; the rest is in the drawer
             (_bk_lead if _d.role in (Role.FLYER, Role.CUSHION) else st).markdown(
-                f'<div style="display:flex;gap:14px;align-items:flex-start;'
-                f'background:{_bg};border-left:2px solid {_col};border-radius:0;'
-                f'padding:12px 16px;margin-bottom:8px;">'
-                f'<div style="flex:0 0 86px;font-family:Helvetica Neue,sans-serif;'
-                f'font-size:12px;color:#6A5030;'
-                f'padding-top:3px;">{_lbl}</div>'
-                f'<div style="flex:1;font-family:Georgia,serif;font-size:14px;'
-                f'color:#3F3B35;line-height:1.55;">{_d.sentence()}{_flag}{_bind}</div>'
-                f'</div>',
+                f'<div class="book-row {_ROW[_d.role]}"><div class="book-role">{_lbl}</div>'
+                f'<div class="book-text">{_d.sentence()}{_flag}{_bind}</div></div>',
                 unsafe_allow_html=True)
 
         read_me(
@@ -1962,15 +1904,15 @@ with tab_breakdown:
     rc_fig = go.Figure()
     rc_fig.add_trace(go.Bar(
         y=list(rc.index), x=rc["weight"].values * 100, orientation="h",
-        name="dollar weight", marker=dict(color="#CBBB94"),
+        name="dollar weight", marker=dict(color=GOLD),
         hovertemplate="%{y} weight: %{x:.1f}%<extra></extra>"))
     rc_fig.add_trace(go.Bar(
         y=list(rc.index), x=rc["risk_pct"].values * 100, orientation="h",
-        name="risk share", marker=dict(color=BRONZE_DK),
+        name="risk share", marker=dict(color=STONE),
         hovertemplate="%{y} risk: %{x:.1f}%<extra></extra>"))
     rc_fig = _style_fig(rc_fig, height=max(200, 46 * len(rc)))
     rc_fig.update_layout(
-        barmode="group", xaxis_title="% of portfolio", showlegend=True,
+        barmode="group", xaxis_title_text="% of portfolio", showlegend=True,
         legend=dict(orientation="h", y=1.14, x=0, font=dict(size=11)))
     st.plotly_chart(rc_fig, width="stretch", config=PLOTLY_CFG)
     top = rc["risk_pct"].idxmax()

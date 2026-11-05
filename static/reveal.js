@@ -8,14 +8,14 @@
  *      IntersectionObserver reports the moment it arrives; nothing listens to
  *      every scrolled pixel. Blocks that arrive together are staggered top to
  *      bottom, left to right.
- *   2. Scrubs - decorative layers (the band's photo, the bronze lintel over each
- *      panel) follow the scroll position itself. app.css does this with scroll
+ *   2. Scrubs - the charcoal key of each section heading's rule draws itself
+ *      across with the scroll position itself. app.css does this with scroll
  *      timelines, off the main thread; where a browser has none, this file
- *      feeds the same position as --scrub, and only while the layer is on
- *      screen.
- *   3. Plates - the heavy photos behind a band start downloading 600px before
- *      the band reaches the screen, and fade in once there. Words come first.
- *   4. Glide - a mouse wheel or trackpad eases the page to where it was sent
+ *      feeds the same position as --scrub, and only while the rule is on
+ *      screen. (The photographs, their parallax and the plates that loaded
+ *      them lazily went on 2026-11-05, ME-28: the page is flat paper and
+ *      stone, like the share banner.)
+ *   3. Glide - a mouse wheel or trackpad eases the page to where it was sent
  *      instead of stepping it there. It stands aside while a button's glide
  *      flies, inside anything that scrolls on its own (a table, a list), and
  *      for touch and keys, which keep the browser's own scrolling.
@@ -58,16 +58,8 @@
   var SIDE = 0.42;        // left of 42% (or right of 58%) of the page's width
   var WIDE = 0.6;         // wider than 60% of the page: tips up, not turns
   var CARD = 0.45;        // a card is narrower than 45% of the page; a wider block in the middle tips up
-  var SCRUB = '.showcase-row, .panel-head';
-  // Each photo plate, and the class on <html> that attaches it (app.css,
-  // main.py). On <html>, not the band: Streamlit may rewrite a block's own
-  // classes on a rerun, and the photo would go with them.
-  var PLATES = { '.showcase-row': 'has-band', '.st-key-gungnir_zone': 'has-gungnir' };
-  var PLATE = Object.keys(PLATES).join(',');
-  var ALL = [ITEMS, SCRUB, PLATE].join(',');
-  function attach(el) {
-    for (var sel in PLATES) if (el.matches(sel)) H.classList.add(PLATES[sel]);
-  }
+  var SCRUB = '.panel-head';
+  var ALL = [ITEMS, SCRUB].join(',');
 
   var calm = !('IntersectionObserver' in W) ||
     (W.matchMedia && W.matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -84,7 +76,7 @@
     s.src = (me && me.src ? me.src : 'app/static/reveal.js').replace(/reveal\.js(\?.*)?$/, file);
     D.head.appendChild(s);
   });
-  if (calm) { H.classList.remove('reveal-on'); return; }   // everything as drawn, photos at once
+  if (calm) { H.classList.remove('reveal-on'); return; }   // everything as drawn
 
   // ---- 1. reveals ----------------------------------------------------------
   var seen = new IntersectionObserver(function (entries) {
@@ -188,16 +180,7 @@
     if (live.length) { D.addEventListener('scroll', onScroll, { capture: true, passive: true }); onScroll(); }
   });
 
-  // ---- 3. plates -------------------------------------------------------------
-  var near = new IntersectionObserver(function (entries) {
-    entries.forEach(function (e) {
-      if (!e.isIntersecting) return;
-      near.unobserve(e.target);
-      attach(e.target);                               // the photo downloads now, then fades up
-    });
-  }, { rootMargin: '600px 0px' });
-
-  // ---- 4. glide ----------------------------------------------------------------
+  // ---- 3. glide ----------------------------------------------------------------
   // The wheel sets where the page is going; each frame closes a share of the
   // distance (GLIDE_EASE), so a notch eases in and a long spin coasts out.
   var GLIDE_EASE = 0.09;  // share of the remaining distance per frame: lower = longer coast
@@ -247,7 +230,6 @@
     found.forEach(function (el) {
       if (el.__rv || el.closest(SKIP)) return;
       el.__rv = 1;
-      if (el.matches(PLATE)) { if (late) attach(el); else near.observe(el); }
       if (el.matches(SCRUB) && onScreen) onScreen.observe(el);
       if (!el.matches(ITEMS) || el.matches(DEST) || el.querySelector(DEST) || el.querySelector(SKIP)) return;
       // a container block arrives through its parts: its own leaves, or the
