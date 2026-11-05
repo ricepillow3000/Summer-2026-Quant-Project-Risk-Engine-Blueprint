@@ -369,16 +369,16 @@ await step('engine baseline', async () => {
 
 await step('allocation', async () => {
   await openDrawer('Weights: how the money');
-  for (const est of ['Sample: plain history', 'EWMA: reactive / panic lens', 'Ledoit-Wolf: steady (default)']) {
+  for (const est of ['Plain history (sample)', 'Quick to react (EWMA)', 'Steady (Ledoit-Wolf, default)']) {
     const prev = await verdict();
-    await pick('Covariance estimator', est);
+    await pick('How the names move together', est);
     await settle();
     const v = await verdict();
     ok(/^\d+(\.\d+)?%$/.test(v), `allocation: estimator "${est.split(' -')[0]}" gives a finite headline`, `${prev} -> ${v}`);
   }
   // Risk parity must make every risk share equal - that is its definition.
   let prev = await verdict();
-  await choose('Risk parity');
+  await choose('Equal risk (risk parity)');
   const rp = await newVerdict(prev);
   const rc = await figure('rc');
   const shares = rc.data.find(t => t.name === 'risk share').x;
@@ -393,7 +393,7 @@ await step('allocation', async () => {
   ok(Math.max(...ew) - Math.min(...ew) <= 0.05, 'allocation: equal weight gives equal dollar weights', `${ew.map(s => s.toFixed(1)).join('/')}%`);
   // Vol targeting: the realised vol of the scaled book should land on the target.
   prev = await verdict();
-  await choose('Target volatility');
+  await choose('Aim for a set level of yearly swings');
   await newVerdict(prev);
   await settle();
   const vol = pct(await metric('Volatility per year'));
@@ -401,7 +401,7 @@ await step('allocation', async () => {
   ok(Math.abs(vol - 10) <= 1.5, 'allocation: vol target 10% lands near 10% realised', `${vol}% realised`);
   ok(/levered \d+\.\d\d×/.test(s), 'allocation: the verdict names the leverage', (s.match(/levered [\d.]+×/) || [''])[0]);
   prev = await verdict();
-  await choose('Target volatility');
+  await choose('Aim for a set level of yearly swings');
   const back = await newVerdict(prev);
   ok(pct(back) === base.v, 'allocation: switching everything back restores the baseline exactly', `${back} vs ${base.v}%`);
 });
@@ -409,7 +409,7 @@ await step('allocation', async () => {
 await step('stress test', async () => {
   await openDrawer('Stress test: shock');
   // A deeper drawdown shock must not make the tail lighter.
-  const slider = page.getByRole('slider', { name: 'Market drawdown shock' }).first();
+  const slider = page.getByRole('slider', { name: 'Market fall over the year (%)' }).first();
   await slider.scrollIntoViewIfNeeded();
   let prev = await verdict();
   await slider.focus();
@@ -426,7 +426,7 @@ await step('stress test', async () => {
 
   if (!SCENARIO_LIST) return say('FAIL', 'stress: crisis list', 'SCAN_SCENARIOS not set');
   const scenarios = SCENARIO_LIST;
-  const engines = FULL ? ['Bootstrap (empirical)', 'Jump-diffusion (Merton)'] : ['Bootstrap (empirical)'];
+  const engines = FULL ? ['Real past days (bootstrap)', 'Real days plus sudden jumps (Merton)'] : ['Real past days (bootstrap)'];
   for (const eng of engines) {
     await choose(eng);
     await settle();
@@ -439,7 +439,7 @@ await step('stress test', async () => {
       const sen = await sentence(), v = await verdict();
       const days = (sen.match(/\((\d+) trading days\)/) || [])[1];
       // The verb follows the engine (ME-07): jump-diffusion replays nothing.
-      const jd = eng.startsWith('Jump');
+      const jd = eng.includes('jumps');
       const said = jd ? `calibrated to the actual returns of ${sc}` : `Replaying the actual returns of ${sc}`;
       ok(sen.includes(said) && /^-?\d+(\.\d+)?%$/.test(v),
          `stress [${eng.split(' ')[0]}]: ${sc} replays and names itself`, `CVaR ${v}, ${days} trading days`
@@ -449,8 +449,8 @@ await step('stress test', async () => {
       await coneAgrees(`${sc}`);
     }
   }
-  await pick('Scenario', 'Custom shock (sliders)');
-  await choose('Bootstrap (empirical)');
+  await pick('Scenario', 'My own shock (set it below)');
+  await choose('Real past days (bootstrap)');
   await settle();
   ok(pct(await verdict()) === base.v, 'stress: back to the base case restores the baseline exactly', await verdict());
   await shot('03-engine');

@@ -1422,13 +1422,21 @@ else:
 deck_alloc, deck_stress = st.columns(2, gap="medium")
 with deck_alloc, st.expander("Weights: how the money is split",
                              expanded=False):
+    # Plain words first, the method's name in brackets (John, 2026-11-05:
+    # "simpler and easy for a user with limited technical skills"). The
+    # values behind each choice are unchanged; only what a visitor reads is.
     COV_LABELS = {
-        "Ledoit-Wolf": "Ledoit-Wolf: steady (default)",
-        "Sample": "Sample: plain history",
-        "EWMA": "EWMA: reactive / panic lens",
+        "Ledoit-Wolf": "Steady (Ledoit-Wolf, default)",
+        "Sample": "Plain history (sample)",
+        "EWMA": "Quick to react (EWMA)",
+    }
+    COV_PLAIN = {
+        "Ledoit-Wolf": "Smooths out the noise in the price history",
+        "Sample": "Uses the price history exactly as it is",
+        "EWMA": "Weighs the last few weeks most, so one bad day moves it a lot",
     }
     cov_method = st.selectbox(
-        "Covariance estimator", ["Ledoit-Wolf", "Sample", "EWMA"],
+        "How the names move together", ["Ledoit-Wolf", "Sample", "EWMA"],
         format_func=lambda m: COV_LABELS[m],
         help="How the engine measures the way these names move together (their "
              "covariance), which sets the weights. Ledoit-Wolf (default) pulls "
@@ -1437,7 +1445,7 @@ with deck_alloc, st.expander("Weights: how the money is split",
              "one bad day moves it a lot: use it to see the panic view, not as a "
              "default.")
     cov, cov_info = estimate_covariance(returns, cov_method)  # annualized risk matrix
-    st.caption(f"How the names move together: {cov_info}.")
+    st.caption(f"{COV_PLAIN[cov_method]}. Method: {cov_info}.")
     if cov_method == "EWMA":
         st.markdown(
             # the palette's warning mark in a Data Quality row, not a yellow
@@ -1454,15 +1462,16 @@ with deck_alloc, st.expander("Weights: how the money is split",
     acol1, acol2 = st.columns(2)
     method = acol1.radio(
         "Weighting", ["Equal weight", "Risk parity"], label_visibility="collapsed",
+        format_func=lambda m: "Equal risk (risk parity)" if m == "Risk parity" else m,
         help="Equal weight puts the same money in each name. Risk parity gives "
              "each name the same share of the risk, so calmer names get more money "
              "and no single name dominates (the idea behind Bridgewater's "
              "All Weather fund).")
     use_vt = acol2.checkbox(
-        "Target volatility", help="Scales the whole portfolio up or down so its "
+        "Aim for a set level of yearly swings", help="Target volatility: scales the whole portfolio up or down so its "
         "yearly price swings (volatility) match the target. Below 1× invests less "
         "than the full amount; above 1× borrows to invest more.")
-    target_vol = acol2.slider("Target yearly volatility (%)", 5, 30, 10, step=1,
+    target_vol = acol2.slider("Yearly swings to aim for (%)", 5, 30, 10, step=1,
                               disabled=not use_vt) / 100
 
 base_weights = risk_parity_weights(cov) if method == "Risk parity" else \
@@ -1494,9 +1503,11 @@ lev_txt = f", levered {leverage:.2f}×" if use_vt else ""
 
 with deck_stress, st.expander("Stress test: shock or replay a crisis",
                               expanded=False):
+    ENGINE_LABELS = {"Bootstrap (empirical)": "Real past days (bootstrap)",
+                     "Jump-diffusion (Merton)": "Real days plus sudden jumps (Merton)"}
     engine = st.radio(
-        "Return model", ["Bootstrap (empirical)", "Jump-diffusion (Merton)"],
-        horizontal=True,
+        "How bad years are simulated", ["Bootstrap (empirical)", "Jump-diffusion (Merton)"],
+        horizontal=True, format_func=lambda e: ENGINE_LABELS[e],
         help="Bootstrap builds each simulated year from stretches of real past "
              "days, so it can only repeat falls it has already seen. Jump-diffusion "
              "(Merton 1976) adds rare, sudden jumps to ordinary daily moves, so a "
@@ -1504,17 +1515,18 @@ with deck_stress, st.expander("Stress test: shock or replay a crisis",
              "the two to compare their worst years on this book.")
     mode = st.selectbox(
         "Scenario", ["Custom shock (sliders)"] + list(HISTORICAL_REGIMES.keys()),
+        format_func=lambda m: "My own shock (set it below)" if m == "Custom shock (sliders)" else m,
         help="Custom: set your own market fall and extra turbulence. Or replay "
              "the actual daily returns of a real crisis, with the way these names "
              "really moved together in it.")
     if mode == "Custom shock (sliders)":
         col1, col2 = st.columns(2)
         drawdown_shock = col1.slider(
-            "Market drawdown shock", -50, 0, 0, step=5,
+            "Market fall over the year (%)", -50, 0, 0, step=5,
             help="Lowers every past daily return so the year as a whole falls "
                  "by this much, before the simulation runs.")
         vol_shock = col2.slider(
-            "Volatility shock", 0, 300, 0, step=10,
+            "Extra turbulence (%)", 0, 300, 0, step=10,
             help="Widens the daily ups and downs by this much, to mimic a "
                  "more turbulent market.")
     else:
@@ -1596,7 +1608,7 @@ if _worst_day <= -1:
     st.warning(
         f"At these settings one day of this book loses {-_worst_day:.0%}, more than "
         "everything it holds, so there is no year to simulate past it. Lower the "
-        "volatility shock or the target volatility.")
+        "extra turbulence or the yearly swings to aim for.")
     st.stop()
 mc = run_monte_carlo(shocked_returns, np.asarray(sim_weights, dtype=float), use_jd)
 _audit("Stress scenario", scenario_label or

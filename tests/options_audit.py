@@ -85,8 +85,8 @@ WEIGHTINGS = ["Equal weight", "Risk parity"]
 TARGETS = list(range(5, 31))             # the slider: 5..30 in steps of 1
 ENGINES = ["Bootstrap (empirical)", "Jump-diffusion (Merton)"]
 CRISES = list(HISTORICAL_REGIMES)
-DRAWDOWNS = list(range(-50, 1, 5))       # "Market drawdown shock" slider
-VOL_SHOCKS = list(range(0, 301, 10))     # "Volatility shock" slider
+DRAWDOWNS = list(range(-50, 1, 5))       # "Market fall over the year (%)" slider
+VOL_SHOCKS = list(range(0, 301, 10))     # "Extra turbulence (%)" slider
 BOOKS = [10_000, 100_000, 1_000_000, 25_000_000, 500_000_000, 5_000_000_000]
 PARTS = list(range(5, 51, 5))            # both participation sliders
 N_MIXES = 12                             # typed-in baskets the page is also run on
@@ -536,23 +536,23 @@ def apply_row(at, row, mix_names):
                 return
     _widget(at.radio, "Which side of the trade are you on?").set_value(
         "Bearish: short the book" if row["side"] else "Bullish: long the book")
-    _widget(at.selectbox, "Covariance estimator").set_value(row["estimator"])
+    _widget(at.selectbox, "How the names move together").set_value(row["estimator"])
     _widget(at.radio, "Weighting").set_value(row["weighting"])
-    vt = _widget(at.checkbox, "Target volatility")
+    vt = _widget(at.checkbox, "Aim for a set level of yearly swings")
     if row["target"] is None:
         vt.uncheck()
     else:
         vt.check()
         if go():                         # the slider is disabled until the box is ticked
             return
-        _widget(at.slider, "Target yearly volatility (%)").set_value(row["target"])
-    _widget(at.radio, "Return model").set_value(row["engine"])
+        _widget(at.slider, "Yearly swings to aim for (%)").set_value(row["target"])
+    _widget(at.radio, "How bad years are simulated").set_value(row["engine"])
     _widget(at.selectbox, "Scenario").set_value(row["scenario"])
     if go():
         return
     if row["scenario"].startswith("Custom"):
-        _widget(at.slider, "Market drawdown shock").set_value(row["drawdown"])
-        _widget(at.slider, "Volatility shock").set_value(row["vol"])
+        _widget(at.slider, "Market fall over the year (%)").set_value(row["drawdown"])
+        _widget(at.slider, "Extra turbulence (%)").set_value(row["vol"])
         if go():
             return
     if "book_size" not in {w.key for w in at.number_input}:

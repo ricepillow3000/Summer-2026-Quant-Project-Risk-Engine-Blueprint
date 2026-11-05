@@ -141,7 +141,7 @@ await step('switch to the jump-diffusion engine', async () => {
   const open = await page.locator('summary', { hasText: 'Stress test: shock' }).first()
     .evaluate(el => el.parentElement.open);
   if (!open) throw new Error('the Stress test drawer closed itself after the previous change');
-  await page.getByText('Jump-diffusion (Merton)', { exact: true }).first().click();
+  await page.getByText('Real days plus sudden jumps (Merton)', { exact: true }).first().click();
   await page.waitForFunction(v => document.querySelector('.verdict-number')?.textContent.trim() !== v, b);
   return `CVaR ${b} -> ${await verdict()}`;
 });
