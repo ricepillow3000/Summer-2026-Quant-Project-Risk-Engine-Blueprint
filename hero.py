@@ -198,6 +198,59 @@ def about_html() -> str:
         f'{profile_marks(arrow=True)}</div></div></div>')
 
 
+# ---- Why Meliona exists: John's story ---------------------------------------
+# John, 2026-11-05: "a story place where we explain why we wanted to create
+# this", beside a second photo of him "when I'm not in my suit". Every fact
+# here is one John gave (his dad, the question, grit, the AI linkages); the
+# promise stays honest - the page describes and simulates, it advises no one.
+STORY_PHOTO = "john-nguyen-story"     # static/john-nguyen-story.{avif,webp,jpg}, 480x600
+STORY_PHOTO_ALT = "John Nguyen out of the suit, smiling, in a maroon quarter-zip sweater"
+STORY_TITLE = "Built for a question too many investors share"
+STORY_QUOTE = "Not the best every year. Back up after every fall."
+# John, 2026-11-05: his dad starts the story, but the story is not about him:
+# it ends on everyone who faces the same problem.
+STORY = (
+    "It started at home. My dad talks about stocks a lot, and one question kept "
+    "coming back: which stock can I actually rely on, and hold for years? He never "
+    "found a good answer, and I came to see that he was far from alone.",
+    "The more I looked, the more I noticed a pattern. The stocks worth holding for a "
+    "long time are not always the best performers. They are the ones that fall and get "
+    "back up. Crisis after crisis, they lose ground, win it back, and keep their numbers "
+    "strong. I call that grit, and the place those stocks live, the Grit Zone.",
+    "Grit was only half of it. Long-term investors also want a part in what is growing "
+    "fastest today: the AI stocks. So I linked the two. A gritty stock is the anchor, an "
+    "AI high-flyer sits beside it, and each carries the same share of the risk, so they "
+    "hold each other up. If a flyer falls, another can take its place: the one that "
+    "works best with the anchor when the two are tested together, against real crashes "
+    "and simulated bad years.",
+    "I saw a problem, so I put my effort into solving that one problem. Meliona is "
+    "built for people like my dad: anyone looking for a stock they can count on, while "
+    "still taking part in what comes next.",
+)
+
+
+def story_html() -> str:
+    """The story on the paper ground: the out-of-suit photo under a charcoal
+    cap on the left, the words on the right, one line pulled out between the
+    second and third paragraphs, signed. A real <img>, like the portrait."""
+    base = f"./app/static/{STORY_PHOTO}"
+    paras = [f'<p class="story-p">{_html.escape(t)}</p>' for t in STORY]
+    # a <p>, not a <blockquote>: Streamlit greys a blockquote and redraws its rule
+    paras.insert(2, f'<p class="story-quote">{_html.escape(STORY_QUOTE)}</p>')
+    return (
+        '<div class="story-section" id="story"><div class="story-grid">'
+        '<figure class="story-photo"><picture>'
+        f'<source type="image/avif" srcset="{base}.avif">'
+        f'<source type="image/webp" srcset="{base}.webp">'
+        f'<img src="{base}.jpg" width="240" height="300" loading="lazy" decoding="async" '
+        f'alt="{STORY_PHOTO_ALT}"></picture>'
+        '<figcaption>John, out of the suit</figcaption></figure>'
+        '<div class="story-text"><div class="kicker">Why I built this</div>'
+        f'<h2 class="showcase-title">{_html.escape(STORY_TITLE)}</h2><div class="ar-rule"></div>'
+        f'{"".join(paras)}'
+        f'<p class="story-sign">{PERSON_NAME}, builder of Meliona</p></div></div></div>')
+
+
 # ---- Five plain questions -------------------------------------------------
 # Rendered on the page (main.py) and served as FAQPage JSON-LD in the head
 # (tools/public_files.py) from this one tuple, so the two cannot drift

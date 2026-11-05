@@ -38,7 +38,7 @@ from src.observability import (count_preset, count_session, host_setting, log_in
                                log_session_start, new_session_ref, setup_logging)
 from src.scenarios import HISTORICAL_REGIMES, replay_returns
 from hero import (N_PATHS, CONTACT_MAX, CONTACT_NAME_MAX, CONTACT_TOPICS, RESPONSE_TIME,
-                  RESPONSE_WINDOW, about_html, contact_mailto, crest_engraving, faq_html,
+                  RESPONSE_WINDOW, about_html, contact_mailto, crest_engraving, faq_html, story_html,
                   hero_html, profile_marks, LINKEDIN_URL, CONTACT_EMAIL as _CONTACT_DEFAULT)
 from src.liquidity import (days_to_liquidate, liquidity_profile,
                            liquidity_adjusted_cvar)
@@ -2340,6 +2340,7 @@ with tab_lineage:
 # ---- The builder, five questions, and a way to write in (ME-28 part 4) ----
 # All below the tab strip, so nothing here moves an element above it.
 st.markdown(about_html(), unsafe_allow_html=True)
+st.markdown(story_html(), unsafe_allow_html=True)    # why Meliona exists, in John's words
 st.markdown(faq_html(), unsafe_allow_html=True)
 
 # Contact. There is no mail server and no database, so nothing is sent from

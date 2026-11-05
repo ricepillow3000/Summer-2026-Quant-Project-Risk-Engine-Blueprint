@@ -4290,13 +4290,16 @@ def test_blocks_reveal_on_arrival_on_the_gpu_and_never_hide_without_script():
     # no image is inlined into the websocket, and no photograph is a
     # backdrop (ME-28, 2026-11-05: flat paper and stone, like the share
     # banner) - nor the lazy-loading plates and parallax that only served
-    # photographs. The one photograph is John's portrait in the About block
-    # (ME-28 part 4): a real <img>, served as files, never a CSS background.
+    # photographs. The photographs are John's: the portrait in the About
+    # block (ME-28 part 4) and the out-of-suit photo beside his story
+    # (2026-11-05) - real <img>s, served as files, never a CSS background.
     assert ";base64," not in main, "an image is inlined into the websocket again"
     assert "url(app/static/" not in main + css + hero, "a photograph is a backdrop again"
     assert sorted(p.name for p in (root / "static").iterdir()
                   if p.suffix in (".jpg", ".jpeg", ".png", ".webp", ".avif")) == \
-        ["john-nguyen.avif", "john-nguyen.jpg", "john-nguyen.webp"], "a photograph other than the portrait is served"
+        ["john-nguyen-story.avif", "john-nguyen-story.jpg", "john-nguyen-story.webp",
+         "john-nguyen.avif", "john-nguyen.jpg", "john-nguyen.webp"], \
+        "a photograph other than John's two is served"
     assert "PLATES" not in js and "has-band" not in js + css + main and "plate-drift" not in css
 
 
@@ -5565,7 +5568,8 @@ def test_the_skeleton_paints_first_and_the_hero_lifts_it():
     cfg = tomllib.loads((root / ".streamlit" / "config.toml").read_text(encoding="utf-8"))
     assert cfg["server"].get("enableStaticServing") is True
     served = sorted(p.name for p in (root / "static").iterdir())
-    assert served == ["app.css", "dock.js", "john-nguyen.avif", "john-nguyen.jpg",
+    assert served == ["app.css", "dock.js", "john-nguyen-story.avif", "john-nguyen-story.jpg",
+                      "john-nguyen-story.webp", "john-nguyen.avif", "john-nguyen.jpg",
                       "john-nguyen.webp", "reveal.js"], \
         f"static/ is served to the public; keep it to public files: {served}"
 
@@ -7016,7 +7020,49 @@ def test_the_builder_block_shows_the_portrait_and_links_out_safely():
     for f in ("main.py", "hero.py", "public/404.html", "public/thanks.html"):
         text = (root / f).read_text(encoding="utf-8")
         for tag in re.findall(r"<img\s[^>]*>", text):
-            assert re.search(r'\balt="[^"]+"', tag) or "{PORTRAIT_ALT}" in tag, f"{f}: <img> without alt: {tag[:80]}"
+            assert re.search(r'\balt="[^"]+"', tag) or re.search(r'alt="\{\w+_ALT\}"', tag), \
+                f"{f}: <img> without alt: {tag[:80]}"
+
+
+def test_johns_story_sits_beside_his_out_of_suit_photo_above_the_contact():
+    """Why Meliona exists, in John's words (2026-11-05): his dad's question,
+    grit, the AI linkages, and why he built it - beside a second photo of
+    him out of the suit. A real <img> with alt text, lazy, the AVIF/WebP/JPEG
+    set at twice its drawn size, no location data left in the files; the
+    section sits between the About block and the questions, so it is near
+    LinkedIn and the contact form; and it promises nothing the engine does
+    not do (no advice, no guarantee)."""
+    import re
+    from PIL import Image
+    import hero
+    root = pathlib.Path(__file__).resolve().parent.parent
+    story = hero.story_html()
+    img = re.search(r"<img [^>]*>", story).group(0)
+    for attr in (f'alt="{hero.STORY_PHOTO_ALT}"', 'width="240"', 'height="300"',
+                 'loading="lazy"', 'decoding="async"'):
+        assert attr in img, attr
+    for ext in ("avif", "webp", "jpg"):
+        f = root / "static" / f"john-nguyen-story.{ext}"
+        assert f"./app/static/john-nguyen-story.{ext}" in story
+        assert f.stat().st_size < 60_000, f"{f.name} is {f.stat().st_size} bytes"
+        if ext != "avif":
+            im = Image.open(f)
+            assert im.size == (480, 600)
+            assert not im.getexif(), f"{f.name} still carries EXIF (where and when it was taken)"
+    words = " ".join(hero.STORY).lower()
+    for idea in ("my dad", "rely on", "grit zone", "ai stocks", "anchor", "take its place",
+                 "people like my dad"):
+        assert idea in words, f"the story lost: {idea}"
+    for claim in ("guarantee", "will make", "risk-free", "safe bet", "buy this", "recommend"):
+        assert claim not in words, f"the story overclaims: {claim}"
+    # John: his dad starts the story, the end speaks to everyone with his problem
+    assert words.count("dad") <= 3, "the story leans on John's dad again"
+    assert story.count('class="story-quote"') == 1 and hero.STORY_QUOTE in story
+    assert 'id="story"' in story and "Why I built this" in story
+    main = (root / "main.py").read_text(encoding="utf-8")
+    at = main.index("st.markdown(story_html()")
+    assert main.index("st.markdown(about_html()") < at < main.index("st.markdown(faq_html()") \
+        < main.index('id="contact"'), "the story sits after About, before the questions and contact"
 
 
 def test_the_case_studies_read_the_live_record():

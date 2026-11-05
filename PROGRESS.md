@@ -4,6 +4,27 @@ Paste this into a new chat session to bring it up to speed instantly.
 
 ---
 
+## Start here: where things stand (updated 2026-11-05)
+
+- **Live:** https://summer-2026-quant-project-risk-engine-blueprint-production.up.railway.app
+  (Railway deploys `main`; the Live audit on `main` proves the deployed
+  build stamp, step 5).
+- **Done on 2026-11-05 (all merged):** the story cut (ME-28), the close
+  (About, questions, contact), nothing freezing when a drawer opens on an
+  iPhone, clean hairline drawers, John's bio and contact (his Gmail plus
+  Meliona support plus LinkedIn), the engine's controls in plain words, and
+  John's story with his second photo (below, in the done list).
+- **How work ships:** branch `claude/...` -> `python -m tools.check` -> draft
+  PR -> ready -> auto-merge on the required `live-audit` check -> Railway
+  deploys -> dispatch the Live audit on `main` and read step 5.
+- **Open, only when John asks:** the Pod 4 board card ("update the board").
+  Nothing else is pending.
+- **Rules that bite:** John's Gmail may appear only in the contact UI and
+  PRIVACY.md (never TERMS, SUPPORT or LAUNCH_CHECKLIST); capitals only in
+  the label voice; text colours must clear AA; anything a button flies to
+  is never animated; nothing above the tab strip may change the number of
+  top-level elements.
+
 ## What this project is
 
 **Meliona** is an institutional-grade **Portfolio Optimization & Risk Engine**
@@ -1102,6 +1123,25 @@ two paid-vendor-dependent pieces remain explicit backlog items:
   the stated blend (scipy ranks), GRIT-05 exactly the short histories
   excluded. A planted error in each part fails its check
   (`test_the_batch_audit_re_derives_every_grit_zone_number`).
+
+- ✅ **John's story: why Meliona exists (2026-11-05)**. John: "a story
+  place where we explain why we wanted to create this", near LinkedIn and
+  the contact form, with a second photo of him "when I'm not in my suit". A
+  new section between About the builder and the questions (`hero.story_html`,
+  `#story`): "Why I built this / Built for a question too many investors
+  share" - it starts with his dad's search for a stock to rely on for years
+  (John: mention his dad lightly, then speak to everyone with that problem),
+  grit (the stocks that are
+  not the best every year but get back up after every fall: the Grit Zone),
+  the linkage of a gritty anchor and an AI high-flyer at the same share of
+  risk, a flyer replaced by the one that works best with the anchor when
+  tested together, and the close: built for people like his dad - with one pulled line ("Not the best
+  every year. Back up after every fall.") and his signature. The photo is a
+  4:5 crop of his selfie, one global grade, no EXIF (`tools/portrait.py
+  --story`). Paper ground, a charcoal cap over the photo, Georgia for the
+  words; the pulled line is a `<p>`, since Streamlit greys a blockquote.
+  The test holds the story to the engine: no advice, no guarantee
+  (`test_johns_story_sits_beside_his_out_of_suit_photo_above_the_contact`).
 
 - ✅ **The engine's controls in plain words (2026-11-05)**. John: "simpler
   and easy for a user with limited technical skills". Each control a visitor
