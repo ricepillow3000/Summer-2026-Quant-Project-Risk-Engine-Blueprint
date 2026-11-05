@@ -39,7 +39,7 @@ from src.observability import (count_preset, count_session, host_setting, log_in
 from src.scenarios import HISTORICAL_REGIMES, replay_returns
 from hero import (N_PATHS, CONTACT_MAX, CONTACT_NAME_MAX, CONTACT_TOPICS, RESPONSE_TIME,
                   RESPONSE_WINDOW, about_html, contact_mailto, crest_engraving, faq_html,
-                  hero_html, profile_marks)
+                  hero_html, profile_marks, LINKEDIN_URL, CONTACT_EMAIL as _CONTACT_DEFAULT)
 from src.liquidity import (days_to_liquidate, liquidity_profile,
                            liquidity_adjusted_cvar)
 from src.grit import grit_scores, MIN_HISTORY_DAYS
@@ -70,13 +70,19 @@ def _ignore_clear_cache_request(self) -> None:
 AppSession._handle_clear_cache_request = _ignore_clear_cache_request
 
 # ---- Operations: kill switch, crash wire, session reference ----------------
-# SUPPORT_EMAIL is the one place the contact address lives; the footer, the
+# SUPPORT_EMAIL is the one place the support address lives; the footer, the
 # maintenance page, the feedback link and the privacy panel all read it from
 # here. A project mailbox rather than a personal one: it is published on a
 # public page, so it will attract spam, and a dedicated address can be
-# forwarded, filtered or handed on without touching a personal inbox.
+# forwarded, filtered or handed on without touching a personal inbox. (The
+# contact form is the exception, at John's choice: CONTACT_EMAIL below.)
 # MELIONA_SUPPORT_EMAIL overrides it per environment without a redeploy.
 SUPPORT_EMAIL = host_setting("SUPPORT_EMAIL", "meleona.support@gmail.com")
+# The contact form writes to John himself (hero.CONTACT_EMAIL, his personal
+# inbox, John 2026-11-05: "I'm more active there"); support mail - the
+# session reference, the maintenance page - stays on the project mailbox.
+# MELIONA_CONTACT_EMAIL overrides it per environment.
+CONTACT_EMAIL = host_setting("CONTACT_EMAIL", _CONTACT_DEFAULT)
 # John's support phone (2026-11-04), shown as a tap-to-call link beside the
 # email. It is published on a public page, so it will be scraped like the
 # email: MELIONA_SUPPORT_PHONE on the host replaces it, and "off" hides it,
@@ -2329,7 +2335,10 @@ st.markdown(faq_html(), unsafe_allow_html=True)
 # visit lasts, is never printed into the page, never logged, never stored.
 st.markdown(
     '<div class="contact-head" id="contact"><div class="kicker">Write to John</div>'
-    '<h2 class="showcase-title">Contact</h2><div class="ar-rule"></div>'
+    # a heading by role, not an <h2>: Streamlit gives every markdown heading
+    # an id made from its text, and "contact" would be this section's own id
+    # a second time (one element per id: tools/device_check.mjs)
+    '<div class="showcase-title" role="heading" aria-level="2">Contact</div><div class="ar-rule"></div>'
     f'<p class="contact-sub">{RESPONSE_TIME} Questions, feedback, recruiting or a '
     'problem with a number: write it here and your own email app sends it.</p></div>',
     unsafe_allow_html=True)
@@ -2346,8 +2355,11 @@ with _contact_slot:
             f'<b>{RESPONSE_WINDOW}</b></div>'
             '<div class="thanks-row"><span>Your session reference</span>'
             f'<b>{SESSION_REF}</b></div>'
-            f'<div class="thanks-row"><span>Or write to</span><b><a href="mailto:{SUPPORT_EMAIL}">'
-            f'{SUPPORT_EMAIL}</a></b></div></div>',
+            f'<div class="thanks-row"><span>Or write to</span><b><a href="mailto:{CONTACT_EMAIL}">'
+            f'{CONTACT_EMAIL}</a></b></div>'
+            '<div class="thanks-row"><span>Or message John</span><b><a href="'
+            f'{LINKEDIN_URL}" target="_blank" rel="noopener noreferrer me">on LinkedIn</a></b></div>'
+            '</div>',
             unsafe_allow_html=True)
         _ty1, _ty2 = st.columns([1, 1], width=720)
         with _ty1:
@@ -2373,7 +2385,7 @@ with _contact_slot:
                 _c_go = st.form_submit_button("Prepare my email", type="primary",
                                               key="contact_send")
             if _c_go:
-                _mail, _why = contact_mailto(SUPPORT_EMAIL, _c_name, _c_topic, _c_msg, SESSION_REF)
+                _mail, _why = contact_mailto(CONTACT_EMAIL, _c_name, _c_topic, _c_msg, SESSION_REF)
                 if _why:
                     st.error(_why, icon=":material/error:")
                 else:
@@ -2383,8 +2395,11 @@ with _contact_slot:
             st.markdown(
                 '<div class="contact-aside"><div class="thanks-row"><span>Response time</span>'
                 f'<b>{RESPONSE_WINDOW}</b></div>'
-                f'<div class="thanks-row"><span>Email</span><b><a href="mailto:{SUPPORT_EMAIL}">'
-                f'{SUPPORT_EMAIL}</a></b></div>'
+                f'<div class="thanks-row"><span>Email</span><b><a href="mailto:{CONTACT_EMAIL}">'
+                f'{CONTACT_EMAIL}</a></b></div>'
+                '<div class="thanks-row"><span>LinkedIn</span><b><a href="'
+                f'{LINKEDIN_URL}" target="_blank" rel="noopener noreferrer me">Message John</a>'
+                '</b></div>'
                 '<p class="contact-note">Nothing is sent from this page. The button opens an '
                 'email in your own app with your words filled in, so you see exactly what '
                 f'goes out. The limit is {CONTACT_MAX:,} characters.</p></div>',

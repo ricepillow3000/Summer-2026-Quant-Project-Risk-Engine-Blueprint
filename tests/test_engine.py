@@ -2742,6 +2742,12 @@ def test_launch_documents_exist_and_say_the_load_bearing_things():
 
     for doc in (privacy, terms, support, checklist):
         assert "meleona.support@gmail.com" in doc
+    # John chose (2026-11-05) to take contact-form mail at his own Gmail; the
+    # privacy policy must then say so, where it says where that email goes.
+    # Everywhere else support stays on the project mailbox, and his address
+    # appearing in any other public document is still a leak.
+    assert "john4000.nguyen@gmail.com" in privacy, "the policy must name where contact mail goes"
+    for doc in (terms, support, checklist):
         assert "john4000.nguyen@gmail.com" not in doc, (
             "a personal address leaked into a public document")
     # The mailbox is a manual, pre-launch step - the runbook must carry it.
@@ -6461,6 +6467,71 @@ def test_a_wide_block_never_turns_like_a_card_and_never_hangs_mid_turn():
     assert "el.style.removeProperty('--reveal-depth');" in js
 
 
+def test_what_the_reader_opens_never_animates_and_touch_screens_move_flat():
+    """John, 2026-11-05 (five iPhone screenshots): opening the Weights and
+    Stress test drawers, the Book's drawer, and the contact form left blocks
+    frozen part-way through their turn - squeezed, sideways, cut off at the
+    edge - and they stayed that way. Two rules: what a reader opens (a
+    drawer's body, a tab's panel) is never tagged for an arrival, and WebKit
+    (every iPhone/iPad browser, Safari) and touch screens get the same
+    arrivals as flat slides and rises, never a perspective turn."""
+    import re
+    root = pathlib.Path(__file__).resolve().parent.parent
+    js = (root / "static" / "reveal.js").read_text(encoding="utf-8")
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    opened = re.search(r"var OPENED = '([^']+)';", js).group(1)
+    assert '[data-testid="stExpanderDetails"]' in opened and '[data-testid="stTabPanel"]' in opened
+    assert "if (el.__rv || el.closest(SKIP) || el.closest(OPENED)) return;" in js
+    assert "var flat = 'GestureEvent' in W || !!(W.matchMedia && W.matchMedia('(pointer: coarse)').matches);" in js
+    assert js.index("if (calm)") < js.index("H.classList.add('reveal-flat')"), "flat is a kind of motion"
+    flat = re.findall(r"\.reveal-on\.reveal-flat \.reveal-item--(\w+)[^{]*\{([^}]*)\}", css)
+    kinds = set(re.findall(r"\.reveal-on\.reveal-flat \.reveal-item--(\w+)", css))
+    assert {"left", "right", "card", "flip"} <= kinds, kinds
+    for _, body in flat:
+        assert "perspective" not in body and "rotate" not in body and "scale" not in body, body
+    # same specificity as the landed state, so it must come first or it wins
+    assert css.index(".reveal-on.reveal-flat .reveal-item--left") < css.index(".reveal-on .reveal-item.is-visible")
+
+
+def test_drawers_and_tabs_are_stone_plaques_in_the_banners_palette():
+    """John, 2026-11-05: "make the drop down / tabs more noticeable, using our
+    design direction and color scheme and geometric patterns". A drawer's
+    header is stone under a 3px gold cap line with its words in paper; an open
+    drawer shows a row of the crest's rhombuses; the tab strip is stone under
+    the same cap line, the open tab a paper face with a gold rhombus. Every
+    colour is the banner's; nothing lifts on hover."""
+    import re
+    root = pathlib.Path(__file__).resolve().parent.parent
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    summ = re.search(r'\[data-testid="stExpander"\] summary \{([^}]*)\}', css).group(1)
+    assert "#2E2A25" in summ and "#EDE9E3" in summ and "3px solid #B8955E" in summ
+    rhombus = re.search(r'\[data-testid="stExpanderDetails"\]::before \{([^}]*)\}', css).group(1)
+    assert "M7 0L10.5 3.5L7 7L3.5 3.5Z" in rhombus and "%23B8955E" in rhombus and "gradient(" not in rhombus
+    strip = re.search(r'\[data-testid="stTabs"\] \[role="tablist"\] \{([^}]*)\}', css).group(1)
+    assert "#2E2A25" in strip and "3px solid #B8955E" in strip
+    assert re.search(r'\[data-testid="stTab"\]\[aria-selected="true"\] \{[^}]*#EDE9E3', css)
+    assert re.search(r'aria-selected="true"\] \[data-testid="stMarkdownContainer"\] p::before \{[^}]*rotate\(45deg\)', css)
+
+
+def test_the_contact_form_writes_to_john_and_linkedin_is_the_second_way():
+    """John, 2026-11-05: his personal email for contact ("I'm more active
+    there") and LinkedIn as a way of communicating too. The form, its aside,
+    the thank-you state and public/thanks.html use CONTACT_EMAIL; support mail
+    stays on the project mailbox. The title is a heading by role, so the page
+    has one #contact (Streamlit's automatic heading anchor made a second)."""
+    import hero
+    root = pathlib.Path(__file__).resolve().parent.parent
+    src = (root / "main.py").read_text(encoding="utf-8")
+    assert hero.CONTACT_EMAIL == "john4000.nguyen@gmail.com"
+    assert 'CONTACT_EMAIL = host_setting("CONTACT_EMAIL", _CONTACT_DEFAULT)' in src
+    assert "contact_mailto(CONTACT_EMAIL," in src and "contact_mailto(SUPPORT_EMAIL" not in src
+    assert src.count("mailto:{CONTACT_EMAIL}") == 2 and src.count("{LINKEDIN_URL}") == 2
+    assert '<div class="showcase-title" role="heading" aria-level="2">Contact</div>' in src
+    assert hero.LINKEDIN_URL in dict((n, u) for n, u, _ in hero.PROFILE_LINKS).values()
+    assert "Computer Information Systems" in hero.PERSON_ROLE and "AI & Analytics" in hero.ABOUT_BIO
+    assert "&amp; Analytics" in hero.about_html(), "the bio's ampersand is escaped in the page"
+
+
 def test_the_browser_audit_runs_on_an_os_its_playwright_supports():
     """2026-11-04: GitHub's ubuntu-latest became 26.04 and Playwright 1.56.1
     refused to install Chromium there, so every browser step of the Live audit
@@ -6818,7 +6889,7 @@ def test_the_thank_you_page_is_branded_noindexed_and_says_when_john_replies():
     root = pathlib.Path(__file__).resolve().parent.parent
     page = (root / "public" / "thanks.html").read_text(encoding="utf-8")
     assert '<meta name="robots" content="noindex">' in page
-    assert hero.RESPONSE_WINDOW in page and "meleona.support@gmail.com" in page
+    assert hero.RESPONSE_WINDOW in page and hero.CONTACT_EMAIL in page
     assert 'href="/"' in page and "#2E2A25" in page and "#B8955E" in page
     for _, url, _ in hero.PROFILE_LINKS:
         assert url in page

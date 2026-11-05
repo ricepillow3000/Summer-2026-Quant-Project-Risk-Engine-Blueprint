@@ -1,6 +1,6 @@
 # Meliona: portfolio optimization and risk engine
 
-A quantitative risk dashboard that lets anyone load a portfolio (equities, ETFs, FX or futures) and stress-test it against thousands of simulated and historical market paths, live. Built by a 2nd-year Data Analytics student to recruiter-facing, quant-interview standards.
+A quantitative risk dashboard that lets anyone load a portfolio (equities, ETFs, FX or futures) and stress-test it against thousands of simulated and historical market paths, live. Built to recruiter-facing, quant-interview standards by a Computer Information Systems student specializing in AI & Analytics.
 
 Live: https://summer-2026-quant-project-risk-engine-blueprint-production.up.railway.app
 

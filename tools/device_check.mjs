@@ -239,7 +239,8 @@ for (const dev of names) {
   const tabs = await page.$$('[role=tab]');
   for (let i = 0; i < tabs.length; i++) states.push([`tab ${i + 1}/${tabs.length}`, i]);
 
-  const found = { words: new Set(), overText: new Set(), clipped: new Set(), covered: new Set() };
+  const found = { words: new Set(), overText: new Set(), clipped: new Set(), covered: new Set(),
+                  ids: new Set(), opened: new Set() };
   let sideways = 0;
   for (const [, ti] of states) {
     if (ti !== null) {
@@ -255,6 +256,21 @@ for (const dev of names) {
     // state each one lands in. A reveal moves only opacity and transform, never
     // layout, so this is the page the visitor sees once scrolled to each block -
     // and a block still waiting below the screen (opacity 0) is not skipped.
+    // Before landing anything: what the reader opened (a drawer's body, a
+    // tab's panel) is simply there - never waiting for an arrival (John's
+    // iPhone, 2026-11-05: blocks frozen mid-turn in every opened drawer).
+    (await page.evaluate(() => [...document.querySelectorAll(
+      '[data-testid="stExpanderDetails"] .reveal-item, [data-testid="stTabPanel"] .reveal-item')]
+      .map(e => (e.innerText || e.dataset.testid || e.tagName).trim().replace(/\s+/g, ' ').slice(0, 30))))
+      .forEach(x => found.opened.add(x));
+    // One element per id: Streamlit's automatic heading anchor once gave the
+    // Contact heading a second "contact" beside the section's own. Left out:
+    // st.dataframe's grid (Glide Data Grid) numbers its cells glide-cell-x-y
+    // inside every table, a library's own ids no page change can reach.
+    (await page.evaluate(() => { const n = {};
+      document.querySelectorAll('[id]').forEach(e => {
+        if (e.id && !e.id.startsWith('glide-cell-')) n[e.id] = (n[e.id] || 0) + 1; });
+      return Object.keys(n).filter(k => n[k] > 1); })).forEach(x => found.ids.add(x));
     await landed(page);
     const m = await page.evaluate(measure);
     sideways = Math.max(sideways, m.sideways);
@@ -276,6 +292,8 @@ for (const dev of names) {
   ok(!found.covered.size, `${tag}: every button, tab and link clickable where drawn${found.covered.size ? ` (${found.covered.size}: ${list(found.covered)})` : ''}`);
   ok(!found.clipped.size, `${tag}: no text cut off${found.clipped.size ? ` (${found.clipped.size}: ${list(found.clipped)})` : ''}`);
   ok(!errors.length, `${tag}: no script errors${errors.length ? ` (${errors.slice(0, 2)})` : ''}`);
+  ok(!found.opened.size, `${tag}: what a drawer or tab opens is there at once${found.opened.size ? ` (${found.opened.size}: ${list(found.opened)})` : ''}`);
+  ok(!found.ids.size, `${tag}: no two elements share an id${found.ids.size ? ` (${list(found.ids)})` : ''}`);
   await ctx.close();
 }
 await browser.close();

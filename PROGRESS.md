@@ -7,7 +7,7 @@ Paste this into a new chat session to bring it up to speed instantly.
 ## What this project is
 
 **Meliona** is an institutional-grade **Portfolio Optimization & Risk Engine**
-with a live Streamlit dashboard, built by a 2nd-year Data Analytics student to
+with a live Streamlit dashboard, built by a Computer Information Systems student (AI & Analytics) to
 be recruiter-facing (the goal is a public live link on a resume). The name
 merges "Durand" (Old French, "enduring/built to withstand hard times") with
 "Mereoleona" (mother lioness) - it ties into the existing lion-crest logo and
@@ -1102,6 +1102,23 @@ two paid-vendor-dependent pieces remain explicit backlog items:
   the stated blend (scipy ranks), GRIT-05 exactly the short histories
   excluded. A planted error in each part fails its check
   (`test_the_batch_audit_re_derives_every_grit_zone_number`).
+
+- ✅ **Nothing freezes when a drawer opens; drawers and tabs stand out
+  (2026-11-05)**. John's iPhone screenshots: the Weights and Stress test
+  drawers, the Book's drawer and the contact form showed blocks frozen
+  part-way through their arrival - squeezed, sideways, cut off at the edge -
+  and a drawer header frozen as a sliver. Chromium never froze (no WebKit
+  here to run), so the fix removes the conditions: what a reader opens (a
+  drawer's body, a tab's panel) is never tagged for an arrival, and WebKit
+  and touch screens get flat slides and rises with no perspective turn.
+  device_check now fails on a tagged block inside opened content and on two
+  elements sharing an id - the Contact heading had Streamlit's automatic
+  anchor "contact" beside the section's own (now a heading by role). Drawers
+  became the banner's stone plaques (gold cap line, paper words, a row of the
+  crest's rhombuses when open) and the tab strip a stone band with a paper
+  face for the open tab. John's bio now reads Computer Information Systems,
+  specializing in AI & Analytics; the contact form writes to his own Gmail
+  (his choice) with LinkedIn as the second way to reach him.
 
 - ✅ **An early button press is never lost (2026-11-05)**. The Live audit
   (step 8c, early) saw "Skip to the analysis" pressed while the page was still
