@@ -149,109 +149,113 @@ class SentenceKey(str, Enum):
 # already contain. Every verb here describes something that has been measured.
 SENTENCES: dict[SentenceKey, str] = {
     SentenceKey.FLYER_PAIRED: (
-        "{ticker} carries {final_weight:.1%} of the book and would clear "
-        "{exit_bucket} at {participation_rate:.0%} of its quiet-tape volume. "
-        "It ranks {momentum_rank} of {n_eligible} eligible names on "
-        "{momentum_lookback}-day return to {momentum_skip} days ago per unit of "
-        "volatility "
-        "({momentum_per_vol:+.2f}), and it has a recovery record: grit "
-        "{grit_score:.0f} of 100 across {n_universe} names. It is paired with "
-        "{partner}, whose own tail is {tail_gap_pts:.1f} points shallower at ES 97.5."
+        "{ticker} leads: it ranks {momentum_rank} of {n_eligible} names on "
+        "its climb over the {momentum_lookback} trading days that ended "
+        "{momentum_skip} days ago, measured against its swings "
+        "({momentum_per_vol:+.2f}). It holds {final_weight:.1%} of the book and "
+        "could be sold {exit_bucket}, trading {participation_rate:.0%} of a "
+        "quiet day's volume. Recovery record: grit {grit_score:.0f} of 100 "
+        "among {n_universe} names. Its anchor is {partner}, whose tail ("
+        "average loss on the worst 2.5 in 100 days) is {tail_gap_pts:.1f} "
+        "points shallower."
     ),
     SentenceKey.FLYER_PAIRED_DEEPER: (
-        "{ticker} carries {final_weight:.1%} of the book and would clear "
-        "{exit_bucket} at {participation_rate:.0%} of its quiet-tape volume. "
-        "It ranks {momentum_rank} of {n_eligible} eligible names on "
-        "{momentum_lookback}-day return to {momentum_skip} days ago per unit of "
-        "volatility "
-        "({momentum_per_vol:+.2f}), and it has a recovery record: grit "
-        "{grit_score:.0f} of 100 across {n_universe} names. Its anchor "
-        "{partner} won the screen on factor independence and steadiness, but "
-        "its own tail is {tail_gap_abs_pts:.1f} points deeper at ES 97.5, so on "
-        "this measure the pairing does not thin the tail."
+        "{ticker} leads: it ranks {momentum_rank} of {n_eligible} names on "
+        "its climb over the {momentum_lookback} trading days that ended "
+        "{momentum_skip} days ago, measured against its swings "
+        "({momentum_per_vol:+.2f}). It holds {final_weight:.1%} of the book and "
+        "could be sold {exit_bucket}, trading {participation_rate:.0%} of a "
+        "quiet day's volume. Recovery record: grit {grit_score:.0f} of 100 "
+        "among {n_universe} names. Its anchor {partner} won the anchor screen "
+        "by moving least with the basket and swinging least, but its own tail "
+        "is {tail_gap_abs_pts:.1f} points deeper (average loss on the worst "
+        "2.5 in 100 days), so on this measure the pairing does not soften the "
+        "worst days."
     ),
     SentenceKey.FLYER_UNPAIRED: (
-        "{ticker} carries {final_weight:.1%} of the book and would clear "
-        "{exit_bucket}. It ranks {momentum_rank} of {n_eligible} on "
-        "{momentum_lookback}-day return to {momentum_skip} days ago per unit of "
-        "volatility "
-        "({momentum_per_vol:+.2f}). No eligible name cleared the anchor screen "
-        "beside it, so it is shown unpaired rather than paired with a name that "
-        "did not qualify."
+        "{ticker} leads: it holds {final_weight:.1%} of the book and could be "
+        "sold {exit_bucket}. It ranks {momentum_rank} of {n_eligible} on its "
+        "climb over the {momentum_lookback} trading days that ended "
+        "{momentum_skip} days ago, measured against its swings "
+        "({momentum_per_vol:+.2f}). No name passed the anchor screen beside "
+        "it, so it stands alone rather than beside a name that did not qualify."
     ),
     SentenceKey.CUSHION_ANCHOR: (
-        "{ticker} is the anchor beside {partner}. Among the grittiest half of "
-        "the eligible names it came top of the anchor screen at "
-        "{anchor_score:.0f} of 100 (least tied to the dominant factor, "
-        "steadiest, thinnest own tail), with grit {grit_score:.0f} of 100 "
-        "across {n_universe} names. It holds {final_weight:.1%} of the book, "
-        "clears {exit_bucket}, and its tail sits {tail_gap_pts:.1f} points shallower at "
-        "ES 97.5 than the name beside it."
+        "{ticker} anchors {partner}. Among the grittiest half of the names that "
+        "can be held, it scored highest on the anchor screen, "
+        "{anchor_score:.0f} of 100: it moves least with the rest of the basket, "
+        "swings least and has the mildest worst days. Recovery record: grit "
+        "{grit_score:.0f} of 100 among {n_universe} names. It holds "
+        "{final_weight:.1%} of the book, could be sold {exit_bucket}, and its "
+        "tail (average loss on the worst 2.5 in 100 days) is "
+        "{tail_gap_pts:.1f} points shallower than its partner's."
     ),
     SentenceKey.CUSHION_ANCHOR_DEEPER: (
-        "{ticker} is the anchor beside {partner}. Among the grittiest half of "
-        "the eligible names it came top of the anchor screen at "
-        "{anchor_score:.0f} of 100 (least tied to the dominant factor, "
-        "steadiest), with grit {grit_score:.0f} of 100 across {n_universe} "
-        "names. It holds {final_weight:.1%} of the book and clears "
-        "{exit_bucket}. Its own tail is {tail_gap_abs_pts:.1f} points deeper at ES 97.5 "
-        "than the name it sits beside, so it earns its place on independence "
-        "rather than on a thinner tail."
+        "{ticker} anchors {partner}. Among the grittiest half of the names that "
+        "can be held, it scored highest on the anchor screen, "
+        "{anchor_score:.0f} of 100: it moves least with the rest of the basket "
+        "and swings least. Recovery record: grit {grit_score:.0f} of 100 among "
+        "{n_universe} names. It holds {final_weight:.1%} of the book and could "
+        "be sold {exit_bucket}. Its own tail is {tail_gap_abs_pts:.1f} points "
+        "deeper than its partner's (average loss on the worst 2.5 in 100 "
+        "days), so it earns its place by moving apart from the basket, not by "
+        "milder worst days."
     ),
     SentenceKey.EXCLUDED_NO_VOLUME: (
-        "{ticker} reports no volume on this feed, so the exit horizon cannot be "
-        "computed at all. It is left out rather than assigned a filled-in number."
+        "{ticker} reports no trading volume on this feed, so how long it would "
+        "take to sell cannot be worked out. It is left out rather than given a "
+        "made-up number."
     ),
     SentenceKey.EXCLUDED_SHORT_HISTORY: (
-        "{ticker} has too little price history to measure a recovery record, so "
-        "it is left out of the ranking rather than scored as though it had one."
+        "{ticker} has too little price history to measure how it recovers from "
+        "a fall, so it is left out of the ranking rather than scored as though "
+        "it had a record."
     ),
     SentenceKey.EXCLUDED_CAPACITY: (
-        "{ticker} absorbs {capacity_weight_per_day:.2%} of a "
-        "${book_value:,.0f} book per day of exiting, so a position worth "
-        "holding cannot be left within {max_exit_days:.0f} day(s). It drops out "
-        "of this book above ${book_breakpoint:,.0f}."
+        "{ticker} can be sold at a pace of only {capacity_weight_per_day:.2%} of a "
+        "${book_value:,.0f} book a day, so a position worth holding could not "
+        "be sold within {max_exit_days:.0f} day(s). It drops out once the book "
+        "is above ${book_breakpoint:,.0f}."
     ),
     SentenceKey.EXCLUDED_MOMENTUM: (
-        "{ticker} clears the liquidity and history gates (it would leave "
-        "{exit_bucket}, grit {grit_score:.0f} of 100), but its "
-        "{momentum_lookback}-day return to {momentum_skip} days ago per unit of "
-        "volatility is "
-        "{momentum_per_vol:+.2f}. It is not rising, so it is not offered as a "
-        "high-flyer."
+        "{ticker} passes the volume and history checks (it could be sold "
+        "{exit_bucket}; grit {grit_score:.0f} of 100), but its climb over the "
+        "{momentum_lookback} trading days that ended {momentum_skip} days ago, "
+        "measured against its swings, is {momentum_per_vol:+.2f}. It is not "
+        "rising, so it is not offered as a high-flyer."
     ),
     SentenceKey.FLYER_PAIRED_EXTERNAL: (
-        "{ticker} carries {final_weight:.1%} of the book and would clear "
-        "{exit_bucket} at {participation_rate:.0%} of its quiet-tape volume. "
-        "It ranks {momentum_rank} of {n_eligible} eligible names on "
-        "{momentum_lookback}-day return to {momentum_skip} days ago per unit of "
-        "volatility "
-        "({momentum_per_vol:+.2f}), with grit {grit_score:.0f} of 100 across "
-        "{n_universe} names. Nothing in the chosen universe thinned its tail, "
-        "so the anchor beside it is {partner}, a defensive holding from "
-        "outside that universe, whose own tail is {tail_gap_pts:.1f} points shallower at "
-        "ES 97.5."
+        "{ticker} leads: it ranks {momentum_rank} of {n_eligible} names on "
+        "its climb over the {momentum_lookback} trading days that ended "
+        "{momentum_skip} days ago, measured against its swings "
+        "({momentum_per_vol:+.2f}). It holds {final_weight:.1%} of the book and "
+        "could be sold {exit_bucket}, trading {participation_rate:.0%} of a "
+        "quiet day's volume. Recovery record: grit {grit_score:.0f} of 100 "
+        "among {n_universe} names. Nothing in your list softened its worst "
+        "days, so its anchor is {partner}, a steady holding that is not on your "
+        "list, whose tail (average loss on the worst 2.5 in 100 days) is "
+        "{tail_gap_pts:.1f} points shallower."
     ),
     SentenceKey.CUSHION_ANCHOR_EXTERNAL: (
-        "{ticker} is a defensive holding from outside the chosen universe, "
-        "brought in as the anchor beside {partner} only because no name in "
-        "that universe had a thinner tail. It scores {anchor_score:.0f} of 100 "
-        "on the anchor screen, holds {final_weight:.1%} of the book, clears "
-        "{exit_bucket}, and its tail sits {tail_gap_pts:.1f} points shallower at ES 97.5 "
-        "than the name beside it."
+        "{ticker} is a steady holding from outside your list, brought in to "
+        "anchor {partner} only because no name in your list had milder worst "
+        "days. It scores {anchor_score:.0f} of 100 on the anchor screen, holds "
+        "{final_weight:.1%} of the book, could be sold {exit_bucket}, and its "
+        "tail (average loss on the worst 2.5 in 100 days) is "
+        "{tail_gap_pts:.1f} points shallower than its partner's."
     ),
     SentenceKey.EXCLUDED_GRIT_FLOOR: (
-        "{ticker} is rising ({momentum_lookback}-day return to {momentum_skip} "
-        "days ago per unit of "
-        "volatility {momentum_per_vol:+.2f}) and would leave {exit_bucket}, "
-        "but grit {grit_score:.0f} of 100 puts it outside the grittiest half "
-        "of the eligible names, and the grit floor is on."
+        "{ticker} is rising (its climb over the {momentum_lookback} trading "
+        "days that ended {momentum_skip} days ago, measured against its swings, "
+        "is {momentum_per_vol:+.2f}) and could be sold {exit_bucket}, but grit "
+        "{grit_score:.0f} of 100 puts it outside the grittiest half of the "
+        "names that can be held, and the grit floor is on."
     ),
     SentenceKey.EXCLUDED_RANK: (
-        "{ticker} clears every gate (it would leave {exit_bucket}, grit "
-        "{grit_score:.0f} of 100) but did not rank in the top "
-        "{n_flyers} on {momentum_lookback}-day return to {momentum_skip} days ago "
-        "per unit of volatility."
+        "{ticker} passes every check (it could be sold {exit_bucket}; grit "
+        "{grit_score:.0f} of 100) but did not rank in the top {n_flyers} on its "
+        "climb over the {momentum_lookback} trading days that ended "
+        "{momentum_skip} days ago, measured against its swings."
     ),
 }
 
@@ -702,10 +706,11 @@ def headline(book: list[TickerDossier]) -> str:
     d = book[0]
     # An outside anchor is not one of the universe's names (ME-08).
     n_ok = sum(1 for x in book if x.eligible and not x.is_fallback_anchor)
+    days = f"{d.max_exit_days:.0f} day" + ("" if f"{d.max_exit_days:.0f}" == "1" else "s")
     line = (f"${d.book_value:,.0f} book: {n_ok} of your {d.n_universe} names "
-            f"hold a position worth keeping and leave within "
-            f"{d.max_exit_days:.0f} day(s) at {d.participation_rate:.0%} of "
-            f"quiet-tape volume.")
+            f"hold a position worth keeping and can be sold within {days}, "
+            f"trading at most {d.participation_rate:.0%} of a quiet day's volume "
+            f"(only 5 in 100 of the last {ADV_LOOKBACK_DAYS} trading days trade less).")
     # The count is of the visitor's names; an outside anchor also holds part
     # of the same book, so it is named with its weight beside the count.
     out = [x for x in book if x.is_fallback_anchor]
@@ -714,5 +719,5 @@ def headline(book: list[TickerDossier]) -> str:
         weights = " and ".join(f"{x.final_weight:.1%}" for x in out)
         one = len(out) == 1
         line += (f" {names}, {'an anchor' if one else 'anchors'} from outside "
-                 f"your universe, {'holds' if one else 'hold'} {weights} of the book.")
+                 f"your list, {'holds' if one else 'hold'} {weights} of the book.")
     return line

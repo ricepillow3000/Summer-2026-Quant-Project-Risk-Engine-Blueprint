@@ -1,0 +1,94 @@
+<!doctype html>
+<!-- Source of docs/brand/linkedin-banner.png (1584x396) and @2x (3168x792):
+     John's LinkedIn profile cover (2026-11-05). tools/brand_icons.mjs puts the
+     crest from assets/logo.svg where the CREST comments sit and renders it.
+
+     The share banner's system (tools/og_image.html), recut for a strip:
+     paper, a charcoal stone block with the live-audit receipt, the faint crest
+     engraved behind it, a stone plinth with a gold cap, Georgia's metric twin
+     (Gelasio) for words and Helvetica's design (FreeSans) for labels.
+     LinkedIn lays the profile photo over the lower left (about 0-420px wide on
+     desktop, and centred-left on a phone), so that corner carries nothing but
+     paper and the plinth; the words start at 460px.
+
+     The receipt's figures are copied from audit/live_audit_2026-10-15T025826Z.md,
+     the same audit the share image quotes; update both together. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Gelasio:wght@400;700&display=block" rel="stylesheet">
+<style>
+:root {
+  --paper: #EDE9E3; --ink: #3F3B35; --ink-2: #5D574D; --bronze-text: #6A5030;
+  --stone: #2E2A25; --stone-deep: #26221E; --gold-text: #C6A26B; --gold-rule: #B8955E;
+  --serif: 'Gelasio', Georgia, serif;
+  --sans: FreeSans, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1584px; height: 396px; overflow: hidden; background: var(--paper); }
+body { position: relative; color: var(--ink); font-family: var(--serif);
+       font-variant-numeric: lining-nums tabular-nums; -webkit-font-smoothing: antialiased; }
+
+.plinth { position: absolute; left: 0; right: 0; bottom: 0; height: 30px; background: var(--stone-deep); }
+.plinth::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: var(--gold-rule); }
+
+.stone { position: absolute; top: 0; right: 0; bottom: 30px; width: 520px; background: var(--stone); overflow: hidden; }
+.stone svg.engraving { position: absolute; left: 50%; top: 50%; width: 300px; height: 300px;
+                       transform: translate(-50%, -50%); }
+
+.field { position: absolute; left: 460px; top: 52px; width: 560px; }
+.mark { display: flex; align-items: center; gap: 16px; }
+.mark svg { width: 64px; height: 64px; flex: none; }
+.kicker { font: 700 13px/1.5 var(--sans); letter-spacing: .2em; text-transform: uppercase;
+          color: var(--bronze-text); border-left: 3px solid var(--stone); padding-left: 12px; }
+h1 { font: 700 92px/0.9 var(--serif); letter-spacing: -0.035em; color: var(--ink); margin: 26px 0 0 -4px; }
+.rule { position: relative; height: 3px; margin-top: 20px; }
+.rule::before { content: ""; position: absolute; left: 0; right: 0; top: 1px; height: 1px; background: var(--ink); opacity: .28; }
+.rule::after { content: ""; position: absolute; left: 0; top: 0; width: 120px; height: 3px; background: var(--stone); }
+.claim { font: 400 20px/1.4 var(--serif); color: var(--ink-2); margin-top: 16px; max-width: 540px; }
+.claim b { font-weight: 700; color: var(--ink); }
+
+.receipt { position: absolute; top: 46px; right: 56px; width: 408px; color: var(--paper); }
+.receipt h2 { font: 700 13px/1.4 var(--sans); letter-spacing: .2em; text-transform: uppercase;
+              color: var(--gold-text); padding-bottom: 12px; border-bottom: 3px solid var(--gold-rule); }
+.row { display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 12px;
+       padding: 13px 0 12px; border-bottom: 1px solid rgba(237, 233, 227, .18); }
+.row span { font: 400 17px/1.3 var(--serif); color: #D8D1C5; white-space: nowrap; }
+.row b { font: 700 20px/1.3 var(--serif); color: var(--paper); white-space: nowrap; }
+.row.lead b { font-size: 34px; line-height: 1; color: var(--gold-text); }
+.by { font: 700 12px/1 var(--sans); letter-spacing: .2em; text-transform: uppercase; color: var(--gold-text);
+      margin-top: 16px; }
+</style>
+</head>
+<body>
+<div class="stone">
+  <svg class="engraving" viewBox="-40 -40 80 80" aria-hidden="true">
+    <g fill="none" stroke="#C6A26B" stroke-opacity=".1" stroke-width=".35">
+      <polygon points="0,-35 27.358,-19.205 0,-3.409 -27.358,-19.205"/>
+      <polygon points="0,-2.309 4,0 0,2.309 -4,0"/>
+      <polygon points="0,35 27.358,19.205 0,3.409 -27.358,19.205"/>
+      <polygon points="-5.905,0 -30.311,-14.091 -30.311,14.091"/>
+      <polygon points="5.905,0 30.311,-14.091 30.311,14.091"/>
+    </g>
+  </svg>
+</div>
+
+<div class="field">
+  <div class="mark"><!--CREST--><p class="kicker">Portfolio risk engine<br>on live end-of-day data</p></div>
+  <h1>Meliona</h1>
+  <div class="rule"></div>
+  <p class="claim">How much could a portfolio lose in a bad year, and what did real crashes do to it? <b>Every number traced to its source.</b></p>
+</div>
+
+<div class="receipt">
+  <h2>Live audit on Yahoo Finance data</h2>
+  <div class="row lead"><span>Audit checks passed</span><b>727 of 728</b></div>
+  <div class="row"><span>Prices vs Yahoo's raw feed</span><b>identical</b></div>
+  <div class="row"><span>Real crises replayed</span><b>10</b></div>
+  <p class="by">Built by John Nguyen</p>
+</div>
+
+<div class="plinth"></div>
+</body>
+</html>

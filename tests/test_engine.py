@@ -2921,9 +2921,13 @@ def test_captions_and_small_labels_clear_aa_after_their_opacity():
 # (#F1EDE5) and a tile (#E9E4DB). Dark: the charcoal bands and the footer.
 BEIGE_GROUNDS = ("#EDE9E3", "#F1EDE5", "#E9E4DB", "#D4CDBF")
 CHARCOAL = "#3F3B35"
-# Selectors whose words sit on a charcoal band: the showcase band, the footer
-# and the boot veil's status line (painted over the band's stand-in).
-ON_DARK = (".showcase-row", ".meliona-footer", ".sk-load")
+# Selectors whose words sit on a charcoal band: the showcase band, the footer,
+# the boot veil's status line (painted over the band's stand-in), the hero's
+# receipt, the About block (ME-28 part 4) and the stone half of
+# public/thanks.html. #3F3B35 is the lightest stone on the page (the bands are
+# now #2E2A25 and #26221E), so clearing it clears them all.
+ON_DARK = (".showcase-row", ".meliona-footer", ".sk-load", ".hero-stats", ".hreceipt", ".hstat",
+           ".about-band", ".stone")
 
 
 def _text_colour_failures(css: str) -> list:
@@ -2964,6 +2968,7 @@ def test_text_colours_meet_wcag_aa():
     root = pathlib.Path(__file__).resolve().parent.parent
     css = (root / "static" / "app.css").read_text(encoding="utf-8")
     page404 = (root / "public" / "404.html").read_text(encoding="utf-8")
+    thanks = (root / "public" / "thanks.html").read_text(encoding="utf-8")
 
     # sanity: the formula agrees with the published reference pair
     assert abs(_contrast("#FFFFFF", "#000000") - 21.0) < 0.01
@@ -2974,7 +2979,7 @@ def test_text_colours_meet_wcag_aa():
     assert _text_colour_failures(".x { color: #B4AB9B; }")
     assert _text_colour_failures(".b:hover { background-color: #9A7B4F; color: #241F1A; }")
 
-    bad = _text_colour_failures(css) + _text_colour_failures(page404)
+    bad = _text_colour_failures(css) + _text_colour_failures(page404) + _text_colour_failures(thanks)
     assert not bad, bad
     sub = _re.search(r"\.panel-head \.s\s*\{[^}]*?(?<![-\w])color:\s*(#[0-9A-Fa-f]{6})", css)
     assert sub and _contrast(sub.group(1), "#EDE9E3") >= 4.5, \
@@ -3128,22 +3133,38 @@ def test_no_negative_letter_spacing_anywhere():
         assert not hits, f"{name}: negative letter-spacing {hits}"
 
 
-def test_uppercase_is_kept_to_the_verdict_label():
+def test_capitals_speak_only_in_the_banners_label_voice():
     """2026-11-04: 19 rules set labels, buttons, CTAs, the footer and the
-    "Updating" tag in tracked capitals, and the map spelled its canvas labels
-    out letter by letter (spacedText). Capitals are kept for the verdict's
-    label alone. (The tab strip was meant to be the other place, but its rules
-    targeted Streamlit's old baseweb tabs and had matched nothing since 1.66,
-    so the strip has read in sentence case all along; it stays that way.)"""
+    "Updating" tag in tracked capitals, each its own size, weight and
+    spacing, and the map spelled its canvas labels out letter by letter
+    (spacedText) - the generated-page look. Capitals were kept for the
+    verdict's label alone.
+
+    2026-11-05 (ME-28, John: "the entire website's design matches the design
+    of our banner"): the share banner speaks its labels in ONE voice - bold
+    Helvetica, 12-14px, capitals tracked .2em - and the site now takes that
+    voice for its kickers, the labels over numbers, buttons and tabs. So
+    capitals are allowed in exactly that shape and no other: every rule that
+    sets capitals sets the Helvetica stack, weight 700, .2em tracking and a
+    12-14px size; nothing is tracked without being that label; and the map,
+    the 404 and the copy in main.py still never set capitals themselves."""
     import re as _re
     css, page, p404, main = _design_files()
-    allowed = (".verdict-label",)
     rules = _re.findall(r"([^{}]+)\{([^}]*)\}", _re.sub(r"/\*.*?\*/", "", css, flags=_re.S))
-    caps = [sel.strip() for sel, body in rules if _re.search(r"text-transform:\s*uppercase", body)]
-    assert caps and all(sel in allowed for sel in caps), f"capitals outside the allowed two: {caps}"
+    caps = [(sel.strip(), body) for sel, body in rules if _re.search(r"text-transform:\s*uppercase", body)]
+    assert len(caps) >= 8, "the label voice is missing from the stylesheet"
+    for sel, body in caps:
+        where = sel[-70:]
+        assert "Helvetica" in body, f"{where}: capitals outside the label voice's Helvetica"
+        assert _re.search(r"font-weight:\s*700", body), f"{where}: capitals that are not bold"
+        assert _re.search(r"letter-spacing:\s*\.2em", body), f"{where}: capitals not tracked .2em"
+        size = _re.search(r"font-size:\s*([\d.]+)rem", body)
+        assert size and 12 <= float(size.group(1)) * 16 <= 14, f"{where}: a label outside 12-14px"
+    voiced = {sel for sel, _ in caps}
     tracked = [sel.strip() for sel, body in rules
-               if _re.search(r"letter-spacing:\s*0?\.\d*[1-9]", body) and sel.strip() not in allowed]
-    assert not tracked, f"tracked (letter-spaced) text outside the capitals: {tracked}"
+               if _re.search(r"letter-spacing:\s*0?\.\d*[1-9]", body) and sel.strip() not in voiced
+               and "inherit" not in body]
+    assert not tracked, f"tracked (letter-spaced) text outside the label voice: {tracked}"
     for name, text in (("war_room.html", page), ("404.html", p404), ("main.py", main)):
         assert not _re.search(r"text-transform:\s*uppercase", text), f"{name} sets capitals"
     assert "toUpperCase" not in page and "spacedText" not in page, "the map spells labels out in capitals"
@@ -3171,16 +3192,12 @@ def test_no_decorative_gradients_glass_or_grain():
         assert "feTurbulence" not in text and "--grain" not in text, f"{name}: film grain is back"
     assert "gradient(" not in _style_of(page) + _style_of(p404), "a gradient in the map or the 404"
     assert "--bronzehi" not in page and "#C9A227" not in page, "the off-palette gold is back"
-    # main.py: only the photo scrims (each paired with a static/ photo), the
-    # Slice's fade into its own ground, and the cone's colour key - a legend
-    # sampled from the flow's own colour scale (FluidX3D's key), not a decoration
+    # main.py: none at all (ME-28, 2026-11-05: the photo scrims and the
+    # Slice's fade went with the photographs; the page is flat paper and stone)
     tree = ast.parse(main)
-    fade = {id(n.value) for n in ast.walk(tree) if isinstance(n, ast.Assign)
-            and any(getattr(t, "id", "") == "_gungnir_fade" for t in n.targets)}
     for n in ast.walk(tree):
-        if isinstance(n, ast.Constant) and isinstance(n.value, str) and "gradient(" in n.value:
-            assert "url(app/static/" in n.value or id(n) in fade or n.value.startswith('<span class="flow-ramp"'), \
-                f"main.py line {n.lineno}: a gradient that is not a photo scrim"
+        if isinstance(n, ast.Constant) and isinstance(n.value, str):
+            assert "gradient(" not in n.value, f"main.py line {n.lineno}: a decorative gradient"
     # no lift, sheen or halo on hover: feedback is a colour change
     for sel, body in _re.findall(r"([^{}]+)\{([^}]*)\}", clean):
         if ":hover" in sel:
@@ -3313,8 +3330,9 @@ def test_type_follows_the_readers_font_size_and_stays_readable():
     map_sizes += [float(v) for v in _re.findall(r"font = '([\d.]+)px", page)]
     map_sizes += [float(v) for v in _re.findall(r'font-size="([\d.]+)"', page)]
     assert map_sizes and min(map_sizes) >= 10, f"map text under 10px: {min(map_sizes)}"
-    role = _re.search(r"flex:0 0 86px;font-family:Helvetica Neue,sans-serif;'\s*f'font-size:([\d.]+)px", main)
-    assert role and float(role.group(1)) >= 11, "the Book's role labels are under 11px"
+    role = _re.search(r"\.book-role \{[^}]*font-size:\s*([\d.]+)rem", css)
+    assert role and float(role.group(1)) * 16 >= 11, "the Book's role labels are under 11px"
+    assert 'class="book-role"' in main, "the Book's role label moved out of its rule"
 
 
 # --- pre-deploy red-team findings, 2026-08-27 --------------------------------
@@ -3550,10 +3568,9 @@ def test_a_universe_holding_an_anchor_keeps_the_rest_of_the_anchor_pool():
     assert {a["t"]: a["f"] for a in pl["assets"]}["TLT"] == "Universe"
     assert {a["t"] for a in pl["assets"] if a["f"] == "Anchor pool"} == {"GLD", "XLP", "XLU", "USMV"}
     assert pl["pairs"] and {p["an"] for p in pl["pairs"]} - {"AAA", "TLT"}, pl["pairs"]
-    # the Balance tab reads the same pool, not a second hand-written join
+    # the page never hand-writes a second join of the pool
     source = (pathlib.Path(__file__).resolve().parent.parent
               / "main.py").read_text(encoding="utf-8")
-    assert "anchor_frame(returns)" in source
     assert "fetch_prices(DEFENSIVE_ANCHOR_TICKERS" not in source
 
 
@@ -4264,13 +4281,17 @@ def test_blocks_reveal_on_arrival_on_the_gpu_and_never_hide_without_script():
     assert head.index("classList.add('reveal-on')") < head.index('src="./app/static/reveal.js"')
     assert "IntersectionObserver' in window" in head and "prefers-reduced-motion" in head
     assert "DOMContentLoaded" in head and "!window.__melionaReveal" in head
-    # heavy pictures are files, AVIF first, the bands' attached on approach
+    # no image is inlined into the websocket, and no photograph is a
+    # backdrop (ME-28, 2026-11-05: flat paper and stone, like the share
+    # banner) - nor the lazy-loading plates and parallax that only served
+    # photographs. The one photograph is John's portrait in the About block
+    # (ME-28 part 4): a real <img>, served as files, never a CSS background.
     assert ";base64," not in main, "an image is inlined into the websocket again"
-    for name, fallback in (("facade", "jpg"), ("band", "jpg"), ("gungnir", "webp")):
-        small, big = root / "static" / f"{name}.avif", root / "static" / f"{name}.{fallback}"
-        assert small.stat().st_size < big.stat().st_size, f"{name}.avif is not the light copy"
-        assert f"url(app/static/{name}.avif)" in main
-    assert "html.has-band .showcase-row::before" in main and "html.has-gungnir" in main
+    assert "url(app/static/" not in main + css + hero, "a photograph is a backdrop again"
+    assert sorted(p.name for p in (root / "static").iterdir()
+                  if p.suffix in (".jpg", ".jpeg", ".png", ".webp", ".avif")) == \
+        ["john-nguyen.avif", "john-nguyen.jpg", "john-nguyen.webp"], "a photograph other than the portrait is served"
+    assert "PLATES" not in js and "has-band" not in js + css + main and "plate-drift" not in css
 
 
 def test_corners_are_square_and_the_maps_rings_stay_in_the_plot():
@@ -4364,6 +4385,50 @@ def test_the_crest_is_symmetric_and_its_pieces_never_touch():
     assert re.search(r"prefers-reduced-motion: reduce\) \{\s*\.hero-crest:hover \.crest-ring", css)
     src = (root / "main.py").read_text(encoding="utf-8")
     assert "P.__melionaRipple" in src and "updateTiming({ iterations: pass + 1 })" in src
+
+
+def test_the_crest_engraving_is_the_banners_and_used_sparingly():
+    """ME-28 (John, 2026-11-05): "the entire website's design matches the
+    design of our banner" - flat paper and flat charcoal stone, no photographs,
+    the Slice's faded watermark logo gone, and the banner's one ornament: the
+    crest's five pieces engraved as a faint gold outline into the stone. It
+    must stay that ornament, not grow back into a watermark: the logo's own
+    pieces, outline only, at the banner's 10%, once per stone block (the
+    hero's receipt and the dark band), never on the paper."""
+    import re
+    import xml.etree.ElementTree as ET
+    import hero
+    root = pathlib.Path(__file__).resolve().parent.parent
+    svg = ET.fromstring((root / "assets" / "logo.svg").read_text(encoding="utf-8"))
+    ns = "{http://www.w3.org/2000/svg}"
+    logo = [poly.get("points") for poly in svg.findall(f".//{ns}polygon")]
+    assert list(hero.CREST_PIECES) == logo, "the engraving is not the crest's own five pieces"
+    banner = (root / "tools" / "og_image.html").read_text(encoding="utf-8")
+    assert "'stroke-opacity': .1" in banner and hero.ENGRAVING_OPACITY == ".1", \
+        "the engraving's opacity drifted from the banner's"
+    mark = hero.crest_engraving()
+    assert 'fill="none"' in mark and 'aria-hidden="true"' in mark and "<text" not in mark
+    assert mark.count("<polygon") == 5 and "gradient" not in mark.lower()
+    # once in the hero (inside the stone receipt), once in main.py (the band)
+    page = hero.hero_html()
+    assert page.count('class="crest-engraving"') == 1
+    assert page.index('class="hero-stats"') < page.index('class="crest-engraving"')
+    main = (root / "main.py").read_text(encoding="utf-8")
+    assert main.count("crest_engraving()") == 1
+    band = main[main.index('<div class="showcase-row">'):main.index('.replace("__ENGRAVING__", crest_engraving())')]
+    assert band.count("__ENGRAVING__") == 1, "the band's engraving is not inside the band"
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    rule = lambda sel: " ".join(re.findall(r"(?m)^" + re.escape(sel) + r" \{([^}]*)\}", css))
+    # the stone blocks are flat stone; the band and the plinth wear the gold cap
+    for sel in (".hero-stats", ".showcase-row"):
+        assert "background: #2E2A25" in rule(sel), f"{sel} is not flat stone"
+    assert "border-top: 3px solid #B8955E" in rule(".showcase-row")
+    assert "border-bottom: 3px solid #B8955E" in rule(".showcase-row")
+    assert "background: #26221E" in rule(".meliona-footer") and \
+        "border-top: 3px solid #B8955E" in rule(".meliona-footer")
+    # the paper is flat: the Slice's topography and its faded mark are gone
+    assert ".st-key-gungnir_zone::before" not in css and "_gungnir_bg" not in main
+    assert ".showcase-row::before" not in css, "a plate is drawn behind the band again"
 
 
 def test_public_files_give_crawlers_and_link_previews_a_real_head(tmp_path=None):
@@ -4505,9 +4570,9 @@ def test_the_warm_pass_covers_every_fetch_a_preset_page_makes():
     the security master. Railway's disk is wiped on every deploy and the cache
     expires every 6h. A warm pass must now cover every fetch the page makes
     for a preset - recorded from the real main.py, so the two cannot drift.
-    The crisis pair too (John, 2026-10-20: "fix the crisis pair slow download
-    next"): the page replays its default flyer and anchor through every named
-    crisis, and the warm pass now picks that same pair by the same rule."""
+    (The crisis pair, the ten-year tail fit and the AI-capex race left the
+    page with Balance and model validation on 2026-11-05, and left the warm
+    pass with them.)"""
     import sys
     import tools.warm_cache as wc
     from src.ingestion import PRESETS
@@ -4550,8 +4615,6 @@ def test_the_warm_pass_covers_every_fetch_a_preset_page_makes():
         if sleep is not None:
             wc.PAUSE_SECONDS = sleep
 
-    pairs = {k for k in page if k[1] == "max" and len(k[0]) == 2}
-    assert len(pairs) >= 2, f"the page replayed no crisis pair for each basket: {pairs}"
     missing = sorted(page - warm)
     assert not missing, f"fetches the page makes that no warm pass covers: {missing}"
 
@@ -4801,7 +4864,7 @@ def test_a_setting_that_loses_more_than_the_book_in_a_day_is_refused_in_words():
             "Bearish: short the book")
         next(c for c in at.checkbox if c.label == "Target volatility").check()
         at.run()
-        next(s for s in at.slider if s.label == "Target annual vol (%)").set_value(30)
+        next(s for s in at.slider if s.label == "Target yearly volatility (%)").set_value(30)
         next(s for s in at.slider if s.label == "Volatility shock").set_value(300)
         at.run()
         assert not at.exception, [e.message for e in at.exception]
@@ -4828,7 +4891,7 @@ def test_liquidity_adjustment_never_turns_a_tail_gain_into_a_bigger_gain():
     assert liquidity_adjusted_cvar(0.20, 60.0)["lvar"] > 0.20   # losses still widen
 
     src = (pathlib.Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
-    guarded = {"that tail widens to ": False, " for the unwind": False}
+    guarded = {"(the tail) widens to ": False}
     for node in ast.walk(ast.parse(src)):
         if not isinstance(node, ast.If):
             continue
@@ -4867,41 +4930,6 @@ def _exec_nodes(nodes, ns):
     return ns
 
 
-def test_tail_fit_drops_a_young_listing_by_name_instead_of_shortening_the_whole_fit():
-    """The 10y tail fit used an aligned pull, so one 2021 listing (RIVN in
-    High-volatility movers) cut the whole fit to 5.1 years while the caption
-    said "~10 years" and the "lack the full history" note could never fire."""
-    import ast
-    from src.ingestion import _clean_price_frame
-
-    src, tree = _main_source_and_tree()
-    fn = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "load_tail_fit"]
-    assert len(fn) == 1, "load_tail_fit is gone from main.py"
-    fn[0].decorator_list = []
-
-    idx = pd.bdate_range("2016-10-14", "2026-10-14")
-    rng = np.random.default_rng(5)
-    px = pd.DataFrame(100 * np.exp(np.cumsum(rng.normal(0, 0.01, (len(idx), 3)), axis=0)),
-                      index=idx, columns=["OLD", "MID", "IPO"])
-    px.loc[px.index < "2021-11-10", "IPO"] = np.nan
-
-    def fetch_prices(tickers, period="2y", align=True, **_):
-        return _clean_price_frame(px[list(tickers)], align)
-
-    ns = {"pd": pd, "np": np, "fetch_prices": fetch_prices,
-          "load_universe": lambda t, period="2y": fetch_prices(list(t), period),
-          "mcneil_frey_tail": lambda pr: {"fitted": True, "n": len(pr)}}
-    _exec_nodes(fn, ns)
-    out = ns["load_tail_fit"](("OLD", "MID", "IPO"), (0.4, 0.3, 0.3), False)
-    _, days, dropped = out[:3]
-    assert dropped == ["IPO"], (f"a 2021 listing shrank the fit to {days} days "
-                                f"({days / 252:.1f}y) and was not named: dropped={dropped}")
-    assert days > 2500, days
-    assert len(out) == 4 and abs(out[3] - 10.0) < 0.05, f"span not reported from the index: {out[1:]}"
-    assert "~10 years" not in src, "the tail-fit caption still hard-codes ~10 years"
-    assert "{_tf_years:.1f} years" in src, "the tail-fit caption does not print the measured span"
-
-
 def test_fan_chart_caption_claims_block_resampling_only_when_it_happened():
     """The cone caption said "resampled in N-day blocks so crash weeks stay
     intact" for jump-diffusion (parametric, nothing resampled) and for replay
@@ -4919,17 +4947,17 @@ def test_fan_chart_caption_claims_block_resampling_only_when_it_happened():
 
     jd = caption(jump_diffusion_mc(long_hist, w, n_simulations=400))
     assert "resampled" not in jd and "crash weeks" not in jd, f"jump-diffusion: {jd}"
-    assert "parametric Merton paths" in jd, jd
+    assert "drawn from the jump model, not from real days" in jd, jd
     iid = caption(monte_carlo(short_hist, w, n_simulations=400))
     assert "crash weeks stay intact" not in iid, f"22-day replay (i.i.d.): {iid}"
-    assert "resampled day by day (window too short for blocks)" in iid, iid
+    assert "resampled one real day at a time (window too short for runs)" in iid, iid
     blk = monte_carlo(_clustered_returns(n=800), np.array([1.0]), n_simulations=400)
     assert blk["block_days"] > 1
     # A geometric block of mean N keeps nothing intact by construction, so the
     # caption says what the bootstrap does and claims nothing more (ME-03,
     # 2026-10-22: the default page printed "2-day blocks so crash weeks stay
     # intact").
-    assert f"resampled in blocks averaging {blk['block_days']} days" in caption(blk), caption(blk)
+    assert f"resampled from runs of real days averaging {blk['block_days']} days" in caption(blk), caption(blk)
     assert "crash weeks" not in caption(blk), caption(blk)
 
 
@@ -4950,96 +4978,6 @@ def test_market_drawdown_shock_compounds_to_the_labelled_drawdown():
         grown = (1 + ns["shocked_returns"]).prod()
         assert np.allclose(grown, 1 + shock / 100), \
             f"shock {shock}% compounds to {float(grown.iloc[0]) - 1:+.1%} over 252 days"
-
-
-def test_defensive_pair_says_who_really_holds_the_money():
-    """Inverse-vol weights give the anchor under half when the flyer is the
-    steadier leg (Index core SPY/GLD: anchor 47%), yet the text said the anchor
-    holds most of the MONEY next to an SVG reading 47% CAPITAL."""
-    src, tree = _main_source_and_tree()
-    node = _lift_assign(tree, "_bv_money")
-    assert node is not None, ("the pair text states 'the anchor holds most of the "
-                              "MONEY' as a fixed string, whatever the weights")
-
-    def say(w_b, vol_a, vol_b):
-        pw = {"w_a": 1 - w_b, "w_b": w_b, "vol_a": vol_a, "vol_b": vol_b}
-        return _exec_nodes([node], {"pw": pw, "flyer": "SPY", "bv_anchor": "GLD"})["_bv_money"]
-
-    under = say(0.473, 0.132, 0.146)
-    assert "anchor holds most" not in under, f"anchor at 47%: {under}"
-    assert "SPY holds more of the" in under and "steadier leg" in under, under
-    over = say(0.75, 0.30, 0.10)
-    assert "the anchor holds most of the money" in over, over
-    assert "steady anchor holds most of the capital" not in src, \
-        "the read-me still says the anchor always holds most of the capital"
-
-
-def test_noise_ceiling_uses_the_ewma_effective_sample_size():
-    """Under EWMA (lambda 0.94) the matrix carries ~32 effective days, but the
-    Marcenko-Pastur line used T = len(returns) = 503: the ceiling sat ~1.95x
-    too low and painted noise factors as signal."""
-    import ast
-    from src.covariance import RISKMETRICS_LAMBDA
-
-    _, tree = _main_source_and_tree()
-    fn = [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)
-          and n.name == "eigen_factor_panel"][0]
-    call = [n for n in ast.walk(fn) if isinstance(n, ast.Call)
-            and getattr(n.func, "id", "") == "marcenko_pastur_bounds"][0]
-    t_arg = call.args[1]
-    pre = []
-    if isinstance(t_arg, ast.Name):
-        pre = [n for n in ast.walk(fn) if isinstance(n, ast.Assign)
-               and any(getattr(t, "id", "") == t_arg.id for t in n.targets)]
-    returns = pd.DataFrame(np.zeros((503, 3)))
-    expect = {"EWMA": (1 + RISKMETRICS_LAMBDA) / (1 - RISKMETRICS_LAMBDA),
-              "Sample": 503, "Ledoit-Wolf": 503}
-    for method, want in expect.items():
-        ns = _exec_nodes(pre, {"cov_method": method, "returns": returns,
-                               "RISKMETRICS_LAMBDA": RISKMETRICS_LAMBDA})
-        got = eval(compile(ast.Expression(t_arg), "main.py", "eval"), ns)  # nosec B307
-        assert abs(got - want) < 1e-9, f"{method}: noise ceiling drawn at T={got}, expected {want:.1f}"
-    printed = [n for n in ast.walk(fn) if isinstance(n, ast.JoinedStr)
-               and "pure noise" in ast.unparse(n)]
-    assert printed and any(isinstance(v, ast.FormattedValue)
-                           and ast.dump(v.value) == ast.dump(t_arg)
-                           for v in printed[0].values), "the caption prints a different T"
-
-
-def test_correlation_watch_says_not_enough_history_instead_of_stable_at_nan():
-    """With 59 return rows and a 63-day window the rolling correlation is
-    empty, latest is NaN, and the page said 'Stable: A x B at +nan'."""
-    import ast
-    src, tree = _main_source_and_tree()
-
-    def seg(n):
-        return ast.get_source_segment(src, n) or ""
-
-    cands = [n for n in ast.walk(tree) if isinstance(n, ast.If)
-             and "Stable:" in seg(n) and "Concentration reading" in seg(n)
-             and "pick_a == pick_b" not in ast.unparse(n.test)]
-    elifs = {id(c.orelse[0]) for c in cands
-             if len(c.orelse) == 1 and isinstance(c.orelse[0], ast.If)}
-    head = [c for c in cands if id(c) not in elifs]
-    assert len(head) == 1, "the Correlation Watch verdict moved"
-
-    said = []
-
-    class _St:
-        def __getattr__(self, kind):
-            return lambda msg, *a, **k: said.append((kind, msg))
-
-    _exec_nodes(head, {"st": _St(), "np": np, "roll": pd.Series(dtype=float),
-                       "latest": float("nan"), "win": 63, "thresh": 0.75,
-                       "pick_a": "A", "pick_b": "B"})
-    assert not any("Stable" in m or "Concentration" in m for _, m in said), said
-    assert any(k == "info" and "not enough history for a 63-day window" in m.lower()
-               for k, m in said), said
-    said.clear()
-    _exec_nodes(head, {"st": _St(), "np": np, "roll": pd.Series([0.9]),
-                       "latest": 0.9, "win": 21, "thresh": 0.75,
-                       "pick_a": "A", "pick_b": "B"})
-    assert said and said[0][0] == "warning" and "Concentration reading" in said[0][1], said
 
 
 # --- council fixes 2026-10-17: book-sharpe-anchor ---
@@ -5119,12 +5057,25 @@ def _offline_app(setup=None, market=None, rf=0.045, adv=5e9, dollar_volume=None,
     return at, restore
 
 
+def _loaded_names(at) -> list:
+    """The universe the page loaded, as Risk Breakdown's caption prints it
+    ("Universe (N): A, B, ...")."""
+    import re
+    for c in at.caption:
+        hit = re.match(r"Universe \((\d+)\): (.+)$", c.value)
+        if hit:
+            names = [t.strip() for t in hit.group(2).split(",")]
+            assert len(names) == int(hit.group(1)), c.value
+            return names
+    raise AssertionError("no Universe caption on the page")
+
+
 def _book_grit(at) -> dict:
     """{ticker: grit} as The Book's sentences print it ("grit 73 of 100")."""
     import re
     out = {}
     for m in at.markdown:
-        hit = re.search(r'line-height:1\.55;">([A-Z0-9.^=-]+) .*?grit (\d+) of 100',
+        hit = re.search(r'class="book-text">([A-Z0-9.^=-]+) .*?grit (\d+) of 100',
                         m.value)
         if hit:
             out[hit.group(1)] = int(hit.group(2))
@@ -5139,7 +5090,7 @@ def test_the_books_grit_is_the_grit_zones_full_history_grit():
     tab's numbers for the same universe."""
     at, restore = _offline_app()
     try:
-        loaded = list([w for w in at.selectbox if w.label.startswith("Anchor")][0].options)
+        loaded = _loaded_names(at)
         # Defensive anchors widen the Book's peer group (stated on screen as
         # "across N names"); with them off the two universes are identical.
         at.toggle(key="book_fallback").set_value(False).run()
@@ -5173,12 +5124,12 @@ def test_the_book_lists_an_outside_etf_only_when_it_is_the_anchor():
     from src.pairing import DEFENSIVE_ANCHOR_TICKERS
     at, restore = _offline_app()
     try:
-        loaded = list([w for w in at.selectbox if w.label.startswith("Anchor")][0].options)
+        loaded = _loaded_names(at)
         cards = {}
         for m in at.markdown:
             hit = re.match(r"\s*(Leads|Anchor|No role|Left out)\s+((?:\d+\.\d%|<0\.1%) of the book\s+)?"
                            r"([A-Z0-9.^=-]+) (.*)",
-                           re.sub(r"<[^>]+>", " ", m.value)) if "border-left:2px solid" in m.value else None
+                           re.sub(r"<[^>]+>", " ", m.value)) if 'class="book-row' in m.value else None
             if hit:
                 # a NO ROLE card, and only that one, says what it holds (ME-12 review)
                 assert bool(hit.group(2)) == (hit.group(1) == "No role"), hit.group(0)[:80]
@@ -5187,7 +5138,7 @@ def test_the_book_lists_an_outside_etf_only_when_it_is_the_anchor():
         shelf = [t for t in DEFENSIVE_ANCHOR_TICKERS if t not in loaded]
         for t, (role, text) in cards.items():
             if t in shelf:
-                assert role == "Anchor" and "outside the chosen universe" in text, (t, role, text)
+                assert role == "Anchor" and "from outside your list" in text, (t, role, text)
         assert set(cards) - set(shelf) == set(loaded), sorted(cards)
     finally:
         restore()
@@ -5205,7 +5156,7 @@ def test_sharpe_does_not_move_with_the_vol_target_slider():
         plain = sharpe()
         [c for c in at.checkbox if c.label == "Target volatility"][0].check().run()
         for tv in (5, 10, 30):
-            [s for s in at.slider if s.label == "Target annual vol (%)"][0].set_value(tv).run()
+            [s for s in at.slider if s.label == "Target yearly volatility (%)"][0].set_value(tv).run()
             assert sharpe() == plain, (
                 f"Sharpe {sharpe()} at a {tv}% vol target vs {plain} unlevered")
         cap = " ".join(c.value for c in at.caption if c.value.startswith("Sharpe ="))
@@ -5242,69 +5193,6 @@ def test_an_offline_boot_never_reads_what_a_live_boot_left_in_the_cache():
         rate = " ".join(c.value for c in at.caption if c.value.startswith("Sharpe ="))
         assert data and "through 2026-10-14" in data[0], f"prices from the earlier boot: {data}"
         assert "Risk-free rate: 4.50%" in rate, f"T-bill rate from the earlier boot: {rate}"
-    finally:
-        restore()
-
-
-def test_changing_weighting_keeps_the_visitors_balance_anchor():
-    """Council 2026-10-17: the Balance-tab anchor had no key and its index
-    followed argmax(weights), so switching Weighting re-created the widget and
-    silently swapped the visitor's anchor (GOOGL -> NVDA) and every number
-    under it. Weighting does not enter the Balance maths at all."""
-    at, restore = _offline_app()
-    try:
-        def anchor():
-            return [w for w in at.selectbox if w.label.startswith("Anchor")][0]
-        default = anchor().value
-        pick = [o for o in anchor().options if o != default][-1]
-        anchor().set_value(pick).run()
-        assert anchor().value == pick
-        [r for r in at.radio if r.label == "Weighting"][0].set_value("Risk parity").run()
-        assert anchor().value == pick, (
-            f"anchor became {anchor().value} after a Weighting change; visitor chose {pick}")
-        assert not at.exception, [e.value for e in at.exception]
-    finally:
-        restore()
-
-
-def test_the_watch_pair_follows_the_basket_not_how_fast_it_was_typed():
-    """PR #20 comparison, 2026-10-20: typing F, GM, DAL, UAL, GILD, VZ quickly
-    showed F x UAL in Correlation Watch, typing it slowly F x GM - the same
-    basket. The pair selectboxes had fixed keys, and Streamlit keeps a keyed
-    widget's value while it is still an option, so the pair a rerun on a
-    half-typed basket picked stuck. The default pair must depend on the final
-    basket only; a visitor's own pick within an unchanged basket must stay."""
-    at, restore = _offline_app()
-    try:
-        def pair():
-            return tuple([w for w in at.selectbox if w.label == f"Asset {s}"][0].value
-                          for s in "AB")
-
-        def basket(names):
-            [w for w in at.multiselect if w.label == "Tickers to analyze"][0].set_value(
-                names).run()
-            assert not at.exception, [e.value for e in at.exception]
-
-        final = ["DAL", "F", "GILD", "GM", "UAL", "VZ"]
-        start = [w for w in at.multiselect if w.label == "Tickers to analyze"][0].value
-        assert not set(pair()) & set(final), f"start pair {pair()} would carry into {final}"
-        basket(final)
-        fresh = pair()
-        # Back to the start, then a half-typed basket without one of the final
-        # default pair's names: its own default pair is still an option once
-        # the basket is complete.
-        basket(start)
-        half = [t for t in final if t != fresh[1]]
-        basket(half)
-        assert set(pair()) <= set(half) and pair()[0] != pair()[1]
-        basket(final)
-        assert pair() == fresh, (
-            f"{pair()} after a stop on a half-typed basket; a fresh {final} shows {fresh}")
-        own = [o for o in [w for w in at.selectbox if w.label == "Asset A"][0].options
-               if o not in fresh][0]
-        [w for w in at.selectbox if w.label == "Asset A"][0].set_value(own).run()
-        [w for w in at.slider if w.label == "Rolling window (days)"][0].set_value(30).run()
-        assert pair() == (own, fresh[1]), f"visitor's pick {own} lost: {pair()}"
     finally:
         restore()
 
@@ -5652,8 +5540,6 @@ def test_the_skeleton_paints_first_and_the_hero_lifts_it():
         hero = next(i for i, v in first if 'id="hero"' in v)
         assert not any("data:image/jpeg;base64" in v for _, v in first), \
             "a photo is inlined into the websocket again"
-        assert any("url(app/static/facade.jpg)" in v for _, v in first)
-        assert any("url(app/static/band.jpg)" in v for _, v in first)
         assert re.search(r"#boot-skel\s*\{[^}]*opacity:\s*0", dict(first)[hero]), \
             "the hero does not lift the skeleton when it arrives"
         # The full-bleed hero swallows the 1rem flex gap of each block above it
@@ -5673,8 +5559,8 @@ def test_the_skeleton_paints_first_and_the_hero_lifts_it():
     cfg = tomllib.loads((root / ".streamlit" / "config.toml").read_text(encoding="utf-8"))
     assert cfg["server"].get("enableStaticServing") is True
     served = sorted(p.name for p in (root / "static").iterdir())
-    assert served == ["app.css", "band.avif", "band.jpg", "dock.js", "facade.avif", "facade.jpg",
-                      "gungnir.avif", "gungnir.webp", "reveal.js", "windtunnel.js"], \
+    assert served == ["app.css", "dock.js", "john-nguyen.avif", "john-nguyen.jpg",
+                      "john-nguyen.webp", "reveal.js"], \
         f"static/ is served to the public; keep it to public files: {served}"
 
 
@@ -5931,7 +5817,8 @@ def test_the_pairing_never_shows_pp_or_percent_for_a_points_gap():
     flyer's worst fall alone (pairing.py: dd_pair - dd_solo), a gap in
     percentage points. The map printed "+16.8pp", and the Balance sentence and
     crisis table printed the same gap as "+17%", which reads as a 17% cut.
-    Both now say it in words: "16.8 points shallower" / "deeper"."""
+    The map now says it in words: "16.8 points shallower" / "deeper" (the
+    Balance tab left the page on 2026-11-05)."""
     import re
     root = pathlib.Path(__file__).resolve().parent.parent
     html = (root / "prototypes" / "war_room.html").read_text(encoding="utf-8")
@@ -5939,9 +5826,8 @@ def test_the_pairing_never_shows_pp_or_percent_for_a_points_gap():
     assert "shallower" in html and "deeper" in html, \
         "the map must say which way the cushion points, in words"
     src = (root / "main.py").read_text(encoding="utf-8")
-    assert 'bt["cushion"]:+.0%' not in src, "the Balance sentence prints a points gap as %"
-    assert '"cushion": "{:+.1%}"' not in src, "the crisis table prints a points gap as %"
-    assert "percentage points" in src, "the Balance sentence must name its unit"
+    assert 'bt["cushion"]:+.0%' not in src, "the page prints a points gap as %"
+    assert '"cushion": "{:+.1%}"' not in src, "the page prints a points gap as %"
 
 
 def test_every_spinner_is_a_few_calm_words():
@@ -6111,34 +5997,28 @@ def test_the_jump_diffusion_caption_states_its_method_not_a_result():
 def test_a_difference_of_two_percentages_says_points_and_a_ratio_says_relative():
     """ME-03 (2026-10-22): the defensive shift read "Annualized vol 17.8%
     (-2.9% vs current)" for a fall from 20.7% - 2.9 points, a 14% relative
-    cut - and the unwind delta "+0% for the unwind" beside a CVaR in percent
-    was a relative change. A difference of two percentages says points; a
-    ratio says relative."""
+    cut. A difference of two percentages says points; a ratio says relative.
+    (The defensive shift and the unwind delta left with Correlation Watch and
+    Liquidity, 2026-11-05; the Book's tail gap carries the rule now.)"""
     import re
     text = _offline_page()["text"]
-    shift = [t for t in text if t.startswith(("Daily CVaR (95%) =",
-                                              "Annualized vol ="))]
-    assert len(shift) == 2, f"defensive simulation not on the page: {shift}"
-    for t in shift:
-        assert "points vs current" in t, t
-    unwind = [t for t in text if t.startswith("Liquidity-adjusted CVaR =")]
-    assert unwind and "relative" in unwind[0], unwind
     # The Book's tail gap is a difference of two ES figures: points too
     # (Council A review, 2026-10-22: "2.4% shallower at ES 97.5").
-    gaps = [t for t in text if "shallower at ES" in t or "deeper at ES" in t]
+    gaps = [t for t in text if "shallower" in t or "deeper" in t]
     assert gaps, "no Book tail-gap sentence on the page"
     for t in gaps:
-        assert re.search(r"\d points (shallower|deeper) at ES", t), t
+        assert re.search(r"\d points (shallower|deeper)", t), t
+        assert not re.search(r"\d%\)? (shallower|deeper)", t), t
 
 
 def test_the_headline_unwind_names_its_book_size_and_participation():
     """ME-03 (2026-10-22): the verdict widened the tail for "the ~N trading
     days it takes to fully unwind at 20% of daily volume" without saying the
     days were for a $1,000,000 book - the one input they turn on - while The
-    Book and the Liquidity tab each let the visitor pick another size."""
+    Book lets the visitor pick another size."""
     from src.narrative import DEFAULT_PARTICIPATION
     v = _verdict(_offline_page("thin volume", adv=5e4)["text"])
-    assert "tail widens to" in v, f"thin volume did not widen the tail: {v}"
+    assert "(the tail) widens to" in v, f"thin volume did not widen the tail: {v}"
     assert "$1,000,000 book" in v, v
     assert f"{DEFAULT_PARTICIPATION:.0%} of each name's average daily dollar volume" in v, v
 
@@ -6151,7 +6031,7 @@ def test_a_median_that_can_be_negative_is_called_a_return_not_a_gain():
     number that can take either."""
     import re
     page = " ".join(_offline_page()["text"])
-    assert re.search(r"median return -\d+%", page), \
+    assert re.search(r"\(median\) return: -\d+%", page), \
         "fixture no longer shows a negative median"
     for word in ("median gain", "Median 1y gain", "even a buyer"):
         assert word not in page, f"{word!r} on the page"
@@ -6163,11 +6043,16 @@ def test_the_page_points_only_to_controls_that_exist():
     name - the estimator lives in the Allocation drawer. (The drawers lost
     their "01 · 02 · 03" numbers on 2026-11-04; the caption names the drawer
     by its title, so this follows the title.)"""
+    import re
     page = _offline_page()
     text = " ".join(page["text"])
     assert "Engine controls" not in text
-    alloc = [e.split(":")[0] for e in page["expanders"] if e.startswith("Allocation")]
-    assert alloc and f"to EWMA in the {alloc[0]} drawer" in text, alloc
+    drawers = [e.split(":")[0] for e in page["expanders"]]
+    for named in re.findall(r"in the (\w+(?: \w+)?) drawer", text):
+        assert named in drawers, f"the page points to a '{named}' drawer that does not exist: {drawers}"
+    # the risk-contribution caption names the Allocation drawer's control
+    # (2026-11-05, ME-28 copy pass: the drawer is "Weights: how the money is split")
+    assert "Weights" in drawers and "switch Weights to Risk parity" in text, drawers
 
 
 # --- ME-09 (2026-10-22): data-quality holes ---
@@ -6185,7 +6070,7 @@ def test_a_day_with_no_volume_reported_is_skipped_not_read_as_zero():
         return dv
     at, restore = _offline_app(dollar_volume=gappy)
     try:
-        cards = [m.value for m in at.markdown if "border-left:2px solid" in m.value]
+        cards = [m.value for m in at.markdown if 'class="book-row' in m.value]
         v = [c for c in cards if ">V " in c]
         assert v, "no Book card for V"
         assert "reports no volume" not in v[0], v[0]
@@ -6217,40 +6102,6 @@ def test_a_crisis_with_none_of_the_basket_trading_is_left_out_of_the_race():
     assert set(early) <= set(rec["left_out"]), rec["left_out"]
     assert not set(early) & set(rec["decided"]["crisis"]), list(rec["decided"]["crisis"])
     assert rec["n"] == len(rec["decided"]) and 0 <= rec["wins"] <= rec["n"]
-
-
-def test_the_balance_tab_ranks_and_sizes_a_pair_on_one_risk_matrix():
-    """ME-03 (2026-10-22): Balance ranked partners on the sample correlation
-    but sized the blend on the selected estimator. Under EWMA the two differ
-    by up to 0.47 in correlation and 16 points of annual vol on the offline
-    market, so the page could name a "least-correlated" partner and quote a
-    correlation the blend beside it was not computed from."""
-    from src.covariance import estimate_covariance
-    from src.comovement import correlation_from_cov
-    from src.hedge import rank_hedges
-    from src.ingestion import get_returns
-    at, restore = _offline_app()
-    try:
-        [s for s in at.selectbox if s.label == "Covariance estimator"][0].set_value("EWMA").run()
-        loaded = list([w for w in at.selectbox if w.label.startswith("Anchor")][0].options)
-        anchor = [w for w in at.selectbox if w.label.startswith("Anchor")][0].value
-        cap = [c.value for c in at.caption if "Long-only minimum-variance weights" in c.value]
-        # The defensive pair beside it is a real-history backtest on plain
-        # sample volatility, so it says "realized" rather than borrow the label.
-        pair = [m.value for m in at.markdown if "annual vol to" in m.value]
-        assert pair and "realized annual vol to" in pair[0], pair[:1]
-    finally:
-        restore()
-    rets = get_returns(_offline_market_prices(loaded, "2y"))
-    cov, _ = estimate_covariance(rets, "EWMA")
-    ranked = rank_hedges(correlation_from_cov(cov), anchor)
-    best, corr = ranked.index[0], float(ranked.iloc[0])
-    assert cap, "Balance caption missing"
-    # the name is no longer set in bold (2026-11-04: bold as decoration), so
-    # it is matched as a whole word beside its correlation
-    assert (f"({best}, {corr:+.2f})" in cap[0] or f"{best} moves against" in cap[0]
-            or f"{best} is the most" in cap[0]) and f"{corr:+.2f}" in cap[0], (best, f"{corr:+.2f}", cap[0])
-    assert "EWMA" in cap[0], f"the caption does not name its risk matrix: {cap[0]}"
 
 
 # --- ME-10 (2026-10-22): one way to do each thing ---
@@ -6305,18 +6156,6 @@ def test_the_jump_calibration_uses_the_unbiased_sample_variance():
     p = calibrate_jump_diffusion(np.expm1(lr))
     assert p["n_jumps"] == 0
     assert abs(p["sigma_d"] ** 2 - lr.var(ddof=1)) < 1e-15, (p["sigma_d"] ** 2, lr.var(ddof=1))
-
-
-def test_a_fall_is_written_as_its_size_never_as_a_double_negative():
-    """Council A review (2026-10-22): the defensive pair read "holding META
-    alone fell -36% at its worst" - fell, minus: a reader can take it as a
-    rise. A fall is stated by its size beside the verb."""
-    import re
-    page = " ".join(_offline_page()["text"])
-    assert re.search(r"alone fell \d+% at its worst", page), "pair sentence missing"
-    assert re.search(r"the fall was \d+%", page), "pair sentence missing"
-    for bad in (r"fell -\d", r"fall was -\d"):
-        assert not re.search(bad, page), bad
 
 
 def test_the_loaded_window_is_counted_one_way_everywhere():
@@ -6614,116 +6453,6 @@ def test_a_wide_block_never_turns_like_a_card_and_never_hangs_mid_turn():
     assert "el.style.removeProperty('--reveal-depth');" in js
 
 
-def test_the_cone_flow_is_a_lattice_boltzmann_solve_bound_to_the_data():
-    """John, 2026-11-04: no fluid-looking loop - "every line, color, velocity
-    vector, and animation timestep must be directly driven by and
-    deterministically bound to the provided data array", FluidX3D's look
-    ("grid cells with over 100,000 time steps") on the site's own background,
-    red only where the flow collides with the data, a "Verification Overlay",
-    and "each color, cell, line, animation and where it's going reflects the
-    chart". static/windtunnel.js is a D2Q9 lattice Boltzmann solver (FluidX3D's
-    method and its Smagorinsky subgrid model) whose walls are the chart's five
-    computed percentile paths; its clock and inflow come from the data; it is
-    drawn as FluidX3D draws a velocity field - one line per cell of a grid on
-    the chart's own axes, in FluidX3D's own colour scale - with FluidX3D's
-    tracer particles released per return level per trading-day cell; check()
-    proves the picture against the computed state."""
-    import re
-    root = pathlib.Path(__file__).resolve().parent.parent
-    js = (root / "static" / "windtunnel.js").read_text(encoding="utf-8")
-    src = (root / "main.py").read_text(encoding="utf-8")
-    # the solver: D2Q9 weights, BGK collision with FluidX3D's Smagorinsky-Lilly
-    # constant, halfway bounce-back, inflow, pressure outlet
-    assert "const float WT[9]=float[9](4./9.,1./9.,1./9.,1./9.,1./9.,1./36.,1./36.,1./36.,1./36.);" in js
-    assert "const int OPP[9]=int[9](0,3,4,1,2,7,8,5,6);" in js
-    assert "for(int i=0;i<9;i++)f[i]-=(f[i]-fe[i])/te;" in js and ".76421222*sqrt(hxx*hxx+hyy*hyy+2.*hxy*hxy)/rho" in js
-    assert "if(outY(q)||wall(q))f[i]=fAt(OPP[i],vUv);else f[i]=fAt(i,q);" in js
-    assert "else if(vUv.x>1.-texel.x){rho=1.;" in js
-    # deterministic: no randomness, no wall-clock in the physics; the frame
-    # rate only changes how many steps are shown per frame
-    body = js[js.index("(function () {"):]
-    assert "Math.random" not in body and "sin(t" not in body and "Date.now" not in body
-    assert "for (var k = 0; k < T.spf; k++) T.step();" in js
-    # the data are the walls, the clock, the inflow, the grid and the particles' release
-    assert "var LEVELS = ['p5', 'p25', 'median', 'p75', 'p95'];" in js and "_fullData" in js
-    assert "T.stepsPerDay = T.L.pc / (LBM.U_IN * n);" in js
-    assert "return LBM.U_IN * (1 - LBM.U_SWING + LBM.U_SWING * w) * Math.min(1, step / (LBM.SPIN_UP * this.L.pc / LBM.U_IN));" in js
-    assert "for (var c = d[0]; c + nd <= d[n - 1] + 1e-9; c += nd) cols.push(c + nd / 2);" in js   # columns: trading days
-    assert "rowsv.push((r + 0.5) * dr);" in js                                                    # rows: steps of return, on 0%
-    assert "T.release = G.nd * T.stepsPerDay;" in js
-    # FluidX3D's own pieces, line for line
-    assert "draw_line(p - u/2|u|, p + u/2|u|)" in js and "(gl_VertexID==0?-1.:1.)*half_*vec2(d.x,-d.y)" in js
-    assert "if(bd<1.&&length(bf)>0.)un+=length(un)*normalize(bf);" in js        # particle_boundary_force
-    # colours: FluidX3D's colorscale_rainbow, the air on its cool part only;
-    # still air transparent; red never in the air, the top wall step red
-    ns: dict = {}
-    exec(re.search(r"^FLOW_AIR = \{.*?\}\n", src, re.M).group(0)
-         + re.search(r"^FLOW_WALL_STEPS = .*?\n", src, re.M).group(0), ns)
-    air, wall = ns["FLOW_AIR"], ns["FLOW_WALL_STEPS"]
-    fns: dict = {"FLOW_AIR": air}
-    for name in ("fluidx3d_rainbow", "flow_air_rgba"):
-        exec(re.search(rf"^def {name}\(.*?(?=^\S)", src, re.S | re.M).group(0), fns)
-    rainbow, rgba = fns["fluidx3d_rainbow"], fns["flow_air_rgba"]
-    # FluidX3D's scale at its own landmarks: black, blue, cyan, green, yellow, red
-    for x, want in ((0.0, (0, 0, 0)), (1 / 3, (0, 0, 1)), (0.5, (0, 1, 1)), (2 / 3, (0, 1, 0)), (0.8, (1, 1, 0)), (1.0, (1, 0, 0))):
-        assert all(abs(g - w) < 1e-6 for g, w in zip(rainbow(x), want)), (x, rainbow(x))
-    def redness(r, g, b):
-        return r > 180 and g < 80 and b < 90
-    for i in range(401):
-        (r, g, b), alpha = rgba(air["full"] * 2 * i / 400)
-        assert not redness(r, g, b), "the air is never red"
-        if i * 2 / 400 < air["rest"]:
-            assert alpha == 0.0, "still air is transparent"
-    r, g, b = (int(wall[-1][1][i:i + 2], 16) for i in (1, 3, 5))
-    assert redness(r, g, b), "the highest wall pressure is the red step"
-    assert '"flow": {"air": dict(FLOW_AIR),' in src
-    # the same scale in the browser, line for line
-    assert "if(x<1.2){r=1.;g=x*.83333333;}else if(x<2.){r=2.5-x*1.25;g=1.;}" in js
-    # no glass, gloss, glow or blur anywhere in it
-    code = re.sub(r"//[^\n]*|/\*.*?\*/", "", body, flags=re.S)
-    for word in ("spec", "fresnel", "blur", "glow", "createRadialGradient", "shadowBlur"):
-        assert word not in code, word
-    # the environment: the grid's mesh, 1px domain box, transparent ground, the switch
-    assert "x.strokeRect(0.5, 0.5, sz.w - 1, sz.h - 1);" in js
-    assert "T.btn.textContent = 'Verification Overlay';" in js
-    assert "plot_bgcolor" not in src[src.index("def fan_chart"):src.index("def panel_head")]
-    # the proof
-    for key in ("colourMismatch", "gridMiss", "particleMoveMismatch", "particleColourMismatch",
-                "redOffWall", "obstacleMiss", "wallMismatch", "peakIsRed"):
-        assert key in js, key
-    scan = (root / "tools" / "deep_scan.mjs").read_text(encoding="utf-8")
-    assert "await windAgrees(tag" in scan and "redOffWall" in scan and "obstacleMiss" in scan and "gridMiss" in scan
-    css = (root / "static" / "app.css").read_text(encoding="utf-8")
-    assert ".wt-verify" in css and ".flow-key" in css and ".flow-ramp" in css
-    reveal = (root / "static" / "reveal.js").read_text(encoding="utf-8")
-    assert "windtunnel.js" in reveal
-    # an emulated GPU also draws the page: the solve there froze it (Live audit,
-    # 2026-11-04), so the page leaves the flow out on a software renderer, and
-    # CI proves the solve in its own step
-    assert "if (!g.gl || g.soft) {" in js and "api.status = g.gl ? 'software renderer: flow not run'" in js
-    # John, 2026-11-04 (live): the tunnel built at load and read the GPU back
-    # synchronously, and the page lost its arrivals and its buttons. Nothing
-    # is built until the cone is near and the page is calm; programs compile
-    # in the background; the live loop reads back through a fence, never a
-    # blocking readPixels; and it holds while a glide or an arrival moves.
-    assert "near.observe(gd)" in js and "requestIdleCallback(go" in js and "new Tunnel(gd, reduced)" not in js
-    assert "KHR_parallel_shader_compile" in js and "COMPLETION_STATUS_KHR" in js
-    loop = js[js.index("Tunnel.prototype.frame = function"):js.index("// ---- the proof")]
-    assert "T.readAsync()" in loop and "T.pollRead()" in loop and "T.paint()" not in loop.split("} else {")[1]
-    assert "gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0)" in js and "gl.clientWaitSync(rb.sync, 0, 0)" in js
-    assert "function gliding() { return !!(D.__melionaStop || W.__melionaStop); }" in js   # main.py's P is the document
-    assert "R.moving() > 0" in js and "api.moving = function" in reveal
-    # a card that cannot keep up is HELD still: the same solve, so it stays
-    # "lbm" (Live audit, 2026-11-04: renaming it "lbm-still" failed step 8d)
-    assert "T.held = true; T.done = true;" in js and "T.mode = 'lbm-still'; T.done" not in js
-    wf = (root / ".github" / "workflows" / "live-audit.yml").read_text(encoding="utf-8")
-    assert "node tools/flow_check.mjs http://127.0.0.1:8501 flow-shots" in wf
-    probe = (root / "tools" / "flow_check.mjs").read_text(encoding="utf-8")
-    for key in ("colourMismatch", "gridMiss", "particleMoveMismatch", "particleColourMismatch", "wallMismatch",
-                "redOffWall", "obstacleMiss", "peakIsRed", "volatility-shock"):
-        assert key in probe, key
-
-
 def test_the_browser_audit_runs_on_an_os_its_playwright_supports():
     """2026-11-04: GitHub's ubuntu-latest became 26.04 and Playwright 1.56.1
     refused to install Chromium there, so every browser step of the Live audit
@@ -6757,30 +6486,25 @@ def test_every_in_page_button_is_flown_by_both_glide_scans():
 
 
 def test_the_crisis_record_audit_reaches_the_boxes_its_own_way():
-    """John, 2026-10-30: the four boxes under the hero must trace to a source,
+    """John, 2026-10-30: the boxes under the hero must trace to a source,
     not be hallucinated. Live audit step 1 works them out a second time from
     Yahoo's raw chart API with its own loop (tools.live_provenance.crisis_boxes,
     no src.conviction); that only proves anything if the loop agrees with the
-    engine on the same closes - checked here offline, a late-listing member
-    and a gap in a window's first week included, so the "trading at the window
-start" rule is exercised."""
+    engine on the same closes - checked here offline."""
     import src.conviction as conv
     from tools import live_provenance as lp
-    names = [conv.BENCHMARK, *conv.AI_CAPEX_BASKET]
-    px = _offline_market_prices(names, "max")
-    px.loc[:"2019-06-30", conv.AI_CAPEX_BASKET[-1]] = np.nan
-    px.loc["2020-02-21", conv.AI_CAPEX_BASKET[0]] = np.nan    # a gap in COVID's first week
+    px = _offline_market_prices([conv.BENCHMARK], "max")
     real = conv.fetch_prices
     conv.fetch_prices = lambda tickers, period="2y", align=True, **_: px[list(tickers)]
     try:
         page = lp.page_boxes(conv.load_conviction())
     finally:
         conv.fetch_prices = real
-    mine = lp.crisis_boxes(px[conv.BENCHMARK], px[conv.AI_CAPEX_BASKET])
+    mine = lp.crisis_boxes(px[conv.BENCHMARK])
     assert page.keys() == mine.keys()
     for k, v in page.items():
-        assert (v == mine[k]) if isinstance(v, (str, list)) else abs(v - mine[k]) < 1e-12, (k, v, mine[k])
-    assert int(page["t1"].split(" of ")[1]) >= 3 and int(page["race"].split(" of ")[1]) >= 3, page
+        assert (v == mine[k]) if isinstance(v, str) else abs(v - mine[k]) < 1e-12, (k, v, mine[k])
+    assert int(page["t1"].split(" of ")[1]) >= 3, page
 
 
 
@@ -6827,7 +6551,7 @@ def test_the_phone_shortcut_flies_to_the_engine_and_never_covers_it():
     assert "env(safe-area-inset-bottom)" in rule(".m-dock")
     btn = rule(".m-dock-btn")
     assert "min-height: 44px" in btn and "border-radius: 0" in btn and "box-shadow: none" in btn
-    assert "background-color: #3F3B35" in rule(".m-dock"), "a charcoal bar"
+    assert "background-color: #2E2A25" in rule(".m-dock"), "a stone bar, as the banner's"
     assert ".m-dock-btn:active" in css and ".m-dock-btn:focus-visible" in css
     assert re.search(r"prefers-reduced-motion: reduce\)\s*\{\s*\.m-dock \{ animation: none", css)
     assert not re.search(r"\.m-[\w-]+[^{}]*\{[^}]*box-shadow:(?!\s*none)", css), "no glow on the dock"
@@ -6882,10 +6606,10 @@ def test_the_cookie_notice_informs_once_and_never_blocks():
     assert "Local storage" in row and "OK" in row
     assert "it is not a consent banner" in " ".join(privacy.split())
     # every layout probe answers it before measuring
-    for tool in ("device_check", "deep_scan", "recruiter_walk", "flow_check", "glide_load_check"):
+    for tool in ("device_check", "deep_scan", "recruiter_walk", "glide_load_check"):
         t = (root / "tools" / f"{tool}.mjs").read_text(encoding="utf-8")
         assert "localStorage.setItem('meliona-cookie-notice', 'ok')" in t or "__melionaNotice?.dismiss()" in t, tool
-    for tool in ("device_check", "deep_scan", "flow_check"):
+    for tool in ("device_check", "deep_scan"):
         t = (root / "tools" / f"{tool}.mjs").read_text(encoding="utf-8")
         assert "revealAll(); window.__melionaNotice?.dismiss();" in t, f"{tool} measures with the notice up"
     site = (root / "tools" / "site_check.mjs").read_text(encoding="utf-8")
@@ -6993,6 +6717,223 @@ def test_the_footer_links_to_the_source_code():
             'Summer-2026-Quant-Project-Risk-Engine-Blueprint">Source code on GitHub</a>') in row
     acc = foot.index(">Accessibility</a>")
     assert acc < foot.index("Source code on GitHub") < foot.index("</div>", acc) + 200
+
+
+def test_the_tab_strip_tells_one_story():
+    """John, 2026-11-05 (ME-28): the page tells one story - how much this book
+    could lose in a bad year, what real crashes did, which names hold up, how
+    anchors cushion flyers. The cone's airflow, the Liquidity, Correlation
+    Watch and Balance tabs, the AI-capex race and the model-validation drawer
+    were cut; the strip is these four, in this order."""
+    import re
+    root = pathlib.Path(__file__).resolve().parent.parent
+    main = (root / "main.py").read_text(encoding="utf-8")
+    strip = re.search(r"tab_3d, tab_breakdown, tab_grit, tab_conviction = st\.tabs\(\[(.*?)\]\)", main, re.S)
+    assert strip, "the analysis tab strip is not the four story tabs"
+    assert re.findall(r'"([^"]+)"', strip.group(1)) == [
+        "Risk Topology", "Risk Breakdown", "Grit Zone", "Crisis Conviction"]
+    code = re.sub(r"(?m)^\s*#.*$", "", main)
+    for gone in ("Correlation Watch", "Model validation", "AI-capex race", "Verification Overlay"):
+        assert gone not in code, gone
+    assert not (root / "static" / "windtunnel.js").exists()
+
+
+
+# ---- ME-28 part 4 (John, 2026-11-05): the builder, a contact form, a
+# thank-you state and page, case studies, five questions and the schema ----
+
+def test_the_contact_form_prepares_an_email_and_keeps_nothing():
+    """There is no mail server and no database, so the form's honest analogue
+    prepares an email the visitor sends from their own app. Every rule is
+    checked on the server (topic from the closed list, a message that is not
+    empty and at most CONTACT_MAX characters, a short optional name); the
+    visitor's words leave only percent-encoded inside a mailto: link, never
+    reach the page as markup, are never logged, and a valid submit shows the
+    thank-you state with the response time and the session reference."""
+    import re
+    from urllib.parse import unquote, urlsplit, parse_qs
+    import hero
+    attack = 'Hi <script>alert(1)</script> "q" \'s & a=b?c#d\n</a><img src=x onerror=alert(1)>'
+    url, why = hero.contact_mailto("help@example.test", "Ann <b>", "Recruiting", attack, "ABCD1234")
+    assert why is None and url.startswith("mailto:help@example.test?subject=")
+    query = url.split("?", 1)[1]
+    assert re.fullmatch(r"subject=[A-Za-z0-9_.~%-]+&body=[A-Za-z0-9_.~%-]+", query), \
+        "the visitor's text is not fully percent-encoded"
+    fields = parse_qs(urlsplit(url).query)
+    assert attack in unquote(query.split("&body=")[1]) and "ABCD1234" in fields["subject"][0]
+    assert hero.contact_mailto("a@b.c", "", "Question", "  \n ", "R") == (
+        None, "Write a message first: the box is empty.")
+    long, why = hero.contact_mailto("a@b.c", "", "Question", "x" * (hero.CONTACT_MAX + 1), "R")
+    assert long is None and f"{hero.CONTACT_MAX:,}" in why
+    assert hero.contact_mailto("a@b.c", "", "Free text", "hi", "R")[0] is None, "topic outside the list"
+    assert hero.contact_mailto("a@b.c", "n" * (hero.CONTACT_NAME_MAX + 1), "Question", "hi", "R")[0] is None
+    assert hero.contact_mailto("a@b.c", "", "Question", "x" * hero.CONTACT_MAX, "R")[0], "the limit itself is allowed"
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    main = (root / "main.py").read_text(encoding="utf-8")
+    block = main[main.index('id="contact"'):main.index("# ---- Closing band")]
+    for leak in ("log_incident", "logging", "open(", "write_text", "_c_msg}", "_c_name}"):
+        assert leak not in block, f"the contact block {leak!r}: the visitor's words must not be kept or printed"
+    assert "max_chars=CONTACT_MAX" in block and "max_chars=CONTACT_NAME_MAX" in block
+
+    at, restore = _offline_app()
+    try:
+        at.button(key="contact_send").click().run()
+        assert [e.value for e in at.error] == ["Write a message first: the box is empty."]
+        at.text_area(key="contact_message").set_value(attack)
+        at.text_input(key="contact_name").set_value("Ann <b>")
+        at.selectbox(key="contact_topic").set_value("Recruiting")
+        at.button(key="contact_send").click().run()
+        assert not at.exception and not at.error
+        card = [m.value for m in at.markdown if "thanks-card" in m.value and "<style" not in m.value]
+        assert card and "Thank you" in card[0] and hero.RESPONSE_WINDOW in card[0]
+        assert at.session_state.session_ref in card[0], "the thank-you state does not show the session reference"
+        assert all("<script>alert" not in m.value and "onerror" not in m.value for m in at.markdown), \
+            "the visitor's words reached the page as markup"
+        links = at.get("link_button")
+        assert len(links) == 1 and links[0].proto.url.startswith("mailto:")
+        assert "<" not in links[0].proto.url and " " not in links[0].proto.url
+        assert any('href="/thanks.html"' in m.value for m in at.markdown), "no link to the page to keep"
+        at.button(key="contact_again").click().run()
+        assert at.text_area(key="contact_message") is not None and not at.get("link_button")
+    finally:
+        restore()
+
+
+def test_the_thank_you_page_is_branded_noindexed_and_says_when_john_replies():
+    """public/thanks.html: copied to the site root by tools/public_files.py
+    like the 404, kept out of search results, in the banner's paper and
+    stone, with the response time, the address and a way back."""
+    import tempfile
+    import hero
+    import tools.public_files as pf
+    root = pathlib.Path(__file__).resolve().parent.parent
+    page = (root / "public" / "thanks.html").read_text(encoding="utf-8")
+    assert '<meta name="robots" content="noindex">' in page
+    assert hero.RESPONSE_WINDOW in page and "meleona.support@gmail.com" in page
+    assert 'href="/"' in page and "#2E2A25" in page and "#B8955E" in page
+    for _, url, _ in hero.PROFILE_LINKS:
+        assert url in page
+    with tempfile.TemporaryDirectory() as tmp:
+        d = pathlib.Path(tmp)
+        (d / "index.html").write_text("<html><head><title>Streamlit</title></head><body>"
+                                      "<noscript>x</noscript></body></html>", encoding="utf-8")
+        pf.install(d, "https://example.test")
+        assert (d / "thanks.html").read_text(encoding="utf-8") == page
+        assert "thanks" not in (d / "sitemap.xml").read_text(encoding="utf-8"), "a noindex page is in the sitemap"
+
+
+def test_the_schema_parses_and_its_faq_is_the_pages():
+    """The served head carries schema.org JSON-LD: the Person (with the three
+    profile links as sameAs and the portrait as image), the web app (free,
+    FinanceApplication, its source repository) and the FAQPage. It parses as
+    JSON, holds no raw "<", and its five questions are the page's own."""
+    import html as _html
+    import json
+    import re
+    import hero
+    import tools.public_files as pf
+    head = pf.head_tags("https://example.test")
+    blocks = re.findall(r'<script type="application/ld\+json">(.*?)</script>', head, re.S)
+    assert len(blocks) == 1 and "<" not in blocks[0]
+    graph = {n["@type"]: n for n in json.loads(blocks[0])["@graph"]}
+    person, app, faq = graph["Person"], graph["WebApplication"], graph["FAQPage"]
+    assert person["name"] == "John Nguyen" and person["sameAs"] == [
+        "https://www.linkedin.com/in/johnnguyen3000/", "https://github.com/ricepillow3000",
+        "https://app.joinhandshake.com/profiles/74fwhv"]
+    assert person["image"] == "https://example.test/app/static/john-nguyen.jpg"
+    assert app["applicationCategory"] == "FinanceApplication" and app["offers"]["price"] == "0"
+    assert app["author"] == {"@id": person["@id"]} and hero.REPO_URL in app["sameAs"]
+    assert app["isBasedOn"]["codeRepository"] == hero.REPO_URL
+    qa = [(q["name"], q["acceptedAnswer"]["text"]) for q in faq["mainEntity"]]
+    assert len(qa) == 5 and qa == list(hero.FAQS)
+    shown = hero.faq_html()
+    for q, a in hero.FAQS:
+        assert _html.escape(q) in shown and _html.escape(a) in shown
+    main = (pathlib.Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
+    assert "st.markdown(faq_html()" in main, "the page does not render the questions the schema states"
+    assert "investment advice" in qa[2][0] and qa[2][1].startswith("No.")
+
+
+def test_the_builder_block_shows_the_portrait_and_links_out_safely():
+    """John's portrait and three clickable marks (LinkedIn, GitHub,
+    Handshake): a real <img> with alt text, its size and lazy loading, the
+    AVIF/WebP/JPEG set at twice the drawn size; every mark opens a new tab
+    with noopener noreferrer, names itself for a screen reader and is a 44px
+    target. The hero carries the contact link above the fold, and every
+    <img> the site draws has alt text."""
+    import re
+    from PIL import Image
+    import hero
+    root = pathlib.Path(__file__).resolve().parent.parent
+    about = hero.about_html()
+    img = re.search(r"<img [^>]*>", about).group(0)
+    for attr in ('alt="John Nguyen, the builder of Meliona, in a navy blazer"', 'width="240"',
+                 'height="300"', 'loading="lazy"', 'decoding="async"'):
+        assert attr in img, attr
+    for ext in ("avif", "webp", "jpg"):
+        f = root / "static" / f"john-nguyen.{ext}"
+        assert f"./app/static/john-nguyen.{ext}" in about
+        assert f.stat().st_size < 60_000, f"{f.name} is {f.stat().st_size} bytes"
+        if ext != "avif":
+            assert Image.open(f).size == (480, 600)
+    marks = re.findall(r"<a [^>]*>", hero.profile_marks())
+    assert len(marks) == 3
+    for (name, url, _), a in zip(hero.PROFILE_LINKS, marks):
+        assert f'href="{url}"' in a and 'target="_blank"' in a and 'rel="noopener noreferrer me"' in a
+        assert f'aria-label="John Nguyen on {name}"' in a
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    svg = re.search(r"\.about-band \.pmark svg \{([^}]*)\}", css).group(1)
+    side = (int(re.search(r"width: (\d+)px", svg).group(1)) + 2 * int(re.search(r"padding: (\d+)px", svg).group(1)) + 2)
+    assert side >= 44 and "min-height: 44px" in css[css.index(".about-band .pmark {"):][:300]
+    main = (root / "main.py").read_text(encoding="utf-8")
+    assert "st.markdown(about_html()" in main and 'profile_marks("f-mark")' in main
+    assert main.index("st.markdown(about_html()") > main.index("st.tabs(["), "the builder sits above the tab strip"
+    assert 'href="#contact" class="cta-link">' in hero.hero_html() and hero.HERO_CONTACT in hero.boot_skeleton_html()
+    for f in ("main.py", "hero.py", "public/404.html", "public/thanks.html"):
+        text = (root / f).read_text(encoding="utf-8")
+        for tag in re.findall(r"<img\s[^>]*>", text):
+            assert re.search(r'\balt="[^"]+"', tag) or "{PORTRAIT_ALT}" in tag, f"{f}: <img> without alt: {tag[:80]}"
+
+
+def test_the_case_studies_read_the_live_record():
+    """Crisis Conviction's case studies name three crises from
+    HISTORICAL_REGIMES and print only numbers the crisis table computed: the
+    fall, the trading days from the bottom back to the old peak (and the
+    date), and a bottom-day buyer's return a year on. Checked on a hand-built
+    path, and on the page against the table for the same market."""
+    import re
+    from src.conviction import crisis_forward_returns, load_conviction
+    from src.scenarios import HISTORICAL_REGIMES
+    root = pathlib.Path(__file__).resolve().parent.parent
+    main = (root / "main.py").read_text(encoding="utf-8")
+    import ast
+    names = ast.literal_eval(re.search(r"(?m)^CASE_STUDIES = (.*)$", main).group(1))
+    assert len(names) == 3 and all(n in HISTORICAL_REGIMES for n in names)
+    idx = pd.bdate_range("2019-06-03", "2021-12-31")
+    px = pd.Series(100.0, index=idx)
+    px.loc["2020-02-19"] = 120.0
+    px.loc["2020-03-23"] = 60.0
+    px.loc["2020-03-24":"2020-06-30"] = 105.0
+    px.loc["2020-07-01":] = 121.0                       # first close back above the peak
+    covid = crisis_forward_returns(px).set_index("crisis").loc["COVID-19 crash (2020)"]
+    assert covid["recovery_days"] == idx.get_loc(pd.Timestamp("2020-07-01")) - idx.get_loc(pd.Timestamp("2020-03-23"))
+    assert str(covid["recovery_date"]) == "2020-07-01"
+    at, restore = _offline_app()
+    try:
+        table = load_conviction()["table"].set_index("crisis")
+        page = next(m.value for m in at.markdown if 'class="case-list"' in m.value)
+        rows = re.findall(r'<div class="case-name">([^<]+)</div>(.*?)(?=<div class="case-row">|</div></div>$)', page)
+        shown = [n for n, _ in rows]
+        assert shown == [n for n in names if n in table.index] and shown, shown
+        for name, body in rows:
+            r = table.loc[name]
+            values = re.findall(r'<div class="case-v">([^<]+)</div>', body)
+            assert values[0] == f"{r['depth']:.0%}"
+            assert values[1] == (f"{int(r['recovery_days'])} days" if pd.notna(r["recovery_days"]) else "Not back")
+            assert values[2] == (f"{r['trough_1y later']:+.0%}" if pd.notna(r["trough_1y later"]) else "Too recent")
+    finally:
+        restore()
 
 
 if __name__ == "__main__":

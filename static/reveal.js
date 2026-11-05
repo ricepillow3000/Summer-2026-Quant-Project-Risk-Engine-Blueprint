@@ -8,14 +8,14 @@
  *      IntersectionObserver reports the moment it arrives; nothing listens to
  *      every scrolled pixel. Blocks that arrive together are staggered top to
  *      bottom, left to right.
- *   2. Scrubs - decorative layers (the band's photo, the bronze lintel over each
- *      panel) follow the scroll position itself. app.css does this with scroll
+ *   2. Scrubs - the charcoal key of each section heading's rule draws itself
+ *      across with the scroll position itself. app.css does this with scroll
  *      timelines, off the main thread; where a browser has none, this file
- *      feeds the same position as --scrub, and only while the layer is on
- *      screen.
- *   3. Plates - the heavy photos behind a band start downloading 600px before
- *      the band reaches the screen, and fade in once there. Words come first.
- *   4. Glide - a mouse wheel or trackpad tows the page, like a boat on a line, to where it was sent
+ *      feeds the same position as --scrub, and only while the rule is on
+ *      screen. (The photographs, their parallax and the plates that loaded
+ *      them lazily went on 2026-11-05, ME-28: the page is flat paper and
+ *      stone, like the share banner.)
+ *   3. Glide - a mouse wheel or trackpad tows the page, like a boat on a line, to where it was sent
  *      instead of stepping it there. It stands aside while a button's glide
  *      flies, inside anything that scrolls on its own (a table, a list), and
  *      for touch and keys, which keep the browser's own scrolling.
@@ -52,32 +52,23 @@
   // and any section a button flies to - the glide lands on it, and it must
   // not fade as it lands (deep_scan: "destination never fades").
   var SKIP = '#hero, #boot-skel, .st-key-risk-map, .st-key-glide';
-  var DEST = '#grit-showcase, #conviction, #crisis-record, #the-slice, #engine, #analysis, #the-book';
+  var DEST = '#grit-showcase, #conviction, #crisis-record, #the-slice, #engine, #analysis, #the-book, #contact';
   // Where a block sits decides how it arrives: its centre in the left or right
   // share of the page slides in from that side; in the middle it turns over.
   var SIDE = 0.42;        // left of 42% (or right of 58%) of the page's width
   var WIDE = 0.6;         // wider than 60% of the page: tips up, not turns
   var CARD = 0.45;        // a card is narrower than 45% of the page; a wider block in the middle tips up
-  var SCRUB = '.showcase-row, .panel-head';
-  // Each photo plate, and the class on <html> that attaches it (app.css,
-  // main.py). On <html>, not the band: Streamlit may rewrite a block's own
-  // classes on a rerun, and the photo would go with them.
-  var PLATES = { '.showcase-row': 'has-band', '.st-key-gungnir_zone': 'has-gungnir' };
-  var PLATE = Object.keys(PLATES).join(',');
-  var ALL = [ITEMS, SCRUB, PLATE].join(',');
-  function attach(el) {
-    for (var sel in PLATES) if (el.matches(sel)) H.classList.add(PLATES[sel]);
-  }
+  var SCRUB = '.panel-head';
+  var ALL = [ITEMS, SCRUB].join(',');
 
   var calm = !('IntersectionObserver' in W) ||
     (W.matchMedia && W.matchMedia('(prefers-reduced-motion: reduce)').matches);
-  var api = W.__melionaReveal = { revealAll: function () {}, moving: function () { return 0; } };
-  // The cone's wind tunnel (static/windtunnel.js) and the bottom dock - the
-  // phone shortcut and the cookie notice (static/dock.js) - come with this
-  // file: one entry point, so the head and main.py's fallback both bring
-  // them. Under reduced motion they load too (the tunnel draws one still
-  // frame of the same solve; the dock shows without its slide).
-  [['meliona-wind', 'windtunnel.js'], ['meliona-dock', 'dock.js']].forEach(function (f) {
+  var api = W.__melionaReveal = { revealAll: function () {} };
+  // The bottom dock - the phone shortcut and the cookie notice
+  // (static/dock.js) - comes with this file: one entry point, so the head and
+  // main.py's fallback both bring it. Under reduced motion it loads too (the
+  // dock shows without its slide).
+  [['meliona-dock', 'dock.js']].forEach(function (f) {
     var id = f[0], file = f[1];
     if (D.getElementById(id)) return;
     var s = D.createElement('script'), me = D.getElementById('meliona-reveal');
@@ -85,7 +76,7 @@
     s.src = (me && me.src ? me.src : 'app/static/reveal.js').replace(/reveal\.js(\?.*)?$/, file);
     D.head.appendChild(s);
   });
-  if (calm) { H.classList.remove('reveal-on'); return; }   // everything as drawn, photos at once
+  if (calm) { H.classList.remove('reveal-on'); return; }   // everything as drawn
 
   // ---- 1. reveals ----------------------------------------------------------
   var seen = new IntersectionObserver(function (entries) {
@@ -164,9 +155,6 @@
   api.revealAll = function () {                       // the end state, at once (layout probes)
     [].forEach.call(D.querySelectorAll('.reveal-item'), function (el) { seen.unobserve(el); done(el); });
   };
-  // how many blocks are arriving right now (the cone's wind tunnel holds its
-  // GPU work until they have landed, so the arrivals keep the frames)
-  api.moving = function () { return D.querySelectorAll('.reveal-item.is-visible').length; };
 
   // ---- 2. scrubs (fallback only) -------------------------------------------
   var native = W.CSS && CSS.supports && CSS.supports('animation-timeline: view()');
@@ -192,16 +180,7 @@
     if (live.length) { D.addEventListener('scroll', onScroll, { capture: true, passive: true }); onScroll(); }
   });
 
-  // ---- 3. plates -------------------------------------------------------------
-  var near = new IntersectionObserver(function (entries) {
-    entries.forEach(function (e) {
-      if (!e.isIntersecting) return;
-      near.unobserve(e.target);
-      attach(e.target);                               // the photo downloads now, then fades up
-    });
-  }, { rootMargin: '600px 0px' });
-
-  // ---- 4. glide ----------------------------------------------------------------
+  // ---- 3. glide ----------------------------------------------------------------
   // A boat on a tow line (John, 2026-11-04: "heavier ... like a boat being
   // tugged", not static). The wheel moves the tug - where the page is going
   // (aim). The page is the hull: a mass pulled toward the aim by a critically
@@ -266,7 +245,6 @@
     found.forEach(function (el) {
       if (el.__rv || el.closest(SKIP)) return;
       el.__rv = 1;
-      if (el.matches(PLATE)) { if (late) attach(el); else near.observe(el); }
       if (el.matches(SCRUB) && onScreen) onScreen.observe(el);
       if (!el.matches(ITEMS) || el.matches(DEST) || el.querySelector(DEST) || el.querySelector(SKIP)) return;
       // a container block arrives through its parts: its own leaves, or the

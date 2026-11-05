@@ -22,16 +22,45 @@
      ink       charcoal #3F3B35 · body #4A4640 · quiet #5D574D · bronze #6A5030
      rules     bronze #9A7B4F · hairline #C4BDAE
    Every text colour is checked against the ground it really sits on by
-   test_text_colours_meet_wcag_aa. Capitals are kept for the verdict's label
-   alone (test_uppercase_is_kept_to_the_verdict_label).
+   test_text_colours_meet_wcag_aa. Capitals speak only in the label voice
+   below (test_capitals_speak_only_in_the_banners_label_voice).
 
-   The house mark is one 2px bronze rule over a surface. Surfaces are flat:
-   no gloss, no glass, no lift on hover, no shadow halos. */
+   2026-11-05 (ME-28, John: "the entire website's design matches the design
+   of our banner"): the share banner (tools/og_image.html) is the reference.
+     paper #EDE9E3 · ink #3F3B35 · ink-2 #5D574D · bronze-text #6A5030
+     stone #2E2A25 (the dark blocks) · stone-deep #26221E (the footer)
+     gold-text #C6A26B (words on stone) · gold-rule #B8955E (rules on stone)
+     words on stone #EDE9E3, quieter #D8D1C5
+   Blocks are flat paper or flat stone with square corners: no photographs,
+   no gradients, no shadows, no rounded cards. The one ornament is the
+   crest's faint engraving (hero.crest_engraving), once per stone block.
+   Type: Georgia for every word that is read, weight 700 for display titles;
+   the LABEL VOICE - Helvetica, bold, 12-13px, capitals tracked .2em, bronze
+   on paper and gold on stone - for kickers, captions over numbers, buttons
+   and tabs. A kicker is that label with a 3px charcoal bar on its left. The
+   annual-report rule is a hairline across the column with a 3px charcoal key
+   over its first 160px. A receipt is a 3px top rule, then rows divided by
+   hairlines. test_capitals_speak_only_in_the_banners_label_voice holds the
+   label voice to its one shape. */
+
+/* ---- The banner's pieces ---------------------------------------------- */
+.kicker { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 700;
+    font-size: 0.8125rem; line-height: 1.5; letter-spacing: .2em; text-transform: uppercase;
+    color: #6A5030; border-left: 3px solid #2E2A25; padding-left: 14px; margin: 0; }
+.ar-rule { display: block; position: relative; height: 3px; width: 100%; }
+.ar-rule::before { content: ""; position: absolute; left: 0; right: 0; top: 1px; height: 1px;
+    background: rgba(63,59,53,.28); }
+.ar-rule::after { content: ""; position: absolute; left: 0; top: 0; height: 3px;
+    width: min(160px, 30%); background: #2E2A25; }
+.crest-engraving { position: absolute; display: block; pointer-events: none; overflow: visible; }
 
 html, body, [class*="css"] { font-family: Georgia, 'Times New Roman', serif; }
 h1, h2, h3 { color: #3F3B35; font-weight: 400; }
 /* Square corners everywhere - Streamlit rounds its widgets, tags and alerts */
 [data-testid="stExpander"], [data-testid="stExpander"] details, .stButton>button,
+.stFormSubmitButton>button, .stLinkButton>a, [data-testid="stTextAreaRootElement"],
+[data-testid="stTextInputRootElement"], [data-testid="stTextArea"] textarea,
+[data-testid="stSelectbox"] [role="group"],
 [data-testid="stMetric"], div[data-baseweb="select"]>div,
 [data-baseweb="input"], [data-baseweb="base-input"], .stNumberInput input,
 [data-testid="stTextInput"] input, [data-testid="stDataFrame"],
@@ -47,9 +76,12 @@ h1, h2, h3 { color: #3F3B35; font-weight: 400; }
 [data-testid="stCaptionContainer"] p, [data-testid="stCaptionContainer"] div {
     font-size: 0.8438rem !important; color: #5D574D !important; line-height: 1.5 !important;
     opacity: 1 !important; }
-/* Metric labels: sentence case, quiet ink (#ABA499 measured 2.14:1, ME-13). */
-[data-testid="stMetricLabel"] p { font-size: 0.8125rem !important; color: #5D574D !important; }
-[data-testid="stMetricValue"] { font-family: Georgia, serif !important;
+/* Metric labels: the label voice in the text bronze (#ABA499 measured
+   2.14:1, ME-13). */
+[data-testid="stMetricLabel"] p { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif !important;
+    font-weight: 700; font-size: 0.75rem !important; letter-spacing: .2em; text-transform: uppercase;
+    color: #6A5030 !important; }
+[data-testid="stMetricValue"] { font-family: Georgia, serif !important; font-weight: 700;
     color: #3F3B35 !important; }
 /* Streamlit keeps a metric's label and value to one line and cuts the rest
    with an ellipsis; in a phone's or portrait iPad's narrow metric columns that
@@ -68,30 +100,33 @@ h1, h2, h3 { color: #3F3B35; font-weight: 400; }
 /* The verdict: a stat between two rules, the one number that owns the page.
    Its label is the one place capitals are kept. */
 .verdict-box { background: transparent; border: none;
-    border-top: 2px solid #9A7B4F; border-bottom: 1px solid #C4BDAE;
-    padding: 26px 4px 30px; margin: 8px 0 30px; }
-.verdict-label { font-family: 'Helvetica Neue', sans-serif; font-size: 0.6875rem;
-    letter-spacing: 0.22em; text-transform: uppercase; color: #6A5030; }
-.verdict-number { font-size: 6rem; color: #3F3B35; margin: 8px 0 4px;
-    line-height: 1; font-weight: 400; }
+    border-top: 3px solid #2E2A25; border-bottom: 1px solid rgba(63,59,53,.28);
+    padding: 22px 0 30px; margin: 8px 0 30px; }
+.verdict-label { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 700;
+    font-size: 0.75rem; letter-spacing: .2em; text-transform: uppercase; color: #6A5030; }
+.verdict-number { font-size: 6rem; color: #3F3B35; margin: 14px 0 6px;
+    line-height: 1; font-weight: 700; }
 .verdict-sentence { font-size: 1.125rem; color: #4A4640; line-height: 1.6; max-width: 580px; }
 
 /* Slider - squared thumb, hairline track */
 [data-testid="stSlider"] [data-baseweb="slider"] > div > div { background: #C4BDAE !important; }
 [data-testid="stSlider"] [role="slider"] {
-    background: #9A7B4F !important; border-radius: 0 !important;
-    border: 2px solid #F1EDE5 !important; box-shadow: none !important; }
+    background: #2E2A25 !important; border-radius: 0 !important;
+    border: 2px solid #EDE9E3 !important; box-shadow: none !important; }
 [data-testid="stSlider"] [data-testid="stThumbValue"] {
     color: #3F3B35 !important; font-family: 'Helvetica Neue', sans-serif !important;
     font-size: 0.75rem !important; }
 
-/* Expanders: a tile with a hairline; the border warms when it can be opened */
+/* Expanders: square, a hairline, no fill; the line darkens to charcoal when
+   it can be opened */
 [data-testid="stExpander"] { border: 1px solid #C4BDAE !important;
-    background: #E9E4DB !important; box-shadow: none !important; margin-top: 10px;
+    background: transparent !important; box-shadow: none !important; margin-top: 10px;
     transition: border-color .25s ease; }
+[data-testid="stExpander"] details, [data-testid="stExpander"] summary {
+    background: transparent !important; }
 /* Streamlit draws a second, rounded border on the <details> inside: one frame */
 [data-testid="stExpander"] details { border: none !important; }
-[data-testid="stExpander"]:hover { border-color: #9A7B4F !important; }
+[data-testid="stExpander"]:hover { border-color: #2E2A25 !important; }
 
 /* ---- Presentation flow: hero, showcase, CTAs (reveals: search "REVEAL") ---- */
 html { scroll-behavior: smooth; }
@@ -122,70 +157,83 @@ html { scroll-behavior: smooth; }
 .hero-section, .showcase-section, .showcase-row, .engine-heading,
 #engine { scroll-margin-top: 28px; }
 #analysis { scroll-margin-top: 28px; }
-#gungnir { scroll-margin-top: 28px; }
-/* Gungnir - the slice: the WHOLE zone (headline, direction radio, sketch,
-   CTA) sits on one beige topography, strongest at the left edge, dissolving
-   rightward. */
-.st-key-gungnir_zone { position: relative; padding: 64px 0 84px; margin-top: 30px; }
-.st-key-gungnir_zone::before { content: ""; position: absolute;
-  top: 0; bottom: 0; left: calc(50% - 50vw); right: calc(50% - 50vw);
-  background-color: #F1EDE5; background-size: cover;
-  background-position: left top; background-repeat: no-repeat;
-  border-top: 1px solid #C4BDAE; border-bottom: 1px solid #C4BDAE; }
-.st-key-gungnir_zone > * { position: relative; z-index: 1; }
-.gungnir-head .showcase-title { color: #3F3B35; margin: 6px 0 10px; }
-.gungnir-sub { font-family: Georgia, serif; font-size: 0.875rem; color: #5D574D;
+/* Gungnir - the slice: flat paper between two hairlines (ME-28: the
+   topographic plate and the faded mark behind it went). */
+.st-key-gungnir_zone { position: relative; padding: 72px 0 84px; margin-top: 40px;
+  border-top: 1px solid rgba(63,59,53,.28); }
+.gungnir-head { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; }
+.gungnir-head .showcase-title { color: #3F3B35; margin: 0; }
+.gungnir-head .ar-rule { max-width: 560px; }
+.gungnir-sub { font-family: Georgia, serif; font-size: 1rem; color: #5D574D;
   max-width: 600px; line-height: 1.6; }
 /* The plaque: the two-asset risk-parity identity beside the sketch it
-   explains. A flat plate under one bronze rule. */
-.gungnir-plaque { max-width: 560px; margin-top: 34px; padding: 30px 34px 26px;
-  background: #F1EDE5; border-top: 2px solid #9A7B4F; }
-.gplaque-eq { display: flex; align-items: flex-start; gap: 20px; margin: 0 0 12px; }
-.gplaque-term { display: flex; flex-direction: column; align-items: center; gap: 7px; }
+   explains, set as a receipt - a 3px charcoal rule, the equation, a
+   hairline, then the sentence. */
+.gungnir-plaque { max-width: 560px; margin-top: 34px; padding: 0;
+  background: transparent; border-top: 3px solid #2E2A25; }
+.gplaque-eq { display: flex; align-items: flex-start; gap: 22px; margin: 0;
+  padding: 28px 0 22px; border-bottom: 1px solid rgba(63,59,53,.28); }
+.gplaque-term { display: flex; flex-direction: column; align-items: center; gap: 10px; }
 .gplaque-term .t { font-family: Georgia, serif; font-size: 2.875rem; line-height: 1;
-  color: #3F3B35; }
+  font-weight: 700; color: #3F3B35; }
 .gplaque-term .t sub { font-size: .48em; }
 .gplaque-eqs { font-family: Georgia, serif; font-size: 2.875rem; line-height: 1;
   color: #6A5030; }
-.gplaque-term .c { font-family: 'Helvetica Neue', sans-serif; font-size: 0.75rem;
-  color: #5D574D; }
-.gplaque-read { font-family: Georgia, serif; font-size: 0.9688rem; color: #4A4640;
-  line-height: 1.6; max-width: 460px; }
+.gplaque-term .c { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 700;
+  font-size: 0.75rem; letter-spacing: .2em; text-transform: uppercase; color: #6A5030; }
+.gplaque-read { font-family: Georgia, serif; font-size: 1rem; color: #4A4640;
+  line-height: 1.6; max-width: 480px; padding-top: 16px; }
 
-/* HERO - a two-column court: the pitch on the left, a 2x2 deck of
-   engine-fact tiles on the right. */
-.hero-section { min-height: 58vh; display: grid;
-    grid-template-columns: minmax(0, 1.45fr) minmax(300px, 1fr);
-    gap: 56px; align-items: center; text-align: left;
+/* HERO - the share banner, as a page: flat paper on the left carrying the
+   crest and its kicker, the name, the annual-report rule, the sentence and
+   the button; a charcoal stone block on the right, from the top of the page
+   to the band below and out to the right edge, carrying the engine's facts
+   as a receipt over the crest's faint engraving. No photograph. */
+.hero-section { --hero-pt: 104px; --hero-pb: 72px; --hero-px: max(7vw, calc(50vw - 744px));
+    min-height: 58vh; display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(320px, 1fr);
+    gap: 0 80px; align-items: center; text-align: left;
     /* Full-bleed: the hero fills the page edge to edge and reaches the top.
        The calc swallows the 1rem flex gap of each zero-height block Streamlit
        stacks above the hero, plus one 16px overshoot the boot skeleton copies
        (its own -16px): margin = 16px x (blocks above + 1), pinned by
-       test_the_skeleton_paints_first_and_the_hero_lifts_it. Here, not in the
-       photo's <style>, so the skeleton has this shape before the photo comes. */
-    margin: calc(-2.4rem - 96px) calc(50% - 50vw) 0;
-    padding: 96px max(7vw, calc(50vw - 744px)) 48px;
-    /* A 2px bronze rule top and bottom */
-    box-shadow: inset 0 2px 0 rgba(176,138,85,.55), inset 0 -2px 0 rgba(176,138,85,.55);
-    border-bottom: 1px solid #C4BDAE;
+       test_the_skeleton_paints_first_and_the_hero_lifts_it. */
+    margin: calc(-2.4rem - 64px) calc(50% - 50vw) 0;
+    padding: var(--hero-pt) var(--hero-px) var(--hero-pb);
+    background: #EDE9E3;
     position: relative; overflow: hidden; }
 /* min-width 0 all the way down: at 200% zoom a phone is 195 CSS px wide and
    the sub-text and the button ran out of the hero (UX check, 2026-11-04). */
 .hero-left { display: flex; flex-direction: column; align-items: flex-start;
-    gap: 16px; min-width: 0; }
+    gap: 22px; min-width: 0; }
 .hero-left > * { min-width: 0; max-width: 100%; }
 .hero-title, .hero-sub { overflow-wrap: break-word; }
+.hero-mark { display: flex; align-items: center; gap: 22px; }
+.hero-left .ar-rule { max-width: 640px; }
+/* The stone: stretched to the hero's full height and out over its right
+   padding, so it meets the page's top and right edges and the band below. */
+.hero-stats { position: relative; z-index: 1; align-self: stretch;
+    display: flex; flex-direction: column; justify-content: center;
+    margin: calc(-1 * var(--hero-pt)) calc(-1 * var(--hero-px)) calc(-1 * var(--hero-pb)) 0;
+    padding: var(--hero-pt) var(--hero-px) var(--hero-pb) 56px;
+    background: #2E2A25; overflow: hidden; }
+.hero-stats .crest-engraving { width: 300px; height: 300px; top: 0; bottom: 0;
+    left: 56px; right: var(--hero-px); margin: auto; }
+.hreceipt-h, .hstat-list { position: relative; }
+.hreceipt-h { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 700;
+    font-size: 0.8125rem; line-height: 1.4; letter-spacing: .2em; text-transform: uppercase;
+    color: #C6A26B; padding-bottom: 14px; border-bottom: 3px solid #B8955E; }
 @media (max-width: 1100px) {
-  .hero-section { grid-template-columns: minmax(0, 1fr); }
+  .hero-section { grid-template-columns: minmax(0, 1fr); --hero-pb: 0px; }
+  /* one column: the stone becomes a full-width block under the pitch */
+  .hero-stats { margin: 48px calc(-1 * var(--hero-px)) 0; padding: 48px var(--hero-px) 52px; }
+  .hero-stats .crest-engraving { left: var(--hero-px); }
   .showcase-row { grid-template-columns: 1fr !important; } }
 /* Short-viewport hero compression lives at the END of the stylesheet stack
-   (search "SHORT-VIEWPORT HERO"): the hero padding is set by an injected
-   <style> emitted later, and a rule placed here loses on source order. */
-.hero-stats { position: relative; z-index: 1; display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+   (search "SHORT-VIEWPORT HERO"). */
 /* The crest stands on the page itself - no plate, no frame (John, 2026-10-29):
    the box keeps its size so nothing below it moves, and the mark fills it. */
-.hero-crest { width: 132px; height: 132px; }
+.hero-crest { width: 96px; height: 96px; flex: none; }
 .hero-crest svg { width: 100%; height: 100%; display: block; overflow: visible; }
 /* Hover: the three rings ripple outward, inner ring first. main.py's script
    holds .rippling after the pointer leaves until each ring ends its pass, so
@@ -202,104 +250,154 @@ html { scroll-behavior: smooth; }
 .hero-crest .crest-ring:nth-of-type(3) { animation-delay: .6s; }
 @media (prefers-reduced-motion: reduce) {
     .hero-crest:hover .crest-ring, .hero-crest.rippling .crest-ring { animation: none; } }
-.hero-title { font-size: clamp(2.5rem, 10.5vw, 5.25rem) !important; color: #3F3B35;
-    line-height: 0.98 !important; margin: 2px 0; }
+/* The name, the banner's display: Georgia 700, the product line under it. */
+.hero-title { font-size: clamp(3rem, 12vw, 6.5rem) !important; color: #3F3B35;
+    font-weight: 700 !important; line-height: 0.95 !important; margin: 0; }
 .hero-title .hline { display: block; }
-.hero-sub { font-size: 1.3125rem; color: #4A4640; max-width: 640px; line-height: 1.6; }
-/* The stat squares: filled rectangles, square corners, no frame, no hover. */
-.hstat { background: #F1EDE5; padding: 20px 22px 16px; min-width: 0; }
-.hstat .n { font-size: 2.375rem; color: #3F3B35; line-height: 1.05; overflow-wrap: anywhere; }
-.hstat .l { font-family: 'Helvetica Neue', sans-serif; font-size: 0.8125rem;
-    color: #6A5030; margin-top: 6px; }
+.hero-title .hline + .hline { font-size: .38em; font-weight: 400; color: #5D574D;
+    line-height: 1.2; margin-top: .45em; }
+.hero-sub { font-size: 1.25rem; color: #5D574D; max-width: 600px; line-height: 1.6; }
+/* The receipt's rows: label left in serif, value right in bold serif, a
+   hairline under each; the first row leads, its number large and in gold. */
+.hstat { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline;
+    gap: 16px; padding: 16px 0 15px; min-width: 0;
+    border-bottom: 1px solid rgba(237,233,227,.18); }
+.hstat .l { font-family: Georgia, serif; font-size: 1.0625rem; line-height: 1.3; color: #D8D1C5; }
+.hstat .n { font-family: Georgia, serif; font-size: 1.375rem; font-weight: 700; line-height: 1.3;
+    color: #EDE9E3; overflow-wrap: anywhere; text-align: right; }
+.hstat:first-child { padding: 20px 0 18px; }
+.hstat:first-child .n { font-size: 2.625rem; line-height: 1; color: #C6A26B; }
 
 /* Twin showcases share one row - half the scroll, none of the clutter */
-.showcase-row { display: grid; grid-template-columns: 1fr 1fr; gap: 64px;
+.showcase-row { display: grid; grid-template-columns: 1fr 1fr; gap: 80px;
     padding: 48px 8px 20px; }
 .showcase-row .showcase-section { padding: 0; }
 
 /* CTA: one rule set, near the end of the file (search "CTA: matte rectangle"). */
 
-.showcase-section { padding: 56px 8px 44px; text-align: left; display: flex;
+/* A section heading: kicker, serif title, annual-report rule, then words. */
+.showcase-section { padding: 56px 0 44px; text-align: left; display: flex;
     flex-direction: column; align-items: flex-start; gap: 18px; }
-.showcase-title { font-size: 3.25rem; color: #3F3B35; margin: 0; font-weight: 400;
-    line-height: 1.05; }
-.showcase-body { font-size: 1rem; color: #4A4640; max-width: 620px; line-height: 1.6; }
+.showcase-section > .ar-rule { max-width: 560px; }
+.showcase-title { font-size: clamp(2rem, 4.2vw, 3rem); color: #3F3B35; margin: 0; font-weight: 700;
+    line-height: 1.08; }
+.showcase-body { font-size: 1.0625rem; color: #4A4640; max-width: 620px; line-height: 1.6; }
 
-/* Pillars - ledger columns divided by hairlines */
+/* Pillars - three ruled columns under a 3px rule, divided by hairlines */
 /* One row of three whatever the column's width (fixed 220px columns wrapped
    to two plus an orphan in the band's half-width column, 2026-11-02). */
 .pillar-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0; margin-top: 16px; border-top: 1px solid #C4BDAE; }
+    gap: 0; margin-top: 18px; border-top: 3px solid #2E2A25; }
 .pillar-card { background: transparent; border: none;
-    border-left: 1px solid #C4BDAE; padding: 26px 22px 14px; min-width: 0;
+    border-left: 1px solid #C4BDAE; padding: 22px 22px 6px; min-width: 0;
     text-align: left; }
 @media (max-width: 640px) {
     .pillar-row { grid-template-columns: 1fr; }
-    .pillar-card { border-left: none; padding-left: 4px; } }
-.pillar-card:first-child { border-left: none; padding-left: 4px; }
-.pillar-label { font-family: Georgia, serif; font-size: 1.0625rem; color: #6A5030;
-    margin-bottom: 6px; }
-.pillar-desc { font-size: 0.8438rem; color: #4A4640; line-height: 1.5; }
+    .pillar-card { border-left: none; padding-left: 0;
+        border-bottom: 1px solid rgba(237,233,227,.18); padding-bottom: 18px; } }
+.pillar-card:first-child { border-left: none; padding-left: 0; }
+.pillar-label { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 700;
+    font-size: 0.75rem; letter-spacing: .2em; text-transform: uppercase; color: #6A5030;
+    margin-bottom: 10px; }
+.pillar-desc { font-size: 0.9375rem; color: #4A4640; line-height: 1.55; }
 
-/* Tables read as cut slabs too */
+/* Tables: a receipt - the 3px rule over a hairline frame */
 [data-testid="stDataFrame"] { border: 1px solid #C4BDAE;
-    border-top: 2px solid #9A7B4F; box-shadow: none; }
+    border-top: 3px solid #2E2A25; box-shadow: none; }
 
 /* Keyboard focus carries the same bronze. In-page links (CTAs, the skip link,
    the footer boxes) share their own ring: see "One focus ring" near the end. */
 .stButton>button:focus-visible { outline: 2px solid #9A7B4F; outline-offset: 2px; }
-.engine-heading { text-align: left; padding: 4px 0 22px; }
+.engine-heading { text-align: left; padding: 40px 0 26px; display: flex;
+    flex-direction: column; align-items: flex-start; gap: 16px; }
+.engine-heading .ar-rule { max-width: 560px; }
+.engine-heading .showcase-title { font-size: clamp(1.75rem, 3.2vw, 2.375rem); }
 
 /* TABS - Streamlit 1.66 draws its tab strip with react-aria ([data-testid=
-   "stTab"]); the rules this file used to carry targeted the old baseweb tabs
-   and had not matched anything since the upgrade, so the strip reads in the
-   page's own serif, sentence case, with Streamlit's bronze underline (the
-   theme's primary colour). Kept as it renders; the dead rules went
-   2026-11-04. */
+   "stTab"]). In the label voice (ME-28): tracked capitals, the quiet ink at
+   rest, charcoal and a 3px charcoal underline on the open tab, the strip
+   standing on one hairline. */
 [data-testid="stTabs"] { margin-top: 10px; }
+[data-testid="stTab"] [data-testid="stMarkdownContainer"] p {
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 700;
+    font-size: 0.75rem; letter-spacing: .2em; text-transform: uppercase; color: #5D574D; }
+[data-testid="stTab"][aria-selected="true"] [data-testid="stMarkdownContainer"] p { color: #2E2A25; }
+[data-testid="stTab"] .react-aria-SelectionIndicator { background-color: #2E2A25 !important;
+    height: 3px !important; }
 [data-testid="stTab"]:focus-visible { outline: 2px solid #6A5030; outline-offset: 2px; }
 
 /* ============================================================
-   SLABS - a flat panel under one bronze rule.
+   SLABS - ruled columns: a 3px charcoal rule, no box; the label in the
+   label voice, the number in bold serif, the note in serif.
    ============================================================ */
-.slab { background: #F1EDE5; border-top: 2px solid #9A7B4F;
-    padding: 22px 24px 18px; height: 100%; margin-top: 48px; }
-.slab-label { font-family: 'Helvetica Neue', sans-serif; font-size: 0.8125rem;
-    color: #6A5030; margin-bottom: 10px; }
-.slab-num { font-size: 2.5rem; color: #3F3B35; line-height: 1; margin-bottom: 6px; }
-.slab-note { font-size: 0.8125rem; color: #5D574D; line-height: 1.55; }
+.slab { background: transparent; border-top: 3px solid #2E2A25;
+    padding: 18px 0 4px; height: 100%; margin-top: 64px; }
+.slab-label { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 700;
+    font-size: 0.75rem; letter-spacing: .2em; text-transform: uppercase;
+    color: #6A5030; margin-bottom: 14px; }
+.slab-num { font-size: 3.25rem; font-weight: 700; color: #3F3B35; line-height: 1;
+    margin-bottom: 12px; font-variant-numeric: tabular-nums; }
+.slab-note { font-size: 0.9375rem; color: #5D574D; line-height: 1.55;
+    border-top: 1px solid rgba(63,59,53,.28); padding-top: 12px; }
 
-/* Plain-language read-out under a chart: what am I looking at? */
-.read-me { background: #F1EDE5; padding: 12px 16px; margin: 10px 0 4px;
-    font-size: 0.875rem; color: #4A4640; line-height: 1.6; }
-.read-me b { color: #3F3B35; font-weight: 400; }
+/* Plain-language read-out under a chart: what am I looking at? A hairline
+   over it, no panel. */
+.read-me { background: transparent; padding: 12px 0 0; margin: 12px 0 4px;
+    border-top: 1px solid rgba(63,59,53,.28);
+    font-size: 0.9375rem; color: #4A4640; line-height: 1.6; }
+.read-me b { color: #3F3B35; font-weight: 700; }
 
-/* Ruled panel header inside a tab: a serif title and a quiet line beside it */
-.panel-head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
-    border-top: 1px solid #C4BDAE; padding-top: 13px; margin: 26px 0 14px;
-    position: relative; }
-/* A bronze accent draws itself across the rule as the section scrolls
-   into view - scroll-linked: its length IS how far the rule has come up the
+/* The Book (main.py): its paragraph, then one ruled row per name. Each row
+   stands under a hairline whose key - the 3px mark over the role column -
+   carries the role: bronze for a flyer, charcoal for an anchor, a light
+   hairline tone for the rest. The role is said in the label voice. */
+.book-lede { font-family: Georgia, serif; font-size: 1.125rem; line-height: 1.55;
+    color: #3F3B35; padding: 4px 0 20px; margin: 0; }
+.book-row { position: relative; display: grid; grid-template-columns: 112px minmax(0, 1fr);
+    gap: 18px; padding: 15px 0 6px; border-top: 1px solid rgba(63,59,53,.28); }
+.book-row::before { content: ""; position: absolute; left: 0; top: -2px; width: 112px; height: 3px;
+    background: #2E2A25; }
+.book-row.is-flyer::before { background: #9A7B4F; }
+.book-row.is-excluded::before { background: #C4BDAE; }
+.book-role { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 700;
+    font-size: 0.75rem; line-height: 1.5; letter-spacing: .2em; text-transform: uppercase;
+    color: #6A5030; padding-top: 3px; }
+.book-role .role-note { display: block; margin-top: 4px; font-family: Georgia, serif;
+    font-weight: 400; font-size: 0.8125rem; letter-spacing: normal; text-transform: none;
+    color: #5D574D; }
+.book-text { font-family: Georgia, serif; font-size: 0.9375rem; line-height: 1.6; color: #3F3B35; }
+.book-flag { color: #6A5030; }
+@media (max-width: 640px) {
+  .book-row { grid-template-columns: minmax(0, 1fr); gap: 6px; } }
+
+/* A section heading inside the page: the title as a kicker, the subtitle as
+   the serif line under it, then the annual-report rule (main.py panel_head). */
+.panel-head { display: flex; flex-direction: column; align-items: flex-start; gap: 10px;
+    margin: 48px 0 18px; position: relative; }
+.panel-head .ar-rule { margin-top: 6px; }
+/* The rule's charcoal key draws itself across as the section scrolls into
+   view - scroll-linked: its length IS how far the rule has come up the
    screen. Scroll timelines where the browser has them; elsewhere static/
    reveal.js feeds the same position as --scrub, only while it is on screen.
-   Under reduced motion it stays scaleX(0) and the 1px border is the base. */
-.panel-head::before { content: ''; position: absolute; top: -1px; left: 0;
-    height: 2px; width: 100%; transform: scaleX(0); transform-origin: left;
-    background: #9A7B4F; }
+   Under reduced motion the key simply stands drawn. */
+.panel-head .ar-rule::after { transform-origin: left; }
 @supports (animation-timeline: view()) {
-  .panel-head::before { animation: lintel-draw linear both;
+  .reveal-on .panel-head .ar-rule::after { animation: lintel-draw linear both;
       animation-timeline: view(); animation-range: entry 0% cover 20%; }
-  @keyframes lintel-draw { to { transform: scaleX(1); } }
+  @keyframes lintel-draw { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 }
 @supports not (animation-timeline: view()) {
-  .reveal-on .panel-head::before { transform: scaleX(min(1, calc(var(--scrub, 0) * 4))); }
+  .reveal-on .panel-head .ar-rule::after { transform: scaleX(min(1, calc(var(--scrub, 0) * 4))); }
 }
 /* Wraps rather than nowrap: on a 375px phone 5 of 25 titles ran out of their
    box and one was cut off (device_check, 2026-10-17). */
-.panel-head .t { font-family: Georgia, serif; font-size: 1.125rem; color: #3F3B35; }
+.panel-head .t { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 700;
+    font-size: 0.75rem; line-height: 1.5; letter-spacing: .2em; text-transform: uppercase;
+    color: #6A5030; border-left: 3px solid #2E2A25; padding-left: 12px; }
 /* The subtitle sits on the page (#EDE9E3): #ABA499 measured 2.04:1 there
-   (design check, 2026-11-04). */
-.panel-head .s { font-size: 0.875rem; color: #5D574D; line-height: 1.5; }
+   (design check, 2026-11-04). Now the section's serif title. */
+.panel-head .s { font-family: Georgia, serif; font-size: 1.625rem; font-weight: 700;
+    color: #3F3B35; line-height: 1.25; }
 
 /* Charts settle in rather than snapping */
 @keyframes panel-settle {
@@ -321,21 +419,29 @@ div:has(> .st-key-glide), .st-key-glide, .st-key-glide div.stElementContainer, .
                              margin-left: -12px !important; }
 }
 
-/* Metric tiles: a flat panel under the bronze rule. */
-[data-testid="stMetric"] { background: #F1EDE5; border: none;
-    border-top: 2px solid #9A7B4F; padding: 15px 18px !important; box-shadow: none; }
+/* Metric tiles: ruled columns like the slabs - a 3px charcoal rule, no box. */
+[data-testid="stMetric"] { background: transparent; border: none;
+    border-top: 3px solid #2E2A25; padding: 14px 0 6px !important; box-shadow: none; }
 
-/* Buttons: a flat rectangle; hover inverts, a press settles */
-.stButton>button { font-family: 'Helvetica Neue', sans-serif; font-size: 0.8125rem;
-    border: 1px solid #C4BDAE; background: #F1EDE5; color: #3F3B35;
-    box-shadow: none;
+/* Buttons: a flat charcoal rectangle in the label voice; hover inverts into
+   the paper, a press settles */
+.stButton>button, .stFormSubmitButton>button, .stLinkButton>a { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 700;
+    font-size: 0.75rem; letter-spacing: .2em; text-transform: uppercase;
+    border: 1px solid #2E2A25; background-color: #2E2A25; color: #EDE9E3;
+    box-shadow: none; padding: 12px 22px;
     transition: background .25s ease, border-color .25s ease, color .25s ease; }
-.stButton>button:hover { background: #3F3B35; color: #F1EDE5; border-color: #3F3B35; }
+/* !important: Streamlit's own markdown rules set Source Serif on the label's
+   <div> and <p> and won over a plain inherit, so every button spoke serif (ME-28 part 4). */
+.stButton>button *, .stFormSubmitButton>button *, .stLinkButton>a * {
+    font: inherit !important; letter-spacing: inherit !important; }
+.stButton>button:hover, .stFormSubmitButton>button:hover, .stLinkButton>a:hover {
+    background-color: #EDE9E3; color: #2E2A25; border-color: #2E2A25; }
 .stButton>button:active { transform: scale(.985); }
 
 /* Inputs: flat panel ground, bronze on hover and focus */
 div[data-baseweb="select"] > div, .stNumberInput input,
-[data-testid="stTextInput"] input, .stMultiSelect [data-baseweb="select"] > div {
+[data-testid="stTextInput"] input, .stMultiSelect [data-baseweb="select"] > div,
+[data-testid="stTextArea"] textarea, [data-testid="stSelectbox"] [role="group"] {
     background: #F1EDE5 !important;
     transition: border-color .25s ease, box-shadow .25s ease; }
 div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
@@ -352,8 +458,8 @@ ul[role="listbox"] li:hover { background: rgba(154,123,79,.12) !important; }
    yellow, green and red, the only bright colours on the page (Correlation
    Watch showed one on every load). Here they are a panel under a rule; the
    rule's tone and the words carry the kind. */
-[data-testid="stAlertContainer"] { background: #F1EDE5 !important;
-    border-top: 2px solid #9A7B4F; }
+[data-testid="stAlertContainer"] { background: transparent !important;
+    border: 1px solid #C4BDAE; border-top: 3px solid #9A7B4F; }
 [data-testid="stAlertContentWarning"], [data-testid="stAlertContentError"] {
     color: #3F3B35 !important; }
 [data-testid="stAlertContentInfo"], [data-testid="stAlertContentSuccess"] {
@@ -424,16 +530,17 @@ ul[role="listbox"] li:hover { background: rgba(154,123,79,.12) !important; }
     background-size: 200% 100% !important; animation: sk-sheen 1.15s linear infinite;
     border-color: transparent !important; box-shadow: none !important; color: transparent !important; }
 #boot-skel .hero-crest { border-radius: 50%; }   /* the crest is round */
-#boot-skel .hstat { background: #E9E4DB !important;
-    box-shadow: none !important; animation: none !important; transform: none !important; }
-#boot-skel .hstat .n { -webkit-text-fill-color: transparent; background: none; }
+/* The receipt keeps its stone; its words shimmer in the stone's own tones. */
+#boot-skel .hstat { box-shadow: none !important; animation: none !important; transform: none !important; }
+#boot-skel .hero-stats .sk-ink {
+    background: linear-gradient(90deg, #3A352F 25%, #4A443D 45%, #3A352F 65%) repeat-x;
+    background-size: 200% 62%; }
 /* A one-digit stat ("2", "4") would be a sliver that reads as a glitch. */
 #boot-skel .hstat .n .sk-ink { display: inline-block; min-width: 1.6em; }
-/* Below the hero the real page continues into the dark band: an 11px light
-   strip, a hairline, then the photo band - colours sampled from the rendered
-   page (avg #99958E top, #8D8983 body), not guessed. */
-#boot-skel .sk-band { flex: 1; margin-top: 12px; border-top: 2px solid #B8A995;
-    background: linear-gradient(180deg, #99958E 0, #8D8983 70px); }
+/* Below the hero the real page continues into the dark band: flat stone
+   under its 3px gold cap, as drawn. */
+#boot-skel .sk-band { flex: 1; margin-top: 0; border-top: 3px solid #B8955E;
+    background: #2E2A25; }
 
 
 @media (prefers-reduced-motion: reduce) {
@@ -516,35 +623,15 @@ ul[role="listbox"] li:hover { background: rgba(154,123,79,.12) !important; }
 @media (prefers-reduced-motion: reduce) {
     .reveal-on .reveal-item { opacity: 1 !important; transform: none !important; } }
 
-/* SCRUB - the band's photo drifts slower than the page (parallax), its
-   position tied to how far the band has crossed the screen. The 12% zoom
-   keeps its edges outside the band at both ends of the drift. */
-@keyframes plate-drift {
-    from { transform: translate3d(0, -4%, 0) scale(1.12); }
-    to   { transform: translate3d(0, 4%, 0) scale(1.12); } }
-@supports (animation-timeline: view()) {
-  .showcase-row { view-timeline: --band block; }
-  .showcase-row::before { animation: plate-drift linear both;
-      animation-timeline: --band; animation-range: cover 0% cover 100%; }
-}
-@supports not (animation-timeline: view()) {
-  .showcase-row::before {
-      transform: translate3d(0, calc((var(--scrub, .5) - .5) * 8%), 0) scale(1.12); }
-}
-
-/* PLATES - a band's photo is attached (main.py) only once reveal.js has seen
-   the band come within 600px, then fades up over the charcoal; the words on
-   the band are there first. Without reveal-on (no script, reduced motion)
-   main.py's rule attaches it at once. */
-.showcase-row::before, .st-key-gungnir_zone::before {
-    transition: opacity 1.2s var(--ease-out); }
-.reveal-on:not(.has-band) .showcase-row::before,
-.reveal-on:not(.has-gungnir) .st-key-gungnir_zone::before { opacity: 0; }
+/* (SCRUB's parallax photo and the PLATES that lazy-attached the band and
+   Slice photographs went with the photographs, ME-28 2026-11-05. The scrub
+   now drives only the panel heading's rule.) */
 
 /* Skeleton status line - sits on the band, in the hero's left gutter */
 #boot-skel .sk-load { position: absolute; bottom: 28px;
     left: max(7vw, calc(50vw - 744px));
-    font-family:'Helvetica Neue',sans-serif; font-size:0.8125rem; color:#F1EDE5;
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 700;
+    font-size: 0.75rem; letter-spacing: .2em; text-transform: uppercase; color: #C6A26B;
     animation: sk-pulse 1.3s ease-in-out infinite; }
 @keyframes sk-pulse { 0%,100%{opacity:.45;} 50%{opacity:1;} }
 
@@ -553,26 +640,25 @@ ul[role="listbox"] li:hover { background: rgba(154,123,79,.12) !important; }
 
 /* (Engravings: the Nordic runes went 2026-07-09, the crest fragments behind
    the Grit Zone and the fan chart 2026-10-30 - John: a watermark logo reads
-   tacky. The crest lives in the hero, once.) */
+   tacky. The crest lives in the hero; on 2026-11-05 John chose the banner's
+   one ornament for the stone blocks: the crest's outline in gold at 10%,
+   hairline, once per block - the hero's receipt and the dark band.) */
 
 /* Tabular figures on every metric so columns of numbers align like a ledger. */
 [data-testid="stMetricValue"], .verdict-number, .hstat .n {
     font-variant-numeric: tabular-nums; }
 
-/* The dark band: the twin showcases sit on one full-bleed charcoal band
-   between beige fields, under a photo and its scrim (main.py). */
-.showcase-row { background: #3F3B35; position: relative;
+/* The dark band: the twin showcases sit on one full-bleed slab of flat
+   stone between beige fields, a 3px gold cap line top and bottom, the
+   crest's faint engraving behind the right-hand column - the banner's stone. */
+.showcase-row { background: #2E2A25; position: relative;
     margin-left: calc(50% - 50vw); margin-right: calc(50% - 50vw);
-    padding: 72px max(7vw, calc(50vw - 744px)) 64px;
-    border-top: 2px solid #9A7B4F; border-bottom: 2px solid #9A7B4F;
+    padding: 88px max(7vw, calc(50vw - 744px)) 80px;
+    border-top: 3px solid #B8955E; border-bottom: 3px solid #B8955E;
     overflow: hidden; }
-/* The photo arrives via a small injected style (a file served from static/)
-   layered UNDER a charcoal scrim; this rule holds geometry and the duotone,
-   tuned warm. Text sits above on its own layer. */
-.showcase-row::before { content: ""; position: absolute; inset: 0;
-    background-size: cover; background-position: center 30%;
-    filter: grayscale(.4) sepia(.42) brightness(.6) contrast(1.03); }
-.showcase-row > * { position: relative; z-index: 1; }
+.showcase-row .crest-engraving { width: 380px; height: 380px; top: 0; bottom: 0; margin: auto 0;
+    right: calc(max(7vw, calc(50vw - 744px)) + 40px); }
+.showcase-row > .showcase-section { position: relative; z-index: 1; }
 /* The band and the Conviction stack used to stage arrival theatre (a photo
    "launch" and a fading double frame) when a button delivered the reader
    here. Removed with the rest of the slide-change effects: the scroll is the
@@ -580,29 +666,142 @@ ul[role="listbox"] li:hover { background: rgba(154,123,79,.12) !important; }
 .conv-core { position: relative; display: flex;
     flex-direction: column; gap: 18px; }
 .showcase-row .showcase-title { color: #EDE9E3; }
-.showcase-row .showcase-body { color: #C4BDAE; }
-.showcase-row .pillar-row { border-top-color: rgba(196,189,174,.28); }
-.showcase-row .pillar-card { border-left-color: rgba(196,189,174,.28); }
+.showcase-row .showcase-body { color: #D8D1C5; }
+.showcase-row .kicker { color: #C6A26B; border-left-color: #B8955E; }
+.showcase-row .ar-rule::before { background: rgba(237,233,227,.18); }
+.showcase-row .ar-rule::after { background: #B8955E; }
+.showcase-row .pillar-row { border-top-color: #B8955E; }
+.showcase-row .pillar-card { border-left-color: rgba(237,233,227,.18); }
 .showcase-row .pillar-label { color: #C6A26B; }
-.showcase-row .pillar-desc { color: #B4AB9B; }
+.showcase-row .pillar-desc { color: #D8D1C5; }
 
 /* Full-bleed bands overflow the court by design - never let that leak into
    a horizontal scrollbar (it also seeded phantom mini-scrollers). */
 [data-testid="stAppViewContainer"] section, [data-testid="stMain"] {
     overflow-x: clip; }
 
+/* --- THE CLOSE (ME-28 part 4): the builder on a stone block, five
+   questions and the contact form on the paper, then the footer. --- */
+/* The hero's two ways in: the button, and beside it the quiet contact link. */
+.hero-ctas { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 30px;
+    margin-top: 14px; max-width: 100%; }
+.hero-ctas .cta-btn { margin-top: 0; }
+.hero-ctas .cta-link { margin-top: 0; }
+/* About the builder: a full-bleed stone block between 3px gold caps, the
+   portrait on the left under its own gold cap, the words on the right. */
+.about-band { background: #2E2A25; position: relative;
+    margin: 104px calc(50% - 50vw) 0; padding: 84px max(7vw, calc(50vw - 744px)) 80px;
+    border-top: 3px solid #B8955E; border-bottom: 3px solid #B8955E; }
+.about-grid { display: grid; grid-template-columns: 240px minmax(0, 1fr) minmax(0, 340px);
+    gap: 56px; align-items: center; }
+.about-photo { margin: 0; width: 240px; border-top: 3px solid #B8955E; }
+.about-photo img { display: block; width: 240px; height: 300px; object-fit: cover;
+    background: #3F3B35; }
+.about-text { display: flex; flex-direction: column; align-items: flex-start; gap: 18px; min-width: 0; }
+.about-text .ar-rule { max-width: 560px; }
+.about-band .kicker { color: #C6A26B; border-left-color: #B8955E; }
+.about-band .showcase-title { color: #EDE9E3; }
+.about-band .ar-rule::before { background: rgba(237,233,227,.18); }
+.about-band .ar-rule::after { background: #B8955E; }
+.about-band .about-bio { font-family: Georgia, serif; font-size: 1.125rem; line-height: 1.6;
+    color: #D8D1C5; max-width: 560px; margin: 0; }
+/* The receipt of profiles: a gold caps line over a 3px gold rule, then one
+   ruled row per profile - a 44px square holding the mark, its name, and the
+   arrow that says it opens elsewhere. Hover and focus fill the square gold. */
+.about-band .about-find-h { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 700;
+    font-size: 0.8125rem; line-height: 1.4; letter-spacing: .2em; text-transform: uppercase;
+    color: #C6A26B; padding-bottom: 14px; border-bottom: 3px solid #B8955E; }
+.about-band .pmark { display: flex; align-items: center; gap: 16px; min-height: 44px;
+    padding: 12px 0; border-bottom: 1px solid rgba(237,233,227,.18);
+    color: #EDE9E3 !important; text-decoration: none !important;
+    font-family: Georgia, serif; font-size: 1.0625rem; }
+.about-band .pmark span { flex: 1; transition: color .22s ease; }
+.about-band .pmark svg { box-sizing: content-box; width: 20px; height: 20px; padding: 11px; flex: none;
+    border: 1px solid rgba(198,162,107,.6); color: #C6A26B;
+    transition: background-color .22s ease, color .22s ease, border-color .22s ease; }
+.about-band .pmark svg.pm-go { width: 14px; height: 14px; padding: 0; border: 0; color: #C6A26B; }
+.about-band .pmark:hover svg:first-child, .about-band .pmark:focus-visible svg:first-child {
+    background-color: #C6A26B; border-color: #C6A26B; color: #2E2A25; }
+.about-band .pmark:hover span { color: #C6A26B; }
+@media (max-width: 1100px) {
+  .about-grid { grid-template-columns: 240px minmax(0, 1fr); gap: 40px 56px; }
+  .about-find { grid-column: 2; } }
+@media (max-width: 760px) {
+  .about-band { padding: 64px max(20px, 7vw) 60px; }
+  .about-grid { grid-template-columns: minmax(0, 1fr); gap: 36px; }
+  .about-find { grid-column: auto; }
+  .about-photo, .about-photo img { width: 200px; }
+  .about-photo img { height: 250px; } }
+/* Five questions: ruled rows, the question in bold serif, two columns wide. */
+.faq-section { display: flex; flex-direction: column; align-items: flex-start; gap: 18px;
+    padding: 88px 0 8px; }
+.faq-section > .ar-rule { max-width: 560px; }
+.faq-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 64px;
+    width: 100%; margin-top: 10px; border-top: 3px solid #2E2A25; }
+.faq-row { padding: 22px 0 20px; border-bottom: 1px solid rgba(63,59,53,.18); min-width: 0; }
+.faq-q { font-family: Georgia, serif !important; font-size: 1.125rem !important; font-weight: 700 !important;
+    line-height: 1.4 !important; color: #3F3B35; margin: 0 0 8px !important; padding: 0 !important; }
+.faq-a { font-family: Georgia, serif; font-size: 1rem; line-height: 1.6; color: #4A4640; margin: 0; }
+@media (max-width: 900px) { .faq-list { grid-template-columns: minmax(0, 1fr); } }
+/* Contact: the heading, then the form beside a small receipt of the facts. */
+.contact-head { display: flex; flex-direction: column; align-items: flex-start; gap: 18px;
+    padding: 88px 0 18px; scroll-margin-top: 28px; }
+.contact-head > .ar-rule { max-width: 560px; }
+.contact-sub { font-family: Georgia, serif; font-size: 1.0625rem; line-height: 1.6;
+    color: #4A4640; max-width: 620px; margin: 0; }
+.contact-aside, .thanks-card { border-top: 3px solid #2E2A25; }
+.thanks-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px;
+    align-items: baseline; padding: 13px 0 12px; border-bottom: 1px solid rgba(63,59,53,.18);
+    font-family: Georgia, serif; font-size: 1rem; color: #4A4640; }
+.thanks-row b { color: #3F3B35; text-align: right; overflow-wrap: anywhere; }
+.thanks-row a { color: #3F3B35; }
+.contact-note { font-family: Georgia, serif; font-size: 0.9375rem; line-height: 1.6;
+    color: #5D574D; margin: 14px 0 0; }
+/* The thank-you state: the receipt's label voice over the facts. */
+.thanks-card { max-width: 720px; margin: 0 0 18px; }
+.thanks-t { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 700;
+    font-size: 0.8125rem; line-height: 1.5; letter-spacing: .2em; text-transform: uppercase;
+    color: #6A5030; padding: 14px 0 12px; border-bottom: 1px solid rgba(63,59,53,.28); }
+.thanks-p { font-family: Georgia, serif; font-size: 1.125rem; line-height: 1.6; color: #3F3B35;
+    margin: 16px 0 6px; }
+.thanks-keep { font-family: Georgia, serif; font-size: 0.9375rem; color: #5D574D; margin: 14px 0 0; }
+.thanks-keep a { color: #6A5030; }
+.st-key-contact_zone { max-width: 1080px; }
+/* Case studies (Crisis Conviction): one ruled row per crisis - its name,
+   then the fall, the way back and a year later, each a label, a number in
+   bold serif and a line of what it means. */
+.case-list { border-top: 3px solid #2E2A25; margin: 4px 0 8px; }
+.case-row { display: grid; grid-template-columns: minmax(0, 1.1fr) repeat(3, minmax(0, 1fr));
+    gap: 28px; padding: 20px 0 18px; border-bottom: 1px solid rgba(63,59,53,.18); }
+.case-name { font-family: Georgia, serif; font-size: 1.125rem; font-weight: 700; color: #3F3B35;
+    line-height: 1.35; }
+.case-k { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 700;
+    font-size: 0.75rem; line-height: 1.5; letter-spacing: .2em; text-transform: uppercase;
+    color: #6A5030; }
+.case-v { font-family: Georgia, serif; font-size: 1.75rem; font-weight: 700; color: #3F3B35;
+    line-height: 1.2; margin: 6px 0 4px; font-variant-numeric: tabular-nums; }
+.case-n { font-family: Georgia, serif; font-size: 0.875rem; line-height: 1.5; color: #5D574D; }
+@media (max-width: 900px) {
+  .case-row { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 20px; }
+  .case-name { grid-column: 1 / -1; } }
+@media (max-width: 520px) { .case-row { grid-template-columns: minmax(0, 1fr); } }
+
 /* --- FOOTER: the page closes on a full-bleed charcoal band - three links
    onward, then the copyright, support and accessibility lines. --- */
-.meliona-footer { background: #3F3B35;
-    margin: 84px calc(50% - 50vw) 0; padding: 56px max(7vw, calc(50vw - 744px)) 36px; }
+/* The plinth: the deepest stone under a 3px gold cap, run to the page's
+   bottom edge (the negative margin swallows the block container's foot). */
+.meliona-footer { background: #26221E; border-top: 3px solid #B8955E;
+    margin: 96px calc(50% - 50vw) -96px; padding: 64px max(7vw, calc(50vw - 744px)) 56px; }
+@media (max-width: 640px) { .meliona-footer { padding-bottom: 128px; } }
 .meliona-footer .f-rail { display: grid; grid-template-columns: repeat(3, 1fr);
-    gap: 16px; margin-bottom: 44px; }
+    gap: 24px; margin-bottom: 48px; }
 @media (max-width: 1100px) { .meliona-footer .f-rail { grid-template-columns: 1fr; } }
-.meliona-footer .f-box { display: block; border-top: 2px solid #B08A55;
-    padding: 18px 4px 20px; color: #EDE9E3 !important; text-decoration: none !important;
-    font-family: Georgia, serif; font-size: 1.0625rem;
-    transition: background .25s ease; }
-.meliona-footer .f-box:hover { background: rgba(154,123,79,.12); }
+.meliona-footer .f-box { display: block; border-top: 3px solid #B8955E;
+    padding: 18px 0 20px; color: #EDE9E3 !important; text-decoration: none !important;
+    font-family: Georgia, serif; font-size: 1.125rem; font-weight: 700;
+    transition: color .25s ease; }
+.meliona-footer .f-box:hover { color: #C6A26B !important; }
+.meliona-footer .f-box small { font-weight: 400; }
 .meliona-footer .f-box small { display: block; margin-top: 8px; color: #B4AB9B;
     font-family: Georgia, serif; font-size: 0.8125rem; line-height: 1.5; }
 .meliona-footer .f-bar { border-top: 1px solid rgba(196,189,174,.28);
@@ -611,23 +810,34 @@ ul[role="listbox"] li:hover { background: rgba(154,123,79,.12) !important; }
     font-size: 0.75rem; line-height: 1.6; color: #B4AB9B; }
 .meliona-footer .f-bar + .f-bar { border-top: 0; padding-top: 10px; }
 .meliona-footer .f-bar a { color: #EDE9E3; }
+/* The builder's profiles in the footer: the same marks, small, light ink. */
+.meliona-footer .f-marks { display: flex; flex-wrap: wrap; gap: 4px 22px; }
+.meliona-footer .f-bar a.f-mark { display: inline-flex; align-items: center; gap: 8px; color: #EDE9E3;
+    text-decoration: none; }
+.meliona-footer .f-mark svg { width: 14px; height: 14px; color: #C6A26B; flex: none; }
+.meliona-footer .f-mark:hover span { text-decoration: underline; }
 /* the session reference is read out to support: full size, light ink */
 .meliona-footer .f-ref { font-size: 0.75rem; color: #EDE9E3; }
 
 /* --- Orientation strip: the three sentences a first-time visitor needs before
    meeting a single dial. Added 2026-08-26 after a non-specialist walkthrough
    found the controls arrive before any statement of what the page is for. --- */
-.orient { background: #E9E4DB; border-top: 2px solid #9A7B4F;
-    padding: 20px 24px 18px; margin: 0 0 26px; }
-.orient-t { font-family: Georgia, serif; font-size: 1.125rem; color: #3F3B35;
-    margin: 0 0 12px; }
-.orient-l { margin: 0; padding-left: 20px; font-family: Georgia, serif;
-    font-size: 0.9688rem; line-height: 1.62; color: #4A4640; }
-.orient-l li { margin-bottom: 7px; }
-.orient-l li:last-child { margin-bottom: 0; }
+/* A receipt (ME-28): the 3px charcoal rule, the title in the label voice,
+   then one ruled row per step - its number in bold serif on the left. */
+.orient { background: transparent; border-top: 3px solid #2E2A25;
+    padding: 0; margin: 0 0 32px; }
+.orient-t { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 700;
+    font-size: 0.75rem; line-height: 1.5; letter-spacing: .2em; text-transform: uppercase;
+    color: #6A5030; margin: 0; padding: 14px 0 13px;
+    border-bottom: 1px solid rgba(63,59,53,.28); }
+.orient-l { margin: 0; padding: 0; list-style: none; counter-reset: orient;
+    font-family: Georgia, serif; font-size: 1rem; line-height: 1.6; color: #4A4640; }
+.orient-l li { counter-increment: orient; display: grid; grid-template-columns: 44px minmax(0, 1fr);
+    margin: 0; padding: 13px 0 12px; border-bottom: 1px solid rgba(63,59,53,.18); }
+.orient-l li::before { content: counter(orient); font-weight: 700; color: #6A5030; }
 .orient-l b { color: #3F3B35; }
-.orient-f { margin-top: 13px; padding-top: 11px; border-top: 1px solid #C4BDAE;
-    font-family: Georgia, serif; font-size: 0.8438rem; color: #5D574D; }
+.orient-f { margin-top: 0; padding-top: 12px;
+    font-family: Georgia, serif; font-size: 0.875rem; color: #5D574D; }
 
 /* --- GUIDED DESCENT ------------------------------------------------------
    The CTA arrow is drawn, not printed. Resting, it is invisible. On hover the
@@ -692,7 +902,7 @@ body:has([data-testid="stStatusWidgetRunningIcon"])::before { content: "";
     background-size: 250% 100%; animation: run-rail 1.4s linear infinite; }
 body:has([data-testid="stStatusWidgetRunningIcon"])::after { content: "Updating\2026";
     position: fixed; top: 10px; right: 12px; z-index: 990; pointer-events: none;
-    padding: 6px 10px; background: #3F3B35; color: #EDE9E3;
+    padding: 7px 11px; background: #2E2A25; color: #EDE9E3;
     font: 0.75rem/1 'Helvetica Neue', Arial, sans-serif; }
 /* Reduced motion stops the rail (global rule); it stays, as a still line. */
 @media (prefers-reduced-motion: reduce) {
@@ -714,105 +924,109 @@ body:has([data-testid="stStatusWidgetRunningIcon"])::after { content: "Updating\
    at full scale the CTA lands at 926px - just under the fold. So the first,
    gentlest tier starts at 1000px rather than 860px; only genuinely tall
    screens keep the untouched editorial scale. */
+/* The tiers set the hero's padding through its variables, so the stone
+   block's bleed (which reads the same variables) follows every tier. */
 @media (max-height: 1000px) {
-  .hero-section { padding-top: 46px !important; padding-bottom: 32px !important;
-                  min-height: 0 !important; }
-  .hero-title { font-size: clamp(2.125rem, 6.6vw, 4rem) !important;
-                line-height: 1.02 !important; }
+  .hero-section { --hero-pt: 56px; --hero-pb: 44px; min-height: 0 !important; }
+  .hero-left { gap: 16px !important; }
+  .hero-title { font-size: clamp(2.5rem, 8vw, 5rem) !important;
+                line-height: .96 !important; }
   .hero-sub { font-size: 1.0625rem !important; line-height: 1.5 !important; }
-  .hero-crest { width: 104px !important; height: 104px !important; }
+  .hero-crest { width: 80px !important; height: 80px !important; }
+  .hstat { padding: 13px 0 12px !important; }
+  .hstat:first-child { padding: 16px 0 14px !important; }
 }
 @media (max-height: 860px) {
-  .hero-section { padding-top: 30px !important; padding-bottom: 22px !important;
-                  min-height: 0 !important; gap: 18px !important; }
-  .hero-left { gap: 8px !important; }
-  .hero-title { font-size: clamp(1.875rem, 5.2vw, 3.125rem) !important;
-                line-height: 1.03 !important; margin: 0 !important; }
+  .hero-section { --hero-pt: 36px; --hero-pb: 28px; min-height: 0 !important; }
+  .hero-left { gap: 10px !important; }
+  .hero-title { font-size: clamp(2.125rem, 6.4vw, 3.75rem) !important;
+                line-height: .98 !important; margin: 0 !important; }
   .hero-sub { font-size: 0.9688rem !important; line-height: 1.42 !important;
               max-width: 540px !important; }
-  .hero-crest { width: 84px !important; height: 84px !important; }
-  .hero-stats { gap: 8px !important; }
-  .hstat { padding: 10px 12px 8px !important; }
+  .hero-crest { width: 64px !important; height: 64px !important; }
+  .hstat { padding: 9px 0 8px !important; }
+  .hstat:first-child { padding: 12px 0 10px !important; }
+  .hstat:first-child .n { font-size: 2.125rem !important; }
 }
 @media (max-height: 700px) {
-  .hero-section { padding-top: 20px !important; padding-bottom: 16px !important; }
-  .hero-title { font-size: clamp(1.6875rem, 4.4vw, 2.5rem) !important; }
+  .hero-section { --hero-pt: 24px; --hero-pb: 20px; }
+  .hero-title { font-size: clamp(1.875rem, 5.2vw, 3rem) !important; }
   .hero-sub { font-size: 0.9062rem !important; }
 }
-/* ---- CTA: matte rectangle, Citadel reference -------------------------
-   A hard rectangle, ONE flat colour, no bevel, no shadow, no shine - and the
-   entire interaction is a confident colour change. Sentence case, like every
-   other label on the page.
+@media (max-height: 1000px) and (max-width: 1100px) {
+  .hero-section { --hero-pb: 0px; } }
+/* A phone is narrow before it is short: the name keeps its display size
+   there (its button still lands on the first screen, site_check). */
+@media (max-width: 640px) {
+  .hero-title { font-size: 3.25rem !important; line-height: .95 !important; }
+  .showcase-row .crest-engraving { left: 0; right: 0; margin: auto; } }
+/* ---- CTA: matte rectangle, the banner's voice ---------------------------
+   A hard rectangle of flat charcoal stone, no bevel, no shadow, no shine;
+   the words in the label voice (white tracked capitals, ME-28); the whole
+   interaction is a clean inversion into the ground it sits on.
 
    Colours stay strictly inside the palette, and each hover lands on a colour
    that belongs to the surface the button sits on:
-     light beige field  charcoal -> the dark text bronze #6A5030
-     dark showcase band bronze   -> beige (a clean inversion into the page)
+     paper field   stone #2E2A25, paper words -> paper, stone words, stone frame
+     stone band    paper, stone words          -> the crest's gold, stone words
    The light bronze #9A7B4F is no ground for words: cream on it measures
-   2.2:1 and near-black #241F1A 4.14:1, both under AA (the old comment here
-   said 6.8:1; test_text_colours_meet_wcag_aa now checks each pair). Cream
-   on #6A5030 is 6.42:1.
+   2.2:1 (test_text_colours_meet_wcag_aa checks each pair).
 
    ONE rule set (2026-10-22, ME-06): three earlier layers - a lifting hover,
    a gradient with a sheen sweep, a 10px radius - lost every property to this
    one and only made the file lie about the button. */
 .cta-btn {
-  display: inline-block; margin-top: 14px; padding: 15px 34px;
+  display: inline-block; margin-top: 14px; padding: 18px 30px 17px;
   max-width: 100%;
   /* the released arrow falls inside the plaque, not across the page */
   position: relative; overflow: hidden;
-  /* Same voice as the hero headline: Georgia serif. */
-  font-family: Georgia, 'Times New Roman', serif; font-size: 1rem;
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 700;
+  font-size: 0.8125rem; line-height: 1.3; letter-spacing: .2em; text-transform: uppercase;
   text-decoration: none !important;
-  background-color: #3F3B35 !important;
-  color: #F1EDE5 !important;
-  border: 1px solid #3F3B35 !important;
+  background-color: #2E2A25 !important;
+  color: #EDE9E3 !important;
+  border: 1px solid #2E2A25 !important;
   border-radius: 0 !important;
   box-shadow: none !important;
   transition: background-color .22s ease, border-color .22s ease,
               color .22s ease !important;
 }
 .cta-btn:hover {
-  background-color: #6A5030 !important;
-  border-color: #6A5030 !important;
-  color: #F1EDE5 !important;
+  background-color: #EDE9E3 !important;
+  border-color: #2E2A25 !important;
+  color: #2E2A25 !important;
 }
-.cta-btn:active { background-color: #4A3A24 !important; }
+.cta-btn:active { background-color: #D4CDBF !important; }
 
-/* A CTA sitting ON the dark showcase band needs the inverse treatment: on the
-   band's own #3F3B35 the charcoal slab would vanish. It inverts to solid
-   bronze with dark type, the highest-contrast pairing inside the palette.
-   Rule: choose the variant by the BACKGROUND the button sits on. */
+/* A CTA sitting ON the stone band takes the inverse: a paper rectangle with
+   stone words, turning to the crest's gold on hover (5.9:1). Rule: choose
+   the variant by the BACKGROUND the button sits on. */
 .cta-btn.on-dark {
-  /* the palette's LIGHTER bronze. It raises BOTH the type contrast on the
-     button and its separation from the #3F3B35 band (4.1 -> ~5.3 and
-     2.8 -> ~3.6); the darker #9A7B4F missed the 4.5 and 3.0 thresholds. */
-  background-color: #B08A55 !important;
-  color: #241F1A !important;
-  border: 1px solid #B08A55 !important;
+  background-color: #EDE9E3 !important;
+  color: #2E2A25 !important;
+  border: 1px solid #EDE9E3 !important;
   box-shadow: none !important;
 }
-/* Inverts into the page's own beige - maximum separation from the charcoal
-   band without introducing a colour the palette does not already own. */
 .cta-btn.on-dark:hover {
-  background-color: #EDE9E3 !important;
-  border-color: #EDE9E3 !important;
-  color: #2E2B26 !important;
+  background-color: #C6A26B !important;
+  border-color: #C6A26B !important;
+  color: #2E2A25 !important;
 }
-.cta-btn.on-dark:active { background-color: #D4CDBF !important; }
+.cta-btn.on-dark:active { background-color: #B8955E !important; }
 /* The crisis-record button sits in a flex column, whose default stretch drew
    it 587px wide beside 221-428px siblings (ME-04): it sizes to its words. */
 .conv-core > .cta-btn { align-self: flex-start; }
 
 /* The quiet CTA - "Skip to the analysis" under the engine heading. It keeps
    its size (a skip must not compete with the slab buttons) and takes the
-   CTA's voice: Georgia, the drawn arrow, the launch (ME-04). */
-.cta-link { display: inline-block; margin-top: 10px; padding-bottom: 2px;
-    font-family: Georgia, 'Times New Roman', serif; font-size: 0.875rem;
+   CTA's voice: the label voice, the drawn arrow, the launch (ME-04). */
+.cta-link { display: inline-block; margin-top: 4px; padding-bottom: 3px;
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 700;
+    font-size: 0.75rem; letter-spacing: .2em; text-transform: uppercase;
     color: #6A5030 !important; text-decoration: none !important;
-    border-bottom: 1px solid rgba(154,123,79,.4);
+    border-bottom: 1px solid rgba(154,123,79,.5);
     transition: color .22s ease, border-color .22s ease; }
-.cta-link:hover { color: #3F3B35 !important; border-bottom-color: #3F3B35; }
+.cta-link:hover { color: #2E2A25 !important; border-bottom-color: #2E2A25; }
 
 /* One focus ring for every in-page link - the CTAs, the skip link, the
    footer boxes. The CTAs wore a 2px bronze outline that measured 2.82:1 on
@@ -821,8 +1035,9 @@ body:has([data-testid="stStatusWidgetRunningIcon"])::after { content: "Updating\
    on-dark button: the dark text bronze on beige (4.7-6.2:1), the light one on
    the charcoal bands (4.65:1). A focus ring needs 3:1 (WCAG 2.2 1.4.11). */
 :root { --ring: #6A5030; }
-.showcase-row, .meliona-footer { --ring: #C6A26B; }
-a.cta-btn:focus-visible, a.cta-link:focus-visible, .meliona-footer a.f-box:focus-visible {
+.showcase-row, .meliona-footer, .about-band { --ring: #C6A26B; }
+a.cta-btn:focus-visible, a.cta-link:focus-visible, .meliona-footer a.f-box:focus-visible,
+a.pmark:focus-visible, .meliona-footer a.f-mark:focus-visible, .thanks-row a:focus-visible {
     outline: 2px solid var(--ring) !important; outline-offset: 3px !important;
     box-shadow: none !important; border-radius: 0 !important; }
 /* The page's scroller takes a Tab stop (Streamlit makes it focusable so the
@@ -833,6 +1048,14 @@ a.cta-btn:focus-visible, a.cta-link:focus-visible, .meliona-footer a.f-box:focus
    headings it read as a stray control. Hidden, not removed: the hero's
    skeleton is measured with that icon's line box in place. */
 [data-testid="stHeaderActionElements"] { visibility: hidden !important; }
+/* In the display titles the icon's empty line box opened a gap between the
+   name and its rule (ME-28): there it goes altogether, and the skeleton's
+   stand-in line with it, so the two still match box for box. Streamlit's own
+   heading padding goes too: the titles are spaced by their blocks' gaps. */
+.hero-title [data-testid="stHeaderActionElements"], .showcase-title [data-testid="stHeaderActionElements"],
+#boot-skel .hero-title .sk-anchor { display: none !important; }
+.hero-title, .showcase-title { padding: 0 !important; }
+.showcase-title { font-weight: 700 !important; }
 
 /* ---- The Slice: fill the width, shorten the column, free the button ----
    Measured at 1920x860: the row is 465px tall and driven ENTIRELY by the
@@ -852,25 +1075,28 @@ a.cta-btn:focus-visible, a.cta-link:focus-visible, .meliona-footer a.f-box:focus
 }
 @media (max-height: 860px) {
   .st-key-gungnir_zone svg[viewBox="0 0 360 200"] { width: 348px !important; }
-  .st-key-gungnir_zone .gungnir-plaque {
-    padding: 14px 18px 12px !important; font-size: 0.8125rem !important;
-  }
+  .st-key-gungnir_zone .gungnir-plaque { font-size: 0.8125rem !important; }
+  .st-key-gungnir_zone .gplaque-eq { padding: 16px 0 12px !important; }
 }
 
 /* The Slice has to read as one screen: land on it and the controls AND the
    button onward are both in view. Same height-tiered treatment as the hero -
    nothing removed, just tightened where the screen is short. */
 @media (max-height: 1000px) {
-  .st-key-gungnir_zone { padding: 30px 0 34px !important; margin-top: 14px !important; }
-  .gungnir-head .showcase-title { font-size: 1.625rem !important; margin: 4px 0 8px !important; }
-  .gungnir-sub { font-size: 0.8438rem !important; }
-  .gungnir-plaque { margin-top: 18px !important; padding: 20px 24px 18px !important; }
+  .st-key-gungnir_zone { padding: 34px 0 34px !important; margin-top: 14px !important; }
+  .gungnir-head { gap: 10px !important; }
+  .gungnir-head .showcase-title { font-size: 1.75rem !important; margin: 0 !important; }
+  .gungnir-sub { font-size: 0.9375rem !important; }
+  .gungnir-plaque { margin-top: 18px !important; }
+  .gplaque-eq { padding: 20px 0 16px !important; }
 }
 @media (max-height: 860px) {
-  .st-key-gungnir_zone { padding: 20px 0 24px !important; margin-top: 10px !important; }
-  .gungnir-head .showcase-title { font-size: 1.4375rem !important; }
-  .gungnir-sub { font-size: 0.7812rem !important; }
-  .gungnir-plaque { margin-top: 12px !important; padding: 15px 18px 13px !important; }
+  .st-key-gungnir_zone { padding: 22px 0 24px !important; margin-top: 10px !important; }
+  .gungnir-head { gap: 8px !important; }
+  .gungnir-head .showcase-title { font-size: 1.5rem !important; }
+  .gungnir-sub { font-size: 0.875rem !important; }
+  .gungnir-plaque { margin-top: 12px !important; }
+  .gplaque-eq { padding: 14px 0 10px !important; }
 }
 
 /* Data Quality rows: caption size, full-strength ink (a caption's 60%
@@ -943,66 +1169,49 @@ a.cta-btn:focus-visible, a.cta-link:focus-visible, .meliona-footer a.f-box:focus
 @keyframes read-progress { to { transform: scaleX(1); } }
 }
 
-/* FLOW KEY - the two stepped colour tables of the cone's lattice Boltzmann
-   flow (main.py FLOW_SPEED_STEPS / FLOW_WALL_STEPS). Swatches are flat chips,
-   no gradients; words use the page's AA text tones. */
-.flow-key { margin: 4px 0 6px; font-family: Georgia, serif; font-size: 0.75rem; color: #54504A; }
-.flow-key-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 3px 0; }
-.flow-key-label { color: #6A5030; font-size: 0.8125rem; min-width: 150px; }
-.flow-chip { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
-.flow-swatch { width: 14px; height: 10px; border: 1px solid #3F3B35; display: inline-block; }
-.flow-ramp { width: 180px; max-width: 100%; height: 10px; border: 1px solid #3F3B35; display: inline-block; }
-.flow-ramp-ends { display: inline-flex; flex-wrap: wrap; gap: 4px 12px; }
-/* The cone's "Verification Overlay" switch (static/windtunnel.js): the page's
-   button grammar - matte, square, a 1px rule; pressed reads as filled. */
-.wt-verify { font: 0.75rem/1 Georgia, serif; color: #3F3B35;
-    background: #F1EDE5; border: 1px solid #3F3B35; border-radius: 0; padding: 6px 10px;
-    cursor: pointer; }
-.wt-verify:hover { background: #E4DED3; }
-.wt-verify[aria-pressed="true"] { background: #3F3B35; color: #F4F1EA; }
-.wt-verify:focus-visible { outline: 2px solid #6A5030; outline-offset: 2px; }
-
 /* ---- DOCK: the bottom of the screen (static/dock.js, 2026-11-04) ----------
    One fixed stack outside Streamlit's tree: the cookie notice above the
    phone shortcut, so the two can never overlap. Under the boot veil (z 999),
    so both arrive with the page, never over the loading screen.
-   The notice informs, it asks nothing: charcoal, square, one hairline of the
-   decorative bronze so it reads on the charcoal band too, and an OK button.
-   The shortcut is phones only: a charcoal bar with the band's own button
-   (light bronze, dark words - 5.3:1), 44px tall, clear of the home bar
-   (safe-area inset); hover and press invert into the page's beige like
-   .cta-btn.on-dark. It slides up when it appears; under reduced motion it
-   simply appears. No shadow, no glow, no radius. */
+   The notice informs, it asks nothing: a slab of stone under the banner's
+   3px gold cap (so it reads on the stone band too), square, and an OK button.
+   The shortcut is phones only: a stone bar under the same gold cap with the
+   band's own button (paper, stone words in the label voice), 44px tall,
+   clear of the home bar (safe-area inset); hover and press turn to the
+   crest's gold like .cta-btn.on-dark. It slides up when it appears; under
+   reduced motion it simply appears. No shadow, no glow, no radius. */
 .m-stack { position: fixed; left: 0; right: 0; bottom: 0; z-index: 998;
     display: flex; flex-direction: column; align-items: flex-start; pointer-events: none; }
 .m-stack > * { pointer-events: auto; box-sizing: border-box; }
 .m-notice { display: flex; align-items: center; gap: 14px; max-width: 380px;
     margin: 0 0 calc(24px + env(safe-area-inset-bottom)) 24px; padding: 12px 14px 12px 16px;
     font: 0.875rem/1.45 Georgia, 'Times New Roman', serif;
-    background-color: #3F3B35; color: #EDE9E3;
-    border: 1px solid #9A7B4F; border-radius: 0; box-shadow: none; }
+    background-color: #2E2A25; color: #EDE9E3;
+    border: 0; border-top: 3px solid #B8955E; border-radius: 0; box-shadow: none; }
 .m-notice p { margin: 0; font: inherit; color: inherit; }
 .m-notice a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 .m-notice-ok { flex: none; min-width: 56px; min-height: 44px; padding: 0 16px; cursor: pointer;
-    font: inherit; background-color: #3F3B35; color: #EDE9E3;
+    font: inherit; background-color: #2E2A25; color: #EDE9E3;
     border: 1px solid #EDE9E3; border-radius: 0; box-shadow: none;
     transition: background-color .22s ease, color .22s ease; }
 .m-notice-ok:hover { background-color: #EDE9E3; color: #2E2B26; }
 .m-notice-ok:active { background-color: #D4CDBF; color: #2E2B26; }
 .m-dock { width: 100%; padding: 8px 16px calc(8px + env(safe-area-inset-bottom));
-    background-color: #3F3B35; border-top: 1px solid #9A7B4F;
+    background-color: #2E2A25; border-top: 3px solid #B8955E;
     animation: m-dock-in .26s cubic-bezier(0.16, 1, 0.3, 1) both; }
 .m-dock[hidden] { display: none !important; }
 @keyframes m-dock-in { from { transform: translateY(100%); } }
 .m-dock-btn { display: flex; align-items: center; justify-content: center;
     width: 100%; min-height: 44px; padding: 0 16px;
-    font: 1rem/1.2 Georgia, 'Times New Roman', serif; text-decoration: none !important;
-    background-color: #B08A55; color: #241F1A !important;
-    border: 1px solid #B08A55; border-radius: 0; box-shadow: none;
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 700;
+    font-size: 0.8125rem; line-height: 1.2; letter-spacing: .2em; text-transform: uppercase;
+    text-decoration: none !important;
+    background-color: #EDE9E3; color: #2E2A25 !important;
+    border: 1px solid #EDE9E3; border-radius: 0; box-shadow: none;
     -webkit-tap-highlight-color: transparent;
     transition: background-color .22s ease, border-color .22s ease, color .22s ease; }
-.m-dock-btn:hover { background-color: #EDE9E3; border-color: #EDE9E3; color: #2E2B26 !important; }
-.m-dock-btn:active { background-color: #D4CDBF; border-color: #D4CDBF; color: #2E2B26 !important; }
+.m-dock-btn:hover { background-color: #C6A26B; border-color: #C6A26B; color: #2E2A25 !important; }
+.m-dock-btn:active { background-color: #B8955E; border-color: #B8955E; color: #2E2A25 !important; }
 .m-notice a:focus-visible, .m-notice-ok:focus-visible, .m-dock-btn:focus-visible {
     outline: 2px solid #C6A26B; outline-offset: 2px; }
 @media (max-width: 640px) {

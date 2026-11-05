@@ -1080,7 +1080,7 @@ two paid-vendor-dependent pieces remain explicit backlog items:
     `window.__melionaStop`, but main.py's glide keeps that on the document:
     it never stood aside, and the longer momentum dragged a glide short (glide
     check momentum/rest). Fixed (`gliding()`), test pinned.
-  - main.py `flow_key_html`: Grid (trading days x cumulative return), Flow
+  - main.py `flow_key_html` (removed with the cone's flow in ME-28): Grid (trading days x cumulative return), Flow
     speed (1.0 = the stream at full strength), Stream strength (follows how
     fast the 5-95% outcome range widens each trading day; full on the day it
     widens fastest), Pressure on a path (Cp, pressure coefficient; red on the
@@ -1102,3 +1102,37 @@ two paid-vendor-dependent pieces remain explicit backlog items:
   the stated blend (scipy ranks), GRIT-05 exactly the short histories
   excluded. A planted error in each part fails its check
   (`test_the_batch_audit_re_derives_every_grit_zone_number`).
+
+- ✅ **Story cut (ME-28, John 2026-11-05)**. The page tells one story: how
+  much this book could lose in a bad year, what real crashes did, which names
+  hold up (grit), and how steady anchors cushion high-flyers. Off that story,
+  and removed from the page with the code, tests and probes that existed only
+  for them: the cone's lattice Boltzmann flow (`static/windtunnel.js`, the
+  flow key, the Verification Overlay, `tools/flow_check.mjs` and Live audit
+  step 8d, deep_scan's `windAgrees`) - the entries above are history; the
+  Liquidity, Correlation Watch and Balance tabs; the AI-capex recovery race
+  (its tab panel and the fourth landing box; the page no longer pulls the
+  basket); and Risk Breakdown's correlation matrix, outcome histogram and
+  "Model validation & factor structure" drawer (VaR backtest, EVT tail,
+  factor exposures, eigen factors). The strip is now Risk Topology, Risk
+  Breakdown, Grit Zone, Crisis Conviction. The Book keeps its own size and
+  participation, the headline keeps its liquidity-adjusted tail, and the
+  libraries (`src/liquidity.py`, `src/comovement.py`, `src/hedge.py`,
+  `src/factors.py`, `src/eigenrisk.py`, `recovery_race`) stay for the audits.
+
+- ✅ **The close (ME-28 part 4, John 2026-11-05)**. About the builder: John's
+  portrait (`tools/portrait.py`: 4:5 crop, one global warm grade, AVIF/WebP/
+  JPEG at 480x600) on a stone block with his LinkedIn, GitHub and Handshake
+  links (monochrome marks, new tab, `noopener noreferrer me`), also in the
+  footer. "Contact John" beside the hero's button glides to a contact form
+  that, with no mail server, prepares a `mailto:` email in the visitor's own
+  app and shows a thank-you state (response time: 2 business days;
+  `public/thanks.html` to keep); nothing is sent, logged or stored. Crisis
+  Conviction gained three case studies read from the live crisis table
+  (`crisis_forward_returns` now returns the days back to the old peak). Five
+  plain questions on the page, served with Person and WebApplication as
+  JSON-LD; the meta description no longer names factor exposures. Buttons
+  had spoken Source Serif (Streamlit's markdown rule beat `font: inherit`):
+  fixed for every button. LAUNCH_CHECKLIST #170-#186 (map and directions,
+  reviews: N/A). Tests: the contact form, the thank-you page, the schema and
+  FAQ, the builder block, the case studies.

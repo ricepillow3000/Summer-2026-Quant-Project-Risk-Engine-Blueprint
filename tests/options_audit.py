@@ -39,9 +39,7 @@ Each run checks the page against the engine for the settings it was given:
   PAGE-01 the headline CVaR is the simulation of exactly these settings
   PAGE-02 the cone (cumulative return % by trading day) is that simulation's
           percentiles, day by day - not a picture
-  PAGE-03 the Liquidity tab's exit days are the closed form for its two inputs
   PAGE-04 The Book quotes the chosen book size, participation and names
-  PAGE-05 Correlation Watch draws the chosen pair's own rolling correlation
   MAP-*   the map in the page's iframe, re-derived dot by dot and line by line
 
     python -m tests.options_audit download audit/options [--offline]
@@ -70,9 +68,8 @@ import pandas as pd
 
 import src.ingestion as ing
 from hero import N_PATHS
-from src.conviction import AI_CAPEX_BASKET, BENCHMARK
+from src.conviction import BENCHMARK
 from src.covariance import RISKMETRICS_LAMBDA, TRADING_DAYS, estimate_covariance
-from src.factors import _PROXIES as FACTOR_PROXIES
 from src.liquidity import days_to_liquidate, liquidity_adjusted_cvar, liquidity_profile
 from src.pairing import DEFENSIVE_ANCHOR_TICKERS
 from src.risk import jump_diffusion_mc, monte_carlo
@@ -80,10 +77,9 @@ from src.scenarios import HISTORICAL_REGIMES, MAX_LEAD_GAP_DAYS, replay_returns
 from src.strategies import risk_parity_weights, vol_target
 from tests import pair_audit
 
-PERIODS = ("2y", "10y", "max")           # every period the page reads (main.py, src/)
+PERIODS = ("2y", "max")                  # every period the page reads (main.py, src/)
 SYMBOLS = sorted(ing.SUGGESTIONS)
-NEEDED = sorted(set(SYMBOLS) | {"SPY", "QQQ", BENCHMARK, *DEFENSIVE_ANCHOR_TICKERS,
-                                *FACTOR_PROXIES, *AI_CAPEX_BASKET})
+NEEDED = sorted(set(SYMBOLS) | {"SPY", "QQQ", BENCHMARK, *DEFENSIVE_ANCHOR_TICKERS})
 ESTIMATORS = ["Ledoit-Wolf", "Sample", "EWMA"]
 WEIGHTINGS = ["Equal weight", "Risk parity"]
 TARGETS = list(range(5, 31))             # the slider: 5..30 in steps of 1
@@ -498,9 +494,7 @@ def page_rows() -> list:
         "universe": universes, "side": [False, True], "estimator": ESTIMATORS,
         "weighting": WEIGHTINGS, "target": [None] + TARGETS, "engine": ENGINES,
         "book": BOOKS, "book_part": PARTS, "grit_floor": [False, True],
-        "outside_anchor": [True, False], "liq_book": BOOKS, "liq_part": PARTS,
-        "watch_a": [0, 1, -1], "watch_b": [1, 0, -1], "window": [10, 21, 42, 63],
-        "threshold": [0.5, 0.75, 0.95], "anchor": [0, -1], "flyer": [0, -1],
+        "outside_anchor": [True, False],
     }
     custom = pairwise({**common, "drawdown": DRAWDOWNS, "vol": VOL_SHOCKS})
     for r in custom:
@@ -518,18 +512,6 @@ def _widget(seq, label):
     if len(hits) != 1:
         raise LookupError(f"{len(hits)} widgets labelled {label!r}")
     return hits[0]
-
-
-def _pick(widget, idx):
-    opts = list(widget.options)
-    widget.set_value(opts[max(-len(opts), min(idx, len(opts) - 1))])
-
-
-def _watch(at, side: str):
-    """Correlation Watch's Asset A/B box, found by its label: its key carries
-    the basket (watch_a__<tickers>) so a new basket starts from its own pair."""
-    hits = [w for w in at.selectbox if w.label == f"Asset {side}"]
-    return hits[0] if hits else None
 
 
 def apply_row(at, row, mix_names):
@@ -563,7 +545,7 @@ def apply_row(at, row, mix_names):
         vt.check()
         if go():                         # the slider is disabled until the box is ticked
             return
-        _widget(at.slider, "Target annual vol (%)").set_value(row["target"])
+        _widget(at.slider, "Target yearly volatility (%)").set_value(row["target"])
     _widget(at.radio, "Return model").set_value(row["engine"])
     _widget(at.selectbox, "Scenario").set_value(row["scenario"])
     if go():
@@ -579,27 +561,6 @@ def apply_row(at, row, mix_names):
     at.slider(key="book_part").set_value(row["book_part"])
     at.toggle(key="book_floor").set_value(row["grit_floor"])
     at.toggle(key="book_fallback").set_value(row["outside_anchor"])
-    if go():
-        return
-    for w in at.number_input:
-        if w.label == "Portfolio size ($)":
-            w.set_value(row["liq_book"])
-    for w in at.slider:
-        if w.label == "Max daily participation (% of ADV)":
-            w.set_value(row["liq_part"])
-    keys = {w.key for w in at.slider}
-    for side, idx in (("A", row["watch_a"]), ("B", row["watch_b"])):
-        box = _watch(at, side)
-        if box is not None:
-            _pick(box, idx)
-    if "watch_w" in keys:
-        at.slider(key="watch_w").set_value(row["window"])
-        at.slider(key="watch_t").set_value(row["threshold"])
-    for label, idx in (("Anchor (the position you want to balance)", row["anchor"]),
-                       ("High-flyer (the volatile conviction position)", row["flyer"])):
-        hits = [w for w in at.selectbox if w.label == label]
-        if hits:
-            _pick(hits[0], idx)
     at.run()
 
 
@@ -609,12 +570,6 @@ def _arr(v) -> np.ndarray:
     if isinstance(v, dict) and "bdata" in v:
         return np.frombuffer(base64.b64decode(v["bdata"]), dtype=np.dtype(v["dtype"]))
     return np.asarray(v, dtype=float)
-
-
-def _fmt_days(d: float) -> str:          # the Liquidity tab's own rounding (main.py)
-    if not np.isfinite(d):
-        return "∞"
-    return "<0.1d" if d < 0.1 else f"{d:.1f}d" if d < 10 else f"{d:.0f}d"
 
 
 def expected(row, loaded):
@@ -704,52 +659,11 @@ def check_page(at, row, mix_names) -> list:
             f"cone median ends {y['p50'][-1]:.4f}% vs engine {b['p50'][-1] * 100:.4f}%")
 
     cols, w = list(exp["rets"].columns), exp["w"]
-    chosen = sorted(mix_names.get(row["universe"]) or ing.PRESETS[row["universe"]])
-    adv = own_adv(chosen).reindex(cols).fillna(0.0).to_numpy()   # the page reads the whole basket
-    cap = row["liq_part"] / 100 * adv
-    with np.errstate(divide="ignore"):
-        days = np.where(cap > 0, np.abs(w) * row["liq_book"] / cap, np.inf)
-    fin = days[np.isfinite(days)]
-    metric = {m.label: m.value for m in at.metric}
-    bars = None
-    for ch in at.get("plotly_chart"):
-        spec = json.loads(ch.proto.spec)
-        title = spec.get("layout", {}).get("xaxis", {}).get("title", {})
-        if (title.get("text") if isinstance(title, dict) else title) == "days to liquidate":
-            bars = dict(zip(spec["data"][0]["y"], _arr(spec["data"][0]["x"]), strict=True))
-    if "Full-exit horizon" not in metric:
-        rec("PAGE-03", False, "the Liquidity tab drew no exit horizon")
-    else:
-        want = {c: d for c, d in zip(cols, days, strict=True) if np.isfinite(d)}
-        rec("PAGE-03", metric["Full-exit horizon"] == _fmt_days(fin.max() if fin.size else np.inf)
-            and (bars or {}).keys() == want.keys()
-            and all(abs(bars[c] - want[c]) <= 1e-9 * max(1.0, want[c]) for c in want),
-            f"page {metric['Full-exit horizon']}, bars {bars} vs "
-            f"{_fmt_days(fin.max() if fin.size else np.inf)}, {want} "
-            f"(${row['liq_book']:,} at {row['liq_part']}%)")
-
-    book = next((m.value for m in at.markdown if " book: " in m.value and "quiet-tape" in m.value), "")
-    bh = re.search(r"\$([\d,]+) book: (\d+) of your (\d+) names .* at (\d+)% of quiet-tape", book)
+    book = next((m.value for m in at.markdown if " book: " in m.value and "quiet day's volume" in m.value), "")
+    bh = re.search(r"\$([\d,]+) book: (\d+) of your (\d+) names .* at most (\d+)% of a quiet day's volume", book)
     rec("PAGE-04", bool(bh) and int(bh.group(1).replace(",", "")) == row["book"]
         and int(bh.group(4)) == row["book_part"] and int(bh.group(3)) == len(cols),
         f"book headline {re.sub('<[^>]+>', '', book)[:160]!r} for ${row['book']:,} at {row['book_part']}%")
-
-    pa, pb = _watch(at, "A").value, _watch(at, "B").value
-    if pa == pb:
-        rec("PAGE-05", "correlated with itself" in warns, f"{pa} against itself: no notice")
-    else:
-        rr = exp["rets"]
-        wfig = next((json.loads(c.proto.spec) for c in at.get("plotly_chart")
-                     if json.loads(c.proto.spec).get("data", [{}])[-1].get("name") == f"{pa} × {pb}"), None)
-        x, y = rr[pa].to_numpy(), rr[pb].to_numpy()
-        win = row["window"]
-        own = [np.corrcoef(x[k - win:k], y[k - win:k])[0, 1] for k in range(win, len(x) + 1)]
-        got = _arr(wfig["data"][-1]["y"]) if wfig is not None else np.array([])
-        ok = len(got) == len(own) and np.allclose(got, own, rtol=1e-9, atol=1e-12)
-        rec("PAGE-05", ok and metric.get("Full-period correlation") == f"{np.corrcoef(x, y)[0, 1]:+.2f}",
-            f"{pa} x {pb} {win}-day: page {len(got)} points "
-            f"vs own {len(own)}; full-period {metric.get('Full-period correlation')} vs "
-            f"{np.corrcoef(x, y)[0, 1]:+.2f}")
 
     frames = [f.proto.srcdoc for f in at.get("iframe") if "const DEMO = " in f.proto.srcdoc]
     if frames:

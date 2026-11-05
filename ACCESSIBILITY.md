@@ -1,6 +1,6 @@
 # Accessibility
 
-_Last reviewed 2026-08-26 · contact meleona.support@gmail.com_
+_Last reviewed 2026-11-05 · contact meleona.support@gmail.com_
 
 Meliona aims to meet **WCAG 2.2 level AA**. This page says what has been done,
 what is measured, and — the part most statements leave out — **where it still
@@ -71,6 +71,14 @@ falls short**, so nobody has to discover a gap the hard way.
 - **Structure:** one `<h1>`, section headings in order, tables with real header
   cells, and wide content scrolls inside its own container rather than forcing
   the page sideways.
+- **Images, links and the form (2026-11-05).** The one photograph, John's
+  portrait, has alt text and its own width and height, so nothing jumps as it
+  loads; the crest is labelled; decorative marks are hidden from screen
+  readers. The LinkedIn, GitHub and Handshake links each name themselves
+  ("John Nguyen on LinkedIn"), take the focus ring and are 44px targets. The
+  contact form's fields carry visible labels, its errors are stated in words
+  ("Write a message first: the box is empty."), and the thank-you state is
+  announced as a status.
 - **Meaning is never carried by colour alone.** Risk verdicts, exclusions and
   data-quality states are always stated in words as well.
 

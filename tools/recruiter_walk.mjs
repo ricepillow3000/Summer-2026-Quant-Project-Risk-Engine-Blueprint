@@ -30,7 +30,7 @@ async function problems() {
       .map(e => e.innerText.slice(0, 120));
     const nan = (document.body.innerText.match(/\b(nan|[-+]?inf)\b/gi) || []).slice(0, 3);
     // A loss phrased as a negative number contradicts itself.
-    const contra = (document.body.innerText.match(/loses an average of -\d[^ ]*/g) || []).slice(0, 1);
+    const contra = (document.body.innerText.match(/loses -\d[^ ]* on average/g) || []).slice(0, 1);
     return { errs: errs.concat(contra.map(c => 'contradiction: ' + c)), nan };
   });
 }
@@ -116,16 +116,16 @@ await step('scroll the whole page', async () => {
 
 const before = await verdict();
 await step('switch basket to Semiconductors', async () => {
-  await openDrawer('Universe: which assets');
+  await openDrawer('Portfolio: which names');
   await pick('Preset basket', 'Semiconductors');
   await page.waitForFunction(b => document.querySelector('.verdict-number')?.textContent.trim() !== b, before);
   return `CVaR ${before} -> ${await verdict()}`;
 }, async () => {
   // The visitor's FIRST change used to re-mount every drawer closed - the
   // one they were using snapped shut under the cursor.
-  const open = await page.locator('summary', { hasText: 'Universe: which assets' }).first()
+  const open = await page.locator('summary', { hasText: 'Portfolio: which names' }).first()
     .evaluate(el => el.parentElement.open);
-  return open || 'the Universe drawer closed itself after the first change';
+  return open || 'the Portfolio drawer closed itself after the first change';
 });
 
 await step('replay the COVID-19 crash', async () => {
@@ -152,8 +152,8 @@ await step('flip to the short side', async () => {
   return `CVaR ${await verdict()}`;
 });
 
-for (const name of ['Risk Topology', 'Risk Breakdown', 'Liquidity', 'Correlation Watch', 'Balance',
-                    'Grit Zone', 'Crisis Conviction', 'Data Quality', 'Lineage & Audit']) {
+for (const name of ['Risk Topology', 'Risk Breakdown', 'Grit Zone', 'Crisis Conviction',
+                    'Data Quality', 'Lineage & Audit']) {
   await step(`open tab: ${name}`, async () => {
     if (['Data Quality', 'Lineage & Audit'].includes(name)) {     // the folded provenance drawer
       const s = page.locator('summary', { hasText: 'Where the numbers come from' }).first();
@@ -163,7 +163,7 @@ for (const name of ['Risk Topology', 'Risk Breakdown', 'Liquidity', 'Correlation
     await tab(name).scrollIntoViewIfNeeded(); await tab(name).click(); await page.waitForTimeout(1200);
   }, async () => {
     const len = await page.evaluate(n => {
-      const t = [...document.querySelectorAll('[role="tab"]')].find(e => e.innerText.trim() === n);
+      const t = [...document.querySelectorAll('[role="tab"]')].find(e => e.textContent.trim() === n);
       const panel = t && document.getElementById(t.getAttribute('aria-controls'));
       return panel ? panel.innerText.trim().length + panel.querySelectorAll('iframe, canvas, svg').length * 100 : 0;
     }, name);
@@ -210,7 +210,7 @@ async function addTicker(sym) {
 
 await step(`type in your own basket (+${typed.join(', ')})`, async () => {
   const b = await verdict();
-  await openDrawer('Universe: which assets');
+  await openDrawer('Portfolio: which names');
   for (const sym of typed) await addTicker(sym);
   return `CVaR ${b} -> ${await verdict()}`;
 }, async () => {

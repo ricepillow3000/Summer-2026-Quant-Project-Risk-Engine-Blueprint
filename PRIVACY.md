@@ -1,6 +1,6 @@
 # Privacy
 
-_Last updated: 2026-11-04. Contact: meleona.support@gmail.com_
+_Last updated: 2026-11-05. Contact: meleona.support@gmail.com_
 
 Meliona is run by John Nguyen, an individual, as a student portfolio project -
 not a company, and nothing here is sold.
@@ -11,14 +11,17 @@ app holds, which is deliberately close to nothing.
 
 ## What is not collected
 
-- No name, email, address, phone number or payment details. There is no form
-  that asks for any of them.
+- No name, email, address, phone number or payment details. The contact form
+  asks for a message and, if you like, a name, but it collects neither: it
+  only prepares an email in your own email app (see **The contact form**).
 - No analytics, advertising, attribution or crash-reporting SDK. No Google
   Analytics, no Sentry, no Firebase, no pixel, no fingerprinting script. The
   only usage numbers are two anonymous totals the server counts itself (see
   **Analytics** below).
 - No third-party JavaScript at all: the page loads no CDN scripts, no external
   fonts and no remote images. Your browser talks to this app and nothing else.
+  The one photograph, John's portrait in the About section, is a file served
+  by this app itself.
 - No location data, no device identifiers, no advertising ID.
 - No profile, and therefore no profiling or automated decision-making about
   you.
@@ -29,6 +32,7 @@ app holds, which is deliberately close to nothing.
 |---|---|---|---|
 | Your ticker selections and slider settings | Your browser session, server memory | Until you close the tab or press **Clear this session's data** | Public ticker symbols |
 | A random session reference (e.g. `9F3A2B7C`) | Same session, shown in the footer | Same | Nothing linked to you - it is random |
+| What you type in the contact form, and the email link it prepares | Server memory for this session only; never written to disk or to any log | Until you press **Write another message**, clear the session or close the tab | Your words, as you typed them |
 | Cached market data | Server disk, filename is a hash of the ticker set | Rotates on size; oldest first | Public Yahoo Finance prices, shared by every visitor who picks the same basket |
 | Error and session-start log lines | Server disk (`logs/`, size-capped, rotating) | Until rotated out (small), or the next redeploy | Timestamp, session reference, ticker symbols, stack trace |
 | Error lines only (no session starts) | Also the host's log stream (Railway), where Streamlit writes its own server errors | The host's log retention | The same error lines |
@@ -38,6 +42,33 @@ app holds, which is deliberately close to nothing.
 The session reference exists for one purpose: if you email about a problem and
 quote it, the operator can find the matching stack trace. It is not a user ID,
 it is not stored anywhere beyond the logs above, and a new one is issued every visit.
+
+## The contact form
+
+The site has no mail server and no database, so the contact form sends
+nothing. When you press **Prepare my email**, the server checks the message
+(not empty, at most 1,000 characters) and builds a `mailto:` link with your
+words in it; **Open your email app** hands that link to your own email
+program, where you see the whole email before anything leaves. Nothing reaches
+anyone unless you press send there. Your words are held in the server's memory
+for this session only, are never printed into the page, never logged and never
+written to disk; they go when you write another message, clear the session or
+close the tab.
+
+An email you do send is an ordinary email to `meleona.support@gmail.com` (a
+Gmail mailbox, forwarded to John) and is kept there as email, under Google's
+own privacy policy, like any message you write to anyone. Ask for it to be
+deleted by replying to the thread.
+
+## The portrait and the profile links
+
+The About section shows John Nguyen's own photograph, served from this app's
+own files; nothing about the image is fetched from anywhere else. The
+**LinkedIn**, **GitHub** and **Handshake** marks beside it, and the same three
+links in the footer, are plain links: nothing is loaded from those sites, no
+widget, embed, button script or tracking pixel of theirs is on the page, and
+none of them learns about your visit unless you click. A click opens that site
+in a new tab, where its own privacy policy applies.
 
 ## Analytics
 
@@ -97,8 +128,9 @@ prevention under its own privacy policy.
 The **Privacy**, **Terms**, **Accessibility** and **Source code on GitHub**
 links in the footer, and the privacy-policy link in the cookie notice, open on
 GitHub, where this project's code is published; GitHub handles those page
-visits under its own privacy statement. The app page itself loads nothing from
-GitHub or any other outside host.
+visits under its own privacy statement. The profile links (LinkedIn, GitHub,
+Handshake) work the same way, and only when clicked. The app page itself loads
+nothing from GitHub or any other outside host.
 
 ## Artificial intelligence
 

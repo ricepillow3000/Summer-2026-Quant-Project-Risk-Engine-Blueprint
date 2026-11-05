@@ -3,7 +3,7 @@ Covariance estimators - how the risk matrix itself is built.
 
 The raw sample covariance is noisy and can be near-singular, which matters
 because everything downstream INVERTS or leans on it: risk-parity weights,
-vol-targeting, the Balance min-variance blend, Monte Carlo. Two professional
+vol-targeting, Monte Carlo. Two professional
 estimators stabilize or sharpen it. All return an ANNUALIZED covariance
 DataFrame with the same asset labels, so they are drop-in swappable.
 

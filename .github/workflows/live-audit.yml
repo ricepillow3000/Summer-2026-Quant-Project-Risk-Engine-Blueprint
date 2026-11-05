@@ -124,15 +124,6 @@ jobs:
             pkill -f "server.port 8502" || true; sleep 2
           done
           exit $status
-      # The cone's lattice Boltzmann flow (static/windtunnel.js). The page runs
-      # it only on a hardware GPU; this runner's is software, so the page shows
-      # the chart without it and this step, on its own, tells the browser it has
-      # a hardware GPU, steps the solver a fixed number of times and runs the
-      # page's own pixel-by-pixel check() on the baseline cone and after a
-      # volatility shock.
-      - name: 8d. This commit - the cone's flow, solved and proven on the pixels
-        if: always()
-        run: node tools/flow_check.mjs http://127.0.0.1:8501 flow-shots 6000
       # John, 2026-11-04: "test simultaneous users and test backup restores".
       # Ten visitors open the page at the same moment on this commit's app,
       # through serve.py's rate limiter; then a copy of this checkout with no
@@ -192,5 +183,4 @@ jobs:
             site-shots/
             walk/
             scan/
-            flow-shots/
             app.log

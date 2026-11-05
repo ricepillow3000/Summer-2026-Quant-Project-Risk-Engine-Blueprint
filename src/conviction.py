@@ -114,9 +114,10 @@ def race_days(days, fell, miss: float) -> float:
 
 def crisis_forward_returns(prices: pd.Series) -> pd.DataFrame:
     """
-    One row per named crisis the series traded through: crash depth, plus
-    forward returns from the pre-crisis peak (worst-timed entry) and from
-    the trough (scariest day), at each horizon in HORIZONS.
+    One row per named crisis the series traded through: crash depth, the
+    trading days from the trough back to the pre-crisis peak, plus forward
+    returns from the pre-crisis peak (worst-timed entry) and from the trough
+    (scariest day), at each horizon in HORIZONS.
     """
     prices = prices.dropna()
     rows = []
@@ -129,10 +130,18 @@ def crisis_forward_returns(prices: pd.Series) -> pd.DataFrame:
             continue            # never declined inside this window: no crash
         peak_val = float(window.loc[peak_date])
         trough_val = float(window.loc[trough_date])
+        # The way back: trading days from the trough to the first close at or
+        # above the peak before the fall, within RECOVERY_HORIZON_DAYS - None
+        # (not back within that span, or the data ends first) is shown as
+        # such, never extrapolated. The page's case studies read these.
+        back = _days_to_reclaim(prices, trough_date, peak_val)
         row = {
             "crisis": name,
             "trough_date": trough_date.date(),
             "depth": trough_val / peak_val - 1.0,
+            "recovery_days": back,
+            "recovery_date": (None if back is None else
+                              prices.index[prices.index.get_loc(trough_date) + back].date()),
         }
         for label, h in HORIZONS.items():
             row[f"peak_{label}"] = _forward_return(prices, peak_date, h)
@@ -247,15 +256,16 @@ def race_record(race: pd.DataFrame) -> dict:
 
 
 def load_conviction(benchmark: str = BENCHMARK) -> dict:
-    """Convenience bundle for the UI: benchmark forward-return table + summary
-    + the AI-capex recovery race, all from live Yahoo data."""
+    """Convenience bundle for the UI: benchmark forward-return table + summary,
+    from live Yahoo data. The recovery race stays in this library
+    (recovery_race, race_record) but left the page (John, 2026-11-05), so the
+    page no longer pulls the basket's full histories."""
     bench_px = fetch_prices([benchmark], period="max", align=False)[benchmark]
     table = crisis_forward_returns(bench_px)
     return {
         "benchmark": benchmark,
         "table": table,
         "summary": conviction_summary(table),
-        "race": recovery_race(benchmark=benchmark),
     }
 
 
@@ -263,4 +273,4 @@ if __name__ == "__main__":
     bundle = load_conviction()
     print(bundle["table"].to_string(index=False))
     print(bundle["summary"])
-    print(bundle["race"].to_string(index=False))
+    print(recovery_race().to_string(index=False))
