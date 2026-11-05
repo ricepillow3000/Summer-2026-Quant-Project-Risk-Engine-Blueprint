@@ -1103,6 +1103,20 @@ two paid-vendor-dependent pieces remain explicit backlog items:
   excluded. A planted error in each part fails its check
   (`test_the_batch_audit_re_derives_every_grit_zone_number`).
 
+- ✅ **An early button press is never lost (2026-11-05)**. The Live audit
+  (step 8c, early) saw "Skip to the analysis" pressed while the page was still
+  loading move 5px and stop 2443px short, three times. Two causes, both in the
+  glide script's wait for a section not written yet: (1) scroll anchoring under
+  a page still growing moved scrollTop and was read as the reader scrolling -
+  now a scroll that leaves the pressed button where it was on screen is layout,
+  not the reader, and a clamp under a shrinking page rebases that position;
+  (2) the wait's timers lived in the glide frame, and a run that replaced the
+  frame took them with it - the wait now lives on the page
+  (`P.__melionaPending`, wall-clock press time) and the next frame carries it
+  on. Browser probes reproduce both on the old script and land on the new one;
+  a reader's own scroll still ends the wait
+  (`test_the_glide_follows_a_moving_target_and_yields_to_the_reader`).
+
 - ✅ **Story cut (ME-28, John 2026-11-05)**. The page tells one story: how
   much this book could lose in a bad year, what real crashes did, which names
   hold up (grit), and how steady anchors cushion high-flyers. Off that story,
