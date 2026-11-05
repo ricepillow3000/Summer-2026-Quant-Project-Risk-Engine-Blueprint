@@ -81,6 +81,30 @@
     s.src = (me && me.src ? me.src : 'app/static/reveal.js').replace(/reveal\.js(\?.*)?$/, file);
     D.head.appendChild(s);
   });
+  // A press before the glide script exists. main.py's glide ships in a frame
+  // that loads after the first links are drawn - "Skip to the analysis" was
+  // on screen 229ms before it, so a quick press fell to the browser's own
+  // jump to a section not written yet, which went nowhere (Live audit 8c
+  // early, four times on 2026-11-05: moved 5px, ended 2400px short). This
+  // file is in the <head>, there first: it keeps the press on the page
+  // (__melionaPending, the same record the glide resumes a wait from), and
+  // the glide flies it as it arrives. Should the glide never come, the
+  // browser's own jump is made once the section exists.
+  D.addEventListener('click', function (e) {
+    if (D.__melionaGlide || e.defaultPrevented || e.button || e.metaKey || e.ctrlKey ||
+        e.shiftKey || e.altKey) return;
+    var a = e.target.closest && e.target.closest('a[href^="#"]');
+    var id = a ? a.getAttribute('href').slice(1) : '';
+    if (!id) return;
+    e.preventDefault();
+    var p = D.__melionaPending = { a: a, id: id, ms: Date.now() };
+    (function wait() {
+      if (D.__melionaGlide || D.__melionaPending !== p) return;   // the glide took it over
+      var el = D.getElementById(id);
+      if (el && Date.now() - p.ms > 3000) { D.__melionaPending = null; el.scrollIntoView(); return; }
+      if (Date.now() - p.ms < 180000) setTimeout(wait, 100);
+    })();
+  }, true);
   if (calm) { H.classList.remove('reveal-on'); return; }   // everything as drawn
   // Flat motion on WebKit (every iPhone and iPad browser, and Safari: only
   // WebKit has GestureEvent) and on any touch screen: the same arrivals as

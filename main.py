@@ -571,7 +571,8 @@ _script_frame("""
   P.addEventListener('scroll', onScroll, { capture: true, passive: true });
   P.__melionaGlide = { onTab: onTab, onLink: onLink, onYield: onYield, onScroll: onScroll };
   /* A press still waiting for its section when this frame replaced the last
-     one: carry it on from its own press time. */
+     one - or made before any frame was here, which static/reveal.js (in the
+     <head>, there first) keeps for us: carry it on from its own press time. */
   const pend = P.__melionaPending;
   if (pend && pend.a.isConnected) waitFor(pend.a, pend.id, performance.now() - (Date.now() - pend.ms));
   else P.__melionaPending = null;

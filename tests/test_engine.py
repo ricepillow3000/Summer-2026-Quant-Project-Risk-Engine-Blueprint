@@ -5708,6 +5708,15 @@ def test_a_press_waits_for_its_section_as_long_as_the_page_is_still_being_writte
         "(the old frame's timers die with it: 'Skip to the analysis' did nothing, Live audit on main 42163e6)"
     assert "P.__melionaSetY = y; if (waitA) waitTop = waitA.getBoundingClientRect().top; return;" in scroll, \
         "a clamp under a shrinking page must rebase where the button sits, or the next anchoring shift ends the wait"
+    # A press before the glide frame exists (the skip link was drawn 229ms
+    # before it; Live audit 8c early, four times): reveal.js, in the <head>,
+    # keeps it as the same pending record and the glide flies it on arrival.
+    rv = (pathlib.Path(__file__).resolve().parent.parent / "static" / "reveal.js").read_text(encoding="utf-8")
+    early = rv[rv.index("A press before the glide script exists"):rv.index("if (calm)")]
+    assert "if (D.__melionaGlide || e.defaultPrevented" in early and "e.preventDefault();" in early
+    assert "D.__melionaPending = { a: a, id: id, ms: Date.now() }" in early, "the record the glide resumes"
+    assert "el.scrollIntoView()" in early, "no glide at all: the browser's own jump, once the section exists"
+    assert "}, true);" in early, "capture: before the page's own handlers"
 
 
 def test_only_a_decaying_flick_is_forgiven_and_every_exit_restores_the_page():

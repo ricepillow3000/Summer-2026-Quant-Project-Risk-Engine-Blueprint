@@ -1134,7 +1134,12 @@ two paid-vendor-dependent pieces remain explicit backlog items:
   (2) the wait's timers lived in the glide frame, and a run that replaced the
   frame took them with it - the wait now lives on the page
   (`P.__melionaPending`, wall-clock press time) and the next frame carries it
-  on. Browser probes reproduce both on the old script and land on the new one;
+  on. A fourth failure (after both fixes) found the root: the skip link is
+  drawn ~230ms before the glide frame loads, so a quick press fell to the
+  browser's own jump to a section not yet written. static/reveal.js, in the
+  <head>, now keeps such a press as the same pending record and the glide
+  flies it on arrival (probe: old script dead, section 2213px away; new one
+  lands at 27px). Browser probes reproduce each cause on the old script and land on the new one;
   a reader's own scroll still ends the wait
   (`test_the_glide_follows_a_moving_target_and_yields_to_the_reader`).
 
