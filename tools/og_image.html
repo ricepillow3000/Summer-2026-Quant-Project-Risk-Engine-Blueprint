@@ -15,8 +15,7 @@
      - THE STONE AND THE CREST. A charcoal block from column 8 to the edge,
        the crest's five pieces engraved into it, small and faint, the audit
        receipt set over them.
-     - THE PLINTH. A dressed stone footing (the rusticated base of a bank or a
-       Florentine palazzo), its joints on every second gutter of the grid.
+     - THE PLINTH. A full-width stone footing with a gold cap: one clean band.
      The site's type and colours only: Georgia's metric twin (Gelasio) for
      words, Helvetica's design (FreeSans) for labels, beige, charcoal, bronze
      and the crest's gold. No gradients outside the crest, no rounded cards,
@@ -56,10 +55,14 @@ svg.stage { position: absolute; inset: 0; width: 1200px; height: 627px; }
           color: var(--bronze-text); border-left: 3px solid var(--charcoal); padding-left: 14px; }
 h1 { font: 700 150px/0.88 var(--serif); letter-spacing: -0.035em; color: var(--ink);
      margin: 52px 0 0 -7px; }
-.datum { display: flex; align-items: center; gap: 12px; margin-top: 34px; }
-.datum i { display: block; height: 3px; width: 158px; background: var(--charcoal); }
-.datum b { display: block; width: 0; height: 0; border-left: 7px solid transparent;
-           border-right: 7px solid transparent; border-bottom: 9px solid var(--bronze); }
+/* The rule under the name: a hairline across the field (columns 1-6) with a
+   heavier key over its first two columns - the ruled line of a printed annual
+   report. No ornament (John, 2026-11-05: sleek, corporate, minimal). */
+.datum { position: relative; height: 3px; margin-top: 34px; }
+.datum::before { content: ""; position: absolute; left: 0; right: 0; top: 1px; height: 1px;
+                 background: var(--ink); opacity: .28; }
+.datum::after { content: ""; position: absolute; left: 0; top: 0; height: 3px; width: 158.67px;
+                background: var(--charcoal); }
 .claim { font: 400 26px/1.4 var(--serif); color: var(--ink-2); margin-top: 22px; max-width: 520px; }
 .claim b { font-weight: 700; color: var(--ink); }
 
@@ -90,17 +93,16 @@ h1 { font: 700 150px/0.88 var(--serif); letter-spacing: -0.035em; color: var(--i
   <!-- The stone: column 8 (x = 64 + 7 x 91.33) to the edge, down to the plinth. -->
   <rect x="703.33" y="0" width="496.67" height="561" fill="#2E2A25"/>
   <g id="fort" clip-path="url(#stone)" fill="none" stroke="#C6A26B"></g>
-  <!-- The plinth: full width, a gold cap, joints on every second gutter. -->
+  <!-- The plinth: full width, a gold cap. -->
   <rect x="0" y="561" width="1200" height="66" fill="#26221E"/>
   <rect x="0" y="561" width="1200" height="3" fill="#B8955E"/>
   <rect x="0" y="564" width="1200" height="1" fill="#3A352F"/>
-  <g id="joints" stroke="#3E3832" stroke-width="2"></g>
 </svg>
 
 <div class="field">
   <div class="mark"><!--CREST--><p class="kicker">Portfolio risk engine<br>on live end-of-day data</p></div>
   <h1>Meliona</h1>
-  <div class="datum"><i></i><b></b></div>
+  <div class="datum"></div>
   <p class="claim">Value at risk, stress tests and Monte Carlo, with <b>every number traced to its source</b> and checked against its paper.</p>
 </div>
 
@@ -140,13 +142,6 @@ const ks = 79 / 35;          // small and faint, as it sat at the star fort's he
 crest.forEach(P => add(fort, 'polygon', { points: pts(P.map(([x, y]) => [C[0] + x * ks, C[1] + y * ks])),
                                           'stroke-width': 1, 'stroke-opacity': .1 }));
 
-// Plinth joints: the gutter centre after every second column, top and foot.
-const joints = document.getElementById('joints');
-for (let k = 2; k < 12; k += 2) {
-  const x = 64 + k * 91.333 - 12;
-  add(joints, 'line', { x1: x, y1: 565, x2: x, y2: 575 });
-  add(joints, 'line', { x1: x, y1: 613, x2: x, y2: 627 });
-}
 </script>
 </body>
 </html>
