@@ -761,6 +761,34 @@ ul[role="listbox"] li:hover { background: rgba(154,123,79,.12) !important; }
   .about-find { grid-column: auto; }
   .about-photo, .about-photo img { width: 200px; }
   .about-photo img { height: 250px; } }
+/* Why Meliona exists: John's story on the paper ground. The out-of-suit photo
+   under a 3px charcoal cap (the About portrait's gold cap, in ink), the words
+   in a reading column, one line pulled out on a bronze rule, then signed. */
+.story-section { padding: 96px 0 8px; }
+.story-grid { display: grid; grid-template-columns: 240px minmax(0, 680px); gap: 64px;
+    align-items: start; }
+.story-photo { margin: 0; width: 240px; border-top: 3px solid #2E2A25; }
+.story-photo img { display: block; width: 240px; height: 300px; object-fit: cover;
+    background: #DDD6CA; }
+.story-photo figcaption { font-family: Georgia, serif; font-style: italic; font-size: 0.9375rem;
+    line-height: 1.5; color: #5D574D; padding-top: 12px; margin-top: 12px;
+    border-top: 1px solid rgba(63,59,53,.18); }
+.story-text { display: flex; flex-direction: column; align-items: flex-start; gap: 18px; min-width: 0; }
+.story-text .ar-rule { max-width: 560px; }
+.story-p { font-family: Georgia, serif; font-size: 1.125rem; line-height: 1.7; color: #3F3B35;
+    margin: 0; max-width: 660px; }
+.story-quote { font-family: Georgia, serif; font-size: 1.5rem !important; font-weight: 700; line-height: 1.35 !important;
+    color: #2E2A25 !important; margin: 10px 0; padding: 4px 0 4px 24px; border-left: 3px solid #9A7B4F;
+    max-width: 600px; }
+.story-sign { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 700;
+    font-size: 0.75rem; line-height: 1.4; letter-spacing: .2em; text-transform: uppercase;
+    color: #6A5030; margin: 8px 0 0; padding-top: 14px; border-top: 1px solid rgba(63,59,53,.18); }
+@media (max-width: 760px) {
+  .story-section { padding-top: 72px; }
+  .story-grid { grid-template-columns: minmax(0, 1fr); gap: 36px; }
+  .story-photo, .story-photo img { width: 200px; }
+  .story-photo img { height: 250px; }
+  .story-quote { font-size: 1.3125rem !important; padding-left: 18px; } }
 /* Five questions: ruled rows, the question in bold serif, two columns wide. */
 .faq-section { display: flex; flex-direction: column; align-items: flex-start; gap: 18px;
     padding: 88px 0 8px; }

@@ -160,7 +160,8 @@ Target ship date: August 23, 2026.
 ## Credits
 
 The page's blocks are flat paper and stone, after the share banner
-(`tools/og_image.html`). Its one photograph is John Nguyen's own portrait
-(cropped and graded by `tools/portrait.py`; not for reuse). The crest
+(`tools/og_image.html`). Its only photographs are John Nguyen's own: the
+About portrait and the photo beside his story (cropped and graded by
+`tools/portrait.py`; not for reuse). The crest
 (`assets/logo.svg`) was drawn for this project. The GitHub and Handshake marks
 are Simple Icons' paths (CC0); the LinkedIn mark is drawn here.
