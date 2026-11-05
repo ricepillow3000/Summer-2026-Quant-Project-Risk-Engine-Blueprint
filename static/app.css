@@ -943,25 +943,6 @@ a.cta-btn:focus-visible, a.cta-link:focus-visible, .meliona-footer a.f-box:focus
 @keyframes read-progress { to { transform: scaleX(1); } }
 }
 
-/* FLOW KEY - the two stepped colour tables of the cone's lattice Boltzmann
-   flow (main.py FLOW_SPEED_STEPS / FLOW_WALL_STEPS). Swatches are flat chips,
-   no gradients; words use the page's AA text tones. */
-.flow-key { margin: 4px 0 6px; font-family: Georgia, serif; font-size: 0.75rem; color: #54504A; }
-.flow-key-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 3px 0; }
-.flow-key-label { color: #6A5030; font-size: 0.8125rem; min-width: 150px; }
-.flow-chip { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
-.flow-swatch { width: 14px; height: 10px; border: 1px solid #3F3B35; display: inline-block; }
-.flow-ramp { width: 180px; max-width: 100%; height: 10px; border: 1px solid #3F3B35; display: inline-block; }
-.flow-ramp-ends { display: inline-flex; flex-wrap: wrap; gap: 4px 12px; }
-/* The cone's "Verification Overlay" switch (static/windtunnel.js): the page's
-   button grammar - matte, square, a 1px rule; pressed reads as filled. */
-.wt-verify { font: 0.75rem/1 Georgia, serif; color: #3F3B35;
-    background: #F1EDE5; border: 1px solid #3F3B35; border-radius: 0; padding: 6px 10px;
-    cursor: pointer; }
-.wt-verify:hover { background: #E4DED3; }
-.wt-verify[aria-pressed="true"] { background: #3F3B35; color: #F4F1EA; }
-.wt-verify:focus-visible { outline: 2px solid #6A5030; outline-offset: 2px; }
-
 /* ---- DOCK: the bottom of the screen (static/dock.js, 2026-11-04) ----------
    One fixed stack outside Streamlit's tree: the cookie notice above the
    phone shortcut, so the two can never overlap. Under the boot veil (z 999),

@@ -365,20 +365,17 @@ is a separate container with its own disk, so it would warm a cache the web
 app never reads. Its passes print to the deploy log, one line per preset.
 
 A pass warms every pull the page makes for a preset, not only its 2y prices:
-the full histories behind The Book and the Grit tab, the 10 years behind the
-tail fit, the anchor pool, and the page-wide pulls
-(benchmark, recovery race, factor proxies, defensive shelf, T-bill). After a
+the full histories behind The Book and the Grit tab, the anchor pool, and the
+page-wide pulls (benchmark, defensive shelf, T-bill). After a
 deploy the first switch to Semiconductors took 93.1s with only the 2y pull
 warm (John, 2026-10-20); offline, warming everything took that switch from
 40.9s to 12.8s, the headline from 4.1s to 1.0s.
 `test_the_warm_pass_covers_every_fetch_a_preset_page_makes` records the real
-page's fetches and fails if a pass misses one - the Balance tab's default
-crisis pair included, picked by the page's own rule (most volatile name, top
-of `anchor_rank`). Each name's download is kept on its own per period
+page's fetches and fails if a pass misses one. Each name's download is kept on its own per period
 (`ingestion._raw_path`), so presets that share names share the work and a
 basket a visitor types downloads only the names the server does not hold yet
-- the rest of it is stitched from what the pass left. A pass makes about 450
-name-downloads (152 names at 2y, 149 at max, 148 at 10y) plus the security
+- the rest of it is stitched from what the pass left. A pass makes about 300
+name-downloads (152 names at 2y, 149 at max) plus the security
 master's lookups when they are due, down from about 820 requests when each
 basket was downloaded whole; the warmer is its own process with its own
 5000-a-day netguard cap, and it pauses 1s between pulls. The cache holds up to

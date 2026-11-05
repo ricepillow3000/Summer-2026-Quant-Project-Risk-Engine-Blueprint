@@ -27,38 +27,22 @@ from src.ingestion import (
     PRESETS, valid_ticker, NoDataError, flat_columns,
     MAX_UNIVERSE, MIN_ROWS, SUGGESTIONS,
 )
-from src.analytics import correlation_matrix, covariance_matrix
-from src.risk import (
-    monte_carlo, jump_diffusion_mc, parametric_var, var_backtest, sharpe_ratio,
-    cvar, var, portfolio_daily_returns, mcneil_frey_tail,
-)
-from src.comovement import (
-    correlation_from_cov, rolling_correlation, most_correlated_pair,
-    defensive_shift, least_correlated_to_pair, cluster_order,
-)
-from src.factors import factor_exposures
+from src.risk import monte_carlo, jump_diffusion_mc, sharpe_ratio
 from src.narrative import (DEFAULT_PARTICIPATION, build_book, headline, role_label,
                            role_note, Role)
 from src.strategies import risk_contributions, risk_parity_weights, vol_target
-from src.hedge import min_variance_pair, rank_hedges
-from src.pairing import (anchor_rank, backtest_pair, crisis_cushion,
-                         es_confidence_interval, pair_weights, regime_labels,
-                         tail_gap, DEFENSIVE_ANCHOR_TICKERS)
-from src.covariance import estimate_covariance, RISKMETRICS_LAMBDA, TRADING_DAYS
-from src.topology import anchor_frame, build_map_payload, war_room_html
+from src.pairing import DEFENSIVE_ANCHOR_TICKERS
+from src.covariance import estimate_covariance, TRADING_DAYS
+from src.topology import build_map_payload, war_room_html
 from src.observability import (count_preset, count_session, host_setting, log_incident,
                                log_session_start, new_session_ref, setup_logging)
-from src.eigenrisk import eigen_factors, marcenko_pastur_bounds, pc1_exposure
 from src.scenarios import HISTORICAL_REGIMES, replay_returns
 from hero import N_PATHS, hero_html
 from src.liquidity import (days_to_liquidate, liquidity_profile,
                            liquidity_adjusted_cvar)
 from src.grit import grit_scores, MIN_HISTORY_DAYS
 from src.data_quality import validate_prices
-from src.conviction import (
-    load_conviction, AI_CAPEX_BASKET, HORIZONS, RECOVERY_HORIZON_DAYS, race_days,
-    race_record,
-)
+from src.conviction import load_conviction, HORIZONS
 
 # Title and icon match the <head> tools/public_files.py serves to crawlers and
 # link previews, so a shared link and the browser tab say the same thing.
@@ -662,106 +646,15 @@ def _style_fig(fig, height: int = 300):
     return fig
 
 
-# The cone in a wind tunnel (John, 2026-11-04): static/windtunnel.js runs a
-# D2Q9 lattice Boltzmann flow (FluidX3D's method) whose walls are the five
-# computed percentile paths below, and draws it as FluidX3D draws a velocity
-# field: one line per cell of a grid laid on the chart's own axes (columns of
-# trading days, rows of percent return), pointing where the computed air in
-# that cell goes, coloured by its speed. Both colour tables ship to the
-# browser in the figure's layout.meta, and the key under the chart prints them.
-#   FLOW_AIR - FluidX3D's own velocity scale, colorscale_rainbow in its
-#     kernel.cpp (black, violet, blue, cyan, green, yellow, red, slow to fast),
-#     of which the air takes only the cool part, up to `top` (green): the hot
-#     end, red, is left to the data. A cell's colour is
-#     shade x rainbow(top x min(1, s / full)), s its speed as a multiple of the
-#     inflow. FluidX3D leaves a lattice point undrawn when its scaled speed is
-#     under 0.1 (`rest`): still air is transparent. Up to `fade` a line fades
-#     into the page, as FluidX3D's dark slow colours fade into its black
-#     ground; `shade` darkens the scale for a light page.
-#   FLOW_WALL_STEPS - a percentile path, segment by segment, by the surface
-#     pressure the flow puts on it, Cp = (p - p_outflow) / (rho U^2 / 2), as
-#     FluidX3D colours a boundary by the force on it: charcoal, crimson, then
-#     vivid red where the flow hits the data hardest. Red exists only on the
-#     data. The last bound is open-ended (1e9).
-FLOW_AIR = {"full": 1.6, "rest": 0.10, "fade": 0.45, "top": 0.62, "shade": 0.78, "alpha": 0.9}
-FLOW_WALL_STEPS = ((0.10, "#3F3B35"), (0.40, "#8E1B2B"), (1e9, "#E0102F"))
-
-
-def fluidx3d_rainbow(x: float) -> tuple:
-    """FluidX3D's colorscale_rainbow (src/kernel.cpp), line for line: x in
-    [0, 1] -> (r, g, b) in [0, 1], black at 0, red at 1. static/windtunnel.js
-    runs the same function in its line shader and in its check()."""
-    x = min(6.0, max(0.0, 6.0 * (1.0 - x)))
-    r = g = b = 0.0
-    if x < 1.2:
-        r, g = 1.0, x * 0.83333333
-    elif x < 2.0:
-        r, g = 2.5 - x * 1.25, 1.0
-    elif x < 3.0:
-        g, b = 1.0, x - 2.0
-    elif x < 4.0:
-        g, b = 4.0 - x, 1.0
-    elif x < 5.0:
-        r, b = x * 0.4 - 1.6, 3.0 - x * 0.5
-    else:
-        r, b = 2.4 - x * 0.4, 3.0 - x * 0.5
-    return r, g, b
-
-
-def flow_air_rgba(s: float) -> tuple:
-    """The colour of a cell's line for a speed s (a multiple of the inflow):
-    (r, g, b) in 0..255 and its opacity."""
-    a = FLOW_AIR
-    q = s / a["full"]
-    alpha = a["alpha"] * min(1.0, max(0.0, (q - a["rest"]) / (a["fade"] - a["rest"])))
-    rgb = fluidx3d_rainbow(a["top"] * min(1.0, q))
-    return tuple(round(255 * min(1.0, a["shade"] * c)) for c in rgb), alpha
-
-
-def flow_key_html() -> str:
-    """The key under the cone: what a cell, a line and each colour mean."""
-    full = FLOW_AIR["full"]
-    stops = []
-    for i in range(13):
-        s = full * i / 12
-        (r, g, b), alpha = flow_air_rgba(s)
-        stops.append(f"rgba({r},{g},{b},{alpha:.3f}) {100 * i / 12:.1f}%")
-    ramp = (f'<span class="flow-ramp" style="background:linear-gradient(90deg,{",".join(stops)})"></span>'
-            f'<span class="flow-ramp-ends"><span>still ({FLOW_AIR["rest"] * full:.2f}, not drawn)</span>'
-            f'<span>1.00 = inflow</span><span>{full:.1f}+</span></span>')
-    lo = None
-    wall = []
-    for hi, col in FLOW_WALL_STEPS:
-        rng = f"Cp &lt;{hi:.2f}" if lo is None else (f"Cp &ge;{lo:.2f}" if hi > 1e8 else f"Cp {lo:.2f}-{hi:.2f}")
-        wall.append(f'<span class="flow-chip"><span class="flow-swatch" style="background:{col}"></span>{rng}</span>')
-        lo = hi
-    return ('<div class="flow-key">'
-            '<div class="flow-key-row"><span class="flow-key-label">Grid</span>'
-            '<span>one cell = a few trading days (x-axis) by a step of return (y-axis); '
-            'its line points where the air in that cell is going</span></div>'
-            '<div class="flow-key-row"><span class="flow-key-label">Air speed, x inflow</span>'
-            + ramp + '</div>'
-            '<div class="flow-key-row"><span class="flow-key-label">Wall pressure on a path</span>'
-            + "".join(wall) + '</div></div>')
-
-
 def fan_chart(bands: dict):
     """
-    Monte Carlo outcome cone: median path + 25-75 and 5-95 percentile bands,
-    with a lattice Boltzmann flow around its paths (static/windtunnel.js).
+    Monte Carlo outcome cone: median path + 25-75 and 5-95 percentile bands.
 
     Rendering note: the percentile paths are drawn as splines. Every plotted
     point is a real computed percentile from the simulation - the spline only
     interpolates *between* those points instead of connecting them with jagged
     straight segments. Hover reports the true underlying value, so nothing is
     smoothed away from the numbers themselves; only the ink between them.
-
-    The flow: the five percentile paths are solid walls in a D2Q9 lattice
-    Boltzmann grid laid over the plot; air enters on the left and is computed
-    step by step, one simulated year per crossing. It is drawn as one line per
-    cell of a grid on the chart's axes (FLOW_AIR colours the air,
-    FLOW_WALL_STEPS the paths). It shows the cone's SHAPE as an obstacle, not
-    a market quantity; the numbers are the paths, the hover and the headline.
     """
     d = bands["days"]
 
@@ -773,8 +666,7 @@ def fan_chart(bands: dict):
 
     fig = go.Figure()
     # Outer 5–95 cone (draw upper first, then lower with fill-to-previous).
-    # Trace order is read by the audits (p95, p5, p75, p25 at 0..3). Flat fills,
-    # no gradient: the flow's colours carry the picture.
+    # Trace order is read by the audits (p95, p5, p75, p25 at 0..3).
     fig.add_trace(go.Scatter(x=d, y=p(bands["p95"]), name="p95", line=edge, hoverinfo="skip"))
     fig.add_trace(go.Scatter(x=d, y=p(bands["p5"]), name="p5", fill="tonexty",
                              fillcolor="rgba(63,59,53,0.05)", line=edge, hoverinfo="skip"))
@@ -809,14 +701,10 @@ def fan_chart(bands: dict):
         xaxis_title="Trading days", yaxis_title="Cumulative return (%)",
         hovermode="x unified",                 # one readout: all five levels on that day
         transition=dict(duration=420, easing="cubic-in-out"),
-        # static/windtunnel.js finds the cone by this, and reads its colour tables here
-        meta={"meliona": "cone",
-              "flow": {"air": dict(FLOW_AIR),
-                       "wall": [list(s) for s in FLOW_WALL_STEPS]}},
+        meta={"meliona": "cone"},              # the audits find the cone by this
     )
     fig = _style_fig(fig, height=360)
-    # room above the plot for the chart's "Verification Overlay" button
-    fig.update_layout(hoverlabel=dict(namelength=0), margin=dict(l=8, r=8, t=34, b=8))
+    fig.update_layout(hoverlabel=dict(namelength=0))
     # Aerodynamic axes: no tick spikes, breathing gridlines only
     fig.update_xaxes(ticks="", showspikes=False)
     fig.update_yaxes(ticks="", ticksuffix="%")
@@ -836,33 +724,6 @@ def read_me(html: str) -> None:
     with <b>…</b>. Keeps the honest, defensible captions but makes the
     explanation impossible to miss."""
     st.markdown(f'<div class="read-me">{html}</div>', unsafe_allow_html=True)
-
-
-def outcome_hist(total_returns, cvar: float):
-    """Histogram of simulated 1-year outcomes. Bars at or beyond the CVaR
-    average (not the whole VaR tail - the measured tail starts at the 5th
-    percentile; CVaR is that tail's mean, which sits deeper) are inked in
-    oxblood so the eye lands on the danger; every bar is a real simulation
-    count - color is annotation, not data."""
-    vals = np.asarray(total_returns) * 100.0
-    counts, edges = np.histogram(vals, bins=48)
-    mids = (edges[:-1] + edges[1:]) / 2
-    tail = -cvar * 100.0
-    colors = ["#8A3B2E" if m <= tail else BRONZE for m in mids]
-    fig = go.Figure(go.Bar(
-        x=mids, y=counts, width=(edges[1] - edges[0]) * 0.92,
-        marker=dict(color=colors, line=dict(width=0)), opacity=0.92,
-        hovertemplate="%{x:.0f}%: %{y} simulations<extra></extra>"))
-    fig.add_vline(x=tail, line=dict(color=CHARCOAL, width=2, dash="dash"),
-                  annotation_text="CVaR", annotation_position="top left",
-                  annotation_font=dict(color=CHARCOAL, size=12))
-    fig.add_vline(x=float(np.median(vals)),
-                  line=dict(color=BRONZE_DK, width=1, dash="dot"),
-                  annotation_text="median", annotation_position="top right",
-                  annotation_font=dict(color=BRONZE_DK, size=11))
-    fig.update_layout(xaxis_title="1-year return (%)", yaxis_title="Simulations",
-                      bargap=0.06)
-    return _style_fig(fig, height=280)
 
 
 def hbar(series: pd.Series, pct: bool = False, title_x: str = "",
@@ -1078,7 +939,7 @@ st.markdown("""
 # ---- Showcase: Crisis Conviction - the emotional problem, answered in numbers ----
 @st.cache_data(ttl=6 * 3600, show_spinner="Reading the crisis record…")
 def load_conviction_data():
-    """Benchmark crisis record + AI-capex recovery race, live from Yahoo."""
+    """Benchmark crisis record, live from Yahoo."""
     return load_conviction()
 
 # Landing target for "See the crisis record" and footer 02. Zero-height marker
@@ -1096,12 +957,8 @@ try:
     _s = _conv["summary"]
     _t1, _t3 = _s["trough_1y_later"], _s["trough_3y_later"]
     _p3 = _s["peak_3y_later"]
-    # Counted once, in src/conviction.race_record, for the slab and the tab.
-    _rec = race_record(_conv["race"])
-    _bwin, _nrace = _rec["wins"], _rec["n"]
 
-
-    _sl1, _sl2, _sl3, _sl4 = st.columns(4)
+    _sl1, _sl2, _sl3 = st.columns(3)
     with _sl1:
         st.markdown(f"""<div class="slab"><div class="slab-label">Bought the scariest day</div>
         <div class="slab-num">{round(_t1["pct_positive"] * _t1["n"])} of {_t1["n"]}</div>
@@ -1119,16 +976,9 @@ try:
         <div class="slab-note">crises: a buyer at the pre-crash peak
         was ahead three years later (median return {_p3["median"]:+.0%}).</div></div>""",
                     unsafe_allow_html=True)
-    with _sl4:
-        st.markdown(f"""<div class="slab"><div class="slab-label">The AI-capex race</div>
-        <div class="slab-num">{_bwin} of {_nrace}</div>
-        <div class="slab-note">crises where heavy compute investors reclaimed
-        their pre-crisis level faster than the S&amp;P 500.</div></div>""",
-                    unsafe_allow_html=True)
     st.caption(
-        "Computed live from Yahoo Finance adjusted closes (S&P 500 via SPY; "
-        "AI-capex basket disclosed in the Crisis Conviction tab). Historical "
-        "record, not a forecast. The Crisis Conviction tab below has the full "
+        "Computed live from Yahoo Finance adjusted closes (S&P 500 via SPY). "
+        "Historical record, not a forecast. The Crisis Conviction tab below has the full "
         "tables, the definitions and the limits."
     )
     # This CTA used to sit at the end of the narrative block ABOVE - which put
@@ -1381,48 +1231,6 @@ def load_universe(tickers_tuple: tuple[str, ...], period: str = "2y"):
     return fetch_prices(list(tickers_tuple), period=period)
 
 
-@st.cache_data(ttl=3600, max_entries=32, show_spinner="Fitting tail model…")
-def load_tail_fit(tickers_tuple: tuple[str, ...], weights_tuple: tuple[float, ...],
-                  bearish_flag: bool):
-    """
-    GPD tail fit on a LONG history, deliberately not the 2-year window the
-    rest of the app uses. Peaks-over-threshold needs enough points ABOVE the
-    threshold: 2y of daily data leaves ~25 exceedances at the 95% level, under
-    the 50 the asymptotics require, so the fit would (correctly) refuse. 10y
-    gives ~126. Cached because the xi bootstrap (200 refits) still costs
-    ~0.6s.
-
-    Names without the full history are dropped and the remaining weights are
-    rescaled to preserve the book's original gross notional - so the fit
-    describes the same leverage, on the names that actually have the history.
-    """
-    # Unaligned on purpose: an aligned pull cut every name to the youngest
-    # listing, so one 2021 IPO turned "10 years" into 5.1 and nothing was ever
-    # named as dropped (2026-10-17 council). A week of slack absorbs holidays.
-    px = fetch_prices(list(tickers_tuple), period="10y", align=False)
-    first = px.notna().idxmax()
-    px = px.loc[:, first <= first.min() + pd.Timedelta(days=7)].dropna()
-    rets = px.pct_change().dropna()
-    keep = [t for t in tickers_tuple if t in rets.columns]
-    if len(keep) < 2:
-        return None, 0, [], 0.0
-    w = pd.Series(weights_tuple, index=list(tickers_tuple))[keep]
-    gross = float(np.abs(weights_tuple).sum())
-    if float(w.abs().sum()) == 0:
-        return None, 0, [], 0.0
-    w = w * (gross / float(w.abs().sum()))
-    pr = rets[keep] @ w
-    if bearish_flag:
-        pr = -pr
-    dropped = [t for t in tickers_tuple if t not in keep]
-    # Conditional EVT: the GPD is fitted to EWMA-standardised residuals, not
-    # raw returns, because peaks-over-threshold assumes i.i.d. exceedances and
-    # the Christoffersen test above exists to show they are not. Returns the
-    # unconditional xi alongside, so the clustering bias is visible.
-    years = (pr.index[-1] - pr.index[0]).days / 365.25 if len(pr) else 0.0
-    return mcneil_frey_tail(pr), int(len(pr)), dropped, years
-
-
 @st.cache_data(ttl=3600, max_entries=64, show_spinner="Loading volume data…")
 def load_adv(tickers_tuple: tuple[str, ...]):
     """Average daily dollar volume per ticker (recent 3-month lookback)."""
@@ -1627,8 +1435,8 @@ with deck_alloc, st.expander("Allocation: how capital is weighted",
     cov_method = st.selectbox(
         "Covariance estimator", ["Ledoit-Wolf", "Sample", "EWMA"],
         format_func=lambda m: COV_LABELS[m],
-        help="How the risk matrix is built; it feeds risk parity, vol targeting "
-             "and the Balance blend. Ledoit-Wolf (default) shrinks noisy history "
+        help="How the risk matrix is built; it feeds risk parity and vol "
+             "targeting. Ledoit-Wolf (default) shrinks noisy history "
              "toward a stable target and is always invertible. Sample is plain "
              "history. EWMA (RiskMetrics λ=0.94) weights the last two weeks heavily, "
              "so it flinches at one bad day: use it to see the panic view, not as a "
@@ -1773,11 +1581,6 @@ def cached_map_payload(rets: pd.DataFrame, w: np.ndarray, names: tuple, short: b
     return build_map_payload(rets, w, list(names), short)
 
 
-@st.cache_data(ttl=3600, max_entries=64, show_spinner=False)
-def cached_es_ci(r: pd.Series) -> tuple:
-    return es_confidence_interval(r)
-
-
 if bearish:
     # Negate BEFORE calibration/resampling so jump-diffusion calibrates its
     # jumps on the short's own tail (an asset's melt-UP is the short's crash).
@@ -1805,7 +1608,7 @@ _audit("Monte Carlo", f"{engine}, {mc['n_simulations']:,} paths of {mc['horizon_
 # The CVaR above assumes you're out at the horizon. Widen it for the days it
 # actually takes to unwind at DEFAULT_PARTICIPATION of real daily volume, for
 # a HEADLINE_BOOK book - named in the sentence, since the days turn on it. The
-# interactive version lives in the Liquidity tab; this is the headline default.
+# Book below takes its own size and participation; this is the headline default.
 HEADLINE_BOOK = 1_000_000
 try:
     _adv = load_adv(tuple(tickers)).reindex(loaded).fillna(0.0)
@@ -1943,7 +1746,6 @@ with v_col:
             '</div>', unsafe_allow_html=True)
 with f_col:
     st.plotly_chart(fan_chart(mc["path_bands"]), width="stretch", config=PLOTLY_CFG)
-    st.markdown(flow_key_html(), unsafe_allow_html=True)
     # Jump-diffusion resamples nothing, and a replay under 30 days falls back to
     # i.i.d. (block_days=1): both used to claim "crash weeks stay intact".
     _se_txt = (f" CVaR sampling error: ±{mc['cvar_se']:.2%} "
@@ -1957,118 +1759,9 @@ with f_col:
     st.caption(
         "Each simulated path compounds a year of daily returns. Hypothetical "
         "distribution, not a forecast. The curves interpolate between real "
-        "computed percentiles." + _se_txt + " The moving air is a lattice "
-        "Boltzmann (D2Q9) flow computed around the five percentile paths as solid "
-        "walls, one line per grid cell of trading days by return: it shows the "
-        "cone's shape as an obstacle, not a market quantity. Air crosses the chart "
-        "in one simulated year, so the day it passes is the day it replays. "
-        "Verification Overlay shows the solver's own numbers."
+        "computed percentiles." + _se_txt
     )
 
-def eigen_factor_panel(cov, weights, returns) -> None:
-    """Statistical risk factors panel (eigendecomposition / PCA).
-
-    Separate function so the tab can wrap it in one try/except and
-    degrade gracefully, matching the factor-exposures panel pattern.
-    """
-    fac = eigen_factors(cov)
-    pc1_pct = float(fac["variance_explained"][0])
-    port_pc1 = pc1_exposure(weights, fac)
-    kappa = fac["condition_number"]
-
-    e1, e2, e3 = st.columns(3)
-    e1.metric("PC1: variance explained", f"{pc1_pct:.0f}%",
-              help="Share of the universe's total variance carried by its "
-                   "dominant statistical factor. It shows where the risk sits, "
-                   "not that everything moves together: one very volatile name "
-                   "can carry PC1 on its size alone. The correlation matrix in "
-                   "Correlation Watch answers whether names move together.")
-    e2.metric("Your book riding PC1", f"{port_pc1:.0%}",
-              help="Share of this portfolio's variance on that dominant "
-                   "factor: the macro vs idiosyncratic split.")
-    e3.metric("Condition number κ", f"{kappa:,.0f}" if np.isfinite(kappa)
-              else "∞ (singular)",
-              help="λmax/λmin, the numerical stability of the risk matrix "
-                   "before any inversion. Fragile above ~1e8.")
-
-    # Plain-English translation so a non-quant meets a sentence, not κ.
-    st.markdown(
-        f"In plain terms, one market wave drives about **{pc1_pct:.0f}%** of "
-        f"this universe's day-to-day swings, and **{port_pc1:.0%}** of your "
-        "book's risk rides that single wave. The higher that climbs, the less "
-        "real your diversification is; in a crash it heads toward 100%.")
-
-    read_me(
-        "Stretch a rubber sheet and most directions bend, but a few stretch "
-        "straight. Those are the eigenvectors, independent (orthogonal) risk "
-        "pathways, and how hard each is stretched is its eigenvalue, the "
-        "variance that factor carries. The factors are statistical and "
-        "unlabeled: PC1 with all-positive loadings reads as the market wave, "
-        "but naming later factors is interpretation, not math.")
-
-    # Scree chart: variance explained per factor + Marcenko-Pastur noise line
-    lam = fac["eigenvalues"]
-    # sigma2 excludes the top (signal) eigenvalue -- the SAME estimator
-    # clip_eigenvalues uses, so this ceiling matches the module logic.
-    sigma2 = float(lam[1:].mean()) if len(lam) > 1 else float(lam.mean())
-    # EWMA weights carry (1+lam)/(1-lam) ~ 32 effective days, not 503: at
-    # T=503 the ceiling sat 1.95x too low and painted noise as signal.
-    mp_t = ((1 + RISKMETRICS_LAMBDA) / (1 - RISKMETRICS_LAMBDA)
-            if cov_method == "EWMA" else len(returns))
-    _, mp_hi = marcenko_pastur_bounds(len(lam), mp_t, sigma2)
-    scree = go.Figure()
-    scree.add_trace(go.Bar(
-        x=[f"PC{i+1}" for i in range(len(lam))],
-        y=fac["variance_explained"],
-        marker=dict(color=[BRONZE_DK if v >= mp_hi else "#CBBB94"
-                           for v in lam]),
-        hovertemplate="%{x}: %{y:.1f}% of variance<extra></extra>"))
-    scree.add_hline(y=float(mp_hi / lam.sum() * 100) if lam.sum() > 0 else 0,
-                    line=dict(color="#8A6A3C", width=1, dash="dot"),
-                    annotation_text="noise ceiling (Marcenko-Pastur, heuristic)",
-                    annotation_font=dict(size=11, color="#8A6A3C"))
-    scree = _style_fig(scree, height=300)
-    scree.update_layout(yaxis_title="% of total variance", showlegend=False)
-    st.plotly_chart(scree, width="stretch", config=PLOTLY_CFG)
-    st.caption(
-        f"Factors above the dotted line carry more variance than pure noise "
-        f"would produce at this sample size (N={len(lam)}, T={mp_t:.0f}"
-        f"{' effective days under EWMA' if cov_method == 'EWMA' else ''}). "
-        "Heuristic reference at this universe size, not a hard test; the "
-        "Ledoit-Wolf estimator is the production defense against inversion "
-        "noise. Switch the estimator to EWMA in the Allocation drawer to see "
-        "the current regime's factor structure instead of the "
-        f"average over {len(returns)} daily returns.")
-
-    with st.expander("Factor loadings: how each name anchors onto each factor"):
-        ld = fac["loadings"]
-        lmax = float(np.abs(ld.values).max()) or 1.0
-        lfig = go.Figure(go.Heatmap(
-            z=ld.values, x=list(ld.columns), y=list(ld.index),
-            zmin=-lmax, zmax=lmax,
-            colorscale=[[0.0, "#3F3B35"], [0.5, "#EDE9E3"],
-                        [0.775, "#C9B48A"], [0.875, "#9A7B4F"],
-                        [0.95, "#7A5426"], [1.0, "#5C3D14"]],
-            xgap=2, ygap=2,
-            hovertemplate="%{y} on %{x}: %{z:+.3f}<extra></extra>",
-            colorbar=dict(thickness=10, outlinewidth=0)))
-        lfig.update_layout(height=max(260, 34 * len(ld) + 80),
-                           yaxis=dict(autorange="reversed"))
-        st.plotly_chart(lfig, width="stretch", config=PLOTLY_CFG)
-        st.caption(
-            "√λ-scaled eigenvectors, in return units: bronze = the name moves "
-            "with the factor, charcoal = against it. Sign convention is "
-            "deterministic (largest loading forced positive) so a factor "
-            "hedge can never silently invert between runs. Neutralizing PC1 "
-            "with an index overlay removes the dominant systematic wave "
-            "without selling a single position. That is the eigen-hedge "
-            "lens, shown here as exposure, not an execution engine.")
-
-
-# ---- Supporting depth: one tab at a time, not stacked accordions ----
-# Twelve tabs on one strip overflow invisibly (the tab-list scrollbar is
-# hidden by design) - split into two ruled rows: risk analysis first,
-# research & housekeeping second. Nothing removed, everything reachable.
 # ---- The Book: the guided arc, deliberately AHEAD of the tab strip ----
 # The tabs answer sixteen questions and leave the reader to assemble them.
 # This answers them in order, and each answer narrows the next: book size sets
@@ -2205,146 +1898,19 @@ with _bk_more:
 
 st.markdown('<div id="analysis"></div>', unsafe_allow_html=True)
 panel_head("Risk & conviction", "The analysis: where the risk lives")
-(tab_3d, tab_breakdown, tab_liquidity, tab_watch, tab_balance, tab_grit,
- tab_conviction) = st.tabs([
-    "Risk Topology", "Risk Breakdown", "Liquidity", "Correlation Watch",
-    "Balance", "Grit Zone", "Crisis Conviction",
+tab_3d, tab_breakdown, tab_grit, tab_conviction = st.tabs([
+    "Risk Topology", "Risk Breakdown", "Grit Zone", "Crisis Conviction",
 ])
+# Story cut (John, 2026-11-05): the page tells one story - a bad year's loss,
+# what real crashes did, which names hold up, how anchors carry flyers - so
+# Liquidity, Correlation Watch, Balance, the AI-capex race and the model-
+# validation drawer left the strip. src/ keeps their libraries.
 # Overwhelm audit (2026-10-29): the research workshop (Signal Lab, Regime
 # Atlas, Security Master) asked no question a visitor has to decide on, and it
 # stood open by default. What remains here is the provenance a reader can
 # audit - folded, one click away, never in the way.
 with st.expander("Where the numbers come from: data checks and audit trail"):
     tab_dq, tab_lineage = st.tabs(["Data Quality", "Lineage & Audit"])
-
-with tab_watch:
-    # Correlation as a moving picture. A static matrix answers "are these
-    # two related on average?" - this tab answers "are they related NOW,
-    # and is that relationship eating my diversification?"
-    corr_now = correlation_from_cov(covariance_matrix(returns))
-    try:
-        def_a, def_b, _ = most_correlated_pair(corr_now)
-    except Exception:  # noqa: BLE001 - degenerate universe; fall back to first two
-        def_a, def_b = loaded[0], loaded[1]
-
-    # Keyed on the basket, like the ticker box on its preset: with a fixed key
-    # Streamlit kept whatever pair a rerun on a half-typed basket had picked,
-    # so typing F, GM, DAL, UAL, GILD, VZ fast showed F x UAL and slowly F x GM
-    # (2026-10-20). A new basket starts from its own default pair; a visitor's
-    # pick lasts while the basket does.
-    _basket = "|".join(sorted(loaded))
-    wc1, wc2, wc3, wc4 = st.columns([2, 2, 2, 2])
-    pick_a = wc1.selectbox("Asset A", loaded, index=loaded.index(def_a),
-                           key=f"watch_a__{_basket}")
-    pick_b = wc2.selectbox("Asset B", loaded, index=loaded.index(def_b),
-                           key=f"watch_b__{_basket}")
-    win = wc3.slider("Rolling window (days)", 10, 63, 21, step=1, key="watch_w",
-                     help="21 trading days ≈ one month. Shorter reacts faster "
-                          "but is noisier.")
-    thresh = wc4.slider("Concentration threshold", 0.50, 0.95, 0.75, step=0.05,
-                        key="watch_t",
-                        help="Above this, the pair is close to one bet and "
-                             "diversification between them is thinning.")
-
-    if pick_a == pick_b:
-        st.warning("Pick two different assets: a name is always +1.00 "
-                   "correlated with itself.")
-    else:
-        roll = rolling_correlation(returns, pick_a, pick_b, window=win).dropna()
-        static_corr = float(corr_now.loc[pick_a, pick_b])
-        latest = float(roll.iloc[-1]) if len(roll) else float("nan")
-
-        m1, m2, m3 = st.columns(3)
-        m1.metric(f"{pick_a} × {pick_b} now ({win}d)",
-                  f"{latest:+.2f}" if len(roll) else "-")
-        # Not an average of the rolling series - it is the single Pearson
-        # correlation over the whole sample, which is a different number.
-        m2.metric("Full-period correlation", f"{static_corr:+.2f}")
-        m3.metric("Range over history",
-                  f"{roll.min():+.2f} … {roll.max():+.2f}" if len(roll) else "-")
-
-        # 60 prices leave 59 returns while the slider reaches 63: an empty
-        # rolling series used to read as "Stable ... at +nan".
-        if not len(roll) or not np.isfinite(latest):
-            st.info(f"Not enough history for a {win}-day window. Shorten the "
-                    "rolling window to get a reading.")
-        elif latest > thresh:
-            st.warning(f"Concentration reading: {pick_a} and {pick_b} are "
-                     f"moving at {latest:+.2f} over the last {win} trading "
-                     f"days, above your {thresh:.2f} threshold. Right now "
-                     "they are closer to one bet than two.")
-        else:
-            st.success(f"Stable: {pick_a} × {pick_b} at {latest:+.2f} over "
-                       f"the last {win} trading days, below your "
-                       f"{thresh:.2f} threshold.")
-
-        wfig = go.Figure()
-        wfig.add_hrect(y0=thresh, y1=1.0, fillcolor="rgba(154,123,79,0.10)",
-                       line_width=0)
-        wfig.add_hline(y=thresh, line=dict(color="#8A6A3C", width=1, dash="dot"),
-                       annotation_text=f"threshold {thresh:.2f}",
-                       annotation_font=dict(size=11, color="#8A6A3C"))
-        wfig.add_hline(y=0, line=dict(color="#C4BDAE", width=1))
-        wfig.add_trace(go.Scatter(
-            x=roll.index, y=roll.values, mode="lines",
-            line=dict(color=BRONZE, width=2.2),
-            hovertemplate="%{x|%Y-%m-%d}: %{y:+.2f}<extra></extra>",
-            name=f"{pick_a} × {pick_b}"))
-        wfig.update_layout(yaxis=dict(range=[-1, 1], title="correlation"),
-                           showlegend=False, height=360)
-        st.plotly_chart(wfig, width="stretch", config=PLOTLY_CFG)
-
-        read_me(
-            "Covariance and correlation share a sign but not units. Covariance "
-            "is in squared-return units, so its size is unreadable on its own; "
-            "correlation divides it by both volatilities, giving co-movement "
-            "per unit of risk on a −1 to +1 scale (R = D⁻¹ΣD⁻¹). The line above "
-            "is that relationship moving: pairs that average +0.4 can run above "
-            "+0.9 in a stress regime, when you need them not to.")
-
-        # --- Defensive simulation: measured, not promised ---
-        others = [t for t in loaded if t not in (pick_a, pick_b)]
-        if latest > thresh and others:
-            dest, dest_corr = least_correlated_to_pair(corr_now,
-                                                       (pick_a, pick_b))
-            w_shift = defensive_shift(weights, loaded, (pick_a, pick_b),
-                                      dest, cut=0.15)
-            pr_before = portfolio_daily_returns(returns, weights)
-            pr_after = portfolio_daily_returns(returns, w_shift)
-            if bearish:
-                # Every other tail number on this page is computed on the
-                # negated book (see the port_returns branch above). This panel
-                # was not, so in bearish mode it reported the LONG book's CVaR
-                # under a short book's heading.
-                pr_before, pr_after = -pr_before, -pr_after
-            cv_b, cv_a = cvar(pr_before), cvar(pr_after)
-            vol_b = float(pr_before.std() * np.sqrt(TRADING_DAYS))
-            vol_a = float(pr_after.std() * np.sqrt(TRADING_DAYS))
-
-            panel_head("Defensive simulation",
-                       f"Cut {pick_a} and {pick_b} by up to 15 points each, "
-                       f"move the freed weight into {dest}")
-            d1, d2 = st.columns(2)
-            d1.metric("Daily CVaR (95%)", f"{cv_a:.2%}",
-                      delta=f"{(cv_a - cv_b) * 100:+.2f} points vs current",
-                      delta_color="inverse")
-            d2.metric("Annualized vol", f"{vol_a:.1%}",
-                      delta=f"{(vol_a - vol_b) * 100:+.1f} points vs current",
-                      delta_color="inverse")
-            verdict_shift = ("reduced" if cv_a < cv_b else
-                             "did not reduce")
-            st.caption(
-                f"Measured through the same engine, the shift {verdict_shift} "
-                f"tail risk on this history. {dest} is the name least "
-                f"correlated to the pair, yet its average correlation to them "
-                f"is {dest_corr:+.2f}: inside one equity universe there is no "
-                "independent asset, only less dependent ones. A simulation on "
-                "historical returns, not advice. Correlations converge toward +1 "
-                "in crashes, so measured diversification is a fair-weather "
-                "number.")
-        elif latest > thresh:
-            st.caption("No third asset in this universe to shift into: "
-                       "a two-asset book has nowhere defensive to go.")
 
 with tab_3d:
     # Risk Topology - the Monte Carlo re-drawn as a strategy map. Every
@@ -2444,55 +2010,6 @@ with tab_breakdown:
            "are the levered book's." if use_vt else "")
     )
 
-
-    panel_head("Correlation matrix", "Do these names move together?")
-    read_me(
-        "Each cell is how tightly two names move together: bronze is lockstep "
-        "(+1), beige independent (0), charcoal a seesaw (−1). A grid of deep "
-        "bronze has little real diversification. The upper half mirrors the "
-        "lower and is masked. Names are ordered by a correlation tree, so names "
-        "that move together sit in one block. The sample is the returns after "
-        "the stress-test choice above: under a crisis replay this is that "
-        f"crisis window, not the {len(returns)} daily returns Correlation Watch "
-        "averages.")
-    corr = correlation_matrix(shocked_returns)
-    # Reorder BEFORE the mask and the bold text are built, so both follow the
-    # new order. In input order a block of names that move together is
-    # scattered across the grid; a permutation changes no number.
-    order = cluster_order(corr)
-    corr = corr.loc[order, order]
-
-    # Lower triangle only - the upper half is a mirror image, masked out.
-    cmat = corr.to_numpy(dtype=float, copy=True)
-    cmat[np.triu(np.ones_like(cmat, dtype=bool))] = np.nan
-    # Hot cells (|corr| >= 0.75, the Watch tab's default threshold) print bold -
-    # the eye lands on concentration first.
-    ctext = np.where(np.isnan(cmat), "", np.vectorize(
-        lambda v: f"<b>{v:.2f}</b>" if abs(v) >= 0.75 else f"{v:.2f}")(
-        np.nan_to_num(cmat)))
-    hm = go.Figure(go.Heatmap(
-        z=cmat, x=list(corr.columns), y=list(corr.index),
-        zmin=-1, zmax=1,
-        # Furnace ramp, palette-native: charcoal seesaw -> beige independent ->
-        # bronze warming -> deep molten bronze at lockstep. Heat = concentration,
-        # driven by the real correlation value, nothing simulated.
-        colorscale=[[0.0, "#3F3B35"], [0.5, "#EDE9E3"], [0.775, "#C9B48A"],
-                    [0.875, "#9A7B4F"], [0.95, "#7A5426"], [1.0, "#5C3D14"]],
-        text=ctext, texttemplate="%{text}", textfont=dict(size=11),
-        hoverongaps=False, xgap=2, ygap=2,
-        hovertemplate="%{y} × %{x}: %{z:.2f}<extra></extra>",
-        colorbar=dict(thickness=10, outlinewidth=0,
-                      tickvals=[-1, 0, 1], ticktext=["−1", "0", "+1"]),
-    ))
-    hm.update_layout(
-        height=max(300, 34 * len(corr) + 90),
-        yaxis=dict(autorange="reversed"), xaxis=dict(side="bottom"))
-    st.plotly_chart(hm, width="stretch", config=PLOTLY_CFG)
-
-    panel_head("Distribution of simulated 1-year outcomes",
-               "Every simulated year, sorted into buckets")
-    st.plotly_chart(outcome_hist(mc["total_returns"], mc["cvar"]),
-                    width="stretch", config=PLOTLY_CFG)
     if mc.get("engine") == "jump-diffusion":
         jp = mc["jump_params"]
         st.caption(
@@ -2503,214 +2020,6 @@ with tab_breakdown:
             "further than any day in the sample; switch the return model to the "
             "bootstrap to compare the two tails on this book."
         )
-
-    # --- Deep dive: the three statistical-test-heavy panels fold behind one
-    #     click so a cold viewer meets the intuitive charts (returns, risk
-    #     contribution, correlation) first, and the model-validation depth
-    #     second - "lead with one number", don't wall them with seven charts. ---
-    with st.expander("Model validation & factor structure"):
-        # --- VaR methods + backtest (validates the model, not just reports it) ---
-        panel_head("Value at Risk: methods & backtest", "The daily loss line, and whether it holds up")
-        hist_var = var(port_returns)
-        bt = var_backtest(port_returns)
-        _chr = bt.get("christoffersen", {})
-        # Two dimensions, two words. Kupiec answers "how many?", Christoffersen
-        # answers "did they arrive together?" - a model can pass one and fail
-        # the other, and clustering is the more dangerous failure.
-        _clump = ("n/a" if _chr.get("passed_ind") is None
-                  else "Independent" if _chr["passed_ind"] else "Clustered")
-        v1, v2, v3, v4 = st.columns(4)
-        v1.metric("Historical VaR (95%)", f"{hist_var:.2%}")
-        v2.metric("Parametric VaR (95%)", f"{parametric_var(port_returns):.2%}")
-        v3.metric("VaR breaches", f"{bt['breaches']} / {bt['expected_breaches']:.0f} exp.")
-        v4.metric("Breach timing", _clump,
-                  help="Kupiec counts breaches; this asks whether they arrived "
-                       "independently or bunched together. Breaches that cluster "
-                       "mean the model holds in calm markets and fails in stress, "
-                       "exactly when the number matters. 'n/a' means too few "
-                       "breaches to estimate it; it is not a pass.")
-        verdict_word = ("passes" if bt["passed"] else
-                        "fails" if bt["passed"] is False else "cannot be computed for")
-        _kupiec_clause = (
-            f"the model's breach rate of {bt['observed_rate']:.1%} is "
-            "statistically consistent with the 5% it claims" if bt["passed"]
-            else f"the model's breach rate of {bt['observed_rate']:.1%} is "
-                 "statistically inconsistent with the 5% it claims: the VaR "
-                 "model misstates its own tail on this sample")
-        # Christoffersen. Reported separately because it answers a different
-        # question, and because "n/a" must never read as a pass.
-        if _chr.get("lr_ind") is None:
-            _cc_clause = (
-                f"Breach timing: only {bt['breaches']} breach(es) in "
-                f"{bt['n']} days, too few consecutive-day transitions to "
-                "estimate P(breach | breach yesterday), so the Christoffersen "
-                "independence test is not defined here. Not a pass: undefined."
-            )
-        else:
-            _ind_word = "independent" if _chr["passed_ind"] else "clustered"
-            _cc_word = "passes" if _chr["passed_cc"] else "fails"
-            _cc_clause = (
-                f"Breach timing (Christoffersen 1998): breaches look "
-                f"{_ind_word}: P(breach | breach yesterday) = "
-                f"{_chr['pi11']:.1%} vs {_chr['pi01']:.1%} otherwise; "
-                f"LR_ind = {_chr['lr_ind']} against a 3.84 critical value "
-                f"(p = {_chr['p_ind']:.3f}). Combined conditional coverage "
-                f"{_cc_word}: LR_cc = LR_uc + LR_ind = {_chr['lr_cc']} "
-                f"against 5.99 on 2 dof (p = {_chr['p_cc']:.3f}). "
-                + ("Count and timing both hold up."
-                   if _chr["passed_cc"] else
-                   "A model can pass on count and still fail here: clustered "
-                   "breaches mean it works in calm markets and breaks in stress.")
-            )
-        if not bt["testable"]:
-            # Walk-forward needs an estimation window plus at least one day to
-            # hold out. Say so rather than render a verdict from no days.
-            st.caption(
-                f"Not enough history for a walk-forward check: "
-                f"{len(port_returns)} days is under the {bt['window']}-day "
-                "estimation window, so there are no out-of-sample days to "
-                "test. Widen the date range."
-            )
-        else:
-            st.caption(
-                "A report card on the risk model: how often the real loss was "
-                "worse than the model's own daily prediction. Too many misses "
-                "means the model understates risk; far too few means it is "
-                "needlessly gloomy. "
-                f"Daily VaR check {verdict_word} the Kupiec "
-                f"proportion-of-failures test (Kupiec 1995; "
-                f"LR = {bt['kupiec_lr']}, 95% critical value 3.84): "
-                f"{_kupiec_clause}. Walk-forward: each day's VaR comes from the "
-                f"{bt['window']} trading days strictly before it and is tested "
-                f"against that day's return, across {bt['n']} out-of-sample days."
-            )
-            st.caption(_cc_clause)
-
-        # --- Tail shape (EVT) - the question CVaR cannot answer -------------
-        panel_head("Tail shape: how bad can it get",
-                   "What the average of the tail still doesn't tell you")
-        try:
-            _tf, _tf_days, _tf_dropped, _tf_years = load_tail_fit(
-                tuple(loaded), tuple(float(x) for x in weights), bool(bearish))
-        except Exception as exc:  # noqa: BLE001 - never take the page down
-            _tf, _tf_days, _tf_dropped, _tf_years = None, 0, [], 0.0
-            st.caption(f"Tail model unavailable: {safe_err('tail-model-unavailable', exc)}")
-
-        if _tf is not None and _tf["fitted"]:
-            _xi, _ci = _tf["xi"], _tf["xi_ci"]
-            t1, t2, t3 = st.columns(3)
-            t1.metric("Tail index ξ (filtered)", f"{_xi:+.2f}",
-                      help="Shape of the loss tail from a Generalized Pareto "
-                           "fit on volatility-standardised residuals, so it "
-                           "measures how heavy the shocks are, not how bunched "
-                           "they arrived. ξ>0 is a heavy tail with no finite "
-                           "worst case; ξ<0 would mean a bounded tail. Bigger "
-                           "ξ, fatter tail.")
-            t2.metric("Worst case",
-                      "None exists" if _xi >= 0 else f"{_tf['finite_endpoint_return']:.1%}",
-                      help="A finite maximum loss exists only if ξ<0. For "
-                           "equities ξ is essentially always >0, so no finite "
-                           "worst case exists. The only hard floor is -100%, "
-                           "from limited liability.")
-            _es999 = _tf["conditional"].get(0.999, {}).get("es")
-            t3.metric("ES 99.9% tomorrow",
-                      "undefined" if _es999 is None else f"{_es999:.1%}",
-                      help="Average loss on a 1-in-1000 day, for tomorrow: the "
-                           "fitted residual tail rescaled by the current "
-                           "volatility forecast. It moves with the market's "
-                           "state, unlike a static full-sample number. "
-                           "'undefined' means ξ≥1: the mean itself does not "
-                           "exist, so no ES can.")
-
-            _ci_txt = ("" if _ci is None else
-                       f" (95% bootstrap interval {_ci[0]:+.2f} to {_ci[1]:+.2f})")
-            _shape = ("no finite worst case exists. The tail decays "
-                      "polynomially, so there is no loss level the model rules "
-                      "out. The only hard floor is -100%."
-                      if _xi >= 0 else
-                      f"the fit implies a bounded tail ending at "
-                      f"{_tf['finite_endpoint_return']:.1%}. Treat that with suspicion: "
-                      "equity losses almost always fit ξ>0, so a negative ξ on "
-                      "this sample is more likely estimation noise than a real bound.")
-            _broken = [k for k, v in _tf["moments_finite"].items() if not v]
-            st.caption(
-                f"Fitted a Generalized Pareto to the "
-                f"{_tf['n_exceedances']} losses above the "
-                f"{_tf['threshold_quantile']:.0%} threshold "
-                f"({_tf['threshold_return']:.2%} of the book at today's volatility; "
-                f"{_tf['threshold_z']:.2f} in standardised units), drawn from "
-                f"{_tf_days} daily returns "
-                f"(~{_tf_years:.1f} years; the {len(returns)} daily returns used elsewhere leave too few "
-                f"exceedances to fit reliably). **ξ = {_xi:+.2f}**{_ci_txt}: {_shape}"
-                + (f" At this ξ the {', '.join(_broken)} of the loss "
-                   f"distribution {'is' if len(_broken) == 1 else 'are'} "
-                   "infinite, so any statistic relying on "
-                   f"{'it' if len(_broken) == 1 else 'them'} is meaningless here."
-                   if _broken else "")
-                + (f" {', '.join(_tf_dropped)} lack{'s' if len(_tf_dropped) == 1 else ''}"
-                   " the full history and were excluded from this fit."
-                   if _tf_dropped else "")
-            )
-            _uxi, _snext = _tf.get("unconditional_xi"), _tf.get("sigma_next")
-            if _uxi is not None:
-                _gap = _uxi - _xi
-                st.caption(
-                    f"Conditional EVT (McNeil-Frey 2000). Peaks-over-threshold "
-                    f"assumes independent exceedances, which the Christoffersen "
-                    f"test above checks, so the GPD here is fitted to "
-                    f"volatility-standardised residuals rather than raw returns. "
-                    f"A raw fit gives ξ = {_uxi:+.2f} against {_xi:+.2f} filtered, "
-                    f"a gap of {_gap:+.2f}: volatility clustering that an "
-                    f"unconditional fit reports as a fatter tail. Volatility is "
-                    f"filtered with EWMA (λ={_tf.get('lam', 0.94)}, the "
-                    f"RiskMetrics daily decay), which is IGARCH(1,1) with λ fixed, "
-                    f"so no volatility parameter is fitted to this sample. The "
-                    f"paper specifies AR(1)-GARCH(1,1); this is a deliberate "
-                    f"simplification. Tomorrow's numbers rescale the residual "
-                    f"tail by the current volatility forecast, σ = {_snext:.2%} "
-                    f"per day."
-                )
-            st.caption(
-                "Limits: maximum likelihood on exceedances over a 95% threshold "
-                "tends to sit a little below the asymptotic ξ, so read the gap "
-                "between the two fits, which is robust, rather than either level "
-                "as exact. The interval is a percentile bootstrap over "
-                "exceedances: it covers estimation noise, not the choice of "
-                "threshold. The conditional mean is taken as zero, since at a "
-                "one-day horizon equity drift is about two orders of magnitude "
-                "below daily volatility."
-            )
-        elif _tf is not None:
-            st.caption(
-                f"No tail fit: {_tf['reason']}. Extreme Value Theory needs "
-                "enough observations above the threshold before it says "
-                "anything; a shape fitted to fewer would be a guess."
-            )
-
-        # --- Named factor exposures ---
-        panel_head("Factor exposures", "What systematic bets is this book taking?")
-        try:
-            fx = factor_exposures(port_returns)
-            st.plotly_chart(hbar(pd.Series(fx["betas"]), title_x="beta"),
-                            width="stretch", config=PLOTLY_CFG)
-            st.caption(
-                f"Market beta {fx['betas']['Market']:+.2f} · "
-                f"R-squared {fx['r_squared']:.0%} · "
-                f"annualized alpha {fx['alpha_annual']:+.1%} ({fx['alpha_basis']}). "
-                "Size (IWM-SPY) and Momentum (MTUM-SPY) are tilts vs. the broad market; "
-                "Value is IWD-IWF, value minus growth, not versus the market. "
-                "ETF-proxy factors, not the academic research series."
-            )
-        except Exception as exc:  # noqa: BLE001
-            st.caption(f"Factor exposures unavailable: {safe_err('factor-exposures-unavailable', exc)}")
-
-        # --- Statistical risk factors (eigendecomposition / PCA) ---
-        panel_head("Statistical risk factors",
-                   "Eigendecomposition: how many independent bets is this book?")
-        try:
-            eigen_factor_panel(cov, weights, returns)
-        except Exception as exc:  # noqa: BLE001 - degrade like the panel above
-            st.caption(f"Statistical risk factors unavailable: {safe_err('statistical-risk-factors-unavailable', exc)}")
 
 source_txt = f"the {scenario_label} window" if scenario_label else (
     f"the {len(shocked_returns)} daily returns loaded "
@@ -2723,309 +2032,6 @@ st.caption(
     f"Methodology: {mc['n_simulations']:,}-path {engine_txt} {source_txt}, over a {mc['horizon_days']}-day horizon. "
     f"{alloc_label.capitalize()} allocation{lev_txt}."
 )
-
-with tab_balance:
-    st.caption(
-        "Pick a name you hold; the engine ranks every other name in your universe "
-        "by how it moves against it, from the real covariance. A negatively "
-        "correlated partner offsets part of the anchor's swings."
-    )
-    if len(loaded) < 2:
-        st.caption("Balance needs at least two assets in the universe.")
-    else:
-        try:
-            # The blend below is sized on the selected estimator's `cov`, so the
-            # partner is ranked on the same matrix: under EWMA the sample
-            # correlation differed by up to 0.47 on the offline market (ME-09).
-            corr_b = correlation_from_cov(cov)
-            # Keyed, with the default seeded only when no valid choice is
-            # stored: an index= that followed argmax(weights) re-created the
-            # widget on every Weighting change and silently replaced the
-            # visitor's anchor (council 2026-10-17).
-            if st.session_state.get("balance_anchor") not in loaded:
-                st.session_state["balance_anchor"] = loaded[int(np.argmax(weights))]  # your biggest position
-            anchor = st.selectbox(
-                "Anchor (the position you want to balance)", loaded,
-                key="balance_anchor")
-            ranked = rank_hedges(corr_b, anchor)
-
-            # Classify by correlation STRENGTH, not just sign: a name at −0.01
-            # is independent, not a hedge, and must not be painted as one.
-            HEDGE, INDEP = -0.20, 0.20   # bands: <−0.2 offsets · ±0.2 independent
-
-            def _hedge_color(v):
-                if v < HEDGE:
-                    return "#33582F"          # green - genuinely moves against
-                if v > INDEP:
-                    return "#8A3B2E"          # red - moves with, no protection
-                return "#9A7B4F"              # bronze - independent, not a hedge
-
-            panel_head("Balancers",
-                       f"How every other name moves relative to {anchor}")
-            hedge_fig = go.Figure(go.Bar(
-                x=ranked.values, y=list(ranked.index), orientation="h",
-                marker=dict(color=[_hedge_color(v) for v in ranked.values],
-                            line=dict(width=0)),
-                hovertemplate="%{y}: correlation %{x:.2f}<extra></extra>"))
-            hedge_fig.add_vline(x=0, line=dict(color=AXIS_LINE, width=1))
-            hedge_fig = _style_fig(hedge_fig, height=max(160, 34 * len(ranked) + 40))
-            hedge_fig.update_layout(xaxis_title="correlation with " + anchor)
-            st.plotly_chart(hedge_fig, width="stretch", config=PLOTLY_CFG)
-            st.markdown(
-                '<div class="read-me">Green moves against the anchor '
-                '(correlation below −0.2), a true offset. Bronze is roughly '
-                'independent (±0.2): it diversifies but does not cancel the '
-                "anchor's moves. Red moves with it and gives no protection. "
-                'In a single-sector basket (all tech, say) you often find no green at '
-                'all, because everything rises and falls together.</div>',
-                unsafe_allow_html=True)
-
-            best = ranked.index[0]
-            best_corr = float(ranked.iloc[0])
-            pair = min_variance_pair(cov, anchor, best)
-            # Honest verdict: is this actually a hedge, or just the least-bad?
-            if best_corr < HEDGE:
-                kind = (f"{best} moves against {anchor} "
-                        f"(correlation {best_corr:+.2f}), a real hedge.")
-            elif best_corr <= INDEP:
-                kind = (f"No true hedge in this universe: {best} is the most "
-                        f"independent name (correlation {best_corr:+.2f}), not a "
-                        f"mirror. Blending it diversifies {anchor} but does not "
-                        f"offset it. A genuine hedge would need an asset from outside "
-                        f"this basket (bonds, gold, cash).")
-            else:
-                kind = (f"Everything here moves together: even the least-correlated "
-                        f"name ({best}, {best_corr:+.2f}) still rises and falls with "
-                        f"{anchor}. This basket cannot hedge itself; a real offset "
-                        f"needs an asset from a different sector or asset class.")
-
-            panel_head("The balanced pair",
-                       f"{anchor} paired with {best}, at minimum-variance weights")
-            b1, b2, b3 = st.columns(3)
-            b1.metric(f"Hold {anchor}", f"{pair['w_anchor']:.0%}")
-            b2.metric(f"Hold {best}", f"{pair['w_hedge']:.0%}")
-            b3.metric("Volatility cut", f"−{pair['vol_reduction']:.0%}")
-            st.caption(
-                f"{kind} Blending {pair['w_anchor']:.0%} {anchor} with "
-                f"{pair['w_hedge']:.0%} {best} takes the pair's annual volatility "
-                f"from {pair['anchor_vol']:.1%} ({anchor} alone) down to "
-                f"{pair['blended_vol']:.1%}, a {pair['vol_reduction']:.0%} "
-                "reduction from diversification. Long-only minimum-variance weights, "
-                f"on the {cov_method} risk matrix set in the Allocation drawer."
-            )
-            # Caveat kept one click away but signposted in the title, so the
-            # limit is never buried - just not competing with the number.
-            with st.expander("Limits: what this does not do"):
-                st.markdown(
-                    '<div class="read-me">'
-                    'Correlations are historical and unstable. In a real crash '
-                    'they converge toward +1: almost everything falls together, and a '
-                    'hedge that worked in calm markets fades exactly when you need it '
-                    'most. This tab lowers ordinary volatility; it does not make a '
-                    'portfolio crisis-proof. It is the counterweight to Crisis Conviction: '
-                    'hold your nerve, and structure so being wrong costs less.</div>',
-                    unsafe_allow_html=True)
-
-            # ---- BON VOYAGE: long-only defensive pairing ----------------
-            # "What goes up must come down. We can't cap the fall; we
-            # measure the cushion." Council pass 6: cushion never cap,
-            # ES@97.5 never CVaR@99, ranks never promises.
-            @st.cache_data(ttl=6 * 3600, max_entries=32, show_spinner="Reading the defensive shelf…")
-            def _bv_anchor_returns(universe_key: str):
-                """Universe returns joined with defensive ETF candidates
-                (Treasuries/gold/staples/utilities/min-vol) - an equity
-                basket usually cannot anchor itself."""
-                return anchor_frame(returns)
-
-            @st.cache_data(ttl=6 * 3600, max_entries=64,
-                           show_spinner="Replaying this pair through each named crisis…")
-            def _bv_crisis(a: str, b: str, w: float, short_a: bool = False):
-                return crisis_cushion(a, b, w, short_a=short_a)
-
-            @st.cache_data(ttl=6 * 3600, max_entries=32,
-                           show_spinner="Reading full price histories to rank the anchors…")
-            def _bv_grit(tickers: tuple):
-                """Grit scores for anchor candidates - the engine's founding
-                question ("who gets back up?") IS the Circle 2 screen."""
-                return grit_scores(list(tickers))["scores"]["grit_score"]
-
-            panel_head("The defensive pair",
-                       "What goes up must come down: tether a high-flyer "
-                       "to an anchor and measure the cushion")
-            try:
-                bv_rets = _bv_anchor_returns(",".join(sorted(loaded)))
-            except Exception:  # noqa: BLE001 - offline: universe only
-                bv_rets = returns
-            vols = returns.std() * np.sqrt(TRADING_DAYS)
-            flyer = st.selectbox(
-                "High-flyer (the volatile conviction position)",
-                loaded, index=loaded.index(vols.idxmax()),
-                help="Defaults to the most volatile name in your universe.")
-            try:                                   # grit feeds the anchor rank
-                bv_grit = _bv_grit(tuple(sorted(bv_rets.columns)))
-            except Exception:  # noqa: BLE001 - grit needs full-history fetch
-                bv_grit = None
-            # Bearish: Circle 1 becomes a synthetic daily-rebalanced SHORT of
-            # the flyer (negated column); every downstream formula is reused
-            # unchanged. The anchor screen flips to squeeze-cushion logic.
-            bv_frame = bv_rets.copy()
-            if bearish:
-                bv_frame[flyer] = -bv_frame[flyer]
-            bv_ranked = anchor_rank(bv_frame, flyer, grit=bv_grit,
-                                    direction="short" if bearish else "long")
-            bv_anchor = bv_ranked.index[0]
-            tg = tail_gap(bv_frame, flyer, bv_anchor)
-            ci_lo, ci_hi = cached_es_ci(bv_frame[flyer])
-            pw = pair_weights(bv_frame[flyer], bv_frame[bv_anchor])
-            bt = backtest_pair(bv_frame[flyer], bv_frame[bv_anchor], pw["w_a"])
-            phase_now = regime_labels(
-                (1 + bv_frame[flyer]).cumprod(), tg["gap"]).iloc[-1]
-            # The phase is said in words; its tone is a palette text ink.
-            _ph_col = {"Tether": "#3F3B35", "Descent": "#6A5030",
-                       "Rotation": "#5D574D"}[phase_now]
-            # Circle-and-line drawn to John's sketch: the high-flyer rides
-            # top-RIGHT, the steady anchor sits bottom-LEFT, joined by the
-            # diagonal safety line. Two-in-one motif, no new chart. Kept
-            # contiguous - st.markdown truncates at blank lines.
-            _bv_role_a = ("the short" if bearish else "the high-flyer")
-            _bv_role_b = ("the squeeze cushion" if bearish else "the steady anchor")
-            # Inverse-vol weights give the anchor under half when the flyer is
-            # the steadier leg (Index core SPY/GLD: 47%), so who holds the
-            # money is read off the weights, not assumed (2026-10-17 council).
-            _bv_money = (
-                f'{flyer} runs {pw["vol_a"]:.0%} realized annual vol to {bv_anchor}\'s '
-                f'{pw["vol_b"]:.0%}, so each dollar of {flyer} carries '
-                f'{pw["vol_a"] / pw["vol_b"]:.1f}x the risk, and an equal-risk split '
-                f'means the anchor holds most of the money.'
-                if pw["w_b"] >= 0.5 else
-                f'{flyer} runs {pw["vol_a"]:.0%} realized annual vol to {bv_anchor}\'s '
-                f'{pw["vol_b"]:.0%}, so here {flyer} is the steadier leg (each '
-                f'dollar of it carries {pw["vol_a"] / pw["vol_b"]:.1f}x the risk), '
-                f'and an equal-risk split means {flyer} holds more of the money.')
-            st.markdown(
-                f'<div style="display:flex;align-items:center;gap:44px;padding:26px 10px 12px;flex-wrap:wrap;">'
-                f'<div style="flex:1 1 100%;max-width:980px;margin:0 auto;background:#F1EDE5;'
-                f'border-top:2px solid #9A7B4F;border-radius:0;padding:26px 18px 14px;">'
-                f'<svg viewBox="0 0 420 300" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;display:block;">'
-                # The safety line: bronze, dashed, circumference to
-                # circumference (endpoints sit r+6 from each center).
-                f'<line x1="129" y1="208" x2="270" y2="101" stroke="#9A7B4F" stroke-width="2" stroke-dasharray="7 5"/>'
-                # The flyer, top right; the anchor, bottom left. One ring each:
-                # the sizes are illustrative, the words carry the numbers.
-                f'<circle cx="316" cy="66" r="52" fill="#F1EDE5" stroke="#8A6A3C" stroke-width="2"/>'
-                f'<text x="316" y="62" text-anchor="middle" font-family="Georgia" font-size="{"17" if len(flyer) < 5 else "14"}" fill="#3F3B35">{"-" + flyer if bearish else flyer}</text>'
-                f'<text x="316" y="81" text-anchor="middle" font-family="Georgia" font-size="11" fill="#6A5030">{pw["w_a"]:.0%} of capital</text>'
-                f'<text x="316" y="136" text-anchor="middle" font-family="Georgia" font-size="12" fill="#5D574D">{_bv_role_a}</text>'
-                f'<circle cx="92" cy="236" r="40" fill="#E9E4DB" stroke="#3F3B35" stroke-width="2"/>'
-                f'<text x="92" y="233" text-anchor="middle" font-family="Georgia" font-size="{"15" if len(bv_anchor) < 5 else "12"}" fill="#3F3B35">{bv_anchor}</text>'
-                f'<text x="92" y="250" text-anchor="middle" font-family="Georgia" font-size="10" fill="#5D574D">{pw["w_b"]:.0%} of capital</text>'
-                f'<text x="104" y="291" text-anchor="middle" font-family="Georgia" font-size="12" fill="#5D574D">{_bv_role_b}</text>'
-                f'</svg>'
-                f'<div style="font-family:Georgia,serif;font-size:13px;color:#5D574D;'
-                f'text-align:center;margin-top:10px;">'
-                f'{"The short and its squeeze cushion. " if bearish else ""}'
-                f'Circle sizes are illustrative; the numbers carry the quantities.</div>'
-                f'</div>'
-                f'<div style="flex:1 1 100%;min-width:0;max-width:980px;margin:0 auto;">'
-                f'<div style="font-family:Georgia;font-size:15px;color:#3F3B35;line-height:1.55;">'
-                # A fall is its size beside the verb: "fell -36%" reads as a rise.
-                f'Over the {bt["n_days"]} daily returns loaded, {"shorting" if bearish else "holding"} '
-                f'{flyer} alone fell <b>{abs(bt["max_dd_solo"]):.0%}</b> at its worst'
-                f'{" (a short bleeds when the name rallies: the squeeze)" if bearish else ""}; '
-                f'tethered to {"a correlated long in " if bearish else ""}'
-                f'{bv_anchor} at risk-parity weights '
-                f'(<b>{pw["w_b"]:.0%}</b> anchor / <b>{pw["w_a"]:.0%}</b> flyer, '
-                f'rebalanced monthly) the fall was <b>{abs(bt["max_dd_pair"]):.0%}</b>, '
-                # a gap between two losses, in percentage points: "+17%"
-                # read as a 17% cut (John, 2026-10-19), so say the unit and
-                # the direction in words
-                + (f'<b>{bt["cushion"] * 100:.0f} percentage points shallower</b>. '
-                   'A cushion, not a cap.</div>' if bt["cushion"] >= 0 else
-                   f'<b>{-bt["cushion"] * 100:.0f} percentage points deeper</b>: '
-                   'no cushion in this history.</div>') +
-                f'<div style="font-family:Georgia,serif;font-size:13px;color:#5D574D;margin-top:8px;">'
-                f'Safety line: tail gap {tg["gap"]:.1%} (ES 97.5% {tg["es_a"]:.1%} vs {tg["es_b"]:.1%}) &middot; '
-                f'{"short " if bearish else ""}{flyer} ES 90% CI {ci_lo:.1%} to {ci_hi:.1%} &middot; current phase: '
-                f'<span style="color:{_ph_col};">{phase_now}</span></div>'
-                f'<div style="font-family:Georgia;font-size:13px;color:#5D574D;margin-top:6px;">'
-                f'{_bv_money}</div>'
-                f'</div></div>',
-                unsafe_allow_html=True)
-            with st.expander("The real backtest: pair vs solo, and the crisis record"):
-                bv_fig = go.Figure()
-                bv_fig.add_scatter(x=bt["solo_path"].index,
-                                   y=(bt["solo_path"] - 1) * 100,
-                                   name=f"{'short ' if bearish else ''}{flyer} alone",
-                                   line=dict(color="#8A3B2E", width=1.4))
-                bv_fig.add_scatter(x=bt["pair_path"].index,
-                                   y=(bt["pair_path"] - 1) * 100,
-                                   name="defensive pair",
-                                   line=dict(color=BRONZE, width=2))
-                bv_fig = _style_fig(bv_fig, height=280)
-                bv_fig.update_layout(yaxis_title="cumulative return (%)",
-                                     legend=dict(orientation="h", y=1.08))
-                st.plotly_chart(bv_fig, width="stretch", config=PLOTLY_CFG)
-                st.caption(
-                    f"Real daily returns, {bt['n_days']} of them, monthly "
-                    f"rebalancing, no lookahead. Pair vol {bt['ann_vol_pair']:.1%} "
-                    f"vs {bt['ann_vol_solo']:.1%} solo; total return "
-                    f"{bt['total_return_pair']:+.0%} vs {bt['total_return_solo']:+.0%}. "
-                    "In-sample description of one history, not a forecast.")
-                try:
-                    cc = _bv_crisis(flyer, bv_anchor, round(pw["w_a"], 3),
-                                    bearish)
-                    if len(cc):
-                        panel_head("Crisis cushion record",
-                                   "The same pair replayed through real crises "
-                                   "(both assets must have traded)")
-                        # the cushion is a gap in percentage points, not a %
-                        # change: shown as points, positive = the pair fell less
-                        st.dataframe(
-                            cc.assign(cushion=cc["cushion"] * 100).rename(columns={
-                                "solo_dd": f"{'short ' if bearish else ''}{flyer} alone",
-                                "pair_dd": "pair", "cushion": "cushion (points)",
-                                "days": "days"})
-                              .style.format({f"{'short ' if bearish else ''}{flyer} alone": "{:.1%}",
-                                             "pair": "{:.1%}",
-                                             "cushion (points)": "{:+.1f}",
-                                             "days": "{:.0f}"}),
-                            width="stretch")
-                        st.caption(
-                            "Cushion = how many percentage points less the pair "
-                            "fell than the flyer alone (negative: it fell more). "
-                            "Crises where either asset had not yet listed are "
-                            "omitted, not guessed. A small or negative cushion "
-                            "means correlations converged in that crisis.")
-                except Exception:  # noqa: BLE001 - crisis replay needs network
-                    st.caption("Crisis replay unavailable offline.")
-                st.markdown(
-                    '<div class="read-me">'
-                    'A long-only defensive pairing (a core-satellite blend), not '
-                    'pairs trading: there is no short leg and no cointegration '
-                    'bet. The anchor is ranked from your universe plus Treasury, '
-                    'gold, staples, utilities and min-vol ETFs, on low correlation '
-                    "to the universe's dominant risk factor, low volatility, a "
-                    'shallow tail and the highest Grit score. It is ranked, never '
-                    'promised. Weights are risk parity, so the steadier leg holds '
-                    'more of the capital. Losses are cushioned, not capped: a '
-                    'long-only pair has no floor above zero, and crisis '
-                    'correlations converge toward +1 when protection matters '
-                    'most. The Tether, Descent and Rotation phases describe past '
-                    'prices; they are not a trading signal. Educational analysis, '
-                    'not investment advice.</div>',
-                    unsafe_allow_html=True)
-                if bearish:
-                    st.caption(
-                        "Bearish read of grit: low grit describes past "
-                        "fragility; it is not a short signal. Past losers "
-                        "are often crowded shorts with high borrow cost and "
-                        "the sharpest squeezes, and an asset that keeps getting "
-                        "back up (high grit) is the hardest name to short. "
-                        "Synthetic daily-rebalanced short; borrow fees, "
-                        "margin and buy-ins not modeled, so real short results "
-                        "are worse. Short losses can exceed 100%.")
-        except Exception as exc:  # noqa: BLE001 - never crash the tab
-            st.caption(f"Balance unavailable for this universe: {safe_err('balance-unavailable-for-this-universe', exc)}")
 
 with tab_grit:
     st.caption(
@@ -3097,7 +2103,7 @@ with tab_conviction:
     )
     try:
         conv = load_conviction_data()
-        ctab, summ, race = conv["table"], conv["summary"], conv["race"]
+        ctab, summ = conv["table"], conv["summary"]
         t1 = summ["trough_1y_later"]
 
         h1, h2, h3 = st.columns(3)
@@ -3156,179 +2162,8 @@ with tab_conviction:
                    f"{', '.join(_behind)}, where three years was not enough."
                    if _behind else ".")
             )
-
-        # --- The AI-capex recovery race ---
-        panel_head("The recovery race", "Heavy-compute investors vs. the broad market")
-        st.caption(
-            f"The thesis: companies pouring capital into compute and AI "
-            f"infrastructure ({', '.join(AI_CAPEX_BASKET)}, equal-weight) "
-            f"recover from crises faster than the broad market. That is a "
-            f"hypothesis. Here is the actual record, crisis by crisis, in "
-            f"trading days from each side's trough back to its own "
-            f"pre-crisis level."
-        )
-        # Raced: the basket traded through it and at least one side fell.
-        rrec = race_record(race)
-        rr = rrec["decided"]
-        cap = RECOVERY_HORIZON_DAYS
-
-        def _lbl(days, fell):
-            if not fell:
-                return "never fell"
-            return "not within 3y" if pd.isna(days) else f"{days:.0f}d"
-
-        race_fig = go.Figure()
-        for col, flag, nm, colr, who in (
-            ("bench_days", "bench_fell", "S&P 500 (SPY)", "#CBBB94", "market"),
-            ("basket_days", "basket_fell", "AI-capex basket", BRONZE_DK, "basket"),
-        ):
-            race_fig.add_trace(go.Bar(
-                y=rr["crisis"],
-                x=[race_days(d, f, cap) for d, f in zip(rr[col], rr[flag])],
-                orientation="h", name=nm, marker=dict(color=colr),
-                text=[_lbl(d, f) for d, f in zip(rr[col], rr[flag])],
-                textposition="outside", textfont=dict(size=11),
-                hovertemplate="%{y} · " + who + ": %{text}<extra></extra>"))
-        race_fig = _style_fig(race_fig, height=max(340, 56 * len(rr) + 70))
-        race_fig.update_layout(
-            barmode="group", xaxis_title="trading days to reclaim pre-crisis level",
-            showlegend=True,
-            # headroom so "not within 3y" outside-labels never clip
-            xaxis=dict(range=[0, cap * 1.18]),
-            legend=dict(orientation="h", y=1.08, x=0, font=dict(size=11)))
-        st.plotly_chart(race_fig, width="stretch", config=PLOTLY_CFG)
-
-        st.markdown(
-            f'<div class="read-me">Shorter bar, faster recovery. The basket got '
-            f'back up faster in {rrec["wins"]} of {rrec["n"]} crises. Where a bar says '
-            f'"not within 3y", that side never reclaimed its pre-crisis '
-            f'level inside ~3 trading years; "never fell" means it did not '
-            f'decline at all inside that window, so it had nothing to '
-            f'reclaim; those crises stay on the chart.'
-            + (f' Left out: {", ".join(rrec["left_out"])}. None of the '
-               f'basket\'s names was trading yet, so there was no race to '
-               f'count.' if rrec["left_out"] else '')
-            + '</div>',
-            unsafe_allow_html=True)
-        st.caption(
-            "Limits: the basket carries today's \"AI capex\" label; in 2008 "
-            "these names were simply large-cap tech, and the record shown is "
-            "theirs whatever the label. Members that had not listed by a crisis "
-            "are left out of that race, not back-filled, so the member count "
-            "varies by crisis. The basket is named with hindsight, so "
-            "survivorship bias is real. One benchmark and one basket: evidence "
-            "for a thesis, not proof. Educational analysis, not investment advice."
-        )
     except Exception as exc:  # noqa: BLE001
         st.caption(f"Crisis Conviction unavailable: {safe_err('crisis-conviction-unavailable', exc)}")
-
-# ---- Liquidity: how fast could you actually get out? ----
-def _fmt_days(d: float) -> str:
-    """Human days: infinity for no-volume names, <1 day rounded sensibly."""
-    if not np.isfinite(d):
-        return "∞"
-    if d < 0.1:
-        return "<0.1d"
-    if d < 10:
-        return f"{d:.1f}d"
-    return f"{d:.0f}d"
-
-
-with tab_liquidity:
-    lc1, lc2 = st.columns(2)
-    book = lc1.number_input(
-        "Portfolio size ($)", min_value=10_000, max_value=5_000_000_000,
-        value=1_000_000, step=100_000,
-        help="Total dollars invested. Position sizes, and so the days to unwind "
-             "them, scale from this.")
-    participation = lc2.slider(
-        "Max daily participation (% of ADV)", 5, 50,
-        round(DEFAULT_PARTICIPATION * 100), step=5,
-        help="How much of a name's average daily dollar volume you'll be before "
-             "your own trading moves the price. Risk desks use ~10–20%.") / 100
-
-    try:
-        adv = load_adv(tuple(tickers)).reindex(loaded).fillna(0.0)
-        dtl = days_to_liquidate(weights, adv, book_value=book,
-                                participation_rate=participation)
-        prof = liquidity_profile(dtl)
-
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Full-exit horizon", _fmt_days(prof["full_exit_days"]))
-        m2.metric("Exitable in 1 day", f"{prof['pct_exitable_1day']:.0%}")
-        m3.metric("Avg position horizon", _fmt_days(prof["weighted_avg_days"]))
-
-        # Liquidity-adjusted tail - how the headline CVaR fattens once the days
-        # it takes to unwind THIS book at THESE sliders are priced in.
-        lv = liquidity_adjusted_cvar(mc["cvar"], prof["full_exit_days"])
-        if mc["cvar"] <= 0:
-            # Was a "+X% for the unwind" delta on a figure that was a gain.
-            read_me(
-                "No tail loss to widen: the worst 5% of simulated years "
-                f"still end up ahead on average (headline CVaR {mc['cvar']:.1%}), "
-                "so there is no tail loss for the unwind to widen and no "
-                "liquidity adjustment is applied.")
-        elif np.isfinite(lv["lvar"]):
-            d1, d2 = st.columns(2)
-            d1.metric("Headline CVaR (95%)", f"{lv['cvar']:.1%}")
-            # The delta stays short: st.metric keeps it on one line and cuts it
-            # with an ellipsis, and "+0% relative, for the unwind" was cut on a
-            # 360px phone (device check, Live audit 2026-10-22). What it is
-            # relative to lives in the help.
-            d2.metric("Liquidity-adjusted CVaR", f"{lv['lvar']:.1%}",
-                      delta=f"+{(lv['multiplier'] - 1):.0%} relative",
-                      delta_color="inverse",
-                      help="The change is relative to the headline CVaR: +2% means "
-                           "1.02 times it, the extra tail for the unwind at this "
-                           "book size and participation.")
-            read_me(
-                "The headline CVaR assumes you are flat at the horizon. This "
-                "widens it by "
-                f"√(1 + exit-days/{TRADING_DAYS}) (the Basel liquidity-horizon convention) "
-                "to cover the extra days the market can move against you while "
-                "you're still unwinding. Prices market exposure over the unwind, "
-                "not the spread you pay to trade. A one-day-liquid book is barely "
-                "penalised; a name you'd be stuck holding carries a fatter tail.")
-
-        chart_days = dtl["days"].replace([np.inf, -np.inf], np.nan).dropna().sort_values()
-        if not chart_days.empty:
-            st.plotly_chart(hbar(chart_days, title_x="days to liquidate"),
-                            width="stretch", config=PLOTLY_CFG)
-            read_me(
-                "Longer bar, harder to sell fast. Each bar is how many "
-                "trading days it would take to fully exit that position without "
-                "being more than your chosen slice of its daily volume. Short bars "
-                "are liquid; a long bar is a name you could get stuck holding in a "
-                "rush for the door.")
-
-        caption = (
-            f"Days to unwind a ${book:,.0f} {alloc_label} book at "
-            f"{participation:.0%} of each name's average daily dollar volume "
-            f"(recent 3-month lookback). "
-        )
-        if prof["least_liquid"] is not None:
-            caption += (
-                f"{prof['least_liquid']} is the bottleneck at "
-                f"{_fmt_days(prof['full_exit_days'])} to fully exit. "
-            )
-        if (mc["cvar"] > 0 and np.isfinite(lv["multiplier"])
-                and lv["multiplier"] - 1 < 0.005):
-            # Every mega-cap/ETF preset exits in well under a day, so the tail
-            # adjustment rounds to +0%. Say why, or a reader assumes the model
-            # is dead rather than the book being genuinely liquid.
-            caption += (
-                "At this size the participation cap never binds, so the tail is "
-                "unchanged: a liquid book, not a dormant model. The Small-cap "
-                "liquidity stress preset, or a larger book above, makes it bite. "
-            )
-        if prof["no_volume"]:
-            caption += (
-                f"No volume feed for {', '.join(prof['no_volume'])} "
-                "(e.g. FX/futures on Yahoo): excluded, not estimated."
-            )
-        st.caption(caption)
-    except Exception as exc:  # noqa: BLE001
-        st.caption(f"Liquidity data unavailable: {safe_err('liquidity-data-unavailable', exc)}")
 
 # src/data_quality.py names its checks for code ("schema.duplicate_dates");
 # a visitor reads plain words. The ids stay in the engine and its tests.

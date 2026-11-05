@@ -101,7 +101,7 @@ PRESETS = {
     ],
     # Small/micro-cap names, deliberately chosen for THIN volume rather than any
     # view on the companies. Every basket above is mega-cap or ETF, so days-to-
-    # liquidate rounds to zero and the Liquidity tab shows a 0% adjustment no
+    # liquidate rounds to zero and the liquidity adjustment reads 0% no
     # matter where the sliders go - the model looks broken when it is merely
     # unstressed. On this basket the participation-rate cap actually binds.
     "Small-cap liquidity stress (thin volume)": [
@@ -307,7 +307,7 @@ def _prune_cache(max_files: int = CACHE_MAX_FILES,
     return dropped
 
 
-_PRESET_PERIODS = ("2y", "10y", "max")      # the periods a preset page pulls
+_PRESET_PERIODS = ("2y", "max")      # the periods a preset page pulls
 
 
 def _preset_raw_paths() -> set[str]:

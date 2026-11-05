@@ -71,13 +71,12 @@
 
   var calm = !('IntersectionObserver' in W) ||
     (W.matchMedia && W.matchMedia('(prefers-reduced-motion: reduce)').matches);
-  var api = W.__melionaReveal = { revealAll: function () {}, moving: function () { return 0; } };
-  // The cone's wind tunnel (static/windtunnel.js) and the bottom dock - the
-  // phone shortcut and the cookie notice (static/dock.js) - come with this
-  // file: one entry point, so the head and main.py's fallback both bring
-  // them. Under reduced motion they load too (the tunnel draws one still
-  // frame of the same solve; the dock shows without its slide).
-  [['meliona-wind', 'windtunnel.js'], ['meliona-dock', 'dock.js']].forEach(function (f) {
+  var api = W.__melionaReveal = { revealAll: function () {} };
+  // The bottom dock - the phone shortcut and the cookie notice
+  // (static/dock.js) - comes with this file: one entry point, so the head and
+  // main.py's fallback both bring it. Under reduced motion it loads too (the
+  // dock shows without its slide).
+  [['meliona-dock', 'dock.js']].forEach(function (f) {
     var id = f[0], file = f[1];
     if (D.getElementById(id)) return;
     var s = D.createElement('script'), me = D.getElementById('meliona-reveal');
@@ -164,9 +163,6 @@
   api.revealAll = function () {                       // the end state, at once (layout probes)
     [].forEach.call(D.querySelectorAll('.reveal-item'), function (el) { seen.unobserve(el); done(el); });
   };
-  // how many blocks are arriving right now (the cone's wind tunnel holds its
-  // GPU work until they have landed, so the arrivals keep the frames)
-  api.moving = function () { return D.querySelectorAll('.reveal-item.is-visible').length; };
 
   // ---- 2. scrubs (fallback only) -------------------------------------------
   var native = W.CSS && CSS.supports && CSS.supports('animation-timeline: view()');

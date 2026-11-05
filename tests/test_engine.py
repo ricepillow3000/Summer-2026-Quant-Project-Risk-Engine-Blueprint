@@ -3550,10 +3550,9 @@ def test_a_universe_holding_an_anchor_keeps_the_rest_of_the_anchor_pool():
     assert {a["t"]: a["f"] for a in pl["assets"]}["TLT"] == "Universe"
     assert {a["t"] for a in pl["assets"] if a["f"] == "Anchor pool"} == {"GLD", "XLP", "XLU", "USMV"}
     assert pl["pairs"] and {p["an"] for p in pl["pairs"]} - {"AAA", "TLT"}, pl["pairs"]
-    # the Balance tab reads the same pool, not a second hand-written join
+    # the page never hand-writes a second join of the pool
     source = (pathlib.Path(__file__).resolve().parent.parent
               / "main.py").read_text(encoding="utf-8")
-    assert "anchor_frame(returns)" in source
     assert "fetch_prices(DEFENSIVE_ANCHOR_TICKERS" not in source
 
 
@@ -4505,9 +4504,9 @@ def test_the_warm_pass_covers_every_fetch_a_preset_page_makes():
     the security master. Railway's disk is wiped on every deploy and the cache
     expires every 6h. A warm pass must now cover every fetch the page makes
     for a preset - recorded from the real main.py, so the two cannot drift.
-    The crisis pair too (John, 2026-10-20: "fix the crisis pair slow download
-    next"): the page replays its default flyer and anchor through every named
-    crisis, and the warm pass now picks that same pair by the same rule."""
+    (The crisis pair, the ten-year tail fit and the AI-capex race left the
+    page with Balance and model validation on 2026-11-05, and left the warm
+    pass with them.)"""
     import sys
     import tools.warm_cache as wc
     from src.ingestion import PRESETS
@@ -4550,8 +4549,6 @@ def test_the_warm_pass_covers_every_fetch_a_preset_page_makes():
         if sleep is not None:
             wc.PAUSE_SECONDS = sleep
 
-    pairs = {k for k in page if k[1] == "max" and len(k[0]) == 2}
-    assert len(pairs) >= 2, f"the page replayed no crisis pair for each basket: {pairs}"
     missing = sorted(page - warm)
     assert not missing, f"fetches the page makes that no warm pass covers: {missing}"
 
@@ -4828,7 +4825,7 @@ def test_liquidity_adjustment_never_turns_a_tail_gain_into_a_bigger_gain():
     assert liquidity_adjusted_cvar(0.20, 60.0)["lvar"] > 0.20   # losses still widen
 
     src = (pathlib.Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
-    guarded = {"that tail widens to ": False, " for the unwind": False}
+    guarded = {"that tail widens to ": False}
     for node in ast.walk(ast.parse(src)):
         if not isinstance(node, ast.If):
             continue
@@ -4865,41 +4862,6 @@ def _exec_nodes(nodes, ns):
     exec(compile(ast.Module(body=list(nodes), type_ignores=[]),  # nosec B102
                  "main.py", "exec"), ns)
     return ns
-
-
-def test_tail_fit_drops_a_young_listing_by_name_instead_of_shortening_the_whole_fit():
-    """The 10y tail fit used an aligned pull, so one 2021 listing (RIVN in
-    High-volatility movers) cut the whole fit to 5.1 years while the caption
-    said "~10 years" and the "lack the full history" note could never fire."""
-    import ast
-    from src.ingestion import _clean_price_frame
-
-    src, tree = _main_source_and_tree()
-    fn = [n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == "load_tail_fit"]
-    assert len(fn) == 1, "load_tail_fit is gone from main.py"
-    fn[0].decorator_list = []
-
-    idx = pd.bdate_range("2016-10-14", "2026-10-14")
-    rng = np.random.default_rng(5)
-    px = pd.DataFrame(100 * np.exp(np.cumsum(rng.normal(0, 0.01, (len(idx), 3)), axis=0)),
-                      index=idx, columns=["OLD", "MID", "IPO"])
-    px.loc[px.index < "2021-11-10", "IPO"] = np.nan
-
-    def fetch_prices(tickers, period="2y", align=True, **_):
-        return _clean_price_frame(px[list(tickers)], align)
-
-    ns = {"pd": pd, "np": np, "fetch_prices": fetch_prices,
-          "load_universe": lambda t, period="2y": fetch_prices(list(t), period),
-          "mcneil_frey_tail": lambda pr: {"fitted": True, "n": len(pr)}}
-    _exec_nodes(fn, ns)
-    out = ns["load_tail_fit"](("OLD", "MID", "IPO"), (0.4, 0.3, 0.3), False)
-    _, days, dropped = out[:3]
-    assert dropped == ["IPO"], (f"a 2021 listing shrank the fit to {days} days "
-                                f"({days / 252:.1f}y) and was not named: dropped={dropped}")
-    assert days > 2500, days
-    assert len(out) == 4 and abs(out[3] - 10.0) < 0.05, f"span not reported from the index: {out[1:]}"
-    assert "~10 years" not in src, "the tail-fit caption still hard-codes ~10 years"
-    assert "{_tf_years:.1f} years" in src, "the tail-fit caption does not print the measured span"
 
 
 def test_fan_chart_caption_claims_block_resampling_only_when_it_happened():
@@ -4950,96 +4912,6 @@ def test_market_drawdown_shock_compounds_to_the_labelled_drawdown():
         grown = (1 + ns["shocked_returns"]).prod()
         assert np.allclose(grown, 1 + shock / 100), \
             f"shock {shock}% compounds to {float(grown.iloc[0]) - 1:+.1%} over 252 days"
-
-
-def test_defensive_pair_says_who_really_holds_the_money():
-    """Inverse-vol weights give the anchor under half when the flyer is the
-    steadier leg (Index core SPY/GLD: anchor 47%), yet the text said the anchor
-    holds most of the MONEY next to an SVG reading 47% CAPITAL."""
-    src, tree = _main_source_and_tree()
-    node = _lift_assign(tree, "_bv_money")
-    assert node is not None, ("the pair text states 'the anchor holds most of the "
-                              "MONEY' as a fixed string, whatever the weights")
-
-    def say(w_b, vol_a, vol_b):
-        pw = {"w_a": 1 - w_b, "w_b": w_b, "vol_a": vol_a, "vol_b": vol_b}
-        return _exec_nodes([node], {"pw": pw, "flyer": "SPY", "bv_anchor": "GLD"})["_bv_money"]
-
-    under = say(0.473, 0.132, 0.146)
-    assert "anchor holds most" not in under, f"anchor at 47%: {under}"
-    assert "SPY holds more of the" in under and "steadier leg" in under, under
-    over = say(0.75, 0.30, 0.10)
-    assert "the anchor holds most of the money" in over, over
-    assert "steady anchor holds most of the capital" not in src, \
-        "the read-me still says the anchor always holds most of the capital"
-
-
-def test_noise_ceiling_uses_the_ewma_effective_sample_size():
-    """Under EWMA (lambda 0.94) the matrix carries ~32 effective days, but the
-    Marcenko-Pastur line used T = len(returns) = 503: the ceiling sat ~1.95x
-    too low and painted noise factors as signal."""
-    import ast
-    from src.covariance import RISKMETRICS_LAMBDA
-
-    _, tree = _main_source_and_tree()
-    fn = [n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)
-          and n.name == "eigen_factor_panel"][0]
-    call = [n for n in ast.walk(fn) if isinstance(n, ast.Call)
-            and getattr(n.func, "id", "") == "marcenko_pastur_bounds"][0]
-    t_arg = call.args[1]
-    pre = []
-    if isinstance(t_arg, ast.Name):
-        pre = [n for n in ast.walk(fn) if isinstance(n, ast.Assign)
-               and any(getattr(t, "id", "") == t_arg.id for t in n.targets)]
-    returns = pd.DataFrame(np.zeros((503, 3)))
-    expect = {"EWMA": (1 + RISKMETRICS_LAMBDA) / (1 - RISKMETRICS_LAMBDA),
-              "Sample": 503, "Ledoit-Wolf": 503}
-    for method, want in expect.items():
-        ns = _exec_nodes(pre, {"cov_method": method, "returns": returns,
-                               "RISKMETRICS_LAMBDA": RISKMETRICS_LAMBDA})
-        got = eval(compile(ast.Expression(t_arg), "main.py", "eval"), ns)  # nosec B307
-        assert abs(got - want) < 1e-9, f"{method}: noise ceiling drawn at T={got}, expected {want:.1f}"
-    printed = [n for n in ast.walk(fn) if isinstance(n, ast.JoinedStr)
-               and "pure noise" in ast.unparse(n)]
-    assert printed and any(isinstance(v, ast.FormattedValue)
-                           and ast.dump(v.value) == ast.dump(t_arg)
-                           for v in printed[0].values), "the caption prints a different T"
-
-
-def test_correlation_watch_says_not_enough_history_instead_of_stable_at_nan():
-    """With 59 return rows and a 63-day window the rolling correlation is
-    empty, latest is NaN, and the page said 'Stable: A x B at +nan'."""
-    import ast
-    src, tree = _main_source_and_tree()
-
-    def seg(n):
-        return ast.get_source_segment(src, n) or ""
-
-    cands = [n for n in ast.walk(tree) if isinstance(n, ast.If)
-             and "Stable:" in seg(n) and "Concentration reading" in seg(n)
-             and "pick_a == pick_b" not in ast.unparse(n.test)]
-    elifs = {id(c.orelse[0]) for c in cands
-             if len(c.orelse) == 1 and isinstance(c.orelse[0], ast.If)}
-    head = [c for c in cands if id(c) not in elifs]
-    assert len(head) == 1, "the Correlation Watch verdict moved"
-
-    said = []
-
-    class _St:
-        def __getattr__(self, kind):
-            return lambda msg, *a, **k: said.append((kind, msg))
-
-    _exec_nodes(head, {"st": _St(), "np": np, "roll": pd.Series(dtype=float),
-                       "latest": float("nan"), "win": 63, "thresh": 0.75,
-                       "pick_a": "A", "pick_b": "B"})
-    assert not any("Stable" in m or "Concentration" in m for _, m in said), said
-    assert any(k == "info" and "not enough history for a 63-day window" in m.lower()
-               for k, m in said), said
-    said.clear()
-    _exec_nodes(head, {"st": _St(), "np": np, "roll": pd.Series([0.9]),
-                       "latest": 0.9, "win": 21, "thresh": 0.75,
-                       "pick_a": "A", "pick_b": "B"})
-    assert said and said[0][0] == "warning" and "Concentration reading" in said[0][1], said
 
 
 # --- council fixes 2026-10-17: book-sharpe-anchor ---
@@ -5119,6 +4991,19 @@ def _offline_app(setup=None, market=None, rf=0.045, adv=5e9, dollar_volume=None,
     return at, restore
 
 
+def _loaded_names(at) -> list:
+    """The universe the page loaded, as Risk Breakdown's caption prints it
+    ("Universe (N): A, B, ...")."""
+    import re
+    for c in at.caption:
+        hit = re.match(r"Universe \((\d+)\): (.+)$", c.value)
+        if hit:
+            names = [t.strip() for t in hit.group(2).split(",")]
+            assert len(names) == int(hit.group(1)), c.value
+            return names
+    raise AssertionError("no Universe caption on the page")
+
+
 def _book_grit(at) -> dict:
     """{ticker: grit} as The Book's sentences print it ("grit 73 of 100")."""
     import re
@@ -5139,7 +5024,7 @@ def test_the_books_grit_is_the_grit_zones_full_history_grit():
     tab's numbers for the same universe."""
     at, restore = _offline_app()
     try:
-        loaded = list([w for w in at.selectbox if w.label.startswith("Anchor")][0].options)
+        loaded = _loaded_names(at)
         # Defensive anchors widen the Book's peer group (stated on screen as
         # "across N names"); with them off the two universes are identical.
         at.toggle(key="book_fallback").set_value(False).run()
@@ -5173,7 +5058,7 @@ def test_the_book_lists_an_outside_etf_only_when_it_is_the_anchor():
     from src.pairing import DEFENSIVE_ANCHOR_TICKERS
     at, restore = _offline_app()
     try:
-        loaded = list([w for w in at.selectbox if w.label.startswith("Anchor")][0].options)
+        loaded = _loaded_names(at)
         cards = {}
         for m in at.markdown:
             hit = re.match(r"\s*(Leads|Anchor|No role|Left out)\s+((?:\d+\.\d%|<0\.1%) of the book\s+)?"
@@ -5242,69 +5127,6 @@ def test_an_offline_boot_never_reads_what_a_live_boot_left_in_the_cache():
         rate = " ".join(c.value for c in at.caption if c.value.startswith("Sharpe ="))
         assert data and "through 2026-10-14" in data[0], f"prices from the earlier boot: {data}"
         assert "Risk-free rate: 4.50%" in rate, f"T-bill rate from the earlier boot: {rate}"
-    finally:
-        restore()
-
-
-def test_changing_weighting_keeps_the_visitors_balance_anchor():
-    """Council 2026-10-17: the Balance-tab anchor had no key and its index
-    followed argmax(weights), so switching Weighting re-created the widget and
-    silently swapped the visitor's anchor (GOOGL -> NVDA) and every number
-    under it. Weighting does not enter the Balance maths at all."""
-    at, restore = _offline_app()
-    try:
-        def anchor():
-            return [w for w in at.selectbox if w.label.startswith("Anchor")][0]
-        default = anchor().value
-        pick = [o for o in anchor().options if o != default][-1]
-        anchor().set_value(pick).run()
-        assert anchor().value == pick
-        [r for r in at.radio if r.label == "Weighting"][0].set_value("Risk parity").run()
-        assert anchor().value == pick, (
-            f"anchor became {anchor().value} after a Weighting change; visitor chose {pick}")
-        assert not at.exception, [e.value for e in at.exception]
-    finally:
-        restore()
-
-
-def test_the_watch_pair_follows_the_basket_not_how_fast_it_was_typed():
-    """PR #20 comparison, 2026-10-20: typing F, GM, DAL, UAL, GILD, VZ quickly
-    showed F x UAL in Correlation Watch, typing it slowly F x GM - the same
-    basket. The pair selectboxes had fixed keys, and Streamlit keeps a keyed
-    widget's value while it is still an option, so the pair a rerun on a
-    half-typed basket picked stuck. The default pair must depend on the final
-    basket only; a visitor's own pick within an unchanged basket must stay."""
-    at, restore = _offline_app()
-    try:
-        def pair():
-            return tuple([w for w in at.selectbox if w.label == f"Asset {s}"][0].value
-                          for s in "AB")
-
-        def basket(names):
-            [w for w in at.multiselect if w.label == "Tickers to analyze"][0].set_value(
-                names).run()
-            assert not at.exception, [e.value for e in at.exception]
-
-        final = ["DAL", "F", "GILD", "GM", "UAL", "VZ"]
-        start = [w for w in at.multiselect if w.label == "Tickers to analyze"][0].value
-        assert not set(pair()) & set(final), f"start pair {pair()} would carry into {final}"
-        basket(final)
-        fresh = pair()
-        # Back to the start, then a half-typed basket without one of the final
-        # default pair's names: its own default pair is still an option once
-        # the basket is complete.
-        basket(start)
-        half = [t for t in final if t != fresh[1]]
-        basket(half)
-        assert set(pair()) <= set(half) and pair()[0] != pair()[1]
-        basket(final)
-        assert pair() == fresh, (
-            f"{pair()} after a stop on a half-typed basket; a fresh {final} shows {fresh}")
-        own = [o for o in [w for w in at.selectbox if w.label == "Asset A"][0].options
-               if o not in fresh][0]
-        [w for w in at.selectbox if w.label == "Asset A"][0].set_value(own).run()
-        [w for w in at.slider if w.label == "Rolling window (days)"][0].set_value(30).run()
-        assert pair() == (own, fresh[1]), f"visitor's pick {own} lost: {pair()}"
     finally:
         restore()
 
@@ -5674,7 +5496,7 @@ def test_the_skeleton_paints_first_and_the_hero_lifts_it():
     assert cfg["server"].get("enableStaticServing") is True
     served = sorted(p.name for p in (root / "static").iterdir())
     assert served == ["app.css", "band.avif", "band.jpg", "dock.js", "facade.avif", "facade.jpg",
-                      "gungnir.avif", "gungnir.webp", "reveal.js", "windtunnel.js"], \
+                      "gungnir.avif", "gungnir.webp", "reveal.js"], \
         f"static/ is served to the public; keep it to public files: {served}"
 
 
@@ -5925,7 +5747,8 @@ def test_the_pairing_never_shows_pp_or_percent_for_a_points_gap():
     flyer's worst fall alone (pairing.py: dd_pair - dd_solo), a gap in
     percentage points. The map printed "+16.8pp", and the Balance sentence and
     crisis table printed the same gap as "+17%", which reads as a 17% cut.
-    Both now say it in words: "16.8 points shallower" / "deeper"."""
+    The map now says it in words: "16.8 points shallower" / "deeper" (the
+    Balance tab left the page on 2026-11-05)."""
     import re
     root = pathlib.Path(__file__).resolve().parent.parent
     html = (root / "prototypes" / "war_room.html").read_text(encoding="utf-8")
@@ -5933,9 +5756,8 @@ def test_the_pairing_never_shows_pp_or_percent_for_a_points_gap():
     assert "shallower" in html and "deeper" in html, \
         "the map must say which way the cushion points, in words"
     src = (root / "main.py").read_text(encoding="utf-8")
-    assert 'bt["cushion"]:+.0%' not in src, "the Balance sentence prints a points gap as %"
-    assert '"cushion": "{:+.1%}"' not in src, "the crisis table prints a points gap as %"
-    assert "percentage points" in src, "the Balance sentence must name its unit"
+    assert 'bt["cushion"]:+.0%' not in src, "the page prints a points gap as %"
+    assert '"cushion": "{:+.1%}"' not in src, "the page prints a points gap as %"
 
 
 def test_every_spinner_is_a_few_calm_words():
@@ -6105,18 +5927,11 @@ def test_the_jump_diffusion_caption_states_its_method_not_a_result():
 def test_a_difference_of_two_percentages_says_points_and_a_ratio_says_relative():
     """ME-03 (2026-10-22): the defensive shift read "Annualized vol 17.8%
     (-2.9% vs current)" for a fall from 20.7% - 2.9 points, a 14% relative
-    cut - and the unwind delta "+0% for the unwind" beside a CVaR in percent
-    was a relative change. A difference of two percentages says points; a
-    ratio says relative."""
+    cut. A difference of two percentages says points; a ratio says relative.
+    (The defensive shift and the unwind delta left with Correlation Watch and
+    Liquidity, 2026-11-05; the Book's tail gap carries the rule now.)"""
     import re
     text = _offline_page()["text"]
-    shift = [t for t in text if t.startswith(("Daily CVaR (95%) =",
-                                              "Annualized vol ="))]
-    assert len(shift) == 2, f"defensive simulation not on the page: {shift}"
-    for t in shift:
-        assert "points vs current" in t, t
-    unwind = [t for t in text if t.startswith("Liquidity-adjusted CVaR =")]
-    assert unwind and "relative" in unwind[0], unwind
     # The Book's tail gap is a difference of two ES figures: points too
     # (Council A review, 2026-10-22: "2.4% shallower at ES 97.5").
     gaps = [t for t in text if "shallower at ES" in t or "deeper at ES" in t]
@@ -6129,7 +5944,7 @@ def test_the_headline_unwind_names_its_book_size_and_participation():
     """ME-03 (2026-10-22): the verdict widened the tail for "the ~N trading
     days it takes to fully unwind at 20% of daily volume" without saying the
     days were for a $1,000,000 book - the one input they turn on - while The
-    Book and the Liquidity tab each let the visitor pick another size."""
+    Book lets the visitor pick another size."""
     from src.narrative import DEFAULT_PARTICIPATION
     v = _verdict(_offline_page("thin volume", adv=5e4)["text"])
     assert "tail widens to" in v, f"thin volume did not widen the tail: {v}"
@@ -6157,11 +5972,15 @@ def test_the_page_points_only_to_controls_that_exist():
     name - the estimator lives in the Allocation drawer. (The drawers lost
     their "01 · 02 · 03" numbers on 2026-11-04; the caption names the drawer
     by its title, so this follows the title.)"""
+    import re
     page = _offline_page()
     text = " ".join(page["text"])
     assert "Engine controls" not in text
-    alloc = [e.split(":")[0] for e in page["expanders"] if e.startswith("Allocation")]
-    assert alloc and f"to EWMA in the {alloc[0]} drawer" in text, alloc
+    drawers = [e.split(":")[0] for e in page["expanders"]]
+    for named in re.findall(r"in the (\w+(?: \w+)?) drawer", text):
+        assert named in drawers, f"the page points to a '{named}' drawer that does not exist: {drawers}"
+    # the risk-contribution caption names the Allocation drawer's control
+    assert "Allocation" in drawers and "switch Allocation to Risk parity" in text, drawers
 
 
 # --- ME-09 (2026-10-22): data-quality holes ---
@@ -6211,40 +6030,6 @@ def test_a_crisis_with_none_of_the_basket_trading_is_left_out_of_the_race():
     assert set(early) <= set(rec["left_out"]), rec["left_out"]
     assert not set(early) & set(rec["decided"]["crisis"]), list(rec["decided"]["crisis"])
     assert rec["n"] == len(rec["decided"]) and 0 <= rec["wins"] <= rec["n"]
-
-
-def test_the_balance_tab_ranks_and_sizes_a_pair_on_one_risk_matrix():
-    """ME-03 (2026-10-22): Balance ranked partners on the sample correlation
-    but sized the blend on the selected estimator. Under EWMA the two differ
-    by up to 0.47 in correlation and 16 points of annual vol on the offline
-    market, so the page could name a "least-correlated" partner and quote a
-    correlation the blend beside it was not computed from."""
-    from src.covariance import estimate_covariance
-    from src.comovement import correlation_from_cov
-    from src.hedge import rank_hedges
-    from src.ingestion import get_returns
-    at, restore = _offline_app()
-    try:
-        [s for s in at.selectbox if s.label == "Covariance estimator"][0].set_value("EWMA").run()
-        loaded = list([w for w in at.selectbox if w.label.startswith("Anchor")][0].options)
-        anchor = [w for w in at.selectbox if w.label.startswith("Anchor")][0].value
-        cap = [c.value for c in at.caption if "Long-only minimum-variance weights" in c.value]
-        # The defensive pair beside it is a real-history backtest on plain
-        # sample volatility, so it says "realized" rather than borrow the label.
-        pair = [m.value for m in at.markdown if "annual vol to" in m.value]
-        assert pair and "realized annual vol to" in pair[0], pair[:1]
-    finally:
-        restore()
-    rets = get_returns(_offline_market_prices(loaded, "2y"))
-    cov, _ = estimate_covariance(rets, "EWMA")
-    ranked = rank_hedges(correlation_from_cov(cov), anchor)
-    best, corr = ranked.index[0], float(ranked.iloc[0])
-    assert cap, "Balance caption missing"
-    # the name is no longer set in bold (2026-11-04: bold as decoration), so
-    # it is matched as a whole word beside its correlation
-    assert (f"({best}, {corr:+.2f})" in cap[0] or f"{best} moves against" in cap[0]
-            or f"{best} is the most" in cap[0]) and f"{corr:+.2f}" in cap[0], (best, f"{corr:+.2f}", cap[0])
-    assert "EWMA" in cap[0], f"the caption does not name its risk matrix: {cap[0]}"
 
 
 # --- ME-10 (2026-10-22): one way to do each thing ---
@@ -6299,18 +6084,6 @@ def test_the_jump_calibration_uses_the_unbiased_sample_variance():
     p = calibrate_jump_diffusion(np.expm1(lr))
     assert p["n_jumps"] == 0
     assert abs(p["sigma_d"] ** 2 - lr.var(ddof=1)) < 1e-15, (p["sigma_d"] ** 2, lr.var(ddof=1))
-
-
-def test_a_fall_is_written_as_its_size_never_as_a_double_negative():
-    """Council A review (2026-10-22): the defensive pair read "holding META
-    alone fell -36% at its worst" - fell, minus: a reader can take it as a
-    rise. A fall is stated by its size beside the verb."""
-    import re
-    page = " ".join(_offline_page()["text"])
-    assert re.search(r"alone fell \d+% at its worst", page), "pair sentence missing"
-    assert re.search(r"the fall was \d+%", page), "pair sentence missing"
-    for bad in (r"fell -\d", r"fall was -\d"):
-        assert not re.search(bad, page), bad
 
 
 def test_the_loaded_window_is_counted_one_way_everywhere():
@@ -6594,116 +6367,6 @@ def test_a_wide_block_never_turns_like_a_card_and_never_hangs_mid_turn():
     assert "el.style.removeProperty('--reveal-depth');" in js
 
 
-def test_the_cone_flow_is_a_lattice_boltzmann_solve_bound_to_the_data():
-    """John, 2026-11-04: no fluid-looking loop - "every line, color, velocity
-    vector, and animation timestep must be directly driven by and
-    deterministically bound to the provided data array", FluidX3D's look
-    ("grid cells with over 100,000 time steps") on the site's own background,
-    red only where the flow collides with the data, a "Verification Overlay",
-    and "each color, cell, line, animation and where it's going reflects the
-    chart". static/windtunnel.js is a D2Q9 lattice Boltzmann solver (FluidX3D's
-    method and its Smagorinsky subgrid model) whose walls are the chart's five
-    computed percentile paths; its clock and inflow come from the data; it is
-    drawn as FluidX3D draws a velocity field - one line per cell of a grid on
-    the chart's own axes, in FluidX3D's own colour scale - with FluidX3D's
-    tracer particles released per return level per trading-day cell; check()
-    proves the picture against the computed state."""
-    import re
-    root = pathlib.Path(__file__).resolve().parent.parent
-    js = (root / "static" / "windtunnel.js").read_text(encoding="utf-8")
-    src = (root / "main.py").read_text(encoding="utf-8")
-    # the solver: D2Q9 weights, BGK collision with FluidX3D's Smagorinsky-Lilly
-    # constant, halfway bounce-back, inflow, pressure outlet
-    assert "const float WT[9]=float[9](4./9.,1./9.,1./9.,1./9.,1./9.,1./36.,1./36.,1./36.,1./36.);" in js
-    assert "const int OPP[9]=int[9](0,3,4,1,2,7,8,5,6);" in js
-    assert "for(int i=0;i<9;i++)f[i]-=(f[i]-fe[i])/te;" in js and ".76421222*sqrt(hxx*hxx+hyy*hyy+2.*hxy*hxy)/rho" in js
-    assert "if(outY(q)||wall(q))f[i]=fAt(OPP[i],vUv);else f[i]=fAt(i,q);" in js
-    assert "else if(vUv.x>1.-texel.x){rho=1.;" in js
-    # deterministic: no randomness, no wall-clock in the physics; the frame
-    # rate only changes how many steps are shown per frame
-    body = js[js.index("(function () {"):]
-    assert "Math.random" not in body and "sin(t" not in body and "Date.now" not in body
-    assert "for (var k = 0; k < T.spf; k++) T.step();" in js
-    # the data are the walls, the clock, the inflow, the grid and the particles' release
-    assert "var LEVELS = ['p5', 'p25', 'median', 'p75', 'p95'];" in js and "_fullData" in js
-    assert "T.stepsPerDay = T.L.pc / (LBM.U_IN * n);" in js
-    assert "return LBM.U_IN * (1 - LBM.U_SWING + LBM.U_SWING * w) * Math.min(1, step / (LBM.SPIN_UP * this.L.pc / LBM.U_IN));" in js
-    assert "for (var c = d[0]; c + nd <= d[n - 1] + 1e-9; c += nd) cols.push(c + nd / 2);" in js   # columns: trading days
-    assert "rowsv.push((r + 0.5) * dr);" in js                                                    # rows: steps of return, on 0%
-    assert "T.release = G.nd * T.stepsPerDay;" in js
-    # FluidX3D's own pieces, line for line
-    assert "draw_line(p - u/2|u|, p + u/2|u|)" in js and "(gl_VertexID==0?-1.:1.)*half_*vec2(d.x,-d.y)" in js
-    assert "if(bd<1.&&length(bf)>0.)un+=length(un)*normalize(bf);" in js        # particle_boundary_force
-    # colours: FluidX3D's colorscale_rainbow, the air on its cool part only;
-    # still air transparent; red never in the air, the top wall step red
-    ns: dict = {}
-    exec(re.search(r"^FLOW_AIR = \{.*?\}\n", src, re.M).group(0)
-         + re.search(r"^FLOW_WALL_STEPS = .*?\n", src, re.M).group(0), ns)
-    air, wall = ns["FLOW_AIR"], ns["FLOW_WALL_STEPS"]
-    fns: dict = {"FLOW_AIR": air}
-    for name in ("fluidx3d_rainbow", "flow_air_rgba"):
-        exec(re.search(rf"^def {name}\(.*?(?=^\S)", src, re.S | re.M).group(0), fns)
-    rainbow, rgba = fns["fluidx3d_rainbow"], fns["flow_air_rgba"]
-    # FluidX3D's scale at its own landmarks: black, blue, cyan, green, yellow, red
-    for x, want in ((0.0, (0, 0, 0)), (1 / 3, (0, 0, 1)), (0.5, (0, 1, 1)), (2 / 3, (0, 1, 0)), (0.8, (1, 1, 0)), (1.0, (1, 0, 0))):
-        assert all(abs(g - w) < 1e-6 for g, w in zip(rainbow(x), want)), (x, rainbow(x))
-    def redness(r, g, b):
-        return r > 180 and g < 80 and b < 90
-    for i in range(401):
-        (r, g, b), alpha = rgba(air["full"] * 2 * i / 400)
-        assert not redness(r, g, b), "the air is never red"
-        if i * 2 / 400 < air["rest"]:
-            assert alpha == 0.0, "still air is transparent"
-    r, g, b = (int(wall[-1][1][i:i + 2], 16) for i in (1, 3, 5))
-    assert redness(r, g, b), "the highest wall pressure is the red step"
-    assert '"flow": {"air": dict(FLOW_AIR),' in src
-    # the same scale in the browser, line for line
-    assert "if(x<1.2){r=1.;g=x*.83333333;}else if(x<2.){r=2.5-x*1.25;g=1.;}" in js
-    # no glass, gloss, glow or blur anywhere in it
-    code = re.sub(r"//[^\n]*|/\*.*?\*/", "", body, flags=re.S)
-    for word in ("spec", "fresnel", "blur", "glow", "createRadialGradient", "shadowBlur"):
-        assert word not in code, word
-    # the environment: the grid's mesh, 1px domain box, transparent ground, the switch
-    assert "x.strokeRect(0.5, 0.5, sz.w - 1, sz.h - 1);" in js
-    assert "T.btn.textContent = 'Verification Overlay';" in js
-    assert "plot_bgcolor" not in src[src.index("def fan_chart"):src.index("def panel_head")]
-    # the proof
-    for key in ("colourMismatch", "gridMiss", "particleMoveMismatch", "particleColourMismatch",
-                "redOffWall", "obstacleMiss", "wallMismatch", "peakIsRed"):
-        assert key in js, key
-    scan = (root / "tools" / "deep_scan.mjs").read_text(encoding="utf-8")
-    assert "await windAgrees(tag" in scan and "redOffWall" in scan and "obstacleMiss" in scan and "gridMiss" in scan
-    css = (root / "static" / "app.css").read_text(encoding="utf-8")
-    assert ".wt-verify" in css and ".flow-key" in css and ".flow-ramp" in css
-    reveal = (root / "static" / "reveal.js").read_text(encoding="utf-8")
-    assert "windtunnel.js" in reveal
-    # an emulated GPU also draws the page: the solve there froze it (Live audit,
-    # 2026-11-04), so the page leaves the flow out on a software renderer, and
-    # CI proves the solve in its own step
-    assert "if (!g.gl || g.soft) {" in js and "api.status = g.gl ? 'software renderer: flow not run'" in js
-    # John, 2026-11-04 (live): the tunnel built at load and read the GPU back
-    # synchronously, and the page lost its arrivals and its buttons. Nothing
-    # is built until the cone is near and the page is calm; programs compile
-    # in the background; the live loop reads back through a fence, never a
-    # blocking readPixels; and it holds while a glide or an arrival moves.
-    assert "near.observe(gd)" in js and "requestIdleCallback(go" in js and "new Tunnel(gd, reduced)" not in js
-    assert "KHR_parallel_shader_compile" in js and "COMPLETION_STATUS_KHR" in js
-    loop = js[js.index("Tunnel.prototype.frame = function"):js.index("// ---- the proof")]
-    assert "T.readAsync()" in loop and "T.pollRead()" in loop and "T.paint()" not in loop.split("} else {")[1]
-    assert "gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0)" in js and "gl.clientWaitSync(rb.sync, 0, 0)" in js
-    assert "function gliding() { return !!(D.__melionaStop || W.__melionaStop); }" in js   # main.py's P is the document
-    assert "R.moving() > 0" in js and "api.moving = function" in reveal
-    # a card that cannot keep up is HELD still: the same solve, so it stays
-    # "lbm" (Live audit, 2026-11-04: renaming it "lbm-still" failed step 8d)
-    assert "T.held = true; T.done = true;" in js and "T.mode = 'lbm-still'; T.done" not in js
-    wf = (root / ".github" / "workflows" / "live-audit.yml").read_text(encoding="utf-8")
-    assert "node tools/flow_check.mjs http://127.0.0.1:8501 flow-shots" in wf
-    probe = (root / "tools" / "flow_check.mjs").read_text(encoding="utf-8")
-    for key in ("colourMismatch", "gridMiss", "particleMoveMismatch", "particleColourMismatch", "wallMismatch",
-                "redOffWall", "obstacleMiss", "peakIsRed", "volatility-shock"):
-        assert key in probe, key
-
-
 def test_the_browser_audit_runs_on_an_os_its_playwright_supports():
     """2026-11-04: GitHub's ubuntu-latest became 26.04 and Playwright 1.56.1
     refused to install Chromium there, so every browser step of the Live audit
@@ -6737,30 +6400,25 @@ def test_every_in_page_button_is_flown_by_both_glide_scans():
 
 
 def test_the_crisis_record_audit_reaches_the_boxes_its_own_way():
-    """John, 2026-10-30: the four boxes under the hero must trace to a source,
+    """John, 2026-10-30: the boxes under the hero must trace to a source,
     not be hallucinated. Live audit step 1 works them out a second time from
     Yahoo's raw chart API with its own loop (tools.live_provenance.crisis_boxes,
     no src.conviction); that only proves anything if the loop agrees with the
-    engine on the same closes - checked here offline, a late-listing member
-    and a gap in a window's first week included, so the "trading at the window
-start" rule is exercised."""
+    engine on the same closes - checked here offline."""
     import src.conviction as conv
     from tools import live_provenance as lp
-    names = [conv.BENCHMARK, *conv.AI_CAPEX_BASKET]
-    px = _offline_market_prices(names, "max")
-    px.loc[:"2019-06-30", conv.AI_CAPEX_BASKET[-1]] = np.nan
-    px.loc["2020-02-21", conv.AI_CAPEX_BASKET[0]] = np.nan    # a gap in COVID's first week
+    px = _offline_market_prices([conv.BENCHMARK], "max")
     real = conv.fetch_prices
     conv.fetch_prices = lambda tickers, period="2y", align=True, **_: px[list(tickers)]
     try:
         page = lp.page_boxes(conv.load_conviction())
     finally:
         conv.fetch_prices = real
-    mine = lp.crisis_boxes(px[conv.BENCHMARK], px[conv.AI_CAPEX_BASKET])
+    mine = lp.crisis_boxes(px[conv.BENCHMARK])
     assert page.keys() == mine.keys()
     for k, v in page.items():
-        assert (v == mine[k]) if isinstance(v, (str, list)) else abs(v - mine[k]) < 1e-12, (k, v, mine[k])
-    assert int(page["t1"].split(" of ")[1]) >= 3 and int(page["race"].split(" of ")[1]) >= 3, page
+        assert (v == mine[k]) if isinstance(v, str) else abs(v - mine[k]) < 1e-12, (k, v, mine[k])
+    assert int(page["t1"].split(" of ")[1]) >= 3, page
 
 
 
@@ -6862,10 +6520,10 @@ def test_the_cookie_notice_informs_once_and_never_blocks():
     assert "Local storage" in row and "OK" in row
     assert "it is not a consent banner" in " ".join(privacy.split())
     # every layout probe answers it before measuring
-    for tool in ("device_check", "deep_scan", "recruiter_walk", "flow_check", "glide_load_check"):
+    for tool in ("device_check", "deep_scan", "recruiter_walk", "glide_load_check"):
         t = (root / "tools" / f"{tool}.mjs").read_text(encoding="utf-8")
         assert "localStorage.setItem('meliona-cookie-notice', 'ok')" in t or "__melionaNotice?.dismiss()" in t, tool
-    for tool in ("device_check", "deep_scan", "flow_check"):
+    for tool in ("device_check", "deep_scan"):
         t = (root / "tools" / f"{tool}.mjs").read_text(encoding="utf-8")
         assert "revealAll(); window.__melionaNotice?.dismiss();" in t, f"{tool} measures with the notice up"
     site = (root / "tools" / "site_check.mjs").read_text(encoding="utf-8")
@@ -6973,6 +6631,25 @@ def test_the_footer_links_to_the_source_code():
             'Summer-2026-Quant-Project-Risk-Engine-Blueprint">Source code on GitHub</a>') in row
     acc = foot.index(">Accessibility</a>")
     assert acc < foot.index("Source code on GitHub") < foot.index("</div>", acc) + 200
+
+
+def test_the_tab_strip_tells_one_story():
+    """John, 2026-11-05 (ME-28): the page tells one story - how much this book
+    could lose in a bad year, what real crashes did, which names hold up, how
+    anchors cushion flyers. The cone's airflow, the Liquidity, Correlation
+    Watch and Balance tabs, the AI-capex race and the model-validation drawer
+    were cut; the strip is these four, in this order."""
+    import re
+    root = pathlib.Path(__file__).resolve().parent.parent
+    main = (root / "main.py").read_text(encoding="utf-8")
+    strip = re.search(r"tab_3d, tab_breakdown, tab_grit, tab_conviction = st\.tabs\(\[(.*?)\]\)", main, re.S)
+    assert strip, "the analysis tab strip is not the four story tabs"
+    assert re.findall(r'"([^"]+)"', strip.group(1)) == [
+        "Risk Topology", "Risk Breakdown", "Grit Zone", "Crisis Conviction"]
+    code = re.sub(r"(?m)^\s*#.*$", "", main)
+    for gone in ("Correlation Watch", "Model validation", "AI-capex race", "Verification Overlay"):
+        assert gone not in code, gone
+    assert not (root / "static" / "windtunnel.js").exists()
 
 
 if __name__ == "__main__":

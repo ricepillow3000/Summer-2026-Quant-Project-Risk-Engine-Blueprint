@@ -50,9 +50,9 @@ def anchor_frame(returns: pd.DataFrame) -> pd.DataFrame:
     Universe returns joined, on common days, with the defensive anchors it does
     not already hold - a held anchor stays once, as a holding. Joining the whole
     pool raised on the shared column, and every caller's fallback then dropped
-    all anchors: 4 of 20 presets drew no anchor pool and the Balance tab offered
-    no defensive candidates (every-pair audit, 2026-10-17). The map and the
-    Balance tab both read this, so they cannot disagree on the pool. Offline,
+    all anchors: 4 of 20 presets drew no anchor pool (every-pair audit,
+    2026-10-17). The map reads the pool here, never through a second
+    hand-written join. Offline,
     or when every anchor is held: the universe alone.
     """
     pool = [t for t in DEFENSIVE_ANCHOR_TICKERS if t not in returns.columns]

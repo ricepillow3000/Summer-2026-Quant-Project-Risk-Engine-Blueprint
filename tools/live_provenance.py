@@ -13,8 +13,8 @@ Three independent cross-checks against the LIVE feed (needs Yahoo access):
    way they have to: SPY vs IVV (both S&P 500), GLD vs gold futures, QQQ vs
    SPY. A mislabelled or synthetic series fails these.
 4. Every preset ticker still trades on Yahoo with a full 2-year history.
-5. The four crisis-record boxes under the hero ("Bought the scariest day",
-   "Three years on", "Worst possible timing", "The AI-capex race"), worked out
+5. The three crisis-record boxes under the hero ("Bought the scariest day",
+   "Three years on", "Worst possible timing"), worked out
    a second time from Yahoo's raw chart API with this file's own loop - no
    yfinance, no src.conviction - and compared as the page prints them.
 
@@ -29,7 +29,7 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 
-from src.conviction import AI_CAPEX_BASKET, BENCHMARK, load_conviction, race_days, race_record
+from src.conviction import BENCHMARK, load_conviction
 from src.ingestion import MAX_UNIVERSE, PRESETS, fetch_prices, fetch_risk_free_rate
 from src.netguard import guarded_session
 from src.scenarios import HISTORICAL_REGIMES
@@ -66,18 +66,13 @@ def raw_chart(symbol: str, span: str = "3mo") -> pd.Series:
     return raw[~raw.index.duplicated(keep="last")]
 
 
-def crisis_boxes(bench: pd.Series, members: pd.DataFrame) -> dict:
-    """The four boxes, from closes alone. Crash anatomy: the trough is the
+def crisis_boxes(bench: pd.Series) -> dict:
+    """The three boxes, from closes alone. Crash anatomy: the trough is the
     window's lowest close, the peak the highest close before it. A buyer's
     return is counted 252 and 756 trading days on (a crisis without that much
-    history after it is left out). The race: each side's trading days from its
-    own trough back to its own peak (within 756 days); the basket is the equal
-    average of the members already trading at the window's start, each set to
-    1 there; a side that never fell scores 0, one that never got back last."""
+    history after it is left out)."""
     bench = bench.dropna()
     fwd = {"t1": [], "t3": [], "p3": []}
-    wins = raced = 0
-    scores = []
 
     def anatomy(w):
         lo = w.idxmin()
@@ -87,11 +82,6 @@ def crisis_boxes(bench: pd.Series, members: pd.DataFrame) -> dict:
     def ahead(series, day, n):
         k = series.index.get_loc(day)
         return series.iloc[k + n] / series.iloc[k] - 1 if k + n < len(series) else None
-
-    def back(series, lo, level):
-        after = series.iloc[series.index.get_loc(lo):][:757]
-        hit = np.flatnonzero(after.to_numpy() >= level)
-        return int(hit[0]) if hit.size else None
 
     for start, end in HISTORICAL_REGIMES.values():
         w = bench.loc[start:end]
@@ -103,41 +93,20 @@ def crisis_boxes(bench: pd.Series, members: pd.DataFrame) -> dict:
                 v = ahead(bench, day, n)
                 if v is not None:
                     fwd[key].append(v)
-        b_score = 0.0 if hi is None else (lambda d: np.inf if d is None else d)(back(bench, lo, w.loc[hi]))
-        m = members.loc[start:]
-        alive = [c for c in m.columns if m[c].iloc[:5].notna().all()]
-        comp = m[alive].dropna()
-        comp = (comp / comp.iloc[0]).mean(axis=1) if alive and len(comp) else pd.Series(dtype=float)
-        cw = comp.loc[start:end]
-        if len(cw) < 5:
-            continue
-        chi, clo = anatomy(cw)
-        if hi is None and chi is None:
-            continue
-        c_score = 0.0 if chi is None else (lambda d: np.inf if d is None else d)(back(comp, clo, cw.loc[chi]))
-        raced += 1
-        wins += c_score < b_score
-        scores.append((float(c_score), float(b_score)))
     med = {k: float(np.median(v)) if v else None for k, v in fwd.items()}
     pos = {k: sum(x > 0 for x in v) for k, v in fwd.items()}
     return {"t1": f"{pos['t1']} of {len(fwd['t1'])}", "t1_median": med["t1"],
             "t3_median": med["t3"], "t3": f"{pos['t3']} of {len(fwd['t3'])}",
-            "p3": f"{pos['p3']} of {len(fwd['p3'])}", "p3_median": med["p3"],
-            "race": f"{wins} of {raced}", "race_days": scores}
+            "p3": f"{pos['p3']} of {len(fwd['p3'])}", "p3_median": med["p3"]}
 
 
 def page_boxes(conv: dict) -> dict:
-    """The same four boxes as main.py prints them from src.conviction."""
+    """The same three boxes as main.py prints them from src.conviction."""
     s = conv["summary"]
     t1, t3, p3 = s["trough_1y_later"], s["trough_3y_later"], s["peak_3y_later"]
-    rec = race_record(conv["race"])
     return {"t1": f"{round(t1['pct_positive'] * t1['n'])} of {t1['n']}", "t1_median": t1["median"],
             "t3_median": t3["median"], "t3": f"{round(t3['pct_positive'] * t3['n'])} of {t3['n']}",
-            "p3": f"{round(p3['pct_positive'] * p3['n'])} of {p3['n']}", "p3_median": p3["median"],
-            "race": f"{rec['wins']} of {rec['n']}",
-            "race_days": [(race_days(r["basket_days"], r["basket_fell"], np.inf),
-                           race_days(r["bench_days"], r["bench_fell"], np.inf))
-                          for _, r in rec["decided"].iterrows()]}
+            "p3": f"{round(p3['pct_positive'] * p3['n'])} of {p3['n']}", "p3_median": p3["median"]}
 
 
 def main() -> int:
@@ -230,26 +199,24 @@ def main() -> int:
               f"{len(col)} days, {col.index[0].date()} -> {col.index[-1].date()}")
 
     # 5. The crisis-record boxes, a second time from the raw chart API.
-    raw = {t: raw_chart(t, "max") for t in [BENCHMARK, *AI_CAPEX_BASKET]}
+    raw = {BENCHMARK: raw_chart(BENCHMARK, "max")}
     gap = int(np.median(np.diff(raw[BENCHMARK].index.values).astype("timedelta64[D]").astype(int)))
     check("crisis record source is daily bars", gap <= 3 and len(raw[BENCHMARK]) > 252 * 20,
           f"{len(raw[BENCHMARK])} {BENCHMARK} bars, median gap {gap} days, "
           f"from {raw[BENCHMARK].index[0].date()}")
-    mine = crisis_boxes(raw[BENCHMARK], pd.DataFrame({t: raw[t] for t in AI_CAPEX_BASKET}))
+    mine = crisis_boxes(raw[BENCHMARK])
     page = page_boxes(load_conviction())
     for key, label in (("t1", "Bought the scariest day: crises positive a year on"),
                        ("t1_median", "Bought the scariest day: median return a year on"),
                        ("t3_median", "Three years on: median return"),
                        ("t3", "Three years on: crises positive"),
                        ("p3", "Worst possible timing: crises ahead three years on"),
-                       ("p3_median", "Worst possible timing: median return"),
-                       ("race", "The AI-capex race: crises the basket reclaimed first"),
-                       ("race_days", "The AI-capex race: (basket, S&P 500) days back, crisis by crisis")):
+                       ("p3_median", "Worst possible timing: median return")):
         a, b = page[key], mine[key]
-        ok = (a == b) if isinstance(a, (str, list)) else (
+        ok = (a == b) if isinstance(a, str) else (
             a is not None and b is not None and f"{a:+.0%}" == f"{b:+.0%}" and abs(a - b) < 1e-4)
         def shown(v):
-            return v if isinstance(v, (str, list)) or v is None else f"{v:+.4%}"
+            return v if isinstance(v, str) or v is None else f"{v:+.4%}"
         check(f"crisis record box - {label}", ok, f"page {shown(a)} vs raw Yahoo {shown(b)}")
 
     bad = [n for n, ok, _ in results if not ok]

@@ -1066,3 +1066,20 @@ two paid-vendor-dependent pieces remain explicit backlog items:
   changes size mid-arrival. Local, with the GPU flag spoofed: no tunnel at
   load, the build waits until after a button's glide lands; glide checks
   (momentum, reader, steady, rest, cold early) and flow_check all pass.
+
+- ✅ **Story cut (ME-28, John 2026-11-05)**. The page tells one story: how
+  much this book could lose in a bad year, what real crashes did, which names
+  hold up (grit), and how steady anchors cushion high-flyers. Off that story,
+  and removed from the page with the code, tests and probes that existed only
+  for them: the cone's lattice Boltzmann flow (`static/windtunnel.js`, the
+  flow key, the Verification Overlay, `tools/flow_check.mjs` and Live audit
+  step 8d, deep_scan's `windAgrees`) - the entries above are history; the
+  Liquidity, Correlation Watch and Balance tabs; the AI-capex recovery race
+  (its tab panel and the fourth landing box; the page no longer pulls the
+  basket); and Risk Breakdown's correlation matrix, outcome histogram and
+  "Model validation & factor structure" drawer (VaR backtest, EVT tail,
+  factor exposures, eigen factors). The strip is now Risk Topology, Risk
+  Breakdown, Grit Zone, Crisis Conviction. The Book keeps its own size and
+  participation, the headline keeps its liquidity-adjusted tail, and the
+  libraries (`src/liquidity.py`, `src/comovement.py`, `src/hedge.py`,
+  `src/factors.py`, `src/eigenrisk.py`, `recovery_race`) stay for the audits.

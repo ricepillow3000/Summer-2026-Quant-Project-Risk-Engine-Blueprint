@@ -205,11 +205,12 @@ def audit_universe(name: str, tickers: list[str], quick: bool) -> dict | None:
                "basel", warn=True)
 
     # -- INV-09 conditional EVT ----------------------------------------------
-    # The app fits EVT on a 10y window (main.py's load_tail_fit), not the 2y
-    # risk window: a GPD needs ~50 exceedances above the 95% threshold, and
-    # 2y of data supplies ~22. Auditing it on 2y would test a refusal. Same
-    # window rule as the app since 2026-10-17: a name listed more than a week
-    # after the earliest is dropped, not allowed to shorten everyone's history.
+    # EVT is fitted on a 10y window (the page's tail panel did the same until
+    # it left with the model-validation drawer, 2026-11-05), not the 2y risk
+    # window: a GPD needs ~50 exceedances above the 95% threshold, and 2y of
+    # data supplies ~22. Auditing it on 2y would test a refusal. A name listed
+    # more than a week after the earliest is dropped, not allowed to shorten
+    # everyone's history.
     try:
         evt_px = fetch_prices(tickers, period="10y", align=False)
         first = evt_px.notna().idxmax()

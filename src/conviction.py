@@ -247,15 +247,16 @@ def race_record(race: pd.DataFrame) -> dict:
 
 
 def load_conviction(benchmark: str = BENCHMARK) -> dict:
-    """Convenience bundle for the UI: benchmark forward-return table + summary
-    + the AI-capex recovery race, all from live Yahoo data."""
+    """Convenience bundle for the UI: benchmark forward-return table + summary,
+    from live Yahoo data. The recovery race stays in this library
+    (recovery_race, race_record) but left the page (John, 2026-11-05), so the
+    page no longer pulls the basket's full histories."""
     bench_px = fetch_prices([benchmark], period="max", align=False)[benchmark]
     table = crisis_forward_returns(bench_px)
     return {
         "benchmark": benchmark,
         "table": table,
         "summary": conviction_summary(table),
-        "race": recovery_race(benchmark=benchmark),
     }
 
 
@@ -263,4 +264,4 @@ if __name__ == "__main__":
     bundle = load_conviction()
     print(bundle["table"].to_string(index=False))
     print(bundle["summary"])
-    print(bundle["race"].to_string(index=False))
+    print(recovery_race().to_string(index=False))
