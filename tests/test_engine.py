@@ -6404,9 +6404,23 @@ def test_blocks_arrive_from_where_they_sit_and_the_wheel_glides():
     assert ".st-key-glide" in re.search(r"var SKIP = '([^']+)'", js).group(1)
     # the wheel glide: stands aside for zoom, a button's flight and anything
     # that scrolls on its own, and never runs under reduced motion
-    assert "W.__melionaStop) return;" in js and "e.ctrlKey" in js and "scrolls(n, e.deltaY)" in js
+    assert "gliding()) return;" in js and "e.ctrlKey" in js and "scrolls(n, e.deltaY)" in js
     assert js.index("if (calm)") < js.index("addEventListener('wheel'")
-    assert "{ passive: false }" in js and re.search(r"var GLIDE_EASE = 0\.\d+;", js)
+    assert "{ passive: false }" in js
+    # John, 2026-11-04: "heavier ... like a boat being tugged" - a critically
+    # damped tow line on the frame's own clock, not a first-order ease
+    assert re.search(r"var TOW = \d+(\.\d+)?;", js)
+    assert "acc = TOW * TOW * (aim - pos) - 2 * TOW * vel;" in js
+    tow = float(re.search(r"var TOW = (\d+(?:\.\d+)?);", js).group(1))
+    assert 3.0 <= tow <= 7.0, "settles in about a second: heavy, not sluggish"
+    # it stands aside while a button's glide flies - and main.py's glide keeps
+    # its stop handle on the DOCUMENT (its P = window.parent.document): read
+    # from the window it was never seen, and the hull's longer momentum then
+    # dragged a glide short (glide check, 2026-11-04)
+    assert "function gliding() { return !!(D.__melionaStop || W.__melionaStop); }" in js
+    assert "|| gliding()) return;   // zoom; a glide in flight" in js
+    main_src = (pathlib.Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
+    assert "const P = window.parent.document;" in main_src and "P.__melionaStop = function" in main_src
 
 
 def test_a_wide_block_never_turns_like_a_card_and_never_hangs_mid_turn():
@@ -6940,3 +6954,43 @@ if __name__ == "__main__":
             print(f"ERROR {t.__name__}: {e!r}")
     print(f"\n{len(tests) - failed}/{len(tests)} passed")
     sys.exit(1 if failed else 0)
+
+
+def test_the_batch_audit_re_derives_every_grit_zone_number():
+    """John, 2026-11-04: every Grit Zone description - consistency, resilience,
+    recovery - accurate and traced to the data. tests/batch_audit.audit_grit
+    re-derives each component a second way (high-water-mark spells, vectorised
+    holding periods, numpy crisis windows, scipy ranks) on every preset's
+    full-history closes in the Live audit. Here it must agree with the engine
+    on a staggered offline market, and catch a planted error in each part."""
+    import tests.batch_audit as ba
+    from src.ingestion import PRESETS
+    name = list(PRESETS)[0]
+    tickers = PRESETS[name]
+    px = _offline_market_prices(tickers, "max")
+    for i, c in enumerate(px.columns):
+        if i % 3 == 1:
+            px.loc[px.index[:len(px) - 1500], c] = np.nan        # a later listing: fewer crises
+        if i % 5 == 4:
+            px.loc[px.index[:len(px) - 300], c] = np.nan         # too young to score
+    saved = list(ba.results)
+    try:
+        ba.results.clear()
+        ba.audit_grit(name, tickers, px)
+        got = {r["id"]: r["status"] for r in ba.results}
+        assert got == {f"GRIT-0{i}": "PASS" for i in (1, 2, 3, 4, 5)}, got
+        real = ba.grit_scores
+        for col, ids in (("consistency", "GRIT-01"), ("pct_recovered", "GRIT-02"),
+                         ("avg_regime_drawdown", "GRIT-03"), ("grit_score", "GRIT-04")):
+            def planted(t, p, _col=col):
+                out = real(t, p)
+                out["scores"][_col] = out["scores"][_col].astype(float) + 0.2
+                return out
+            ba.grit_scores = planted
+            ba.results.clear()
+            ba.audit_grit(name, tickers, px)
+            ba.grit_scores = real
+            assert {r["id"]: r["status"] for r in ba.results}[ids] == "FAIL", (col, ba.results)
+    finally:
+        ba.grit_scores = real if "real" in locals() else ba.grit_scores
+        ba.results[:] = saved

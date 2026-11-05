@@ -15,7 +15,7 @@
  *      screen. (The photographs, their parallax and the plates that loaded
  *      them lazily went on 2026-11-05, ME-28: the page is flat paper and
  *      stone, like the share banner.)
- *   3. Glide - a mouse wheel or trackpad eases the page to where it was sent
+ *   3. Glide - a mouse wheel or trackpad tows the page, like a boat on a line, to where it was sent
  *      instead of stepping it there. It stands aside while a button's glide
  *      flies, inside anything that scrolls on its own (a table, a list), and
  *      for touch and keys, which keep the browser's own scrolling.
@@ -181,30 +181,45 @@
   });
 
   // ---- 3. glide ----------------------------------------------------------------
-  // The wheel sets where the page is going; each frame closes a share of the
-  // distance (GLIDE_EASE), so a notch eases in and a long spin coasts out.
-  var GLIDE_EASE = 0.09;  // share of the remaining distance per frame: lower = longer coast
+  // A boat on a tow line (John, 2026-11-04: "heavier ... like a boat being
+  // tugged", not static). The wheel moves the tug - where the page is going
+  // (aim). The page is the hull: a mass pulled toward the aim by a critically
+  // damped spring, so it gathers way instead of jumping, keeps its momentum
+  // through the next notch of the wheel, and comes to rest on the aim without
+  // overshooting or bouncing back. Integrated on the frame's own clock, so a
+  // fast and a slow screen move the hull alike.
+  var TOW = 4.6;          // the tow line's natural frequency (rad/s): lower = heavier hull; ~1.3 s to settle
   var SCROLLER = '[data-testid="stMain"]';
-  var aim = null, put = null, run = 0;
+  var aim = null, put = null, run = 0, pos = 0, vel = 0, last = 0;
   function scrolls(n, dy) {                            // can this inner box take the wheel itself?
     var o = W.getComputedStyle(n).overflowY;
     if (o !== 'auto' && o !== 'scroll') return false;
     return dy > 0 ? n.scrollTop + n.clientHeight < n.scrollHeight - 1 : n.scrollTop > 0;
   }
-  function coast() {
+  function stop() { aim = put = null; run = 0; vel = 0; last = 0; }
+  // A button's glide is flying: main.py's glide script keeps its stop handle
+  // on this document (its P). The old check read the window and never saw it.
+  function gliding() { return !!(D.__melionaStop || W.__melionaStop); }
+  function coast(now) {
     var sc = D.querySelector(SCROLLER);
     // someone else moved the page (a button's glide, a key, the scrollbar):
-    // theirs wins, and this wheel's aim is dropped
-    if (!sc || aim === null || (put !== null && Math.abs(sc.scrollTop - put) > 2)) { aim = put = null; run = 0; return; }
-    var cur = sc.scrollTop, next = cur + (aim - cur) * GLIDE_EASE;
-    if (Math.abs(aim - next) < 0.5) next = aim;
-    sc.scrollTop = next;
+    // theirs wins, and this wheel's aim and way are dropped at once
+    if (!sc || aim === null || gliding() || (put !== null && Math.abs(sc.scrollTop - put) > 2)) { stop(); return; }
+    var dt = last ? Math.min(0.05, (now - last) / 1000) : 1 / 60, max = sc.scrollHeight - sc.clientHeight;
+    last = now;
+    for (var i = 0; i < 4; i++) {                      // the tow line's pull, less the water's drag
+      var h = dt / 4, acc = TOW * TOW * (aim - pos) - 2 * TOW * vel;
+      vel += acc * h; pos += vel * h;
+    }
+    if (pos < 0 || pos > max) { pos = Math.max(0, Math.min(pos, max)); vel = 0; }   // the page's ends are the quay
+    if (Math.abs(aim - pos) < 0.5 && Math.abs(vel) < 8) { pos = aim; vel = 0; }
+    sc.scrollTop = pos;
     put = sc.scrollTop;
-    if (put === aim || Math.abs(put - cur) < 0.05 && next !== aim) { aim = put = null; run = 0; return; }
+    if (pos === aim && vel === 0) { stop(); return; }
     run = W.requestAnimationFrame(coast);
   }
   W.addEventListener('wheel', function (e) {
-    if (e.ctrlKey || e.defaultPrevented || !e.deltaY || W.__melionaStop) return;   // zoom; a glide in flight
+    if (e.ctrlKey || e.defaultPrevented || !e.deltaY || gliding()) return;   // zoom; a glide in flight (it reads the wheel itself)
     var sc = D.querySelector(SCROLLER);
     if (!sc || !sc.contains(e.target)) return;
     for (var n = e.target; n && n !== sc; n = n.parentElement) if (scrolls(n, e.deltaY)) return;
@@ -212,7 +227,7 @@
     var dy = e.deltaMode === 1 ? e.deltaY * 40 : e.deltaMode === 2 ? e.deltaY * sc.clientHeight : e.deltaY;
     var max = sc.scrollHeight - sc.clientHeight;
     aim = Math.max(0, Math.min((aim === null ? sc.scrollTop : aim) + dy, max));
-    if (!run) { put = sc.scrollTop; sc.style.scrollBehavior = 'auto'; run = W.requestAnimationFrame(coast); }
+    if (!run) { pos = put = sc.scrollTop; vel = 0; last = 0; sc.style.scrollBehavior = 'auto'; run = W.requestAnimationFrame(coast); }
   }, { passive: false });
 
   // ---- tagging -----------------------------------------------------------------
