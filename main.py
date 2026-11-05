@@ -423,6 +423,7 @@ _script_frame("""
      never shrunk, one against the flight - yields at once. */
   const SCROLL_KEYS = ['PageUp', 'PageDown', 'ArrowUp', 'ArrowDown', 'Home', 'End', ' '];
   let wheelAt = 0, wheelDy = 0, tail = false, shrunk = false, forgivenAt = 0;
+  let waitA = null, waitTop = 0;          // the press waiting for its section, and where it sat (onScroll)
   function yieldNow() {
     tail = false;
     P.__melionaFlight = (P.__melionaFlight || 0) + 1;
@@ -454,6 +455,17 @@ _script_frame("""
     if (!P.__melionaStop || !sc || e.target !== sc || P.__melionaSetY === undefined) return;
     const y = sc.scrollTop;
     if (Math.abs(y - P.__melionaSetY) <= 2) return;
+    /* While a press waits for its section the page is still being written,
+       and a block growing ABOVE the view moves scrollTop by itself: the
+       browser's scroll anchoring keeps what the reader sees in place. That
+       is not the reader - what they see did not move, so the pressed button
+       still sits where it was. Counting it ended the wait and the press did
+       nothing: "Skip to the analysis" moved 5px and stopped 2443px short,
+       twice on the Live audit (step 8c early, 2026-11-05). A reader's scroll
+       moves the button with the page. */
+    if (waitA && Math.abs(waitA.getBoundingClientRect().top - waitTop) <= 2) {
+      P.__melionaSetY = y; return;
+    }
     if (performance.now() - forgivenAt < 300) { P.__melionaSetY = y; return; }
     if (y >= sc.scrollHeight - sc.clientHeight - 2 && P.__melionaSetY > y) return;
     yieldNow();
@@ -493,9 +505,10 @@ _script_frame("""
     supersede();                          // a flight still running lands first
     const w = P.__melionaFlight = (P.__melionaFlight || 0) + 1;
     const scroller = findScroller(a);
-    P.__melionaStop = function () { P.__melionaStop = null; P.__melionaScroller = null; };   // nothing else to restore
+    P.__melionaStop = function () { P.__melionaStop = null; P.__melionaScroller = null; waitA = null; };   // nothing else to restore
     P.__melionaScroller = scroller;       // so a scroll the reader makes while it waits ends the wait
     P.__melionaSetY = scroller.scrollTop;
+    waitA = a; waitTop = a.getBoundingClientRect().top;   // ...and only the reader's (onScroll)
     const t0 = performance.now();
     let idleSince = null;
     (function poll() {
