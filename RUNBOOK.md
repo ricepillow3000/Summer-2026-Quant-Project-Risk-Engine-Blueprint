@@ -226,8 +226,11 @@ five-minute reviewer path:
    the verdict change; excluded assets are named, not hidden.
 4. Open **Risk Topology** - the Monte Carlo drawn as a map, with the state
    model and its measured widening factor disclosed in the footnote.
-5. Open **Lineage & Audit** for provenance, the run's audit trail, and the
-   privacy panel with the session-clear control.
+5. Open **Crisis Conviction** for the three case studies, then **Where the
+   numbers come from** -> **Lineage & Audit** for provenance, the run's audit
+   trail, and the privacy panel with the session-clear control.
+6. Scroll to **About the builder** and **Contact**: the profile links open in
+   a new tab, and the form prepares an email without sending anything.
 
 ## 6b. Support mailbox setup (do this before the link is public)
 

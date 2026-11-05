@@ -1083,3 +1083,20 @@ two paid-vendor-dependent pieces remain explicit backlog items:
   participation, the headline keeps its liquidity-adjusted tail, and the
   libraries (`src/liquidity.py`, `src/comovement.py`, `src/hedge.py`,
   `src/factors.py`, `src/eigenrisk.py`, `recovery_race`) stay for the audits.
+
+- ✅ **The close (ME-28 part 4, John 2026-11-05)**. About the builder: John's
+  portrait (`tools/portrait.py`: 4:5 crop, one global warm grade, AVIF/WebP/
+  JPEG at 480x600) on a stone block with his LinkedIn, GitHub and Handshake
+  links (monochrome marks, new tab, `noopener noreferrer me`), also in the
+  footer. "Contact John" beside the hero's button glides to a contact form
+  that, with no mail server, prepares a `mailto:` email in the visitor's own
+  app and shows a thank-you state (response time: 2 business days;
+  `public/thanks.html` to keep); nothing is sent, logged or stored. Crisis
+  Conviction gained three case studies read from the live crisis table
+  (`crisis_forward_returns` now returns the days back to the old peak). Five
+  plain questions on the page, served with Person and WebApplication as
+  JSON-LD; the meta description no longer names factor exposures. Buttons
+  had spoken Source Serif (Streamlit's markdown rule beat `font: inherit`):
+  fixed for every button. LAUNCH_CHECKLIST #170-#186 (map and directions,
+  reviews: N/A). Tests: the contact form, the thank-you page, the schema and
+  FAQ, the builder block, the case studies.

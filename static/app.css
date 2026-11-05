@@ -157,7 +157,6 @@ html { scroll-behavior: smooth; }
 .hero-section, .showcase-section, .showcase-row, .engine-heading,
 #engine { scroll-margin-top: 28px; }
 #analysis { scroll-margin-top: 28px; }
-#gungnir { scroll-margin-top: 28px; }
 /* Gungnir - the slice: flat paper between two hairlines (ME-28: the
    topographic plate and the faded mark behind it went). */
 .st-key-gungnir_zone { position: relative; padding: 72px 0 84px; margin-top: 40px;
@@ -813,7 +812,7 @@ ul[role="listbox"] li:hover { background: rgba(154,123,79,.12) !important; }
 .meliona-footer .f-bar a { color: #EDE9E3; }
 /* The builder's profiles in the footer: the same marks, small, light ink. */
 .meliona-footer .f-marks { display: flex; flex-wrap: wrap; gap: 4px 22px; }
-.meliona-footer .f-mark { display: inline-flex; align-items: center; gap: 8px; color: #EDE9E3;
+.meliona-footer .f-bar a.f-mark { display: inline-flex; align-items: center; gap: 8px; color: #EDE9E3;
     text-decoration: none; }
 .meliona-footer .f-mark svg { width: 14px; height: 14px; color: #C6A26B; flex: none; }
 .meliona-footer .f-mark:hover span { text-decoration: underline; }

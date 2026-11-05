@@ -609,8 +609,6 @@ BRONZE = "#9A7B4F"
 CHARCOAL = "#3F3B35"
 STONE = "#2E2A25"          # the banner's charcoal block
 GOLD = "#C6A26B"           # the crest's gold
-BAND_OUTER = "rgba(154,123,79,0.14)"   # light bronze - 5–95 percentile cone
-BAND_INNER = "rgba(154,123,79,0.30)"   # medium bronze - 25–75 percentile cone
 GRID = "rgba(63,59,53,0.08)"
 AXIS_LINE = "rgba(63,59,53,0.28)"
 

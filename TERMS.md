@@ -35,8 +35,12 @@ availability, and no number here should be relied on for trading.
 
 ## Images
 
-The app shows no photographs (since 5 November 2026). Its crest and drawings
-were made for this project.
+The app shows one photograph: the portrait of John Nguyen in the About
+section. It is John's own photo, used by him, cropped and colour-graded for
+the page (`tools/portrait.py` records the edit); it may not be reused without
+his permission. The crest and the drawings were made for this project. The
+LinkedIn, GitHub and Handshake marks are those companies' own logos, drawn in
+one colour and used only to link to John's profiles there.
 
 ## Acceptable use
 

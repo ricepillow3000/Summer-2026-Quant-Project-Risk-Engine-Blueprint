@@ -2,9 +2,16 @@
 
 **Email: meleona.support@gmail.com** · **Phone: [770-265-9930](tel:+17702659930)**
 
-This is a student portfolio project run by one person. Support is best-effort:
-expect a reply in days, not minutes, and no service-level guarantee. Email is
-best for a problem report, because the session reference below travels with it.
+**Response time: John replies within 2 business days.** This is a student
+portfolio project run by one person, so that is a promise of effort, not a
+service-level guarantee.
+
+The quickest way to write is the **Contact** form at the foot of the page: pick
+a topic (Question, Feedback, Recruiting or Report a problem), write up to 1,000
+characters, and it opens an email in your own email app with your words and
+your session reference already filled in. The site has no mail server, so you
+send it yourself - nothing leaves until you press send. Email is best for a
+problem report, because the session reference below travels with it.
 
 ## Reporting a problem
 

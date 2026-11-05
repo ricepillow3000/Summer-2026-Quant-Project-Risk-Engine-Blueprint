@@ -23,6 +23,8 @@ Every market figure is fetched from Yahoo Finance at runtime and computed by the
 - The Book and the Risk Topology map: which high-flying names lead the book and which steady anchors cushion them, from the book's own history.
 - Crisis Conviction: what a buyer of the S&P 500 actually earned after every named crisis, at the trough and at the worst-timed peak.
 - Grit Zone: ranks each asset's own price history on drawdown-recovery speed, rolling 1-year consistency and resilience across real crisis windows. The score is relative to the chosen basket.
+- Case studies: three named crashes (COVID-19, 2022, the 2008 crisis) as one row each - the fall, the trading days back to the old peak, and a bottom-day buyer a year on - read from the live crisis record.
+- About, questions and contact: the builder's portrait and profile links, five plain questions (also served as FAQPage JSON-LD), and a contact form that prepares an email in the visitor's own app - there is no mail server, so nothing is sent or stored by the site.
 
 ## Tech stack
 
@@ -116,7 +118,7 @@ model:
 | Control | Where | What it stops |
 |---|---|---|
 | Ticker funnel (`VALID_TICKER`) | `src/ingestion.py` | Free-text symbols reaching HTML sinks, fetch URLs or cache paths |
-| Egress allowlist | `src/netguard.py` | Any outbound request leaving the two enumerated market-data hosts, including via redirect; the SSRF control for an app with no user-supplied URLs |
+| Egress allowlist | `src/netguard.py` | Any outbound request leaving the enumerated Yahoo Finance hosts, including via redirect; the SSRF control for an app with no user-supplied URLs |
 | Complexity budget (`MAX_UNIVERSE`, cache size caps) | `src/ingestion.py` | One visitor spending the whole server's compute, or filling the disk with novel cache keys |
 | Script-splice escaping | `src/topology.py` | A payload string closing the map's `<script>` block early |
 | `toolbarMode = "viewer"` | `.streamlit/config.toml` | Visitors reaching Streamlit's operator actions (Rerun, Clear cache, Settings) |
@@ -157,6 +159,8 @@ Target ship date: August 23, 2026.
 
 ## Credits
 
-The page uses no photographs: its blocks are flat paper and stone, after the
-share banner (`tools/og_image.html`). The crest (`assets/logo.svg`) was drawn
-for this project.
+The page's blocks are flat paper and stone, after the share banner
+(`tools/og_image.html`). Its one photograph is John Nguyen's own portrait
+(cropped and graded by `tools/portrait.py`; not for reuse). The crest
+(`assets/logo.svg`) was drawn for this project. The GitHub and Handshake marks
+are Simple Icons' paths (CC0); the LinkedIn mark is drawn here.
