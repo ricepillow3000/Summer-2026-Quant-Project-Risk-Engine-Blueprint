@@ -6493,30 +6493,32 @@ def test_what_the_reader_opens_never_animates_and_touch_screens_move_flat():
     assert css.index(".reveal-on.reveal-flat .reveal-item--left") < css.index(".reveal-on .reveal-item.is-visible")
 
 
-def test_drawers_and_tabs_stand_out_in_the_banners_beige():
-    """John, 2026-11-05: "make the drop down / tabs more noticeable, using our
-    design direction and color scheme and geometric patterns", then "don't
-    make it a dark color, keep it ... a beige". A drawer's header is a beige
-    a step deeper than the page under a 3px gold cap line, words in ink, in
-    a bronze hairline frame; an open drawer shows a row of the crest's
-    rhombuses; the tab strip is the same beige under the same cap line, the
-    open tab a lighter paper face with a gold rhombus. No stone (dark) fill;
-    every colour is the banner's; nothing lifts on hover."""
+def test_drawers_keep_the_hairline_box_in_bold_with_the_rules_key():
+    """John, 2026-11-05: a stone plaque, then a beige plaque, were "not
+    something I am looking for" - "the old designs were good but bold the
+    words ... keeping the same elements, uplift this". So: the hairline box
+    with no fill, the label in bold serif, the chevron in text bronze, and the
+    page's own signature - the charcoal key of every section heading's rule -
+    on the drawer's top edge, drawn out (a transform, not a width) while the
+    drawer is hovered or open. The tabs keep the old label voice with a
+    charcoal underline. No dark or tinted fill on either."""
     import re
     root = pathlib.Path(__file__).resolve().parent.parent
     css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    frame = re.search(r'\[data-testid="stExpander"\] \{([^}]*)\}', css).group(1)
+    assert "1px solid #C4BDAE" in frame and "background: transparent" in frame
+    label = re.search(r'\[data-testid="stExpander"\] summary \[data-testid="stMarkdownContainer"\] p \{([^}]*)\}', css).group(1)
+    assert "font-weight: 700" in label and "Helvetica" not in label, "bold serif, not the label voice"
+    key = re.search(r'\[data-testid="stExpander"\]::before \{([^}]*)\}', css).group(1)
+    assert "background-color: #2E2A25" in key and "height: 3px" in key and "scaleX(" in key
+    assert "transition: transform" in key and "transition: width" not in key
+    assert '[data-testid="stExpander"]:has(details[open])::before { transform: scaleX(1); }' in css
     summ = re.search(r'\[data-testid="stExpander"\] summary \{([^}]*)\}', css).group(1)
-    assert "background-color: #E9E4DB" in summ and "color: #3F3B35" in summ and "3px solid #B8955E" in summ
-    rhombus = re.search(r'\[data-testid="stExpanderDetails"\]::before \{([^}]*)\}', css).group(1)
-    assert "M7 0L10.5 3.5L7 7L3.5 3.5Z" in rhombus and "%23B8955E" in rhombus and "gradient(" not in rhombus
-    strip = re.search(r'\[data-testid="stTabs"\] \[role="tablist"\] \{([^}]*)\}', css).group(1)
-    assert "background-color: #E9E4DB" in strip and "3px solid #B8955E" in strip
-    assert re.search(r'\[data-testid="stTab"\]\[aria-selected="true"\] \{[^}]*#F1EDE5', css)
-    for sel in (r'\[data-testid="stExpander"\] summary', r'\[data-testid="stTab"\]',
-                r'\[data-testid="stTabs"\] \[role="tablist"\]'):
-        body = re.search(sel + r' \{([^}]*)\}', css).group(1)
-        assert "#2E2A25 !important;\n" not in body and "background-color: #2E2A25" not in body, "a dark fill"
-    assert re.search(r'aria-selected="true"\] \[data-testid="stMarkdownContainer"\] p::before \{[^}]*rotate\(45deg\)', css)
+    assert "background: transparent" in summ
+    assert '[data-testid="stTab"] .react-aria-SelectionIndicator { background-color: #2E2A25' in css
+    for sel in (r'\[data-testid="stExpander"\] summary', r'\[data-testid="stTab"\]'):
+        for body in re.findall(sel + r'(?::hover)? \{([^}]*)\}', css):
+            assert not re.search(r"background(-color)?:\s*#(2E2A25|26221E|E9E4DB|E1DACE)", body), "a fill"
 
 
 def test_the_contact_form_writes_to_john_and_linkedin_is_the_second_way():

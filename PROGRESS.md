@@ -1113,12 +1113,13 @@ two paid-vendor-dependent pieces remain explicit backlog items:
   and touch screens get flat slides and rises with no perspective turn.
   device_check now fails on a tagged block inside opened content and on two
   elements sharing an id - the Contact heading had Streamlit's automatic
-  anchor "contact" beside the section's own (now a heading by role). Drawers
-  and tabs stand out but stay beige (John: "don't make it a dark color"): a
-  deeper-beige header under a 3px gold cap line, the chevron in a square
-  bronze box, a bronze hairline frame, a row of the crest's gold rhombuses
-  when open; the open tab a lighter paper face with a gold rhombus. The
-  contact section lists both addresses, each with its job. John's bio now reads Computer Information Systems,
+  anchor "contact" beside the section's own (now a heading by role). Drawers:
+  John turned down a stone plaque and a beige plaque ("the old designs were
+  good but bold the words ... keeping the same elements, uplift this"), so
+  they keep the hairline box with bold serif labels, a text-bronze chevron,
+  and the section rule's charcoal key on the top edge, drawn out while
+  hovered or open; tabs keep their label voice. The contact section lists
+  both addresses, each with its job. John's bio now reads Computer Information Systems,
   specializing in AI & Analytics; the contact form writes to his own Gmail
   (his choice) with LinkedIn as the second way to reach him.
 
