@@ -459,7 +459,7 @@ div:has(> .st-key-glide), .st-key-glide, .st-key-glide div.stElementContainer, .
     font-size: 0.75rem; letter-spacing: .2em; text-transform: uppercase;
     border: 1px solid #2E2A25; background-color: #2E2A25; color: #EDE9E3;
     box-shadow: none; padding: 12px 22px;
-    /* the hover's paper rises from the bottom edge as a mask (::before, MOTION) */
+    /* the hover's paper rises from the bottom edge as a mask (::after, MOTION) */
     position: relative; isolation: isolate; overflow: hidden;
     transition: border-color var(--wipe) ease, color var(--wipe) var(--ease-wipe),
                 transform var(--press-dur) var(--ease-out); }
@@ -474,14 +474,14 @@ div:has(> .st-key-glide), .st-key-glide, .st-key-glide div.stElementContainer, .
 .stButton>button:hover, .stFormSubmitButton>button:hover, .stLinkButton>a:hover {
     background-color: #2E2A25; }
 /* The colour change is a MASK, not a dissolve: a flat paper layer behind the
-   words, uncovered from the bottom edge up by its clip-path. */
-.stButton>button::before, .stFormSubmitButton>button::before, .stLinkButton>a::before,
-.cta-btn::before {
+   words (its ::after; the CTA's old sheen lived on the other pseudo), uncovered from the bottom edge up by its clip-path. */
+.stButton>button::after, .stFormSubmitButton>button::after, .stLinkButton>a::after,
+.cta-btn::after {
     content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
     background-color: #EDE9E3; clip-path: inset(100% 0 0 0);
     transition: clip-path var(--wipe) var(--ease-wipe), background-color .15s ease; }
-.stButton>button:hover::before, .stFormSubmitButton>button:hover::before,
-.stLinkButton>a:hover::before, .cta-btn:hover::before, .cta-btn:active::before {
+.stButton>button:hover::after, .stFormSubmitButton>button:hover::after,
+.stLinkButton>a:hover::after, .cta-btn:hover::after, .cta-btn:active::after {
     clip-path: inset(0 0 0 0); }
 
 /* Inputs: flat panel ground, bronze on hover and focus */
@@ -1215,7 +1215,7 @@ body:has([data-testid="stStatusWidgetRunningIcon"])::after { content: "Updating\
   border: 1px solid #2E2A25 !important;
   border-radius: 0 !important;
   box-shadow: none !important;
-  /* the hover's paper rises from the bottom edge as a mask (::before, MOTION) */
+  /* the hover's paper rises from the bottom edge as a mask (::after, MOTION) */
   isolation: isolate;
   transition: border-color var(--wipe) ease, color var(--wipe) var(--ease-wipe),
               transform var(--press-dur) var(--ease-out) !important;
@@ -1224,7 +1224,7 @@ body:has([data-testid="stStatusWidgetRunningIcon"])::after { content: "Updating\
   border-color: #2E2A25 !important;
   color: #2E2A25 !important;
 }
-.cta-btn:active::before { background-color: #D4CDBF; }
+.cta-btn:active::after { background-color: #D4CDBF; }
 
 /* A CTA sitting ON the stone band takes the inverse: a paper rectangle with
    stone words, turning to the crest's gold on hover (5.9:1). Rule: choose
@@ -1235,12 +1235,12 @@ body:has([data-testid="stStatusWidgetRunningIcon"])::after { content: "Updating\
   border: 1px solid #EDE9E3 !important;
   box-shadow: none !important;
 }
-.cta-btn.on-dark::before { background-color: #C6A26B; }
+.cta-btn.on-dark::after { background-color: #C6A26B; }
 .cta-btn.on-dark:hover {
   border-color: #C6A26B !important;
   color: #2E2A25 !important;
 }
-.cta-btn.on-dark:active::before { background-color: #B8955E; }
+.cta-btn.on-dark:active::after { background-color: #B8955E; }
 /* The crisis-record button sits in a flex column, whose default stretch drew
    it 587px wide beside 221-428px siblings (ME-04): it sizes to its words. */
 .conv-core > .cta-btn { align-self: flex-start; }

@@ -7161,10 +7161,10 @@ def test_motion_follows_the_house_rules():
     # a press sinks to .97; the colour change is a rising mask, not a dissolve
     assert ".cta-btn:active { transform: scale(var(--press)); }" in css
     assert ".stButton>button:active, .stFormSubmitButton>button:active" in css
-    wipe = re.search(r"\.cta-btn::before \{([^}]*)\}", css).group(1)
+    wipe = re.search(r"\.cta-btn::after \{([^}]*)\}", css).group(1)
     assert "clip-path: inset(100% 0 0 0)" in wipe and "transition: clip-path var(--wipe)" in wipe
-    assert ".stLinkButton>a:hover::before, .cta-btn:hover::before, .cta-btn:active::before {\n    clip-path: inset(0 0 0 0); }" in css
-    assert ".stButton>button::before" in css, "the Streamlit buttons share the mask"
+    assert ".stLinkButton>a:hover::after, .cta-btn:hover::after, .cta-btn:active::after {\n    clip-path: inset(0 0 0 0); }" in css
+    assert ".stButton>button::after" in css, "the Streamlit buttons share the mask"
     # knobs: stretched while dragged, the position never tweened
     thumb = re.search(r'\[data-testid="stSlider"\] \[data-rac\]:has\(> div > input\[type="range"\]\) \{\s*'
                       r'transform-origin: 0 0;\s*transition: ([^;]+);', css)
