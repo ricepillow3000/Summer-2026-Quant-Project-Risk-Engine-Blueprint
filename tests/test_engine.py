@@ -6214,6 +6214,17 @@ def test_blocks_arrive_from_where_they_sit_and_the_wheel_glides():
     assert "gliding()) return;" in js and "e.ctrlKey" in js and "scrolls(n, e.deltaY)" in js
     assert js.index("if (calm)") < js.index("addEventListener('wheel'")
     assert "{ passive: false }" in js
+    # ...over the map too (John, 2026-11-06: "once it got to the map, it went
+    # back to the static state"): a wheel over a frame goes to the frame's
+    # window, so every frame gets the same listener, after every load, and
+    # the frame's own scrollers take it first. tools/map_wheel_check.mjs
+    # (Live audit 8b) measures it with the real wheel: one notch moved the
+    # page 100px in 1 frame before, ~98px over ~63 frames after.
+    assert "querySelectorAll('iframe'))).forEach(hookFrame)" in js
+    assert "f.addEventListener('load', hook);" in js and "fw.addEventListener('wheel', onWheel, { passive: false })" in js
+    assert "doc.defaultView.frameElement" in js and "doc.scrollingElement" in js
+    wf = (pathlib.Path(__file__).resolve().parent.parent / ".github" / "workflows" / "live-audit.yml").read_text(encoding="utf-8")
+    assert "node tools/map_wheel_check.mjs http://127.0.0.1:8501" in wf
     # John, 2026-11-04: "heavier ... like a boat being tugged" - a critically
     # damped tow line on the frame's own clock, not a first-order ease
     assert re.search(r"var TOW = \d+(\.\d+)?;", js)
