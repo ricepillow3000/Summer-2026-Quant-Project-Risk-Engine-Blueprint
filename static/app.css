@@ -111,10 +111,15 @@ h1, h2, h3 { color: #3F3B35; font-weight: 400; }
 
 /* Slider - squared thumb, hairline track */
 [data-testid="stSlider"] [data-baseweb="slider"] > div > div { background: #C4BDAE !important; }
-[data-testid="stSlider"] [role="slider"] {
+/* Streamlit 1.66 draws the thumb with react-aria: no [role="slider"] any
+   more (that selector matched nothing and the thumb fell back to a grey
+   dot) - the thumb is the box that holds the hidden range input. */
+[data-testid="stSlider"] [data-rac]:has(> div > input[type="range"]) {
     background: #2E2A25 !important; border-radius: 0 !important;
     border: 2px solid #EDE9E3 !important; box-shadow: none !important; }
-[data-testid="stSlider"] [data-testid="stThumbValue"] {
+[data-testid="stSlider"] [data-rac][data-disabled]:has(> div > input[type="range"]) {
+    background: #A39C90 !important; }
+[data-testid="stSlider"] [data-testid="stSliderThumbValue"] {
     color: #3F3B35 !important; font-family: 'Helvetica Neue', sans-serif !important;
     font-size: 0.75rem !important; }
 
@@ -343,7 +348,12 @@ html { scroll-behavior: smooth; }
 [data-testid="stTab"]:hover [data-testid="stMarkdownContainer"] p,
 [data-testid="stTab"][aria-selected="true"] [data-testid="stMarkdownContainer"] p { color: #2E2A25; }
 [data-testid="stTab"] .react-aria-SelectionIndicator { background-color: #2E2A25 !important;
-    height: 3px !important; }
+    height: 3px !important;
+    /* ONE underline shared by every tab (react-aria's SelectionIndicator, a
+       shared layout element): it moves from the old tab to the new one - an
+       on-screen move, so the in-out curve (MOTION, below) */
+    transition: translate var(--move) var(--ease-in-out), width var(--move) var(--ease-in-out),
+                background-color .2s ease !important; }
 [data-testid="stTab"]:focus-visible { outline: 2px solid #6A5030; outline-offset: 2px; }
 
 /* ============================================================
@@ -449,14 +459,30 @@ div:has(> .st-key-glide), .st-key-glide, .st-key-glide div.stElementContainer, .
     font-size: 0.75rem; letter-spacing: .2em; text-transform: uppercase;
     border: 1px solid #2E2A25; background-color: #2E2A25; color: #EDE9E3;
     box-shadow: none; padding: 12px 22px;
-    transition: background .25s ease, border-color .25s ease, color .25s ease; }
+    /* the hover's paper rises from the bottom edge as a mask (::before, MOTION) */
+    position: relative; isolation: isolate; overflow: hidden;
+    transition: border-color var(--wipe) ease, color var(--wipe) var(--ease-wipe),
+                transform var(--press-dur) var(--ease-out); }
 /* !important: Streamlit's own markdown rules set Source Serif on the label's
    <div> and <p> and won over a plain inherit, so every button spoke serif (ME-28 part 4). */
 .stButton>button *, .stFormSubmitButton>button *, .stLinkButton>a * {
     font: inherit !important; letter-spacing: inherit !important; }
 .stButton>button:hover, .stFormSubmitButton>button:hover, .stLinkButton>a:hover {
-    background-color: #EDE9E3; color: #2E2A25; border-color: #2E2A25; }
-.stButton>button:active { transform: scale(.985); }
+    color: #2E2A25; border-color: #2E2A25; }
+/* under the rising paper the ground stays charcoal (Streamlit's own hover
+   would show through the part not yet covered) */
+.stButton>button:hover, .stFormSubmitButton>button:hover, .stLinkButton>a:hover {
+    background-color: #2E2A25; }
+/* The colour change is a MASK, not a dissolve: a flat paper layer behind the
+   words, uncovered from the bottom edge up by its clip-path. */
+.stButton>button::before, .stFormSubmitButton>button::before, .stLinkButton>a::before,
+.cta-btn::before {
+    content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+    background-color: #EDE9E3; clip-path: inset(100% 0 0 0);
+    transition: clip-path var(--wipe) var(--ease-wipe), background-color .15s ease; }
+.stButton>button:hover::before, .stFormSubmitButton>button:hover::before,
+.stLinkButton>a:hover::before, .cta-btn:hover::before, .cta-btn:active::before {
+    clip-path: inset(0 0 0 0); }
 
 /* Inputs: flat panel ground, bronze on hover and focus */
 div[data-baseweb="select"] > div, .stNumberInput input,
@@ -467,12 +493,29 @@ div[data-baseweb="select"] > div, .stNumberInput input,
 div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
 .stNumberInput input:focus, [data-testid="stTextInput"] input:focus {
     box-shadow: 0 0 0 1px #9A7B4F !important; }
-/* Dropdown menus: the same flat panel with a hairline */
-[data-baseweb="popover"] [data-baseweb="menu"],
-[data-baseweb="popover"] ul[role="listbox"] {
-    background: #F1EDE5 !important; border: 1px solid #C4BDAE; box-shadow: none; }
-[data-baseweb="menu"] li[role="option"]:hover,
-ul[role="listbox"] li:hover { background: rgba(154,123,79,.12) !important; }
+/* Dropdown menus: the same flat panel with a hairline. Streamlit 1.66 draws
+   them with react-aria (the old baseweb selectors here matched nothing, and
+   the menus showed a rounded tan card with a drop shadow): square, the
+   field's own paper, one hairline, no shadow; the row under the pointer or
+   the keys takes a faint bronze wash, square too. */
+[data-testid="stSelectboxVirtualDropdown"], [data-testid="stMultiSelectDropdown"] {
+    background: #F1EDE5 !important; border: 1px solid #C4BDAE !important;
+    border-radius: 0 !important; box-shadow: none !important; }
+[data-testid="stSelectboxVirtualDropdown"] [data-item-hl],
+[data-testid="stMultiSelectDropdown"] [data-item-hl] { border-radius: 0 !important; }
+[data-testid="stSelectboxVirtualDropdown"] [role="option"][data-focused] [data-item-hl],
+[data-testid="stMultiSelectDropdown"] [role="option"][data-focused] [data-item-hl],
+[data-testid="stSelectboxVirtualDropdown"] [role="option"]:hover [data-item-hl],
+[data-testid="stMultiSelectDropdown"] [role="option"]:hover [data-item-hl] {
+    background-color: rgba(154,123,79,.14) !important; }
+/* The chosen names: square ticker tags in the dark bronze text tone with
+   paper words (6.4:1). Streamlit drew them rounded, in the light bronze
+   with white words - 3.2:1, under AA. */
+[data-testid="stMultiSelectTagsContainer"] [data-tag] {
+    border-radius: 0 !important; background-color: #6A5030 !important; color: #EDE9E3 !important; }
+/* Help tips: square and flat like everything else */
+[role="tooltip"][data-rac], [role="tooltip"][data-rac] > div {
+    border-radius: 0 !important; box-shadow: none !important; }
 
 /* Alerts (st.info / warning / success / error): Streamlit draws them in blue,
    yellow, green and red, the only bright colours on the page (Correlation
@@ -651,6 +694,133 @@ ul[role="listbox"] li:hover { background: rgba(154,123,79,.12) !important; }
     transition-delay: var(--reveal-delay, 0ms) !important; }
 @media (prefers-reduced-motion: reduce) {
     .reveal-on .reveal-item { opacity: 1 !important; transform: none !important; } }
+
+/* =========================================================================
+   MOTION - the rules every move on the page keeps (John, 2026-11-06).
+   One vocabulary, so a dropdown, a drawer, a tab and a button feel like the
+   same instrument:
+     entrances     ease OUT (fast start, soft landing): --ease-out
+     on-screen     a thing moving from one place to another eases IN-OUT:
+                   --ease-in-out (the tab underline, the CVaR tick, the
+                   buttons' glide in main.py, the wheel's tow in reveal.js)
+     exits         about 20% shorter than their entrance, accelerating away
+     popovers      150-250ms; they start at scale 0.95 and grow FROM their
+                   trigger, and shrink back TO it (reveal.js sets
+                   --pop-origin from the trigger; data-placement is the
+                   fallback) - never from or into their own centre
+     rows          a list arriving staggers its rows 30ms apart
+     press         a button sinks to 0.97 while it is held
+     knobs         a slider's thumb stretches 12% along its track while it
+                   is dragged; its position is the hand's own (never tweened)
+     masks         a photograph is uncovered by a mask, and a button's colour
+                   change rises as a mask, not a cross-dissolve
+     icons         an icon that changes arrives with scale and blur
+     success       a pulse confirms it (the thank-you receipt)
+     no bounce     no curve here leaves 0..1: nothing overshoots and springs
+                   back (test_motion_follows_the_house_rules)
+   Reduced motion: the global rule above stops every animation and
+   transition; reveal.js does not run its motion at all.
+   ========================================================================= */
+:root { --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1); --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+        --pop-in: 200ms; --pop-out: 160ms; --row-stagger: 30ms; --move: 260ms;
+        --press: 0.97; --press-dur: 120ms; --knob-stretch: 1.12; --wipe: 340ms;
+        /* the colour wipe's own ease-out: a cubic, so the rise can be seen
+           (the expo-out of the reveals is 90% there in a third of the time) */
+        --ease-wipe: cubic-bezier(0.33, 1, 0.68, 1);
+        --settle: 260ms; --mask-dur: 1.1s; }
+
+/* Popovers - the dropdown menus and the help tips. The outer box carries
+   react-aria's position (an inline transform), so it only fades; the panel
+   inside it scales. react-aria keeps a closing popover (data-exiting) until
+   its outer box's animation ends, so the exit really plays. */
+[data-testid="stSelectboxVirtualDropdown"], [data-testid="stMultiSelectDropdown"],
+[role="tooltip"][data-rac] { animation: pop-fade-in var(--pop-in) var(--ease-out) both; }
+[data-testid="stSelectboxVirtualDropdown"] > div, [data-testid="stMultiSelectDropdown"] > div,
+[role="tooltip"][data-rac] > div {
+    transform-origin: var(--pop-origin, 50% 0);
+    animation: pop-scale-in var(--pop-in) var(--ease-out) both; }
+[data-testid="stSelectboxVirtualDropdown"][data-placement="top"] > div,
+[data-testid="stMultiSelectDropdown"][data-placement="top"] > div {
+    transform-origin: var(--pop-origin, 50% 100%); }
+[data-testid="stSelectboxVirtualDropdown"][data-exiting], [data-testid="stMultiSelectDropdown"][data-exiting],
+[role="tooltip"][data-rac][data-exiting] { animation: pop-fade-out var(--pop-out) var(--ease-exit) both; }
+[data-testid="stSelectboxVirtualDropdown"][data-exiting] > div,
+[data-testid="stMultiSelectDropdown"][data-exiting] > div,
+[role="tooltip"][data-rac][data-exiting] > div {
+    animation: pop-scale-out var(--pop-out) var(--ease-exit) both; }
+@keyframes pop-fade-in  { from { opacity: 0; } }
+@keyframes pop-fade-out { to   { opacity: 0; } }
+@keyframes pop-scale-in  { from { transform: scale(.95); } }
+@keyframes pop-scale-out { to   { transform: scale(.95); } }
+/* ...and its rows arrive 30ms apart (reveal.js numbers the first eight as
+   the menu opens; rows a long list draws later as it scrolls do not wait) */
+.pop-rows [role="option"] {
+    animation: row-in 160ms var(--ease-out) backwards;
+    animation-delay: calc(var(--row, 0) * var(--row-stagger)); }
+@keyframes row-in { from { opacity: 0; translate: 0 -4px; } }
+
+/* Details settle: what a drawer or a tab opens onto arrives in reading
+   order, 30ms apart - a flat rise, never a turn (what froze on iPhones was
+   a 3D turn: test_what_the_reader_opens_never_animates_and_touch_screens_move_flat).
+   The panel being left is gone as the new one rises into its place. */
+[data-testid="stExpanderDetails"] > [data-testid="stVerticalBlock"] > *,
+[data-testid="stTabPanel"] > [data-testid="stVerticalBlock"] > * {
+    animation: settle var(--settle) var(--ease-out) backwards; }
+[data-testid="stExpanderDetails"] > [data-testid="stVerticalBlock"] > :nth-child(2),
+[data-testid="stTabPanel"] > [data-testid="stVerticalBlock"] > :nth-child(2) { animation-delay: 30ms; }
+[data-testid="stExpanderDetails"] > [data-testid="stVerticalBlock"] > :nth-child(3),
+[data-testid="stTabPanel"] > [data-testid="stVerticalBlock"] > :nth-child(3) { animation-delay: 60ms; }
+[data-testid="stExpanderDetails"] > [data-testid="stVerticalBlock"] > :nth-child(4),
+[data-testid="stTabPanel"] > [data-testid="stVerticalBlock"] > :nth-child(4) { animation-delay: 90ms; }
+[data-testid="stExpanderDetails"] > [data-testid="stVerticalBlock"] > :nth-child(5),
+[data-testid="stTabPanel"] > [data-testid="stVerticalBlock"] > :nth-child(5) { animation-delay: 120ms; }
+[data-testid="stExpanderDetails"] > [data-testid="stVerticalBlock"] > :nth-child(6),
+[data-testid="stTabPanel"] > [data-testid="stVerticalBlock"] > :nth-child(6) { animation-delay: 150ms; }
+[data-testid="stExpanderDetails"] > [data-testid="stVerticalBlock"] > :nth-child(n+7),
+[data-testid="stTabPanel"] > [data-testid="stVerticalBlock"] > :nth-child(n+7) { animation-delay: 180ms; }
+@keyframes settle { from { opacity: 0; translate: 0 6px; } }
+
+/* Icons: the drawer's chevron is a new glyph each time it opens or closes;
+   it comes in with scale and blur, the way the old one's place is taken. */
+[data-testid="stExpander"] summary [data-testid="stIconMaterial"] {
+    display: inline-block; animation: icon-in 220ms var(--ease-out) both; }
+@keyframes icon-in { from { opacity: 0; transform: scale(.6); filter: blur(3px); } }
+
+/* Press: every button sinks a little while it is held, and comes back */
+.stButton>button:active, .stFormSubmitButton>button:active, .stLinkButton>a:active,
+.cta-btn:active { transform: scale(var(--press)); }
+
+/* Knobs: a slider thumb stretches 12% along its track while it is dragged.
+   Its position is the hand's (react-aria's inline left), so only the
+   stretch and the colour have a transition - Streamlit's own "transition:
+   all" tweened the position behind the finger. Origin 0 0 keeps the stretch
+   centred on the thumb under its inline translate(-50%, -50%). */
+[data-testid="stSlider"] [data-rac]:has(> div > input[type="range"]) {
+    transform-origin: 0 0;
+    transition: scale 150ms var(--ease-out), background-color .2s ease !important; }
+[data-testid="stSlider"] [data-rac][data-dragging]:has(> div > input[type="range"]) {
+    scale: var(--knob-stretch) 1; }
+
+/* Masks: John's two photographs are uncovered from their cap down as they
+   arrive (reveal.js tags them; hidden only under html.reveal-on). */
+.reveal-on .mask-reveal { clip-path: inset(0 0 100% 0); }
+.reveal-on .mask-reveal.is-unmasked { clip-path: inset(0 0 0 0);
+    transition: clip-path var(--mask-dur) var(--ease-out) var(--mask-delay, 0ms); }
+
+/* Success: the thank-you receipt confirms with one pulse - a hairline frame
+   that leaves the card and fades - and its rows arrive 30ms apart. */
+.thanks-card, [data-testid="stAlert"]:has([data-testid="stAlertContentSuccess"]) { position: relative; }
+.thanks-card::after, [data-testid="stAlert"]:has([data-testid="stAlertContentSuccess"])::after {
+    content: ""; position: absolute; inset: -3px 0 0 0; border: 1px solid #2E2A25;
+    pointer-events: none; opacity: 0; animation: success-pulse 900ms var(--ease-out) 150ms both; }
+@keyframes success-pulse { from { opacity: .6; transform: scale(1); }
+                           to   { opacity: 0;  transform: scale(1.02, 1.06); } }
+.thanks-card .thanks-row { animation: settle var(--settle) var(--ease-out) backwards; }
+/* (the card's first <div> is its title: the rows are divs 2, 3, ...) */
+.thanks-card .thanks-row:nth-of-type(3) { animation-delay: 30ms; }
+.thanks-card .thanks-row:nth-of-type(4) { animation-delay: 60ms; }
+.thanks-card .thanks-row:nth-of-type(5) { animation-delay: 90ms; }
+.thanks-card .thanks-row:nth-of-type(n+6) { animation-delay: 120ms; }
 
 /* (SCRUB's parallax photo and the PLATES that lazy-attached the band and
    Slice photographs went with the photographs, ME-28 2026-11-05. The scrub
@@ -1045,15 +1215,16 @@ body:has([data-testid="stStatusWidgetRunningIcon"])::after { content: "Updating\
   border: 1px solid #2E2A25 !important;
   border-radius: 0 !important;
   box-shadow: none !important;
-  transition: background-color .22s ease, border-color .22s ease,
-              color .22s ease !important;
+  /* the hover's paper rises from the bottom edge as a mask (::before, MOTION) */
+  isolation: isolate;
+  transition: border-color var(--wipe) ease, color var(--wipe) var(--ease-wipe),
+              transform var(--press-dur) var(--ease-out) !important;
 }
 .cta-btn:hover {
-  background-color: #EDE9E3 !important;
   border-color: #2E2A25 !important;
   color: #2E2A25 !important;
 }
-.cta-btn:active { background-color: #D4CDBF !important; }
+.cta-btn:active::before { background-color: #D4CDBF; }
 
 /* A CTA sitting ON the stone band takes the inverse: a paper rectangle with
    stone words, turning to the crest's gold on hover (5.9:1). Rule: choose
@@ -1064,12 +1235,12 @@ body:has([data-testid="stStatusWidgetRunningIcon"])::after { content: "Updating\
   border: 1px solid #EDE9E3 !important;
   box-shadow: none !important;
 }
+.cta-btn.on-dark::before { background-color: #C6A26B; }
 .cta-btn.on-dark:hover {
-  background-color: #C6A26B !important;
   border-color: #C6A26B !important;
   color: #2E2A25 !important;
 }
-.cta-btn.on-dark:active { background-color: #B8955E !important; }
+.cta-btn.on-dark:active::before { background-color: #B8955E; }
 /* The crisis-record button sits in a flex column, whose default stretch drew
    it 587px wide beside 221-428px siblings (ME-04): it sizes to its words. */
 .conv-core > .cta-btn { align-self: flex-start; }
@@ -1175,7 +1346,16 @@ a.pmark:focus-visible, .meliona-footer a.f-mark:focus-visible, .thanks-row a:foc
     border-bottom: 1px solid #C4BDAE; }
 .cvar-tick { position: absolute; bottom: -1px; width: 2px; height: 9px;
     transform: translateX(-1px); }
-.cvar-tick.now { background: #3F3B35; animation: cvar-tick-in .9s cubic-bezier(.22,.61,.36,1) both; }
+.cvar-tick.now { background: #3F3B35; }
+/* A move from the last headline travels an ARC, not a straight line: across
+   on the in-out curve, up and back down over it (its height, --arc, is set by
+   main.py from the distance: 15% of it, 2-8px). Only a real move hops. */
+.cvar-tick.now.moving {
+    animation: cvar-tick-in .9s var(--ease-in-out) both, cvar-tick-arc .9s linear both; }
+@keyframes cvar-tick-arc {
+    0%   { translate: 0 0; animation-timing-function: cubic-bezier(0.33, 1, 0.68, 1); }
+    50%  { translate: 0 var(--arc, -4px); animation-timing-function: cubic-bezier(0.32, 0, 0.67, 0); }
+    100% { translate: 0 0; } }
 .cvar-tick.prev { background: #9A7B4F; opacity: .45; height: 6px; }
 @keyframes cvar-tick-in { from { left: var(--from); } }
 .cvar-scale-ends { display: flex; justify-content: space-between; max-width: 420px;
@@ -1269,6 +1449,9 @@ a.pmark:focus-visible, .meliona-footer a.f-mark:focus-visible, .thanks-row a:foc
     transition: background-color .22s ease, border-color .22s ease, color .22s ease; }
 .m-dock-btn:hover { background-color: #C6A26B; border-color: #C6A26B; color: #2E2A25 !important; }
 .m-dock-btn:active { background-color: #B8955E; border-color: #B8955E; color: #2E2A25 !important; }
+.m-dock-btn, .m-notice-ok { transition: background-color .22s ease, border-color .22s ease, color .22s ease,
+    transform var(--press-dur) var(--ease-out); }
+.m-dock-btn:active, .m-notice-ok:active { transform: scale(var(--press)); }
 .m-notice a:focus-visible, .m-notice-ok:focus-visible, .m-dock-btn:focus-visible {
     outline: 2px solid #C6A26B; outline-offset: 2px; }
 @media (max-width: 640px) {
@@ -1292,11 +1475,11 @@ a.pmark:focus-visible, .meliona-footer a.f-mark:focus-visible, .thanks-row a:foc
    its data-testids. Only for a coarse pointer: a mouse keeps the density. */
 @media (pointer: coarse) {
   button[aria-label="Clear all"], [data-testid="stTooltipHoverTarget"] button,
-  [data-testid="stSlider"] [role="slider"],
   [data-testid="stTabsScrollRight"], [data-testid="stTabsScrollLeft"] { position: relative; }
   button[aria-label="Clear all"]::after,
   [data-testid="stTooltipHoverTarget"] button::after,
-  [data-testid="stSlider"] [role="slider"]::after { content: ""; position: absolute; inset: -14px; }
+  [data-testid="stSlider"] [data-rac]:has(> div > input[type="range"])::after {
+      content: ""; position: absolute; inset: -14px; }
   [data-testid="stTabsScrollRight"]::after, [data-testid="stTabsScrollLeft"]::after {
       content: ""; position: absolute; inset: -2px -12px; }
   [data-testid="stMultiSelectTagsContainer"] span:has(> button[aria-label^="Remove "]) {

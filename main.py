@@ -1707,12 +1707,18 @@ def cvar_scale_html(now: float, prev: float | None) -> str:
     on_scale = lambda v: min(max(shown(v), 0.0), 100.0)      # a gain sits at 0
     beyond = shown(now) > 100
     moved = None if prev is None else round(shown(now) - shown(prev), 1)
+    # A real move travels an arc (app.css, MOTION): its height is 15% of the
+    # distance across the 420px scale, 2-8px; a tick that stays put never hops.
+    travel = 0.0 if prev is None else abs(on_scale(now) - on_scale(prev)) * 4.2
+    hop = travel >= 1.0
+    arc = min(8.0, max(2.0, 0.15 * travel))
     return (
         '<div class="cvar-scale" aria-hidden="true">'
         + (f'<span class="cvar-tick prev" style="left:{on_scale(prev):.1f}%"></span>'
            if prev is not None else "")
-        + f'<span class="cvar-tick now{" beyond" if beyond else ""}" style="left:{on_scale(now):.1f}%;'
-          f'--from:{on_scale(now if prev is None else prev):.1f}%"></span></div>'
+        + f'<span class="cvar-tick now{" beyond" if beyond else ""}{" moving" if hop else ""}" '
+          f'style="left:{on_scale(now):.1f}%;--from:{on_scale(now if prev is None else prev):.1f}%;'
+          f'--arc:{-arc:.1f}px"></span></div>'
         '<div class="cvar-scale-ends" aria-hidden="true"><span>0%</span>'
         + ('<span class="beyond">beyond the whole book &#8250;</span>' if beyond
            else '<span>the whole book</span>') + '</div>'

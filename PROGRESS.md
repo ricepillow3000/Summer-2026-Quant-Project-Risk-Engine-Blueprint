@@ -4,7 +4,7 @@ Paste this into a new chat session to bring it up to speed instantly.
 
 ---
 
-## Start here: where things stand (updated 2026-11-05)
+## Start here: where things stand (updated 2026-11-06)
 
 - **Live:** https://summer-2026-quant-project-risk-engine-blueprint-production.up.railway.app
   (Railway deploys `main`; the Live audit on `main` proves the deployed
@@ -14,6 +14,20 @@ Paste this into a new chat session to bring it up to speed instantly.
   iPhone, clean hairline drawers, John's bio and contact (his Gmail plus
   Meliona support plus LinkedIn), the engine's controls in plain words, and
   John's story with his second photo (below, in the done list).
+- **2026-11-06, motion (front-end session):** one motion vocabulary for the
+  whole page - `static/app.css` "MOTION" holds the tokens and rules, and
+  `static/reveal.js` the parts that need script. Dropdowns and help tips
+  open in 200ms from scale .95 out of the control that opened them and
+  close back into it in 160ms (react-aria waits for the `[data-exiting]`
+  animation); menu rows, drawer and tab contents and the thank-you rows
+  arrive 30ms apart; buttons sink to .97 when pressed and their hover
+  colour rises as a mask; the slider thumb (its pre-1.66 selector had
+  matched nothing) is the square charcoal thumb again, stretches 12% while
+  dragged and is never tweened; the drawer chevron arrives with scale and
+  blur; the CVaR tick travels an arc; John's photos are uncovered by a mask;
+  the receipt pulses once; the wheel tow is heavier (`TOW` 4.6 -> 3.8) and
+  the page stretches past its ends and eases back (no bounce anywhere: no
+  curve leaves 0..1). Pinned by `test_motion_follows_the_house_rules`.
 - **How work ships:** branch `claude/...` -> `python -m tools.check` -> draft
   PR -> ready -> auto-merge on the required `live-audit` check -> Railway
   deploys -> dispatch the Live audit on `main` and read step 5.
