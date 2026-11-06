@@ -917,7 +917,7 @@ st.markdown("""
       <div class="pillar-card">
         <div class="pillar-label">Resilience</div>
         <div class="pillar-desc">How little it fell in the real crises we
-          replay, and how often it was back at its pre-crisis price within two years.</div>
+          replay, and how often it was back at its pre-crisis price within two trading years.</div>
       </div>
     </div>
   </div>
@@ -2240,7 +2240,7 @@ DQ_MESSAGES = {"DatetimeIndex confirmed.": "Every row carries a date.",
 
 with tab_dq:
     st.caption(
-        "The basket's two-year prices are checked here: dates present and in order, prices above zero, enough history, "
+        "The prices behind the headline are checked here: dates present and in order, prices above zero, enough history, "
         "missing days, how recent it is, and any unusually large one-day move. These checks catch a "
         "broken or implausible feed; they cannot catch a wrong number that "
         "looks plausible. The results are reported, not used to stop the analysis."
