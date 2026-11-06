@@ -30,10 +30,10 @@ Paste this into a new chat session to bring it up to speed instantly.
   curve leaves 0..1). Pinned by `test_motion_follows_the_house_rules`.
 - **2026-11-06 back-end sweep (security + no bloat):** CLAUDE.md opens with
   John's four rules (think first, simplest code, surgical changes, prove it
-  with a test). About 690 lines nothing shipped were deleted: `src/factors.py`,
-  `src/comovement.py`, `src/hedge.py`, the AI-capex recovery race in
-  `src/conviction.py`, parametric VaR, `clear_cache` and four more unused
-  functions, with the 14 tests that only exercised them.
+  with a test). 597 lines nothing shipped were deleted from src/ and tools/:
+  `src/factors.py`, `src/comovement.py`, `src/hedge.py`, the AI-capex recovery
+  race in `src/conviction.py`, parametric VaR, `clear_cache` and four more
+  unused functions - and the 14 tests (287 lines) that only exercised them.
   `test_src_holds_only_code_the_app_or_its_audits_run` keeps it that way.
   Every workflow checkout now sets `persist-credentials: false`
   (`test_no_workflow_checkout_leaves_the_token_on_disk`). A full read of the

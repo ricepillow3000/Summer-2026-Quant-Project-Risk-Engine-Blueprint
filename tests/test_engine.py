@@ -3619,7 +3619,7 @@ def test_no_credentials_in_tracked_source():
 
 def test_src_holds_only_code_the_app_or_its_audits_run():
     """John, 2026-11-06: no bloat. A src/ name that only the unit tests call is
-    code nobody ships - 690 lines of it (three modules, the recovery race,
+    code nobody ships - 597 lines of it (three modules, the recovery race,
     parametric VaR, ...) were cut that day. Delete it, don't keep it "as a
     library": git history keeps it. A name counts as used when the app, the
     tools or the live audits mention it outside its own definition."""
