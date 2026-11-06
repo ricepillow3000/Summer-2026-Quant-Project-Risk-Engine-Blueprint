@@ -4069,10 +4069,19 @@ def test_blocks_reveal_on_arrival_on_the_gpu_and_never_hide_without_script():
     assert "will-change: transform, opacity" in moving
     assert "cubic-bezier(0.16, 1, 0.3, 1)" in css, "the reveal curve is generic again"
     assert re.search(r"prefers-reduced-motion: reduce\)\s*\{\s*\.reveal-on \.reveal-item", css)
-    # trigger-based: an observer reports arrivals; a scroll listener exists only
-    # in the scrub fallback, attached while a scrub layer is on screen
+    # trigger-based: an observer reports arrivals, and nothing listens to the
+    # scroll (the heading rules' scroll-linked draw parked them half-drawn
+    # under a reader who stopped: John, 2026-11-06)
     assert "new IntersectionObserver" in js and "new MutationObserver" in js
-    assert js.count("addEventListener('scroll'") == 1 and "if (live.length)" in js
+    assert "addEventListener('scroll'" not in js and "animation-range" not in css
+    # an arrival starts BEFORE its slot is on screen, never inside the edge
+    # (-8% left headings, cards and the contact button missing or out of
+    # place at the screen's foot until a scroll brought them in)
+    lead = re.search(r"var LEAD = '(\d+)%';", js)
+    assert lead and int(lead.group(1)) >= 10 and "rootMargin: '0px 0px ' + LEAD" in js
+    # ...measured on the page's own scroller: on the window, stMain clipped
+    # every block below it first and the lead counted for nothing
+    assert "new IntersectionObserver(arrive, { root: sc," in js
     assert re.search(r"var STAGGER_MS = \d+;", js) and "Math.min(i, MAX_STEPS) * STAGGER_MS" in js
     # a section a button flies to never fades as the glide lands on it
     dest = re.search(r"var DEST = '([^']+)'", js).group(1)

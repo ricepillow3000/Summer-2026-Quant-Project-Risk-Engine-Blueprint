@@ -8,13 +8,10 @@
  *      IntersectionObserver reports the moment it arrives; nothing listens to
  *      every scrolled pixel. Blocks that arrive together are staggered top to
  *      bottom, left to right.
- *   2. Scrubs - the charcoal key of each section heading's rule draws itself
- *      across with the scroll position itself. app.css does this with scroll
- *      timelines, off the main thread; where a browser has none, this file
- *      feeds the same position as --scrub, and only while the rule is on
- *      screen. (The photographs, their parallax and the plates that loaded
- *      them lazily went on 2026-11-05, ME-28: the page is flat paper and
- *      stone, like the share banner.)
+ *   2. Rules - the charcoal key of each section heading's rule draws itself
+ *      across once, as the heading arrives (app.css). It used to follow the
+ *      scroll position, so a reader who stopped with a heading low on the
+ *      screen saw its rule frozen half-drawn (John, 2026-11-06).
  *   3. Glide - a mouse wheel or trackpad tows the page, like a boat on a line, to where it was sent
  *      instead of stepping it there. It stands aside while a button's glide
  *      flies, inside anything that scrolls on its own (a table, a list), and
@@ -40,7 +37,8 @@
   if (W.__melionaReveal) return;                      // one copy per page
 
   var STAGGER_MS = 90;    // gap between blocks that arrive together: higher = slower cascade
-  var MAX_STEPS = 8;      // a long list waits at most MAX_STEPS x STAGGER_MS
+  var MAX_STEPS = 5;      // a long list waits at most MAX_STEPS x STAGGER_MS
+                          // (8 held the last of a batch back 720ms, still hidden on screen)
 
   // What reveals. Our own blocks and Streamlit's (metrics, charts, tables) by
   // name; every other block on the page - a control, a caption, a card, a
@@ -70,8 +68,7 @@
   var SIDE = 0.42;        // left of 42% (or right of 58%) of the page's width
   var WIDE = 0.6;         // wider than 60% of the page: tips up, not turns
   var CARD = 0.45;        // a card is narrower than 45% of the page; a wider block in the middle tips up
-  var SCRUB = '.panel-head';
-  var ALL = [ITEMS, SCRUB].join(',');
+  var LEAD = '15%';       // an arrival starts this far below the screen's bottom edge
 
   var calm = !('IntersectionObserver' in W) ||
     (W.matchMedia && W.matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -122,7 +119,7 @@
   if (flat) H.classList.add('reveal-flat');
 
   // ---- 1. reveals ----------------------------------------------------------
-  var seen = new IntersectionObserver(function (entries) {
+  function arrive(entries) {
     entries.filter(function (e) { return e.isIntersecting; })
       // reading order = document order: a row of metrics left to right, a
       // heading before its line. (Their boxes are still mid-transform, so
@@ -131,10 +128,34 @@
         return a.target.compareDocumentPosition(b.target) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
       })
       .forEach(function (e, i) { show(e.target, Math.min(i, MAX_STEPS) * STAGGER_MS); });
-  }, { rootMargin: '0px 0px -8% 0px', threshold: 0 });  // fires once 8% inside the bottom edge
+  }
+  // Fires as a block's slot comes within LEAD of the bottom edge, so it is
+  // already arriving when the reader first sees it. It used to wait until it
+  // was 8% INSIDE the edge (and its waiting state sits 46px low): a slow
+  // scroll stopped with a heading, a card or the contact form's button
+  // missing or out of place at the bottom of the screen for up to 3s,
+  // until a scroll brought it "into full view" (John, 2026-11-06).
+  // The root is the page's own scroller (stMain), not the window: a margin
+  // only widens the root, and stMain clips everything below it first, so on
+  // the window the lead counted for nothing. Streamlit draws stMain after
+  // this file runs: until then the window stands in, and when stMain comes
+  // (or is ever redrawn) the blocks still waiting move to a fresh observer.
+  var seen = null, seenRoot;
+  function observer() {
+    var sc = D.querySelector(SCROLLER);
+    if (seen && seenRoot === sc) return seen;
+    var old = seen;
+    seenRoot = sc;
+    seen = new IntersectionObserver(arrive, { root: sc, rootMargin: '0px 0px ' + LEAD + ' 0px', threshold: 0 });
+    if (old) {
+      old.disconnect();
+      [].forEach.call(D.querySelectorAll('.reveal-item:not(.is-visible)'), function (el) { seen.observe(el); });
+    }
+    return seen;
+  }
 
   function show(el, delay) {
-    seen.unobserve(el);
+    observer().unobserve(el);
     var how = side(el);
     el.classList.add('reveal-item--' + how);          // jumps there while still invisible
     // A card turns on its spine with the eye 3x its width away, never closer:
@@ -144,7 +165,7 @@
     el.style.setProperty('--reveal-delay', delay + 'ms');
     el.classList.add('is-visible');
     var end = function (ev) {
-      if (ev && ev.target !== el) return;
+      if (ev && (ev.target !== el || ev.pseudoElement)) return;   // a heading's rule ends on its own clock
       if (ev && ev.type === 'transitionend' && ev.propertyName !== 'transform') return;
       done(el);
     };
@@ -196,7 +217,7 @@
     el.style.removeProperty('--reveal-depth');
   }
   api.revealAll = function () {                       // the end state, at once (layout probes)
-    [].forEach.call(D.querySelectorAll('.reveal-item'), function (el) { seen.unobserve(el); done(el); });
+    [].forEach.call(D.querySelectorAll('.reveal-item'), function (el) { observer().unobserve(el); done(el); });
     [].forEach.call(D.querySelectorAll('.mask-reveal'), function (el) { veiled.unobserve(el.parentElement); unveil(el); });
   };
 
@@ -257,30 +278,6 @@
     pop.classList.add('pop-rows');
     setTimeout(function () { pop.classList.remove('pop-rows'); }, 520);
   }
-
-  // ---- 2. scrubs (fallback only) -------------------------------------------
-  var native = W.CSS && CSS.supports && CSS.supports('animation-timeline: view()');
-  var live = [], frame = 0;
-  function paint() {
-    frame = 0;
-    var vh = W.innerHeight;
-    live.forEach(function (el) {                      // 0 = just below the screen, 1 = just above
-      var r = el.getBoundingClientRect();
-      var p = Math.min(1, Math.max(0, (vh - r.top) / (vh + r.height)));
-      el.style.setProperty('--scrub', p.toFixed(3));
-    });
-  }
-  function onScroll() { if (!frame) frame = W.requestAnimationFrame(paint); }
-  var onScreen = native ? null : new IntersectionObserver(function (entries) {
-    entries.forEach(function (e) {
-      var i = live.indexOf(e.target);
-      if (e.isIntersecting && i < 0) live.push(e.target);
-      if (!e.isIntersecting && i >= 0) live.splice(i, 1);
-    });
-    // the scroll listener exists only while a scrub layer is on screen
-    D.removeEventListener('scroll', onScroll, true);
-    if (live.length) { D.addEventListener('scroll', onScroll, { capture: true, passive: true }); onScroll(); }
-  });
 
   // ---- 3. glide ----------------------------------------------------------------
   // A boat on a tow line (John, 2026-11-04: "heavier ... like a boat being
@@ -404,20 +401,19 @@
       el.parentElement.__mask = el;
       veiled.observe(el.parentElement);
     });
-    var found = root.matches(ALL) ? [root] : [];
-    found.push.apply(found, root.querySelectorAll(ALL));
+    var found = root.matches(ITEMS) ? [root] : [];
+    found.push.apply(found, root.querySelectorAll(ITEMS));
     found.forEach(function (el) {
       if (el.__rv || el.closest(SKIP) || el.closest(OPENED)) return;
       el.__rv = 1;
-      if (el.matches(SCRUB) && onScreen) onScreen.observe(el);
-      if (!el.matches(ITEMS) || el.matches(DEST) || el.querySelector(DEST) || el.querySelector(SKIP)) return;
+      if (el.matches(DEST) || el.querySelector(DEST) || el.querySelector(SKIP)) return;
       // a container block arrives through its parts: its own leaves, or the
       // named blocks inside it (a row of cards keeps its card-by-card deal)
       if (!el.matches(NAMED) && (el.querySelector(LEAF) || el.querySelector(NAMED))) return;
       var parent = el.parentElement && el.parentElement.closest('.reveal-item');
       if (parent || (late && inView(el))) return;     // never animate inside an animating block
       el.classList.add('reveal-item');
-      seen.observe(el);
+      observer().observe(el);
     });
   }
   scan(D.body);

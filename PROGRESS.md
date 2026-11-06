@@ -28,6 +28,18 @@ Paste this into a new chat session to bring it up to speed instantly.
   the receipt pulses once; the wheel tow is heavier (`TOW` 4.6 -> 3.8) and
   the page stretches past its ends and eases back (no bounce anywhere: no
   curve leaves 0..1). Pinned by `test_motion_follows_the_house_rules`.
+- **2026-11-06, frozen arrivals fixed:** John saw headings, text and
+  buttons stop part-way or sit out of place at the foot of the screen until
+  a scroll brought them into full view. Three causes, each measured by a
+  reader-paced wheel probe (after every stop: blocks waiting on screen /
+  still moving / half-drawn heading rules, 17 / 16 / 4 before, 0 / 0 / 0
+  after at 390, 1440 and 1920): arrivals only started 8% inside the bottom
+  edge, and the observer watched the window, which stMain clips first; the
+  arrival's tail was 1.45s plus up to 720ms of stagger; the heading rules
+  followed the scroll position. Now the observer is rooted on stMain and
+  starts 15% below the edge, the settle is 1.1s with at most 450ms stagger,
+  and each rule draws once as its heading arrives. No scroll listener is
+  left in reveal.js.
 - **2026-11-06 back-end sweep (security + no bloat):** CLAUDE.md opens with
   John's four rules (think first, simplest code, surgical changes, prove it
   with a test). 597 lines nothing shipped were deleted from src/ and tools/:
