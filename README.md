@@ -85,7 +85,6 @@ risk-engine/
 │   ├── ingestion.py         # DataEngine: fetch, cache, provenance, dollar volume
 │   ├── analytics.py         # Covariance, correlation, eigen-decomposition
 │   ├── risk.py              # VaR, CVaR, Kupiec backtest, bootstrap + jump-diffusion MC
-│   ├── factors.py           # Named factor exposures (ETF-proxy regression)
 │   ├── strategies.py        # Risk parity, vol targeting, risk contribution
 │   ├── scenarios.py         # Historical regime replay (real crisis windows)
 │   ├── liquidity.py         # Days-to-liquidate (participation-rate model)
@@ -150,7 +149,7 @@ other visitors requested.
 | Done | Covariance, correlation and eigen-decomposition |
 | Done | CVaR and bootstrap Monte Carlo; VaR methods and the Kupiec backtest |
 | Done | Streamlit dashboard, beige/bronze theme, crest |
-| Done | Risk parity, vol targeting, risk contribution, named factors |
+| Done | Risk parity, vol targeting, risk contribution |
 | Done | Historical regime replay, liquidity modeling, jump-diffusion engine |
 | Done | Live deployment to a public URL (the recruiter link) |
 | Planned | Optional: an automatic executive summary, further UI polish |

@@ -95,10 +95,6 @@ def run(preset: str | None) -> int:
     worst, median = _pct(metrics, "Worst simulated year"), _pct(metrics, "Median 1-year return")
     if worst is not None and median is not None and worst > median:
         flag("NUMBER", f"worst simulated year {worst}% is above the median {median}%")
-    for label in ("Historical VaR (95%)", "Parametric VaR (95%)"):
-        value = _pct(metrics, label)
-        if value is not None and value < 0:
-            flag("NUMBER", f"{label} rendered negative ({value}%) - VaR is a loss")
     vol = _pct(metrics, "Volatility per year")
     if vol is not None and vol <= 0:
         flag("NUMBER", f"annualized volatility is {vol}%")

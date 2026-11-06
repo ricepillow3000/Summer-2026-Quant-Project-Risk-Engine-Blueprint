@@ -6,14 +6,9 @@ Buying during a crisis is emotionally brutal: the brain treats financial loss
 like a physical threat, so the scariest day is precisely when acting feels
 impossible. This module doesn't argue with that feeling - it prices it. For
 every named crisis window the engine already replays (src.scenarios), it
-computes what ACTUALLY happened next, from real prices:
-
-  1. Forward returns - if you had bought the benchmark at the pre-crisis PEAK
-     (the worst-timed entry possible) or at the TROUGH (the scariest single
-     day), where did you stand 1 and 3 years later?
-  2. Recovery race - did a basket of heavy compute/AI-infrastructure
-     investors reclaim its pre-crisis level faster or slower than the broad
-     market, crisis by crisis?
+computes what ACTUALLY happened next, from real prices: if you had bought
+the benchmark at the pre-crisis PEAK (the worst-timed entry possible) or at
+the TROUGH (the scariest single day), where did you stand 1 and 3 years later?
 
 Quant Deep Dive:
 - Entry points are defined mechanically: the peak is the window's running
@@ -22,9 +17,6 @@ Quant Deep Dive:
 - Forward returns are simple point-to-point total returns on adjusted closes
   (dividends/splits already folded in by auto_adjust), measured in TRADING
   days (252 ≈ 1y, 756 ≈ 3y).
-- The recovery race normalizes each surviving basket member to 1.0 at the
-  window start and averages - an equal-weight composite, same construction
-  as the benchmark's own normalized path, so the two race from the same line.
 
 Honest limits:
 - Nobody can time the exact trough. The trough row quantifies the DIRECTION
@@ -32,15 +24,10 @@ Honest limits:
   worst possible timing) is shown alongside it.
 - A crisis too recent to have a full forward horizon is excluded from that
   horizon, not extrapolated.
-- The "AI capex" basket is today's label. In 2008 these same tickers were
-  simply large-cap tech; the record shown is theirs regardless of the label.
-  The thesis that AI investment speeds recovery is a HYPOTHESIS - this
-  module shows the historical record and lets the viewer judge.
-- All of it is hindsight on one benchmark and one basket. Educational
-  analysis, not investment advice.
+- All of it is hindsight on one benchmark. Educational analysis, not
+  investment advice.
 """
 
-import numpy as np
 import pandas as pd
 
 from src.ingestion import fetch_prices
@@ -49,10 +36,6 @@ from src.scenarios import HISTORICAL_REGIMES
 
 BENCHMARK = "SPY"
 HORIZONS = {"1y later": TRADING_DAYS, "3y later": 3 * TRADING_DAYS}
-
-# Names whose capital spending is dominated by compute / AI infrastructure
-# today. Fixed list, disclosed in the UI; their PAST record is shown as-is.
-AI_CAPEX_BASKET = ["NVDA", "MSFT", "GOOGL", "AMZN", "META", "AVGO"]
 
 # How far past the trough we search for a reclaim of the pre-crisis peak
 # before calling it "not recovered" within the horizon (~3 trading years).
@@ -96,20 +79,6 @@ def _days_to_reclaim(prices: pd.Series, trough_date: pd.Timestamp,
     if hit.empty:
         return None
     return int(after.index.get_loc(hit.index[0]))
-
-
-def race_days(days, fell, miss: float) -> float:
-    """Effective days-to-reclaim for one leg of a recovery race, collapsing
-    the three states into one comparable number:
-
-      never fell        -> 0.0   (nothing to reclaim; it wins by not falling)
-      fell, reclaimed   -> days
-      fell, never back  -> `miss` (np.inf to rank it last, the chart cap to
-                                   draw it as a full-width bar)
-    """
-    if not fell:
-        return 0.0
-    return miss if days is None or pd.isna(days) else float(days)
 
 
 def crisis_forward_returns(prices: pd.Series) -> pd.DataFrame:
@@ -167,99 +136,9 @@ def conviction_summary(table: pd.DataFrame) -> dict:
     return out
 
 
-def _composite(prices: pd.DataFrame, start) -> pd.Series:
-    """Equal-weight composite: each surviving column normalized to 1.0 at its
-    first close on/after `start`, then averaged. NaN columns are dropped -
-    excluded, not estimated."""
-    sliced = prices.loc[start:]
-    if sliced.empty:
-        return pd.Series(dtype=float)
-    # A member must already be trading AT the window start to join the race -
-    # names that IPO later are excluded from this crisis, not back-filled.
-    alive = sliced.columns[sliced.iloc[:MIN_WINDOW_ROWS].notna().all()]
-    sliced = sliced[alive].dropna()
-    if sliced.empty or sliced.shape[1] == 0:
-        return pd.Series(dtype=float)
-    return (sliced / sliced.iloc[0]).mean(axis=1)
-
-
-def recovery_race(basket: list[str] | None = None,
-                  benchmark: str = BENCHMARK) -> pd.DataFrame:
-    """
-    Crisis by crisis: trading days for the equal-weight basket composite vs
-    the benchmark to reclaim their own pre-crisis peaks after the trough.
-    days = None means did not recover within RECOVERY_HORIZON_DAYS; the
-    companion `*_fell` flag is False when that side never declined in the
-    window at all. Both are shown, not hidden.
-    """
-    basket = basket or AI_CAPEX_BASKET
-    px = fetch_prices(basket + [benchmark], period="max", align=False)
-    bench = px[benchmark].dropna()
-    members = px[[c for c in px.columns if c != benchmark]]
-
-    rows = []
-    for name, (s, e) in HISTORICAL_REGIMES.items():
-        bwin = bench.loc[s:e]
-        if len(bwin) < MIN_WINDOW_ROWS:
-            continue
-        comp = _composite(members, s)
-        cwin = comp.loc[s:e]
-        row = {"crisis": name, "basket_traded": False}
-
-        # Benchmark leg. `*_fell` separates "never declined in this window"
-        # (nothing to reclaim) from "declined and never got back" (days=None).
-        b_peak, b_trough = _peak_trough(bwin)
-        row["bench_fell"] = b_peak is not None
-        row["bench_days"] = (
-            _days_to_reclaim(bench, b_trough, float(bwin.loc[b_peak]))
-            if b_peak is not None else None)
-
-        # Basket leg - needs enough members trading through the window
-        if len(cwin) >= MIN_WINDOW_ROWS:
-            c_peak, c_trough = _peak_trough(cwin)
-            row["basket_traded"] = True
-            row["basket_fell"] = c_peak is not None
-            row["basket_days"] = (
-                _days_to_reclaim(comp, c_trough, float(cwin.loc[c_peak]))
-                if c_peak is not None else None)
-            # Same aliveness rule as _composite: trading at the window start.
-            mwin = members.loc[s:e]
-            row["basket_members"] = int(
-                mwin.iloc[:MIN_WINDOW_ROWS].notna().all().sum())
-        else:
-            row["basket_fell"] = False
-            row["basket_days"] = None
-            row["basket_members"] = 0
-        rows.append(row)
-    return pd.DataFrame(rows)
-
-
-def race_record(race: pd.DataFrame) -> dict:
-    """The race as the page reports it: the crises actually raced, the
-    basket's wins among them, and the crises left out.
-
-    A crisis is raced when the basket had members trading through it and at
-    least one side fell. With no member trading, recovery_race reports
-    basket_fell=False, which race_days() reads as "never fell" - 0 days, a
-    win in a race the basket never ran (ME-03, 2026-10-22). Those crises are
-    left out and named instead. Ranking is by race_days: never fell (0) beats
-    a reclaim, which beats never getting back (inf).
-    """
-    traded = race.get("basket_traded", pd.Series(True, index=race.index)).astype(bool)
-    shown = race[traded & (race["bench_fell"] | race["basket_fell"])]
-    wins = int(sum(
-        race_days(r["basket_days"], r["basket_fell"], np.inf)
-        < race_days(r["bench_days"], r["bench_fell"], np.inf)
-        for _, r in shown.iterrows()))
-    return {"decided": shown, "wins": wins, "n": int(len(shown)),
-            "left_out": race.loc[~traded, "crisis"].tolist()}
-
-
 def load_conviction(benchmark: str = BENCHMARK) -> dict:
     """Convenience bundle for the UI: benchmark forward-return table + summary,
-    from live Yahoo data. The recovery race stays in this library
-    (recovery_race, race_record) but left the page (John, 2026-11-05), so the
-    page no longer pulls the basket's full histories."""
+    from live Yahoo data."""
     bench_px = fetch_prices([benchmark], period="max", align=False)[benchmark]
     table = crisis_forward_returns(bench_px)
     return {
@@ -273,4 +152,3 @@ if __name__ == "__main__":
     bundle = load_conviction()
     print(bundle["table"].to_string(index=False))
     print(bundle["summary"])
-    print(recovery_race().to_string(index=False))

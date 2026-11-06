@@ -29,9 +29,6 @@ from src.strategies import (
 )
 from src.liquidity import (days_to_liquidate, liquidity_profile,
                            liquidity_adjusted_cvar)
-from src.comovement import (correlation_from_cov, rolling_correlation,
-                            most_correlated_pair, defensive_shift,
-                            least_correlated_to_pair, cluster_order)
 from src.grit import (
     drawdown_episodes, recovery_stats, rolling_consistency,
     regime_drawdown_and_recovery, grit_scores, _score01,
@@ -203,79 +200,6 @@ def test_mc_cvar_standard_error_positive_and_shrinks_with_paths():
         assert mc["cvar_se"] < mc["cvar"]          # error is a fraction of the estimate
     # 16x the paths -> ~4x smaller sampling error (1/sqrt(N)); allow slack
     assert big["cvar_se"] < small["cvar_se"] / 2.5
-
-
-def test_correlation_identity_matches_pandas_and_flags_zero_vol():
-    rng = np.random.default_rng(7)
-    df = pd.DataFrame(rng.normal(0, 0.01, (500, 3)), columns=["A", "B", "C"])
-    df["B"] = 0.6 * df["A"] + 0.4 * df["B"]          # plant real correlation
-    r = correlation_from_cov(df.cov())
-    # R = D^-1 Sigma D^-1 must reproduce pandas .corr() to float precision
-    assert np.allclose(r.values, df.corr().values, atol=1e-12)
-    assert np.allclose(np.diag(r.values), 1.0)
-    # Zero-variance asset: correlation undefined -> NaN, never faked
-    rz = correlation_from_cov(df.assign(Z=0.0).cov())
-    assert np.isnan(rz.loc["Z", "A"]) and np.isnan(rz.loc["Z", "Z"])
-
-
-def test_comovement_pair_shift_and_destination_hand_worked():
-    # A and B identical => corr exactly 1; C independent noise
-    rng = np.random.default_rng(11)
-    a = rng.normal(0, 0.01, 400)
-    df = pd.DataFrame({"A": a, "B": a, "C": rng.normal(0, 0.01, 400)})
-    corr = correlation_from_cov(df.cov())
-    pa, pb, top = most_correlated_pair(corr)
-    assert {pa, pb} == {"A", "B"} and abs(top - 1.0) < 1e-12
-    # Least-correlated destination must be the only outside name
-    dest, dcorr = least_correlated_to_pair(corr, (pa, pb))
-    assert dest == "C" and abs(dcorr) < 0.2
-    # Rolling correlation of identical series is 1 everywhere post-window
-    roll = rolling_correlation(df, "A", "B", window=21).dropna()
-    assert np.allclose(roll.values, 1.0)
-    assert roll.index[0] == 20                        # first 20 rows NaN
-
-    # Defensive shift: exposure preserved, never negative, cut capped at holding
-    w = np.array([0.40, 0.10, 0.50])                  # B holds only 10%
-    shifted = defensive_shift(w, ["A", "B", "C"], ("A", "B"), "C", cut=0.15)
-    assert abs(shifted.sum() - w.sum()) < 1e-12       # nothing created/destroyed
-    assert (shifted >= 0).all()                        # no silent short
-    assert abs(shifted[1]) < 1e-12                     # B cut to zero, not -5%
-    assert abs(shifted[2] - 0.75) < 1e-12              # C got 0.15 + 0.10
-
-
-def test_correlation_tree_order_puts_each_planted_block_together():
-    # Two planted factors, columns deliberately interleaved A1, B1, A2, B2...
-    # In input order the heatmap scatters each group across the grid; the
-    # correlation tree must pull each group into one unbroken run.
-    rng = np.random.default_rng(23)
-    n = 600
-    fa, fb = rng.normal(0, 0.01, n), rng.normal(0, 0.01, n)
-    cols = {}
-    for i in (1, 2, 3):
-        cols[f"A{i}"] = fa + rng.normal(0, 0.004, n)
-        cols[f"B{i}"] = fb + rng.normal(0, 0.004, n)
-    df = pd.DataFrame(cols)
-    assert list(df.columns) == ["A1", "B1", "A2", "B2", "A3", "B3"]
-    corr = df.corr()
-
-    order = cluster_order(corr)
-    assert sorted(order) == sorted(corr.columns)       # same names, once each
-    groups = "".join(name[0] for name in order)
-    assert groups in ("AAABBB", "BBBAAA"), order       # each block contiguous
-
-    # A permutation only: every pair keeps exactly its own number.
-    re = corr.loc[order, order]
-    for a in corr.columns:
-        for b in corr.columns:
-            assert re.loc[a, b] == corr.loc[a, b]
-    assert sorted(re.to_numpy().ravel()) == sorted(corr.to_numpy().ravel())
-
-    # A NaN (a zero-vol name) gives no honest distance: keep the input order.
-    bad = corr.copy()
-    bad.loc["A1", "B2"] = bad.loc["B2", "A1"] = np.nan
-    assert cluster_order(bad) == list(corr.columns)
-    # Fewer than 3 names: nothing to group, input order back.
-    assert cluster_order(corr.iloc[:2, :2]) == ["A1", "B1"]
 
 
 def test_liquidity_adjusted_cvar_widens_tail_monotonically():
@@ -952,18 +876,9 @@ def test_signal_effective_breadth_correlation_adjusted():
 
 
 from src.regimes import (
-    rolling_windows, wasserstein_distance_1d, wasserstein_kmeans,
+    rolling_windows, wasserstein_kmeans,
     regime_stats, vol_ordered_labels, transition_matrix,
 )
-
-
-def test_regime_wasserstein_hand_worked():
-    """W2 of sorted [0,1] vs [1,2] is exactly 1 (every quantile shifts by 1)."""
-    assert abs(wasserstein_distance_1d(np.array([0.0, 1.0]),
-                                       np.array([1.0, 2.0])) - 1.0) < 1e-12
-    # and against itself, exactly zero
-    a = np.sort(np.random.default_rng(0).normal(size=20))
-    assert wasserstein_distance_1d(a, a) == 0.0
 
 
 def test_regime_kmeans_separates_synthetic_regimes():
@@ -1063,72 +978,6 @@ def test_crisis_forward_returns_on_synthetic_covid_window():
     summ = conviction_summary(table)
     assert summ["trough_1y_later"]["n"] >= 1
     assert 0.0 <= summ["trough_1y_later"]["pct_positive"] <= 1.0
-
-
-def test_conviction_composite_excludes_late_ipos():
-    """A member with no data at the window start is excluded from the
-    composite, not back-filled."""
-    from src.conviction import _composite
-
-    idx = pd.bdate_range("2020-01-01", periods=20)
-    a = pd.Series(np.linspace(10, 20, 20), index=idx)
-    b = pd.Series([np.nan] * 10 + list(np.linspace(50, 55, 10)), index=idx)
-    comp = _composite(pd.DataFrame({"A": a, "B": b}), idx[0])
-    # Only A is alive at the start: composite == A normalized to 1.0.
-    assert abs(comp.iloc[0] - 1.0) < 1e-12
-    assert abs(comp.iloc[-1] - (a.iloc[-1] / a.iloc[0])) < 1e-12
-
-
-def test_hedge_negative_correlation_cuts_vol():
-    """A near-mirror asset should roughly halve to near-zero the blended vol,
-    at a ~50/50 minimum-variance weight - the whole point of a hedge."""
-    from src.analytics import covariance_matrix
-    from src.hedge import min_variance_pair
-
-    idx = pd.bdate_range("2020-01-01", periods=400)
-    rng = np.random.default_rng(1)
-    a = rng.normal(0, 0.01, 400)
-    df = pd.DataFrame({"A": a, "B": -a}, index=idx)   # exact mirror
-    cov = covariance_matrix(df)
-    r = min_variance_pair(cov, "A", "B")
-    assert r["correlation"] < -0.99
-    assert 0.4 < r["w_anchor"] < 0.6            # near-even split
-    assert r["vol_reduction"] > 0.9            # mirror kills almost all vol
-    assert r["blended_vol"] < r["anchor_vol"]
-
-
-def test_hedge_identical_asset_no_reduction():
-    """Hedging an asset with a perfect copy of itself buys nothing - the
-    blended vol must equal the anchor vol (corr = +1, no diversification)."""
-    from src.analytics import covariance_matrix
-    from src.hedge import min_variance_pair
-
-    idx = pd.bdate_range("2020-01-01", periods=300)
-    rng = np.random.default_rng(2)
-    a = rng.normal(0, 0.01, 300)
-    df = pd.DataFrame({"A": a, "B": a}, index=idx)     # identical
-    cov = covariance_matrix(df)
-    r = min_variance_pair(cov, "A", "B")
-    assert r["correlation"] > 0.99
-    assert abs(r["blended_vol"] - r["anchor_vol"]) < 1e-9
-    assert abs(r["vol_reduction"]) < 1e-6
-
-
-def test_hedge_ranking_orders_most_negative_first():
-    """rank_hedges lists the most negatively-correlated partner first."""
-    from src.analytics import correlation_matrix
-    from src.hedge import rank_hedges
-
-    idx = pd.bdate_range("2020-01-01", periods=400)
-    rng = np.random.default_rng(3)
-    a = rng.normal(0, 0.01, 400)
-    df = pd.DataFrame({"A": a, "MIRROR": -a,
-                       "INDEP": rng.normal(0, 0.01, 400)}, index=idx)
-    corr = correlation_matrix(df)
-    ranked = rank_hedges(corr, "A")
-    assert ranked.index[0] == "MIRROR"          # most negative first
-    assert ranked.iloc[0] < ranked.iloc[-1]
-    assert "A" not in ranked.index              # anchor excluded
 
 
 def test_ewma_reacts_to_recent_volatility_spike():
@@ -1260,17 +1109,13 @@ def test_eigen_sign_alignment_is_deterministic():
     np.testing.assert_allclose(align_eigenvector_signs(-q), q)
 
 
-def test_eigen_pc1_dominates_and_exposure_in_range():
-    """One shared market wave → PC1 must dominate variance explained, and
-    the equal-weight portfolio's PC1 share must be a valid ratio near 1."""
-    from src.eigenrisk import eigen_factors, marcenko_pastur_bounds, pc1_exposure
+def test_eigen_pc1_dominates_a_one_wave_market():
+    """One shared market wave → PC1 must dominate variance explained."""
+    from src.eigenrisk import eigen_factors, marcenko_pastur_bounds
 
     returns = _eigen_test_returns()
     fac = eigen_factors(returns.cov() * 252)
     assert fac["variance_explained"][0] > 60.0
-    w = np.ones(4) / 4
-    share = pc1_exposure(w, fac)
-    assert 0.0 <= share <= 1.0 and share > 0.9   # everything is one wave
     lo, hi = marcenko_pastur_bounds(4, len(returns))
     assert 0 <= lo < hi                          # sane noise band
 
@@ -1320,8 +1165,8 @@ def test_eigen_edge_cases_no_crash():
 # Synthetic data is allowed HERE (deterministic, seeded) - never in the UI.
 # ---------------------------------------------------------------------------
 from src.pairing import (
-    expected_shortfall, es_confidence_interval, pc1_factor_correlations,
-    anchor_rank, tail_gap, backtest_pair, regime_labels)
+    expected_shortfall, pc1_factor_correlations,
+    anchor_rank, tail_gap, backtest_pair)
 
 
 def _seeded_returns(n=1000, seed=11):
@@ -1399,29 +1244,6 @@ def test_backtest_long_only_no_lookahead_weights():
         raise AssertionError("w_a > 1 must raise (no leverage)")
     except ValueError:
         pass
-
-
-def test_regime_labels_deterministic_and_causal():
-    idx = pd.bdate_range("2021-01-01", periods=8)
-    prices = pd.Series([100, 105, 110, 95, 90, 100, 108, 110], index=idx, dtype=float)
-    labels = regime_labels(prices, gap=0.10)
-    # 95, 90 breach the 10% gap; 100 (-9.1%) is still beyond gap/2 so the
-    # Descent holds; 108 (-1.8%) re-enters within gap/2 -> Rotation; 110 -> Tether.
-    assert list(labels) == ["Tether", "Tether", "Tether", "Descent", "Descent",
-                            "Descent", "Rotation", "Tether"]
-    # Causality: appending future data must not rewrite past labels.
-    longer = pd.concat([prices, pd.Series([60.0], index=[idx[-1] + pd.Timedelta(days=1)])])
-    assert list(regime_labels(longer, gap=0.10).iloc[:8]) == list(labels)
-
-
-def test_es_bootstrap_ci_contains_point_and_narrows():
-    small, big = _seeded_returns(250, 9), _seeded_returns(2500, 9)
-    for r in (small, big):
-        lo, hi = es_confidence_interval(r, n_boot=200)
-        assert lo <= expected_shortfall(r) <= hi
-    lo_s, hi_s = es_confidence_interval(small, n_boot=200)
-    lo_b, hi_b = es_confidence_interval(big, n_boot=200)
-    assert (hi_b - lo_b) < (hi_s - lo_s), "CI must narrow with more data"
 
 
 def test_pair_weights_equal_risk_contribution():
@@ -2003,22 +1825,6 @@ def test_peak_trough_reports_no_crash_when_window_never_declined():
     assert crash.loc[pk] > crash.loc[tr]
 
 
-def test_race_days_separates_never_fell_from_never_reclaimed():
-    """Three states must not collapse: not falling is the best outcome in a
-    recovery race, never getting back is the worst."""
-    from src.conviction import race_days
-
-    never_fell = race_days(None, False, np.inf)
-    reclaimed = race_days(42, True, np.inf)
-    never_back = race_days(None, True, np.inf)
-    assert never_fell == 0.0
-    assert never_fell < reclaimed < never_back
-    assert np.isinf(never_back)
-    # The chart passes the axis cap instead of inf so the bar stays drawable.
-    assert race_days(None, True, 756) == 756
-    assert race_days(float("nan"), True, 756) == 756
-
-
 def test_max_drawdown_counts_starting_capital_as_a_peak():
     """The value paths start AFTER day one, so 1.0 of starting capital is not
     in the series. Without clipping the running peak up to 1.0 a day-one loss
@@ -2072,48 +1878,6 @@ def test_ewma_weight_in_last_month_matches_the_caption():
     assert 36 < days_to_90 < 38                     # caption says ~37 days
     half_life = np.log(0.5) / np.log(lam)
     assert 10.5 < half_life < 11.5                  # caption says ~11 days
-
-
-def test_factor_alpha_is_measured_over_the_risk_free_leg():
-    """Alpha is return over the risk-free leg. Estimating the intercept on RAW
-    returns overstates it by (1 - beta_market) * rf whenever beta != 1."""
-    import src.factors as fac
-
-    rng = np.random.default_rng(11)
-    n = 400
-    idx = pd.bdate_range("2022-01-03", periods=n)
-    rf_annual, beta_mkt = 0.0504, 0.5
-    rf_d = rf_annual / 252.0
-    alpha_d = 0.0002
-
-    mkt_excess = rng.normal(0.0004, 0.011, n)
-    factors = pd.DataFrame({
-        "Market": rf_d + mkt_excess,                      # raw market return
-        "Size": rng.normal(0, 0.006, n),                  # long-short, no rf
-        "Value": rng.normal(0, 0.006, n),
-        "Momentum": rng.normal(0, 0.006, n),
-    }, index=idx)
-    port = pd.Series(rf_d + beta_mkt * mkt_excess + alpha_d, index=idx)
-
-    orig_build, orig_rf = fac._build_factors, fac.fetch_risk_free_rate
-    try:
-        fac._build_factors = lambda period="2y": factors
-        fac.fetch_risk_free_rate = lambda *a, **k: rf_annual
-        got = fac.factor_exposures(port)
-
-        fac.fetch_risk_free_rate = lambda *a, **k: None
-        raw = fac.factor_exposures(port)
-    finally:
-        fac._build_factors, fac.fetch_risk_free_rate = orig_build, orig_rf
-
-    assert abs(got["betas"]["Market"] - beta_mkt) < 1e-6
-    assert abs(got["alpha_annual"] - alpha_d * 252) < 1e-6
-    assert "T-bill" in got["alpha_basis"]
-
-    # Raw-return intercept is inflated by exactly (1 - beta) * rf, and says so.
-    assert abs(raw["alpha_annual"] - (alpha_d * 252 + (1 - beta_mkt) * rf_annual)) < 1e-6
-    assert raw["alpha_annual"] > got["alpha_annual"]
-    assert "RAW" in raw["alpha_basis"]
 
 
 # --- dispersion correction (2026-08-26: the map's terrain was too narrow) ----
@@ -3344,22 +3108,6 @@ def test_type_follows_the_readers_font_size_and_stays_readable():
 # --- pre-deploy red-team findings, 2026-08-27 --------------------------------
 
 
-def test_most_independent_ranks_on_distance_from_zero():
-    """least_correlated_to_pair calls its winner the most INDEPENDENT name.
-    Ranking the signed average handed that title to the most strongly inverse
-    candidate: -0.60 to both legs beat +0.05, though -0.60 is a name that moves
-    hard with the pair and merely backwards. Independence is distance from
-    zero."""
-    names = ["A", "B", "INVERSE", "FLAT"]
-    c = pd.DataFrame(np.eye(4), index=names, columns=names)
-    for leg in ("A", "B"):
-        c.loc["INVERSE", leg] = c.loc[leg, "INVERSE"] = -0.60
-        c.loc["FLAT", leg] = c.loc[leg, "FLAT"] = 0.05
-    pick, avg = least_correlated_to_pair(c, ("A", "B"))
-    assert pick == "FLAT", pick
-    assert abs(avg - 0.05) < 1e-12          # the SIGNED value is still returned
-
-
 def test_replay_includes_the_windows_opening_day():
     """pct_change() taken inside the slice has no prior close for the first
     bar, so every crisis replay silently lost its opening day - often the
@@ -3869,6 +3617,57 @@ def test_no_credentials_in_tracked_source():
     assert not offenders, "credential-shaped literal in source: " + str(offenders)
 
 
+def test_src_holds_only_code_the_app_or_its_audits_run():
+    """John, 2026-11-06: no bloat. A src/ name that only the unit tests call is
+    code nobody ships - 690 lines of it (three modules, the recovery race,
+    parametric VaR, ...) were cut that day. Delete it, don't keep it "as a
+    library": git history keeps it. A name counts as used when the app, the
+    tools or the live audits mention it outside its own definition."""
+    import ast
+    import re as _re
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    users = [root / "main.py", root / "hero.py", root / "serve.py",
+             *root.glob("src/*.py"), *root.glob("tools/*.py"), *root.glob("tools/*.mjs"),
+             *(root / "tests" / f for f in ("batch_audit.py", "pair_audit.py",
+                                             "options_audit.py", "map_probe.mjs")),
+             *root.glob("showcase/*.py")]
+    text = {p: p.read_text(encoding="utf-8") for p in users if p.exists()}
+    test_only = {"FORBIDDEN_WORDS"}   # the word list test_narrative greps the copy for
+    unused = []
+    for path in sorted(root.glob("src/*.py")):
+        for node in ast.parse(text[path]).body:
+            if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
+                names = [node.name]
+            elif isinstance(node, ast.Assign):
+                names = [t.id for t in node.targets if isinstance(t, ast.Name)]
+            else:
+                continue
+            for name in names:
+                if name.startswith("__") or name in test_only:
+                    continue
+                word = _re.compile(rf"\b{_re.escape(name)}\b")
+                uses = sum(len(word.findall(t)) for t in text.values())
+                if uses <= 1:                  # only its own definition
+                    unused.append(f"{path.name}:{node.lineno} {name}")
+    assert not unused, f"src/ code that nothing ships (delete it): {unused}"
+
+
+def test_no_workflow_checkout_leaves_the_token_on_disk():
+    """actions/checkout writes the job's GITHUB_TOKEN into .git/config unless
+    told not to, where any later step - an artifact upload of the checkout, a
+    build that copies the tree - can carry it out. No job here pushes, so
+    none needs it there (2026-11-06 back-end security sweep)."""
+    root = pathlib.Path(__file__).resolve().parent.parent
+    for wf in sorted((root / ".github" / "workflows").glob("*.yml")):
+        lines = wf.read_text(encoding="utf-8").splitlines()
+        for i, ln in enumerate(lines):
+            if "uses: actions/checkout@" in ln:
+                after = "\n".join(lines[i + 1:i + 3])
+                assert "persist-credentials: false" in after, \
+                    f"{wf.name}:{i + 1} checkout keeps the token in .git/config"
+
+
 def test_no_exception_text_is_rendered_to_visitors():
     """str(exc) carries the absolute server path - FileNotFoundError and
     PermissionError on a cache file both embed it - so rendering it defeats
@@ -4194,11 +3993,10 @@ def test_flat_price_asset_is_detected_before_the_math():
 
 
 def test_cached_hot_paths_are_deterministic():
-    """main.py caches the signal IC, the ES bootstrap and the map payload per
+    """main.py caches the signal IC and the map payload per
     input. That only changes speed, never a number, if each returns exactly the
     same result twice for the same input."""
     from src.signals import daily_ic, momentum_signal, forward_returns
-    from src.pairing import es_confidence_interval
     import json
 
     from src.topology import build_map_payload
@@ -4212,7 +4010,6 @@ def test_cached_hot_paths_are_deterministic():
     a = daily_ic(momentum_signal(px), forward_returns(px, horizon=5))
     b = daily_ic(momentum_signal(px), forward_returns(px, horizon=5))
     pd.testing.assert_series_equal(a, b)
-    assert es_confidence_interval(rets["A"]) == es_confidence_interval(rets["A"])
     w = np.full(4, 0.25)
     m1 = build_map_payload(rets, w, list("ABCD"))
     m2 = build_map_payload(rets, w, list("ABCD"))
@@ -6103,32 +5900,6 @@ def test_a_day_with_no_volume_reported_is_skipped_not_read_as_zero():
         assert "reports no volume" not in v[0], v[0]
     finally:
         restore()
-
-
-def test_a_crisis_with_none_of_the_basket_trading_is_left_out_of_the_race():
-    """ME-03 (2026-10-22): when no basket member traded at a crisis's start,
-    recovery_race set basket_fell=False, which the page reads as "never fell"
-    and race_days() as 0 - a basket WIN in a race it never ran. It must be
-    left out of the count and named as left out."""
-    import src.conviction as conv
-    from src.scenarios import HISTORICAL_REGIMES
-    idx = pd.bdate_range("1999-01-04", "2026-10-14")
-    rng = np.random.default_rng(4)
-    px = pd.DataFrame(100 * np.exp(np.cumsum(rng.normal(0.0003, 0.012, (len(idx), 3)), axis=0)),
-                      index=idx, columns=["SPY", "NEW1", "NEW2"])
-    px.loc[px.index < "2012-01-03", ["NEW1", "NEW2"]] = np.nan
-    real = conv.fetch_prices
-    conv.fetch_prices = lambda tickers, **k: px[list(tickers)]
-    try:
-        race = conv.recovery_race(basket=["NEW1", "NEW2"], benchmark="SPY")
-    finally:
-        conv.fetch_prices = real
-    early = [n for n, (s, _) in HISTORICAL_REGIMES.items() if pd.Timestamp(s) < pd.Timestamp("2012-01-03")]
-    assert early, "fixture no longer has a crisis before the basket listed"
-    rec = conv.race_record(race)
-    assert set(early) <= set(rec["left_out"]), rec["left_out"]
-    assert not set(early) & set(rec["decided"]["crisis"]), list(rec["decided"]["crisis"])
-    assert rec["n"] == len(rec["decided"]) and 0 <= rec["wins"] <= rec["n"]
 
 
 # --- ME-10 (2026-10-22): one way to do each thing ---
