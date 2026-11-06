@@ -14,6 +14,17 @@ Paste this into a new chat session to bring it up to speed instantly.
   iPhone, clean hairline drawers, John's bio and contact (his Gmail plus
   Meliona support plus LinkedIn), the engine's controls in plain words, and
   John's story with his second photo (below, in the done list).
+- **2026-11-06 back-end sweep (security + no bloat):** CLAUDE.md opens with
+  John's four rules (think first, simplest code, surgical changes, prove it
+  with a test). About 690 lines nothing shipped were deleted: `src/factors.py`,
+  `src/comovement.py`, `src/hedge.py`, the AI-capex recovery race in
+  `src/conviction.py`, parametric VaR, `clear_cache` and four more unused
+  functions, with the 14 tests that only exercised them.
+  `test_src_holds_only_code_the_app_or_its_audits_run` keeps it that way.
+  Every workflow checkout now sets `persist-credentials: false`
+  (`test_no_workflow_checkout_leaves_the_token_on_disk`). A full read of the
+  back end (serve.py, src/, tools, Docker, Railway, workflows) found no other
+  path from a visitor to harm.
 - **How work ships:** branch `claude/...` -> `python -m tools.check` -> draft
   PR -> ready -> auto-merge on the required `live-audit` check -> Railway
   deploys -> dispatch the Live audit on `main` and read step 5.

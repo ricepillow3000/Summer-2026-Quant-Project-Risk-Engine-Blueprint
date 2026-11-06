@@ -209,22 +209,6 @@ def project_returns(returns: pd.DataFrame, eigenvectors: pd.DataFrame,
                         columns=list(eigenvectors.columns[:k]))
 
 
-def pc1_exposure(weights: np.ndarray, eigen: dict) -> float:
-    """Share of portfolio variance carried by PC1 alone, in [0, 1].
-
-    Var(w) = Σ λᵢ (vᵢᵀw)² - the portfolio's variance split across the
-    orthogonal factors. PC1's slice over the total is the macro-vs-
-    idiosyncratic headline: how much of the book is ONE systematic wave.
-    In a crisis this ratio spikes toward 1 - the diversification the
-    calm-period matrix showed collapses into a single stretch direction.
-    """
-    v = eigen["eigenvectors"].values
-    lam = np.clip(eigen["eigenvalues"], 0.0, None)
-    contrib = lam * (v.T @ np.asarray(weights)) ** 2
-    total = contrib.sum()
-    return float(contrib[0] / total) if total > 0 else 0.0
-
-
 def safe_inverse(cov: pd.DataFrame) -> tuple[np.ndarray, bool]:
     """Invert with a pseudo-inverse fallback. Returns (inverse, used_pinv).
 

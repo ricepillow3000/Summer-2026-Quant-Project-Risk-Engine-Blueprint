@@ -52,19 +52,6 @@ def expected_shortfall(port_returns: pd.Series,
     return cvar(port_returns, confidence)
 
 
-def es_confidence_interval(port_returns: pd.Series,
-                           confidence: float = TAIL_CONFIDENCE,
-                           n_boot: int = 500, seed: int = 7) -> tuple[float, float]:
-    """Bootstrap 90% CI for ES - honesty about tail sampling error."""
-    r = pd.Series(port_returns).dropna().to_numpy()
-    rng = np.random.default_rng(seed)
-    idx = rng.integers(0, len(r), size=(n_boot, len(r)))
-    stats = np.array([expected_shortfall(pd.Series(r[row]), confidence)
-                      for row in idx])
-    lo, hi = np.percentile(stats, [5, 95])
-    return float(lo), float(hi)
-
-
 def pc1_factor_correlations(returns: pd.DataFrame) -> pd.Series:
     """
     Correlation of each asset's daily returns with the universe's dominant
@@ -236,29 +223,6 @@ def backtest_pair(returns_a: pd.Series, returns_b: pd.Series,
         "es_solo": expected_shortfall(joined["a"]),
         "n_days": len(joined),
     }
-
-
-def regime_labels(prices_a: pd.Series, gap: float) -> pd.Series:
-    """
-    Tether / Descent / Rotation labels over A's REAL price history.
-    Descriptive regime study, not a signal. No lookahead: the label at t uses
-    only prices up to t.
-      Tether   - drawdown from running peak shallower than the tail gap
-      Descent  - drawdown deeper than the tail gap (the fall is 'live')
-      Rotation - back within half the gap of the running peak after a Descent
-    """
-    dd = prices_a / prices_a.cummax() - 1.0
-    labels, in_descent = [], False
-    for d in dd:
-        if d <= -abs(gap):
-            in_descent = True
-            labels.append("Descent")
-        elif in_descent and d > -abs(gap) / 2:
-            in_descent = False
-            labels.append("Rotation")
-        else:
-            labels.append("Descent" if in_descent else "Tether")
-    return pd.Series(labels, index=prices_a.index, name="phase")
 
 
 def crisis_cushion(a: str, b: str, w_a: float = DEFAULT_W_A,
