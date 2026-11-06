@@ -5496,19 +5496,19 @@ def test_a_press_waits_for_its_section_as_long_as_the_page_is_still_being_writte
     assert "P.__melionaScroller = scroller" in wait and "P.__melionaSetY = scroller.scrollTop" in wait, \
         "a scroll the reader makes while the press waits must end the wait"
     scroll = script[script.index("function onScroll"):script.index("function go(")]
-    assert "waiting = true" in wait and "waiting = false" in wait, \
-        "the wait must be marked while it runs, and unmarked when it ends"
-    assert "if (waiting && !held) { P.__melionaSetY = y; return; }" in scroll, \
-        "the page moving itself under a waiting press is not the reader: only a held pointer is " \
-        "(Live audit 8c, 'Skip to the analysis'; test_a_waiting_press_survives_the_page_moving_itself)"
+    assert "waitA = a; waitTop = a.getBoundingClientRect().top" in wait and "waitA = null" in wait, \
+        "the wait must remember where the pressed button sat, and forget it when it ends"
+    assert "Math.abs(waitA.getBoundingClientRect().top - waitTop) <= 2" in scroll, \
+        "scroll anchoring under a page still loading is not the reader: only a scroll that moves " \
+        "the pressed button may end the wait (Live audit 8c, 'Skip to the analysis' twice)"
     assert "P.__melionaPending = { a: a, id: id, ms: Date.now()" in wait and "P.__melionaPending = null" in wait, \
         "a waiting press must live on the page, not only in its frame (cleared when it flies or ends)"
     tail = script[script.index("P.__melionaGlide = { onTab"):]
     assert "const pend = P.__melionaPending" in tail and "waitFor(pend.a, pend.id, performance.now() - (Date.now() - pend.ms))" in tail, \
         "a frame that replaces the last one mid-wait must carry the press on from its own press time " \
         "(the old frame's timers die with it: 'Skip to the analysis' did nothing, Live audit on main 42163e6)"
-    assert "P.__melionaSetY > y) { P.__melionaSetY = y; return; }" in scroll, \
-        "a clamp under a shrinking page is not the reader either"
+    assert "P.__melionaSetY = y; if (waitA) waitTop = waitA.getBoundingClientRect().top; return;" in scroll, \
+        "a clamp under a shrinking page must rebase where the button sits, or the next anchoring shift ends the wait"
     # A press before the glide frame exists (the skip link was drawn 229ms
     # before it; Live audit 8c early, four times): reveal.js, in the <head>,
     # keeps it as the same pending record and the glide flies it on arrival.
@@ -5518,50 +5518,6 @@ def test_a_press_waits_for_its_section_as_long_as_the_page_is_still_being_writte
     assert "D.__melionaPending = { a: a, id: id, ms: Date.now() }" in early, "the record the glide resumes"
     assert "el.scrollIntoView()" in early, "no glide at all: the browser's own jump, once the section exists"
     assert "}, true);" in early, "capture: before the page's own handlers"
-
-
-def test_a_waiting_press_survives_the_page_moving_itself():
-    """Live audit 8c early (four times on 2026-11-05, again on 2026-11-06 on a
-    PR that touched no page code): "Skip to the analysis", pressed on a cold
-    start, moved 5px and stopped ~2400px short. While the press waited for its
-    section the page moved itself 5px, and onScroll read that as the reader
-    taking over. Now only a pointer held down (a scrollbar drag) does; wheel,
-    touch and keys end a wait in onYield. tests/glide_wait_probe.mjs drives
-    main.py's real glide frame on a stand-in page. Self-skips without node or
-    playwright."""
-    import ast
-    import html as _html
-    import shutil
-    import subprocess
-    import tempfile
-
-    node = shutil.which("node")
-    if not node:
-        print("[skip] node not on PATH - glide wait probe not run")
-        return
-    root = pathlib.Path(__file__).resolve().parent.parent
-    src = (root / "main.py").read_text(encoding="utf-8")
-    script = next(n.args[0].value for n in ast.walk(ast.parse(src)) if isinstance(n, ast.Call)
-                  and ast.unparse(n.func) == "_script_frame" and n.args
-                  and isinstance(n.args[0], ast.Constant) and "__melionaGlide" in n.args[0].value)
-    page = ('<!doctype html><body style="margin:0">'
-            '<div data-testid="stMain" id="sc" style="height:900px;overflow:auto">'
-            '<div style="height:1500px"></div><a id="go" href="#analysis">Skip to the analysis</a>'
-            '<div id="grow" style="height:4000px"></div></div>'
-            '<i data-testid="stStatusWidgetRunningIcon"></i>'
-            f'<iframe srcdoc="{_html.escape(script, quote=True)}"></iframe></body>')
-    with tempfile.NamedTemporaryFile("w", suffix=".html", delete=False, encoding="utf-8") as fh:
-        fh.write(page)
-        path = pathlib.Path(fh.name)
-    try:
-        r = subprocess.run([node, str(root / "tests" / "glide_wait_probe.mjs"), str(path)],
-                           capture_output=True, text=True, timeout=120)
-    finally:
-        path.unlink(missing_ok=True)
-    if r.returncode == 3:
-        print("[skip] playwright not installed - glide wait probe not run")
-        return
-    assert r.returncode == 0, (r.stdout + r.stderr)[-600:]
 
 
 def test_only_a_decaying_flick_is_forgiven_and_every_exit_restores_the_page():

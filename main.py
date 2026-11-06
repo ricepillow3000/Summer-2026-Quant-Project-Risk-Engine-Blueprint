@@ -217,9 +217,6 @@ _script_frame("""
       P.removeEventListener(t, prev.onYield, true);
     });
     if (prev.onScroll) P.removeEventListener('scroll', prev.onScroll, true);
-    if (prev.onPointer) ['pointerdown', 'pointerup', 'pointercancel'].forEach(function (t) {
-      P.removeEventListener(t, prev.onPointer, true);
-    });
   }
 
   /* Charts inside a tab or expander are rendered while their container is
@@ -432,7 +429,7 @@ _script_frame("""
      never shrunk, one against the flight - yields at once. */
   const SCROLL_KEYS = ['PageUp', 'PageDown', 'ArrowUp', 'ArrowDown', 'Home', 'End', ' '];
   let wheelAt = 0, wheelDy = 0, tail = false, shrunk = false, forgivenAt = 0;
-  let waiting = false, held = false;     // a press waiting for its section; a pointer held down (onScroll)
+  let waitA = null, waitTop = 0;          // the press waiting for its section, and where it sat (onScroll)
   function yieldNow() {
     tail = false;
     P.__melionaFlight = (P.__melionaFlight || 0) + 1;
@@ -464,20 +461,27 @@ _script_frame("""
     if (!P.__melionaStop || !sc || e.target !== sc || P.__melionaSetY === undefined) return;
     const y = sc.scrollTop;
     if (Math.abs(y - P.__melionaSetY) <= 2) return;
-    /* While a press waits for its section the page is still being written
-       and moves by itself (scroll anchoring, a clamp, a block settling). Only
-       a reader holding a pointer down - a scrollbar drag - scrolls here; a
-       wheel, touch or key already ends the wait in onYield. Guessing from the
-       pressed button's position missed the page's own moves: "Skip to the
-       analysis" moved 5px and stopped ~2400px short (Live audit 8c early,
-       four times on 2026-11-05, again on 2026-11-06). */
-    if (waiting && !held) { P.__melionaSetY = y; return; }
+    /* While a press waits for its section the page is still being written,
+       and a block growing ABOVE the view moves scrollTop by itself: the
+       browser's scroll anchoring keeps what the reader sees in place. That
+       is not the reader - what they see did not move, so the pressed button
+       still sits where it was. Counting it ended the wait and the press did
+       nothing: "Skip to the analysis" moved 5px and stopped 2443px short,
+       twice on the Live audit (step 8c early, 2026-11-05). A reader's scroll
+       moves the button with the page. */
+    if (waitA && Math.abs(waitA.getBoundingClientRect().top - waitTop) <= 2) {
+      P.__melionaSetY = y; waitTop = waitA.getBoundingClientRect().top; return;
+    }
     if (performance.now() - forgivenAt < 300) { P.__melionaSetY = y; return; }
-    /* The page shrinking under a flight clamps scrollTop: not the reader. */
-    if (y >= sc.scrollHeight - sc.clientHeight - 2 && P.__melionaSetY > y) { P.__melionaSetY = y; return; }
+    /* The page shrinking under us clamps scrollTop: not the reader either.
+       Take the new position as the base, the button's included, or the next
+       anchoring shift compares against where the button sat before the clamp
+       and ends a wait the reader never touched. */
+    if (y >= sc.scrollHeight - sc.clientHeight - 2 && P.__melionaSetY > y) {
+      P.__melionaSetY = y; if (waitA) waitTop = waitA.getBoundingClientRect().top; return;
+    }
     yieldNow();
   }
-  function onPointer(e) { held = e.type === 'pointerdown' && e.pointerType !== 'touch'; }
   function go(a, el) {
     const scroller = findScroller(el);
     /* Reduced motion: land at once, same place. A CSS media query cannot stop
@@ -514,11 +518,11 @@ _script_frame("""
     const w = P.__melionaFlight = (P.__melionaFlight || 0) + 1;
     const scroller = findScroller(a);
     P.__melionaStop = function () {       // nothing else to restore
-      P.__melionaStop = null; P.__melionaScroller = null; P.__melionaPending = null; waiting = false;
+      P.__melionaStop = null; P.__melionaScroller = null; P.__melionaPending = null; waitA = null;
     };
     P.__melionaScroller = scroller;       // so a scroll the reader makes while it waits ends the wait
     P.__melionaSetY = scroller.scrollTop;
-    waiting = true;                       // ...and only the reader's (onScroll)
+    waitA = a; waitTop = a.getBoundingClientRect().top;   // ...and only the reader's (onScroll)
     const t0 = since || performance.now();
     /* The wait lives on the page, not only in this frame: a run that replaces
        the frame mid-wait takes this frame's timers with it, and the press did
@@ -565,10 +569,7 @@ _script_frame("""
     P.addEventListener(t, onYield, { capture: true, passive: true });
   });
   P.addEventListener('scroll', onScroll, { capture: true, passive: true });
-  ['pointerdown', 'pointerup', 'pointercancel'].forEach(function (t) {
-    P.addEventListener(t, onPointer, { capture: true, passive: true });
-  });
-  P.__melionaGlide = { onTab: onTab, onLink: onLink, onYield: onYield, onScroll: onScroll, onPointer: onPointer };
+  P.__melionaGlide = { onTab: onTab, onLink: onLink, onYield: onYield, onScroll: onScroll };
   /* A press still waiting for its section when this frame replaced the last
      one - or made before any frame was here, which static/reveal.js (in the
      <head>, there first) keeps for us: carry it on from its own press time. */
