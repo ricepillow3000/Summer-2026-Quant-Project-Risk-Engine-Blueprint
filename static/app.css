@@ -405,20 +405,16 @@ html { scroll-behavior: smooth; }
 .panel-head { display: flex; flex-direction: column; align-items: flex-start; gap: 10px;
     margin: 48px 0 18px; position: relative; }
 .panel-head .ar-rule { margin-top: 6px; }
-/* The rule's charcoal key draws itself across as the section scrolls into
-   view - scroll-linked: its length IS how far the rule has come up the
-   screen. Scroll timelines where the browser has them; elsewhere static/
-   reveal.js feeds the same position as --scrub, only while it is on screen.
-   Under reduced motion the key simply stands drawn. */
+/* The rule's charcoal key draws itself across once, as the heading arrives
+   (reveal.js), a beat after the heading. It used to be scroll-linked, and a
+   reader who stopped with a heading low on the screen saw it frozen
+   half-drawn (John, 2026-11-06). A heading that is not animated - already on
+   screen, a button's destination, reduced motion - simply has it drawn. */
 .panel-head .ar-rule::after { transform-origin: left; }
-@supports (animation-timeline: view()) {
-  .reveal-on .panel-head .ar-rule::after { animation: lintel-draw linear both;
-      animation-timeline: view(); animation-range: entry 0% cover 20%; }
-  @keyframes lintel-draw { from { transform: scaleX(0); } to { transform: scaleX(1); } }
-}
-@supports not (animation-timeline: view()) {
-  .reveal-on .panel-head .ar-rule::after { transform: scaleX(min(1, calc(var(--scrub, 0) * 4))); }
-}
+.reveal-on .panel-head.reveal-item .ar-rule::after { transform: scaleX(0); }
+.reveal-on .panel-head.reveal-item.is-visible .ar-rule::after { transform: scaleX(1);
+    transition: transform calc(var(--reveal-dur) * .75) var(--ease-out);
+    transition-delay: calc(var(--reveal-delay, 0ms) + 150ms); }
 /* Wraps rather than nowrap: on a 375px phone 5 of 25 titles ran out of their
    box and one was cut off (device_check, 2026-10-17). */
 .panel-head .t { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-weight: 700;
@@ -659,7 +655,7 @@ div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
    The stagger between blocks is STAGGER_MS in reveal.js.
    ============================================================ */
 :root { --reveal-y: 46px; --reveal-x: clamp(56px, 9vw, 150px); --reveal-turn: 16deg;
-        --reveal-dur: 1.45s; --ease-out: cubic-bezier(0.16, 1, 0.3, 1); }
+        --reveal-dur: 1.1s; --ease-out: cubic-bezier(0.16, 1, 0.3, 1); }
 .reveal-on .reveal-item {
     opacity: 0; transform: translate3d(0, var(--reveal-y), 0) scale(.94); }
 .reveal-on .reveal-item--left {
@@ -821,10 +817,6 @@ div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
 .thanks-card .thanks-row:nth-of-type(4) { animation-delay: 60ms; }
 .thanks-card .thanks-row:nth-of-type(5) { animation-delay: 90ms; }
 .thanks-card .thanks-row:nth-of-type(n+6) { animation-delay: 120ms; }
-
-/* (SCRUB's parallax photo and the PLATES that lazy-attached the band and
-   Slice photographs went with the photographs, ME-28 2026-11-05. The scrub
-   now drives only the panel heading's rule.) */
 
 /* Skeleton status line - sits on the band, in the hero's left gutter */
 #boot-skel .sk-load { position: absolute; bottom: 28px;
