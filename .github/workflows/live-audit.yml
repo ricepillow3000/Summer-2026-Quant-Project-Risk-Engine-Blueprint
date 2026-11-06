@@ -100,6 +100,8 @@ jobs:
         run: |
           mkdir -p site-shots/devices
           node tools/device_check.mjs http://127.0.0.1:8501 site-shots/devices
+          # a first visit's click, keys and wheel never paint a gold block (John, 2026-11-06)
+          node tools/key_wheel_check.mjs http://127.0.0.1:8501 site-shots/keys
       # Every button glide lands (tools/glide_load_check.mjs): on the settled
       # page, through a trackpad flick, under a reader's swipe back and a
       # steady mouse wheel - and pressed while the page is still loading. Each

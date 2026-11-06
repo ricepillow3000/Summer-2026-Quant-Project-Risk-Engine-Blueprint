@@ -1216,10 +1216,15 @@ a.pmark:focus-visible, .meliona-footer a.f-mark:focus-visible, .thanks-row a:foc
    no words). Under reduced motion the global rule stops the animation and
    the line rests at scaleX(0): still, and out of the way. */
 /* Only where scroll timelines exist: elsewhere the animation would run on
-   the clock and leave a full-width bar (Council B). */
+   the clock and leave a full-width bar (Council B).
+   ::after, never ::before: Streamlit owns stMain:focus-visible::before for
+   its keyboard-focus ring (sticky, the full screen tall). Sharing it, a click
+   on the page and then any key merged the two into a full-screen bronze
+   block that the wheel scaled out from the left (John, 2026-11-06;
+   tools/key_wheel_check.mjs). */
 @supports (animation-timeline: scroll()) {
 [data-testid="stMain"] { scroll-timeline: --page block; }
-[data-testid="stMain"]::before { content: ""; position: fixed; top: 0; left: 0; right: 0;
+[data-testid="stMain"]::after { content: ""; position: fixed; top: 0; left: 0; right: 0;
     height: 1px; z-index: 989; pointer-events: none; background: #9A7B4F;
     transform: scaleX(0); transform-origin: 0 50%;
     animation: read-progress linear both; animation-timeline: --page; }
