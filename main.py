@@ -217,6 +217,9 @@ _script_frame("""
       P.removeEventListener(t, prev.onYield, true);
     });
     if (prev.onScroll) P.removeEventListener('scroll', prev.onScroll, true);
+    if (prev.onPointer) ['pointerdown', 'pointerup', 'pointercancel'].forEach(function (t) {
+      P.removeEventListener(t, prev.onPointer, true);
+    });
   }
 
   /* Charts inside a tab or expander are rendered while their container is
@@ -430,6 +433,8 @@ _script_frame("""
   const SCROLL_KEYS = ['PageUp', 'PageDown', 'ArrowUp', 'ArrowDown', 'Home', 'End', ' '];
   let wheelAt = 0, wheelDy = 0, tail = false, shrunk = false, forgivenAt = 0;
   let waitA = null, waitTop = 0;          // the press waiting for its section, and where it sat (onScroll)
+  let waitId = '', pointerHeld = false;   // its section's id; a hand on the page (a scrollbar drag)
+  function onPointer(e) { pointerHeld = e.type === 'pointerdown'; }
   function yieldNow() {
     tail = false;
     P.__melionaFlight = (P.__melionaFlight || 0) + 1;
@@ -469,6 +474,22 @@ _script_frame("""
        nothing: "Skip to the analysis" moved 5px and stopped 2443px short,
        twice on the Live audit (step 8c early, 2026-11-05). A reader's scroll
        moves the button with the page. */
+    if (waitA) {
+      /* A run can replace the waiting link; a detached one reports top 0,
+         which reads as the page moving under it. Follow its replacement. */
+      if (!waitA.isConnected) {
+        const r = [].find.call(P.querySelectorAll('a[href^="#"]'),
+                               function (x) { return x.getAttribute('href') === '#' + waitId; });
+        if (r) { waitA = r; waitTop = r.getBoundingClientRect().top; }
+      }
+      /* While a press waits, the reader scrolls only with a hand on the page
+         (a scrollbar drag): the wheel, a touch and the keys end the wait
+         through onYield before they scroll. Any other scroll is the page
+         being written above the view - scroll anchoring pinning some other
+         node moved the link and ended the wait 5px in, 2385px short (Live
+         audit 8c early, PR #51 on 2026-11-06, intermittent). */
+      if (!pointerHeld) { P.__melionaSetY = y; waitTop = waitA.getBoundingClientRect().top; return; }
+    }
     if (waitA && Math.abs(waitA.getBoundingClientRect().top - waitTop) <= 2) {
       P.__melionaSetY = y; waitTop = waitA.getBoundingClientRect().top; return;
     }
@@ -523,6 +544,7 @@ _script_frame("""
     P.__melionaScroller = scroller;       // so a scroll the reader makes while it waits ends the wait
     P.__melionaSetY = scroller.scrollTop;
     waitA = a; waitTop = a.getBoundingClientRect().top;   // ...and only the reader's (onScroll)
+    waitId = id;
     const t0 = since || performance.now();
     /* The wait lives on the page, not only in this frame: a run that replaces
        the frame mid-wait takes this frame's timers with it, and the press did
@@ -569,7 +591,10 @@ _script_frame("""
     P.addEventListener(t, onYield, { capture: true, passive: true });
   });
   P.addEventListener('scroll', onScroll, { capture: true, passive: true });
-  P.__melionaGlide = { onTab: onTab, onLink: onLink, onYield: onYield, onScroll: onScroll };
+  ['pointerdown', 'pointerup', 'pointercancel'].forEach(function (t) {
+    P.addEventListener(t, onPointer, { capture: true, passive: true });
+  });
+  P.__melionaGlide = { onTab: onTab, onLink: onLink, onYield: onYield, onScroll: onScroll, onPointer: onPointer };
   /* A press still waiting for its section when this frame replaced the last
      one - or made before any frame was here, which static/reveal.js (in the
      <head>, there first) keeps for us: carry it on from its own press time. */
@@ -916,21 +941,20 @@ st.markdown("""
       </div>
       <div class="pillar-card">
         <div class="pillar-label">Resilience</div>
-        <div class="pillar-desc">How little it fell, and how fast it came
-          back, in the real crises we replay.</div>
+        <div class="pillar-desc">How little it fell in the real crises we
+          replay, and how often it was back at its pre-crisis price within two trading years.</div>
       </div>
     </div>
   </div>
   <div class="showcase-section" id="conviction">
     <div class="conv-core">
       <div class="kicker">S&amp;P 500 via SPY, computed live</div>
-      <h2 class="showcase-title">The hardest trade is the one history rewards</h2>
+      <h2 class="showcase-title">What crash buyers saw next</h2>
       <div class="ar-rule"></div>
       <div class="showcase-body">
-        Buying in a crash feels wrong. Here is what a buyer of the S&amp;P 500
-        earned in each crisis we replay: once at the bottom, the lowest close
-        of the crisis, and once at the worst moment, the peak before the
-        fall.
+        Here is what a buyer of the S&amp;P 500 earned after each crisis we
+        replay: once at the bottom, the lowest close inside the crisis's dates,
+        and once at the high before the fall inside those dates.
       </div>
       <a href="#crisis-record" class="cta-btn on-dark" style="margin-top:22px;">
         See the crisis record<span class="cta-arrow" aria-hidden="true"><svg viewBox="0 0 16 30" fill="none" xmlns="http://www.w3.org/2000/svg"><path class="shaft" d="M8 1 V22" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path class="head" d="M2.5 16.5 L8 22.5 L13.5 16.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a>
@@ -975,9 +999,9 @@ try:
         bottom. {round(_t3["pct_positive"] * _t3["n"])} of {_t3["n"]} showed a gain.</div></div>""",
                     unsafe_allow_html=True)
     with _sl3:
-        st.markdown(f"""<div class="slab"><div class="slab-label">Worst possible timing</div>
+        st.markdown(f"""<div class="slab"><div class="slab-label">Bought at the high</div>
         <div class="slab-num">{round(_p3["pct_positive"] * _p3["n"])} of {_p3["n"]}</div>
-        <div class="slab-note">crises: a buyer at the peak before the fall
+        <div class="slab-note">crises: a buyer at the high before the fall
         was ahead three years later. Typical (median) return: {_p3["median"]:+.0%}.</div></div>""",
                     unsafe_allow_html=True)
     st.caption(
@@ -1028,10 +1052,11 @@ with _gungnir_zone:
             "Which side of the trade are you on?",
             ["Bullish: long the book", "Bearish: short the book"],
             horizontal=True, key="bv_direction",
-            help="Bearish runs every number as if you had sold the same stocks "
-                 "short, reset each day. Borrowing fees, margin interest and "
-                 "forced buy-backs are not included, so a real short would do "
-                 "worse than shown.")
+            help="Bearish reruns the headline, the cone, the crisis replays, Risk "
+                 "Breakdown and the map as if you had sold the same stocks short, "
+                 "reset each day. The Book and the Grit Zone stay long-only. "
+                 "Borrowing fees, margin interest and forced buy-backs are not "
+                 "included, so a real short would do worse than shown.")
 bearish = direction.startswith("Bearish")
 _bv_sk_a, _bv_sk_b = ("the short position", "the squeeze cushion") if bearish \
     else ("the high-flyer", "the steady cushion")
@@ -1304,7 +1329,8 @@ def _freshness_ticker(fetched_at_iso: str, live: bool):
     dot = ('<span class="fresh-dot is-live" role="img" aria-label="Data is current"></span>' if live
            else '<span class="fresh-dot is-stale" role="img" aria-label="Data is stale"></span>')
     st.caption(f"{dot} Data pulled {ago} · re-pulled from Yahoo once older "
-               f"than {CACHE_MAX_AGE_HOURS:g}h, on your next interaction, not on a timer.",
+               f"than {CACHE_MAX_AGE_HOURS:g}h, on your next interaction; the starter "
+               "baskets are also refreshed in the background every 5 hours.",
                unsafe_allow_html=True)
 
 
@@ -1454,9 +1480,9 @@ with deck_alloc, st.expander("Weights: how the money is split",
             'style="color:#6A5030;font-weight:700;">!</span> '
             "Panic view: EWMA jumps on one bad day. Half its weight sits in the "
             "last ≈11 trading days, about 73% in the last month, and 90% in the "
-            "last ~37 (λ=0.94). It is the panic the Crisis Conviction tab argues "
-            "against, shown so you can see how jumpy risk looks; the engine does "
-            "not suggest acting on it.</div>",
+            "last ~37 (λ=0.94). It is shown so you can see how jumpy risk can "
+            "look; the Crisis Conviction tab shows what followed past panics, and "
+            "the engine does not suggest acting on either.</div>",
             unsafe_allow_html=True,
         )
     acol1, acol2 = st.columns(2)
@@ -1707,12 +1733,18 @@ def cvar_scale_html(now: float, prev: float | None) -> str:
     on_scale = lambda v: min(max(shown(v), 0.0), 100.0)      # a gain sits at 0
     beyond = shown(now) > 100
     moved = None if prev is None else round(shown(now) - shown(prev), 1)
+    # A real move travels an arc (app.css, MOTION): its height is 15% of the
+    # distance across the 420px scale, 2-8px; a tick that stays put never hops.
+    travel = 0.0 if prev is None else abs(on_scale(now) - on_scale(prev)) * 4.2
+    hop = travel >= 1.0
+    arc = min(8.0, max(2.0, 0.15 * travel))
     return (
         '<div class="cvar-scale" aria-hidden="true">'
         + (f'<span class="cvar-tick prev" style="left:{on_scale(prev):.1f}%"></span>'
            if prev is not None else "")
-        + f'<span class="cvar-tick now{" beyond" if beyond else ""}" style="left:{on_scale(now):.1f}%;'
-          f'--from:{on_scale(now if prev is None else prev):.1f}%"></span></div>'
+        + f'<span class="cvar-tick now{" beyond" if beyond else ""}{" moving" if hop else ""}" '
+          f'style="left:{on_scale(now):.1f}%;--from:{on_scale(now if prev is None else prev):.1f}%;'
+          f'--arc:{-arc:.1f}px"></span></div>'
         '<div class="cvar-scale-ends" aria-hidden="true"><span>0%</span>'
         + ('<span class="beyond">beyond the whole book &#8250;</span>' if beyond
            else '<span>the whole book</span>') + '</div>'
@@ -2041,9 +2073,9 @@ st.caption(
 
 with tab_grit:
     st.caption(
-        "Grit ranks your names by how each one came back from its own falls: "
-        "how fast, how fully, and how reliably across real crises. Every name "
-        "here has fallen; this measures what happened next."
+        "Grit ranks your names on three things: how fast and how fully each "
+        "won back its own falls of 5% or more, how often a year of holding it "
+        "ended in a gain, and how it held up in the real crises we replay."
     )
     try:
         grit = load_grit(tuple(loaded))
@@ -2060,8 +2092,8 @@ with tab_grit:
                 width="stretch", config=PLOTLY_CFG,
             )
             read_me(
-                "Longer bar, grittier name. The name at the top has, over its own "
-                "history, come back from its falls the fastest and most reliably. "
+                "Longer bar, grittier name. The name at the top scores highest on "
+                "recovery, consistency and resilience combined, over its own history. "
                 "Scores run 0 to 100 within this basket: they rank these names "
                 "against each other, not against the whole market.")
             grittiest = gscores.index[0]
@@ -2195,9 +2227,9 @@ with tab_conviction:
             st.markdown(
                 '<div class="read-me">'
                 'Each row is a real crisis. Trough buy: you bought the S&amp;P '
-                '500 (SPY) at the lowest close of the crisis, the exact bottom. '
-                'Peak buy: you bought at the top before the fall, the worst '
-                'possible timing. The columns show where that money stood 1 and 3 '
+                '500 (SPY) at its lowest close inside the crisis dates we replay. '
+                'Peak buy: you bought at the highest close inside those dates, '
+                'before the fall, the worst timing within them. The columns show where that money stood 1 and 3 '
                 'trading years later. "-" means the crisis is too recent for that '
                 'span: left out, not estimated.'
                 '</div>', unsafe_allow_html=True)
@@ -2208,7 +2240,7 @@ with tab_conviction:
             _behind = show.loc[_p3y < 0, "Crisis"].tolist()
             st.caption(
                 "Nobody can time the exact bottom, so the trough columns show which "
-                "way the odds lean, not a strategy you could follow. That is why "
+                "way the past record leans, not a strategy you could follow. That is why "
                 "the peak columns sit beside them: the worst-timed buyer was ahead "
                 f"three years later in {int((_p3y > 0).sum())} of "
                 f"{int(_p3y.notna().sum())} crises with three years of data"
@@ -2233,11 +2265,10 @@ DQ_MESSAGES = {"DatetimeIndex confirmed.": "Every row carries a date.",
 
 with tab_dq:
     st.caption(
-        "Every price download is checked before any risk number is worked out "
-        "from it: dates present and in order, prices above zero, enough history, "
+        "The prices behind the headline are checked here: dates present and in order, prices above zero, enough history, "
         "missing days, how recent it is, and any unusually large one-day move. These checks catch a "
         "broken or implausible feed; they cannot catch a wrong number that "
-        "looks plausible."
+        "looks plausible. The results are reported, not used to stop the analysis."
     )
     report = validate_prices(prices)
     # Palette marks, not colour emoji - the emoji were the only bright colours
@@ -2280,7 +2311,8 @@ with tab_lineage:
             "Yahoo Finance. Every figure above is computed from this source by "
             "the engine's own code; no value originates from a language model. "
             f"A copy older than {CACHE_MAX_AGE_HOURS:g} hours is re-pulled "
-            "automatically on the next interaction."
+            "automatically on the next interaction, and the starter baskets are "
+            "also refreshed in the background every 5 hours."
         )
     else:
         st.caption("Provenance record appears after the first live fetch.")

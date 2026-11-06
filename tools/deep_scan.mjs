@@ -504,7 +504,7 @@ async function bookState() {
   });
 }
 await step('the book', async () => {
-  // "n of N names hold a position worth keeping" counts the LIQUIDITY gate:
+  // "n of N names can hold at least 1% of the book" counts the LIQUIDITY gate:
   // an eligible name can still hold no role for ranking below the cut, so
   // leaders + anchors <= eligible <= N. N is the visitor's own names (ME-08):
   // an outside anchor's card is on screen but not one of them, so it counts

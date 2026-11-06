@@ -18,7 +18,13 @@
  *   3. Glide - a mouse wheel or trackpad tows the page, like a boat on a line, to where it was sent
  *      instead of stepping it there. It stands aside while a button's glide
  *      flies, inside anything that scrolls on its own (a table, a list), and
- *      for touch and keys, which keep the browser's own scrolling.
+ *      for touch and keys, which keep the browser's own scrolling. Pushed
+ *      past either end of the page it stretches, with resistance, and eases
+ *      back when let go: a rubber band, never a bounce.
+ *   4. Popovers - a dropdown or a help tip grows out of the control that
+ *      opened it and shrinks back into it (--pop-origin), and a menu's rows
+ *      arrive 30ms apart. 5. Masks - John's photographs are uncovered from
+ *      their cap down as they arrive. app.css "MOTION" holds the timings.
  *
  * Only opacity and transform ever change: the compositor (GPU) animates them,
  * and neither moves the layout, so nothing on the page shifts or reflows.
@@ -51,7 +57,8 @@
   // skeleton, the map (its own probe measures it), the glide's script frame,
   // and any section a button flies to - the glide lands on it, and it must
   // not fade as it lands (deep_scan: "destination never fades").
-  var SKIP = '#hero, #boot-skel, .st-key-risk-map, .st-key-glide';
+  // The thank-you receipt too: it confirms with its own pulse (app.css MOTION).
+  var SKIP = '#hero, #boot-skel, .st-key-risk-map, .st-key-glide, .thanks-card';
   var DEST = '#grit-showcase, #conviction, #crisis-record, #the-slice, #engine, #analysis, #the-book, #contact';
   // What the reader opens - a drawer's body, a tab's panel - is simply there
   // when it opens: an arrival inside it is motion the reader did not ask for,
@@ -190,7 +197,66 @@
   }
   api.revealAll = function () {                       // the end state, at once (layout probes)
     [].forEach.call(D.querySelectorAll('.reveal-item'), function (el) { seen.unobserve(el); done(el); });
+    [].forEach.call(D.querySelectorAll('.mask-reveal'), function (el) { veiled.unobserve(el.parentElement); unveil(el); });
   };
+
+  // ---- masks: the photographs ----------------------------------------------
+  // Uncovered from the cap down by a clip-path mask as they arrive, once; the
+  // classes go when it lands, so nothing stays clipped or on its own layer.
+  // Its frame (the <figure>) is what is watched: a box its own mask hides
+  // entirely never counts as on screen.
+  var MASK = '.about-photo picture, .story-photo picture';
+  var veiled = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      if (!e.isIntersecting) return;
+      var el = e.target.__mask;
+      veiled.unobserve(e.target);
+      if (!el || !el.classList.contains('mask-reveal')) return;
+      el.style.setProperty('--mask-delay', '120ms');
+      void el.offsetWidth;
+      el.classList.add('is-unmasked');
+      el.addEventListener('transitionend', function (ev) { if (ev.target === el) unveil(el); });
+      el.__mkTimer = setTimeout(function () { unveil(el); }, 1600);
+    });
+  }, { rootMargin: '0px 0px -8% 0px', threshold: 0 });
+  function unveil(el) {
+    clearTimeout(el.__mkTimer);
+    el.classList.remove('mask-reveal', 'is-unmasked');
+    el.style.removeProperty('--mask-delay');
+  }
+
+  // ---- popovers: from the trigger, back to the trigger ----------------------
+  // react-aria draws each dropdown and help tip in a portal at the end of
+  // <body>. Its panel scales from --pop-origin: the point of the panel's edge
+  // nearest the control that opened it (the focused field for a menu, the
+  // hovered mark for a tip), so it grows out of that control and, on close,
+  // shrinks back into it. Measured in the frame before the first paint, and
+  // again as react-aria settles the popover's position (a tip is first drawn
+  // at the page's corner, then moved beside its mark).
+  var POP = '[data-testid="stSelectboxVirtualDropdown"], [data-testid="stMultiSelectDropdown"], [role="tooltip"][data-rac]';
+  var hovered = null;
+  D.addEventListener('pointerover', function (e) { hovered = e.target; }, { capture: true, passive: true });
+  function aimPop(pop) {
+    var panel = pop.firstElementChild;
+    while (panel && panel.tagName === 'SPAN') panel = panel.nextElementSibling;   // react-aria's focus-scope markers
+    if (!panel || pop.hasAttribute('data-exiting')) return;   // closing: it shrinks back to where it came from
+    var tip = pop.getAttribute('role') === 'tooltip';
+    var trig = tip ? hovered && hovered.closest && hovered.closest('[data-testid="stTooltipHoverTarget"], button, a')
+                   : D.activeElement && D.activeElement.closest('[data-testid="stSelectbox"], [data-testid="stMultiSelect"]');
+    var t = trig && trig.getBoundingClientRect && trig.getBoundingClientRect();
+    var r = panel.getBoundingClientRect();
+    if (!t || !r.width || !r.height) return;
+    var x = Math.max(0, Math.min(r.width, (t.left + t.right) / 2 - r.left));
+    var y = (t.top + t.bottom) / 2 < (r.top + r.bottom) / 2 ? 0 : r.height;   // the trigger sits above, or below
+    panel.style.setProperty('--pop-origin', x.toFixed(0) + 'px ' + y.toFixed(0) + 'px');
+    if (tip || pop.__rows) return;
+    pop.__rows = 1;
+    // the rows: the first eight are numbered for their 30ms stagger, for this opening only
+    var rows = pop.querySelectorAll('[role="option"]');
+    for (var i = 0; i < rows.length && i < 8; i++) rows[i].style.setProperty('--row', i);
+    pop.classList.add('pop-rows');
+    setTimeout(function () { pop.classList.remove('pop-rows'); }, 520);
+  }
 
   // ---- 2. scrubs (fallback only) -------------------------------------------
   var native = W.CSS && CSS.supports && CSS.supports('animation-timeline: view()');
@@ -224,7 +290,8 @@
   // through the next notch of the wheel, and comes to rest on the aim without
   // overshooting or bouncing back. Integrated on the frame's own clock, so a
   // fast and a slow screen move the hull alike.
-  var TOW = 4.6;          // the tow line's natural frequency (rad/s): lower = heavier hull; ~1.3 s to settle
+  var TOW = 3.8;          // the tow line's natural frequency (rad/s): lower = heavier hull; ~1.7 s to settle
+                          // (John, 2026-11-06: "heavy ... slightly delayed ... more fluid": 4.6 -> 3.8)
   var SCROLLER = '[data-testid="stMain"]';
   var aim = null, put = null, run = 0, pos = 0, vel = 0, last = 0;
   function scrolls(n, dy) {                            // can this inner box take the wheel itself?
@@ -254,6 +321,48 @@
     if (pos === aim && vel === 0) { stop(); return; }
     run = W.requestAnimationFrame(coast);
   }
+  // ---- the rubber band at the page's ends ---------------------------------
+  // Taking the wheel took the browser's own elastic ends with it. Pushed past
+  // the top or the bottom, the page now gives with resistance - it follows
+  // the hand at once (never tweened), less and less the further it is pushed,
+  // to at most BAND px - and eases back when the hand lets go, on a
+  // critically damped spring: no overshoot, no bounce.
+  var BAND = 72;          // the furthest the page gives past an end (px)
+  var RETURN = 16;        // how briskly it comes back (rad/s): ~0.35 s
+  var BODY = '[data-testid="stMainBlockContainer"]';
+  var give = 0, gv = 0, gRun = 0, gLast = 0, gAt = 0;
+  function stretch(px) {                               // pull (raw px) -> give (px shown)
+    var a = Math.abs(px);
+    return (px < 0 ? -1 : 1) * BAND * (1 - 1 / (a / (BAND * 1.8) + 1));
+  }
+  function unstretch(g) {                              // give -> the pull that shows it
+    var a = Math.min(Math.abs(g) / BAND, 0.999);
+    return (g < 0 ? -1 : 1) * BAND * 1.8 * (1 / (1 - a) - 1);
+  }
+  function paintGive() {
+    var b = D.querySelector(BODY);
+    if (!b) return;
+    b.style.transform = Math.abs(give) < 0.25 ? '' : 'translate3d(0,' + (-give).toFixed(2) + 'px,0)';
+  }
+  function settleGive(now) {
+    gRun = 0;
+    if (now - gAt < 90) { gRun = W.requestAnimationFrame(settleGive); return; }   // the hand is still on it
+    var dt = gLast ? Math.min(0.05, (now - gLast) / 1000) : 1 / 60;
+    gLast = now;
+    for (var i = 0; i < 4; i++) { var h = dt / 4; gv += (-RETURN * RETURN * give - 2 * RETURN * gv) * h; give += gv * h; }
+    if (Math.abs(give) < 0.25 && Math.abs(gv) < 4) { give = gv = 0; gLast = 0; paintGive(); return; }
+    paintGive();
+    gRun = W.requestAnimationFrame(settleGive);
+  }
+  function band(dy) {                                  // a push past the end, or back from it
+    // from where the page stands now - mid-return included - so it never jumps
+    var pull = (give ? unstretch(give) : 0) + dy;
+    if (give && Math.sign(pull) !== Math.sign(give)) pull = 0;   // pulled back through the end
+    give = stretch(pull); gv = 0; gLast = 0; gAt = performance.now();
+    paintGive();
+    if (!gRun) gRun = W.requestAnimationFrame(settleGive);
+  }
+
   W.addEventListener('wheel', function (e) {
     if (e.ctrlKey || e.defaultPrevented || !e.deltaY || gliding()) return;   // zoom; a glide in flight (it reads the wheel itself)
     var sc = D.querySelector(SCROLLER);
@@ -262,6 +371,10 @@
     e.preventDefault();
     var dy = e.deltaMode === 1 ? e.deltaY * 40 : e.deltaMode === 2 ? e.deltaY * sc.clientHeight : e.deltaY;
     var max = sc.scrollHeight - sc.clientHeight;
+    // At rest on an end and pushed on past it - or already stretched: the band
+    // takes the wheel (pulling back first undoes the stretch).
+    var atTop = sc.scrollTop <= 0 && dy < 0, atEnd = sc.scrollTop >= max - 1 && dy > 0;
+    if (give || (!run && (atTop || atEnd) && max > 0)) { band(dy); return; }
     aim = Math.max(0, Math.min((aim === null ? sc.scrollTop : aim) + dy, max));
     if (!run) { pos = put = sc.scrollTop; vel = 0; last = 0; sc.style.scrollBehavior = 'auto'; run = W.requestAnimationFrame(coast); }
   }, { passive: false });
@@ -276,6 +389,21 @@
   }
   function scan(root) {
     if (root.nodeType !== 1) return;
+    (root.matches(POP) ? [root] : [].slice.call(root.querySelectorAll(POP))).forEach(function (pop) {
+      W.requestAnimationFrame(function () {
+        aimPop(pop);
+        W.requestAnimationFrame(function () { aimPop(pop); });
+      });
+      [60, 140, 260].forEach(function (ms) { setTimeout(function () { aimPop(pop); }, ms); });
+    });
+    var masks = root.matches(MASK) ? [root] : [].slice.call(root.querySelectorAll(MASK));
+    masks.forEach(function (el) {
+      if (el.__mk || el.closest(DEST) || (late && inView(el))) return;
+      el.__mk = 1;
+      el.classList.add('mask-reveal');
+      el.parentElement.__mask = el;
+      veiled.observe(el.parentElement);
+    });
     var found = root.matches(ALL) ? [root] : [];
     found.push.apply(found, root.querySelectorAll(ALL));
     found.forEach(function (el) {

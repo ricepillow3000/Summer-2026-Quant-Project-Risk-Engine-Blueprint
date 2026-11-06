@@ -4915,8 +4915,8 @@ def test_the_books_grit_is_the_grit_zones_full_history_grit():
         wrong = {t: (g, round(float(tab[t]))) for t, g in book.items()
                  if g != round(float(tab[t]))}
         assert not wrong, f"Book grit vs Grit Zone grit, shelf on (book, tab): {wrong}"
-        head = [m.value for m in at.markdown if " book: " in m.value and "names hold" in m.value]
-        assert head and f"of your {len(loaded)} names hold" in head[0], head
+        head = [m.value for m in at.markdown if " book: " in m.value and "names can hold" in m.value]
+        assert head and f"of your {len(loaded)} names can hold" in head[0], head
     finally:
         restore()
 
@@ -6875,6 +6875,148 @@ def test_the_case_studies_read_the_live_record():
     finally:
         restore()
 
+
+
+def test_motion_follows_the_house_rules():
+    """John, 2026-11-06: twenty motion rules for a premium, corporate feel -
+    entrances ease out, on-screen moves ease in-out, dropdowns 150-250ms,
+    popovers start at 0.95 and grow from (and shrink back into) their
+    trigger, exits about 20% shorter, list rows 30ms apart, a press to 0.97,
+    a dragged knob stretched 12% and never tweened, details settling in
+    order, arcs for a moving object, a success pulse, masks for reveals and
+    colour changes, icons with scale and blur, and no bounce anywhere. The
+    browser proof (every rule measured on the real page) is in the PR; this
+    pins the rules in the source so none of them can quietly go."""
+    import re
+    root = pathlib.Path(__file__).resolve().parent.parent
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    js = (root / "static" / "reveal.js").read_text(encoding="utf-8")
+    main = (root / "main.py").read_text(encoding="utf-8")
+    war = (root / "prototypes" / "war_room.html").read_text(encoding="utf-8")
+    tok = dict(re.findall(r"--([\w-]+):\s*([^;]+);", re.search(r":root \{ (--ease-in-out:.*?)\}", css, re.S).group(1)))
+    ms = lambda v: float(v[:-2]) if v.endswith("ms") else float(v[:-1]) * 1000
+    pop_in, pop_out = ms(tok["pop-in"]), ms(tok["pop-out"])
+    assert 150 <= pop_in <= 250, "a dropdown opens in 150-250ms"
+    assert abs(pop_out - 0.8 * pop_in) <= 0.05 * pop_in, "an exit is about 20% shorter than its entrance"
+    assert tok["row-stagger"] == "30ms" and tok["press"] == "0.97" and tok["knob-stretch"] == "1.12"
+    # no bounce: no curve on the page leaves 0..1, so nothing overshoots
+    for name, text in (("app.css", css), ("main.py", main), ("war_room.html", war)):
+        for curve in re.findall(r"cubic-bezier\(([^)]*)\)", text):
+            x1, y1, x2, y2 = (float(v) for v in curve.split(","))
+            assert 0 <= y1 <= 1 and 0 <= y2 <= 1, f"{name}: cubic-bezier({curve}) overshoots - a bounce"
+    # popovers: fade on the positioned box, scale from .95 on the panel, from the trigger
+    for sel in ('[data-testid="stSelectboxVirtualDropdown"]', '[data-testid="stMultiSelectDropdown"]',
+                '[role="tooltip"][data-rac]'):
+        assert sel in css, sel
+    assert "@keyframes pop-scale-in  { from { transform: scale(.95); } }" in css
+    assert "@keyframes pop-scale-out { to   { transform: scale(.95); } }" in css
+    assert "animation: pop-fade-in var(--pop-in) var(--ease-out)" in css, "entrances ease out"
+    assert "animation: pop-fade-out var(--pop-out) var(--ease-exit)" in css
+    assert "transform-origin: var(--pop-origin" in css and "[data-exiting]" in css
+    aim = re.search(r"function aimPop\(pop\) \{(.*?)\n  \}", js, re.S).group(1)
+    assert "--pop-origin" in aim and "getBoundingClientRect" in aim, "the origin is read from the trigger"
+    assert "stTooltipHoverTarget" in aim and "D.activeElement" in aim
+    # rows 30ms apart, details settling in reading order, flat (never a turn)
+    assert "animation-delay: calc(var(--row, 0) * var(--row-stagger))" in css
+    assert "rows[i].style.setProperty('--row', i)" in js
+    settle = re.search(r"@keyframes settle \{([^}]*\})", css).group(1)
+    assert "rotate" not in settle and "perspective" not in settle and "scale" not in settle
+    steps = [int(d) for d in re.findall(
+        r'stExpanderDetails"\] > \[data-testid="stVerticalBlock"\] > :nth-child\(\d\),\n'
+        r'\[data-testid="stTabPanel"\][^{]*\{ animation-delay: (\d+)ms; \}', css)]
+    assert steps == [30, 60, 90, 120, 150], steps
+    # on-screen moves ease in-out: the tab underline, the CVaR tick, the buttons' glide
+    assert "transition: translate var(--move) var(--ease-in-out)" in css
+    assert "animation: cvar-tick-in .9s var(--ease-in-out) both, cvar-tick-arc" in css
+    assert "const ease = t => -(Math.cos(Math.PI * t) - 1) / 2;" in main
+    # a press sinks to .97; the colour change is a rising mask, not a dissolve
+    assert ".cta-btn:active { transform: scale(var(--press)); }" in css
+    assert ".stButton>button:active, .stFormSubmitButton>button:active" in css
+    wipe = re.search(r"\.cta-btn::after \{([^}]*)\}", css).group(1)
+    assert "clip-path: inset(100% 0 0 0)" in wipe and "transition: clip-path var(--wipe)" in wipe
+    assert ".stLinkButton>a:hover::after, .cta-btn:hover::after, .cta-btn:active::after {\n    clip-path: inset(0 0 0 0); }" in css
+    assert ".stButton>button::after" in css, "the Streamlit buttons share the mask"
+    # knobs: stretched while dragged, the position never tweened
+    thumb = re.search(r'\[data-testid="stSlider"\] \[data-rac\]:has\(> div > input\[type="range"\]\) \{\s*'
+                      r'transform-origin: 0 0;\s*transition: ([^;]+);', css)
+    assert thumb and "all" not in thumb.group(1) and "left" not in thumb.group(1), "a hand-held move is tweened"
+    assert "[data-dragging]:has(> div > input[type=\"range\"]) {\n    scale: var(--knob-stretch) 1; }" in css
+    assert '[data-testid="stSlider"] [role="slider"]' not in css, "a dead pre-1.66 thumb selector is back"
+    # masks for the photographs, hidden only under html.reveal-on
+    assert ".reveal-on .mask-reveal { clip-path: inset(0 0 100% 0); }" in css
+    assert "veiled.observe(el.parentElement);" in js, "a box its own mask hides never counts as on screen"
+    # icons arrive with scale and blur; success pulses once
+    icon = re.search(r"@keyframes icon-in \{([^}]*\})", css).group(1)
+    assert "scale(" in icon and "blur(" in icon and "opacity: 0" in icon
+    assert "animation: success-pulse 900ms" in css and "@keyframes success-pulse" in css
+    # the wheel: heavy, and a rubber band (critically damped, so it never bounces) past the ends
+    tow = float(re.search(r"var TOW = (\d+(?:\.\d+)?);", js).group(1))
+    assert 3.0 <= tow <= 4.2, "heavy: the hull takes about a second to arrive"
+    assert int(re.search(r"var BAND = (\d+);", js).group(1)) <= 80
+    assert "gv += (-RETURN * RETURN * give - 2 * RETURN * gv) * h;" in js, "the band's return must be critically damped"
+    assert js.index("if (calm)") < js.index("function band(dy)"), "no band under reduced motion"
+
+
+def test_the_cvar_tick_hops_an_arc_only_when_it_really_moves():
+    """John, 2026-11-06 ("use arcs for object movement"): the headline's tick
+    travels from the last headline's place to the new one over an arc whose
+    height follows the distance (15%, 2-8px). A first headline, or one that
+    lands where the last one was, does not hop in place."""
+    import re
+    scale = _main_function("cvar_scale_html")
+    assert " moving" not in scale(0.2254, None), "a first headline has nowhere to travel from"
+    assert " moving" not in scale(0.22540, 0.22480), "the same displayed number does not move"
+    far = scale(0.60, 0.10)
+    assert "cvar-tick now moving" in far
+    assert re.search(r"--arc:-8\.0px", far), far
+    assert " moving" not in scale(0.2266, 0.2254), "0.2 points is under a pixel: no hop"
+    near = scale(0.2354, 0.2254)                  # one point: 4.2px across, the lowest arc
+    assert re.search(r"--arc:-2\.0px", near) and " moving" in near, near
+
+
+def test_the_story_and_the_faq_say_the_same_thing():
+    """John, 2026-11-06: "we said the risk engine is not financial advice ...
+    but in my story I said I wanted to help people like my dad. Does this
+    contradict?" It did: the FAQ says Meliona "does not tell anyone what to buy
+    or sell, and nothing on it is a forecast", while the story promised "a
+    stock they can count on", quoted "back up after every fall", called some
+    stocks "worth holding" and said a flyer's replacement was chosen by crash
+    tests (it is ranked on momentum; the crashes test the whole portfolio).
+    The story now helps by giving the evidence, in the FAQ's own words."""
+    import hero
+    story = " ".join(hero.STORY + (hero.STORY_QUOTE, hero.STORY_TITLE)).lower()
+    faq = dict(hero.FAQS)["Is this investment advice?"].lower()
+    assert "does not tell anyone what to buy" in faq and "does not tell anyone what to buy" in story
+    for promise in ("count on", "after every fall", "worth holding", "works best",
+                    "hold each other up", "will do well", "safe"):
+        assert promise not in story, f"the story promises what the FAQ disclaims: {promise!r}"
+    assert "cannot say how a stock will do" in story, "the story must say it forecasts nothing"
+
+
+def test_a_waiting_press_yields_only_to_the_readers_own_hand():
+    """Live audit 8c early, PR #51 (2026-11-06, intermittent): "Skip to the
+    analysis", pressed 200 ms after it appeared, waited for #analysis, then
+    took a 5px scroll the page made while it was being written as the reader
+    taking over - and stopped 2385px short. The anchoring check (the link
+    holds still) misses when anchoring pins another node or a rerun replaces
+    the link (a detached link reads top 0). While a press waits, the wheel,
+    a touch and the keys already end it through onYield; the only other way
+    a reader scrolls is a hand on the scrollbar - so only that counts."""
+    import ast
+    root = pathlib.Path(__file__).resolve().parent.parent
+    tree = ast.parse((root / "main.py").read_text(encoding="utf-8"))
+    script = next(n.args[0].value for n in ast.walk(tree) if isinstance(n, ast.Call)
+                  and ast.unparse(n.func) == "_script_frame" and n.args
+                  and isinstance(n.args[0], ast.Constant) and "__melionaGlide" in n.args[0].value)
+    scroll = script[script.index("function onScroll"):script.index("function go(")]
+    assert "if (!pointerHeld) { P.__melionaSetY = y;" in scroll, "a wait must ignore scrolls no hand made"
+    assert "if (!waitA.isConnected)" in scroll and "x.getAttribute('href') === '#' + waitId" in scroll, \
+        "a replaced link must be followed, not read as top 0"
+    assert "function onPointer(e) { pointerHeld = e.type === 'pointerdown'; }" in script
+    for t in ("'pointerdown', 'pointerup', 'pointercancel'",):
+        assert script.count(t) == 2, "pointer listeners must be added and removed on rebind"
+    assert "onPointer: onPointer" in script and "prev.onPointer" in script
+    assert "waitId = id;" in script
 
 
 def test_a_key_and_the_wheel_never_paint_a_gold_block():
