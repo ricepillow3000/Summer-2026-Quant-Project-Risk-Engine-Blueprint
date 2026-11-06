@@ -7202,6 +7202,25 @@ def test_the_cvar_tick_hops_an_arc_only_when_it_really_moves():
     near = scale(0.2354, 0.2254)                  # one point: 4.2px across, the lowest arc
     assert re.search(r"--arc:-2\.0px", near) and " moving" in near, near
 
+
+def test_the_story_and_the_faq_say_the_same_thing():
+    """John, 2026-11-06: "we said the risk engine is not financial advice ...
+    but in my story I said I wanted to help people like my dad. Does this
+    contradict?" It did: the FAQ says Meliona "does not tell anyone what to buy
+    or sell, and nothing on it is a forecast", while the story promised "a
+    stock they can count on", quoted "back up after every fall", called some
+    stocks "worth holding" and said a flyer's replacement was chosen by crash
+    tests (it is ranked on momentum; the crashes test the whole portfolio).
+    The story now helps by giving the evidence, in the FAQ's own words."""
+    import hero
+    story = " ".join(hero.STORY + (hero.STORY_QUOTE, hero.STORY_TITLE)).lower()
+    faq = dict(hero.FAQS)["Is this investment advice?"].lower()
+    assert "does not tell anyone what to buy" in faq and "does not tell anyone what to buy" in story
+    for promise in ("count on", "after every fall", "worth holding", "works best",
+                    "hold each other up", "will do well", "safe"):
+        assert promise not in story, f"the story promises what the FAQ disclaims: {promise!r}"
+    assert "cannot say how a stock will do" in story, "the story must say it forecasts nothing"
+
 if __name__ == "__main__":
     import sys
 
