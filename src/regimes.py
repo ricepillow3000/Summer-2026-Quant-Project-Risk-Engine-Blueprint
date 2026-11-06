@@ -52,15 +52,6 @@ def rolling_windows(returns: pd.Series, window: int = 20, step: int = 5):
     return np.vstack(rows), pd.DatetimeIndex(ends)
 
 
-def wasserstein_distance_1d(a: np.ndarray, b: np.ndarray) -> float:
-    """W2 between two equal-length SORTED sample vectors (1-D closed form)."""
-    a = np.asarray(a, dtype=float)
-    b = np.asarray(b, dtype=float)
-    if a.shape != b.shape:
-        raise ValueError(f"quantile vectors must match: {a.shape} vs {b.shape}")
-    return float(np.sqrt(np.mean((a - b) ** 2)))
-
-
 def wasserstein_kmeans(Q: np.ndarray, k: int = 3, n_init: int = 8,
                        max_iter: int = 100, seed: int = 42):
     """Lloyd's k-means where rows of Q are sorted quantile vectors.

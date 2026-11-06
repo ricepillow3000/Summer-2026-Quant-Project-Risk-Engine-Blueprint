@@ -12,8 +12,8 @@ Caching strategy for a live web app:
 - Per-universe disk cache keyed by ticker-set, so different baskets don't
   collide and repeat views are instant (no Yahoo rate-limiting on refresh).
 - The cache is FRESHNESS-AWARE: it re-pulls once it ages past `max_age_hours`,
-  so a deployed app never serves indefinitely-stale data. `clear_cache` (or
-  `python -m tools.warm_cache --drill`) forces a re-pull - an operator action,
+  so a deployed app never serves indefinitely-stale data.
+  `python -m tools.warm_cache --drill` forces a re-pull - an operator action,
   not a visitor one.
 
 Universe is fully configurable - equities, ETFs, FX (EURUSD=X), or futures
@@ -253,21 +253,6 @@ def _dv_cache_path(tickers: list[str], period: str) -> str:
     key = hashlib.md5((",".join(tickers) + "|" + period + "|dv").encode(),
                       usedforsecurity=False).hexdigest()[:12]
     return os.path.join(DATA_DIR, f"dollarvol_{key}.parquet")
-
-
-def clear_cache(tickers: list[str] | None = None, period: str = "2y") -> None:
-    """Delete the disk cache + provenance for a universe, forcing a fresh pull."""
-    cleaned = _clean(tickers)
-    price_cache = _cache_path(cleaned, period)
-    paths = [price_cache, _meta_path(price_cache)]
-    # Prices and dollar volume now share one download; clear both, plus the
-    # legacy "6mo" dollar-volume cache from before they were unified.
-    for dv_period in (period, "6mo"):
-        dv_cache = _dv_cache_path(cleaned, dv_period)
-        paths += [dv_cache, _meta_path(dv_cache)]
-    for path in paths:
-        if os.path.exists(path):
-            os.remove(path)
 
 
 def _prune_cache(max_files: int = CACHE_MAX_FILES,

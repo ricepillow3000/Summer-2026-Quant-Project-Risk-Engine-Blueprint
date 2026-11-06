@@ -66,18 +66,6 @@ def sharpe_ratio(port_returns: pd.Series, risk_free_rate: float = 0.0,
     return (mu - risk_free_rate) / sigma
 
 
-def parametric_var(port_returns: pd.Series, confidence: float = 0.95) -> float:
-    """
-    Variance-covariance (parametric) VaR: assumes returns are normal and reads
-    the loss off the fitted distribution. Faster than historical and smooth, but
-    understates tail risk when returns are fat-tailed - which is exactly why we
-    backtest it below and keep CVaR as the headline.
-    """
-    mu, sigma = port_returns.mean(), port_returns.std()
-    z = stats.norm.ppf(1 - confidence)
-    return float(-(mu + z * sigma))
-
-
 # genpareto.fit spends ~95% of its time in scipy's generic objective
 # (_penalized_nnlf): argument checks and dispatch around a few numpy calls,
 # run ~150 times per fit and 200 fits per bootstrap. This is that objective
