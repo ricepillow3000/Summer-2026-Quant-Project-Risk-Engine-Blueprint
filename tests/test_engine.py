@@ -7221,6 +7221,32 @@ def test_the_story_and_the_faq_say_the_same_thing():
         assert promise not in story, f"the story promises what the FAQ disclaims: {promise!r}"
     assert "cannot say how a stock will do" in story, "the story must say it forecasts nothing"
 
+
+def test_a_waiting_press_yields_only_to_the_readers_own_hand():
+    """Live audit 8c early, PR #51 (2026-11-06, intermittent): "Skip to the
+    analysis", pressed 200 ms after it appeared, waited for #analysis, then
+    took a 5px scroll the page made while it was being written as the reader
+    taking over - and stopped 2385px short. The anchoring check (the link
+    holds still) misses when anchoring pins another node or a rerun replaces
+    the link (a detached link reads top 0). While a press waits, the wheel,
+    a touch and the keys already end it through onYield; the only other way
+    a reader scrolls is a hand on the scrollbar - so only that counts."""
+    import ast
+    root = pathlib.Path(__file__).resolve().parent.parent
+    tree = ast.parse((root / "main.py").read_text(encoding="utf-8"))
+    script = next(n.args[0].value for n in ast.walk(tree) if isinstance(n, ast.Call)
+                  and ast.unparse(n.func) == "_script_frame" and n.args
+                  and isinstance(n.args[0], ast.Constant) and "__melionaGlide" in n.args[0].value)
+    scroll = script[script.index("function onScroll"):script.index("function go(")]
+    assert "if (!pointerHeld) { P.__melionaSetY = y;" in scroll, "a wait must ignore scrolls no hand made"
+    assert "if (!waitA.isConnected)" in scroll and "a[href=\"#' + waitId + '\"]" in scroll, \
+        "a replaced link must be followed, not read as top 0"
+    assert "function onPointer(e) { pointerHeld = e.type === 'pointerdown'; }" in script
+    for t in ("'pointerdown', 'pointerup', 'pointercancel'",):
+        assert script.count(t) == 2, "pointer listeners must be added and removed on rebind"
+    assert "onPointer: onPointer" in script and "prev.onPointer" in script
+    assert "waitId = id;" in script
+
 if __name__ == "__main__":
     import sys
 

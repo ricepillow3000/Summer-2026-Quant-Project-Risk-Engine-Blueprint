@@ -217,6 +217,9 @@ _script_frame("""
       P.removeEventListener(t, prev.onYield, true);
     });
     if (prev.onScroll) P.removeEventListener('scroll', prev.onScroll, true);
+    if (prev.onPointer) ['pointerdown', 'pointerup', 'pointercancel'].forEach(function (t) {
+      P.removeEventListener(t, prev.onPointer, true);
+    });
   }
 
   /* Charts inside a tab or expander are rendered while their container is
@@ -430,6 +433,8 @@ _script_frame("""
   const SCROLL_KEYS = ['PageUp', 'PageDown', 'ArrowUp', 'ArrowDown', 'Home', 'End', ' '];
   let wheelAt = 0, wheelDy = 0, tail = false, shrunk = false, forgivenAt = 0;
   let waitA = null, waitTop = 0;          // the press waiting for its section, and where it sat (onScroll)
+  let waitId = '', pointerHeld = false;   // its section's id; a hand on the page (a scrollbar drag)
+  function onPointer(e) { pointerHeld = e.type === 'pointerdown'; }
   function yieldNow() {
     tail = false;
     P.__melionaFlight = (P.__melionaFlight || 0) + 1;
@@ -469,6 +474,21 @@ _script_frame("""
        nothing: "Skip to the analysis" moved 5px and stopped 2443px short,
        twice on the Live audit (step 8c early, 2026-11-05). A reader's scroll
        moves the button with the page. */
+    if (waitA) {
+      /* A run can replace the waiting link; a detached one reports top 0,
+         which reads as the page moving under it. Follow its replacement. */
+      if (!waitA.isConnected) {
+        const r = P.querySelector('a[href="#' + waitId + '"]');
+        if (r) { waitA = r; waitTop = r.getBoundingClientRect().top; }
+      }
+      /* While a press waits, the reader scrolls only with a hand on the page
+         (a scrollbar drag): the wheel, a touch and the keys end the wait
+         through onYield before they scroll. Any other scroll is the page
+         being written above the view - scroll anchoring pinning some other
+         node moved the link and ended the wait 5px in, 2385px short (Live
+         audit 8c early, PR #51 on 2026-11-06, intermittent). */
+      if (!pointerHeld) { P.__melionaSetY = y; waitTop = waitA.getBoundingClientRect().top; return; }
+    }
     if (waitA && Math.abs(waitA.getBoundingClientRect().top - waitTop) <= 2) {
       P.__melionaSetY = y; waitTop = waitA.getBoundingClientRect().top; return;
     }
@@ -523,6 +543,7 @@ _script_frame("""
     P.__melionaScroller = scroller;       // so a scroll the reader makes while it waits ends the wait
     P.__melionaSetY = scroller.scrollTop;
     waitA = a; waitTop = a.getBoundingClientRect().top;   // ...and only the reader's (onScroll)
+    waitId = id;
     const t0 = since || performance.now();
     /* The wait lives on the page, not only in this frame: a run that replaces
        the frame mid-wait takes this frame's timers with it, and the press did
@@ -569,7 +590,10 @@ _script_frame("""
     P.addEventListener(t, onYield, { capture: true, passive: true });
   });
   P.addEventListener('scroll', onScroll, { capture: true, passive: true });
-  P.__melionaGlide = { onTab: onTab, onLink: onLink, onYield: onYield, onScroll: onScroll };
+  ['pointerdown', 'pointerup', 'pointercancel'].forEach(function (t) {
+    P.addEventListener(t, onPointer, { capture: true, passive: true });
+  });
+  P.__melionaGlide = { onTab: onTab, onLink: onLink, onYield: onYield, onScroll: onScroll, onPointer: onPointer };
   /* A press still waiting for its section when this frame replaced the last
      one - or made before any frame was here, which static/reveal.js (in the
      <head>, there first) keeps for us: carry it on from its own press time. */
