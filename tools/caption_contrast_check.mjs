@@ -22,6 +22,10 @@ await page.goto(url);
 await page.waitForSelector('.meliona-footer', { timeout: 300000 });
 await page.waitForTimeout(2500);
 await page.evaluate(() => { document.querySelector('[data-testid="stMain"]').style.scrollBehavior = 'auto'; });
+// Measure the landed page, as the layout probes do: a block below the fold
+// waits at opacity 0 until it arrives (static/reveal.js), and read before
+// its arrival a caption measured 1.00:1 - the wait, not its ink.
+await page.evaluate(() => window.__melionaReveal && window.__melionaReveal.revealAll());
 
 const lum = ([r, g, bl]) => { const c = [r, g, bl].map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; });
   return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
