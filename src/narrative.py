@@ -166,8 +166,9 @@ SENTENCES: dict[SentenceKey, str] = {
         "({momentum_per_vol:+.2f}). It holds {final_weight:.1%} of the book and "
         "could be sold {exit_bucket}, trading {participation_rate:.0%} of a "
         "quiet day's volume. Recovery record: grit {grit_score:.0f} of 100 "
-        "among {n_universe} names. Its anchor {partner} won the anchor screen "
-        "by moving least with the basket and swinging least, but its own tail "
+        "among {n_universe} names. Its anchor {partner} won the anchor screen, "
+        "which favours names that move little with the basket and swing little, "
+        "but its own tail "
         "is {tail_gap_abs_pts:.1f} points deeper (average loss on the worst "
         "2.5 in 100 days), so on this measure the pairing does not soften the "
         "worst days."
@@ -183,8 +184,9 @@ SENTENCES: dict[SentenceKey, str] = {
     SentenceKey.CUSHION_ANCHOR: (
         "{ticker} anchors {partner}. Among the grittiest half of the names that "
         "can be held, it scored highest on the anchor screen, "
-        "{anchor_score:.0f} of 100: it moves least with the rest of the basket, "
-        "swings least and has the mildest worst days. Recovery record: grit "
+        "{anchor_score:.0f} of 100, a score that averages how little it moves "
+        "with the rest of the basket, how little it swings, how mild its worst "
+        "days are and its grit. Recovery record: grit "
         "{grit_score:.0f} of 100 among {n_universe} names. It holds "
         "{final_weight:.1%} of the book, could be sold {exit_bucket}, and its "
         "tail (average loss on the worst 2.5 in 100 days) is "
@@ -193,8 +195,8 @@ SENTENCES: dict[SentenceKey, str] = {
     SentenceKey.CUSHION_ANCHOR_DEEPER: (
         "{ticker} anchors {partner}. Among the grittiest half of the names that "
         "can be held, it scored highest on the anchor screen, "
-        "{anchor_score:.0f} of 100: it moves least with the rest of the basket "
-        "and swings least. Recovery record: grit {grit_score:.0f} of 100 among "
+        "{anchor_score:.0f} of 100, a score that favours names that move little "
+        "with the rest of the basket and swing little. Recovery record: grit {grit_score:.0f} of 100 among "
         "{n_universe} names. It holds {final_weight:.1%} of the book and could "
         "be sold {exit_bucket}. Its own tail is {tail_gap_abs_pts:.1f} points "
         "deeper than its partner's (average loss on the worst 2.5 in 100 "
@@ -213,7 +215,7 @@ SENTENCES: dict[SentenceKey, str] = {
     ),
     SentenceKey.EXCLUDED_CAPACITY: (
         "{ticker} can be sold at a pace of only {capacity_weight_per_day:.2%} of a "
-        "${book_value:,.0f} book a day, so a position worth holding could not "
+        "${book_value:,.0f} book a day, so a position of 1% of the book could not "
         "be sold within {max_exit_days:.0f} day(s). It drops out once the book "
         "is above ${book_breakpoint:,.0f}."
     ),
@@ -708,7 +710,7 @@ def headline(book: list[TickerDossier]) -> str:
     n_ok = sum(1 for x in book if x.eligible and not x.is_fallback_anchor)
     days = f"{d.max_exit_days:.0f} day" + ("" if f"{d.max_exit_days:.0f}" == "1" else "s")
     line = (f"${d.book_value:,.0f} book: {n_ok} of your {d.n_universe} names "
-            f"hold a position worth keeping and can be sold within {days}, "
+            f"can hold at least 1% of the book and sell it within {days}, "
             f"trading at most {d.participation_rate:.0%} of a quiet day's volume "
             f"(only 5 in 100 of the last {ADV_LOOKBACK_DAYS} trading days trade less).")
     # The count is of the visitor's names; an outside anchor also holds part

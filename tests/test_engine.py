@@ -5119,7 +5119,7 @@ def test_the_books_grit_is_the_grit_zones_full_history_grit():
                  if g != round(float(tab[t]))}
         assert not wrong, f"Book grit vs Grit Zone grit, shelf on (book, tab): {wrong}"
         head = [m.value for m in at.markdown if " book: " in m.value and "names hold" in m.value]
-        assert head and f"of your {len(loaded)} names hold" in head[0], head
+        assert head and f"of your {len(loaded)} names can hold" in head[0], head
     finally:
         restore()
 

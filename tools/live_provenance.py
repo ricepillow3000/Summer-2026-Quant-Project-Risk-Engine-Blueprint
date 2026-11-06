@@ -14,7 +14,7 @@ Three independent cross-checks against the LIVE feed (needs Yahoo access):
    SPY. A mislabelled or synthetic series fails these.
 4. Every preset ticker still trades on Yahoo with a full 2-year history.
 5. The three crisis-record boxes under the hero ("Bought at the bottom",
-   "Three years on", "Worst possible timing"), worked out
+   "Three years on", "Bought at the high"), worked out
    a second time from Yahoo's raw chart API with this file's own loop - no
    yfinance, no src.conviction - and compared as the page prints them.
 
@@ -210,8 +210,8 @@ def main() -> int:
                        ("t1_median", "Bought at the bottom: median return a year on"),
                        ("t3_median", "Three years on: median return"),
                        ("t3", "Three years on: crises positive"),
-                       ("p3", "Worst possible timing: crises ahead three years on"),
-                       ("p3_median", "Worst possible timing: median return")):
+                       ("p3", "Bought at the high: crises ahead three years on"),
+                       ("p3_median", "Bought at the high: median return")):
         a, b = page[key], mine[key]
         ok = (a == b) if isinstance(a, str) else (
             a is not None and b is not None and f"{a:+.0%}" == f"{b:+.0%}" and abs(a - b) < 1e-4)

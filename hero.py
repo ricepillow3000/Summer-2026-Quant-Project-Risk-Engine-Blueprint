@@ -273,7 +273,8 @@ FAQS = (
      "average loss in the worst 5 of every 100 simulated years."),
     ("Where do the numbers come from?",
      "From end-of-day prices pulled live from Yahoo Finance and worked out by the engine's "
-     "own code, which is public. No number is typed in by hand or written by an AI model. "
+     "own code, which is public. No market figure is typed in by hand or written by an AI "
+     "model; the few fixed settings, like the crisis dates, are stated on the page. "
      "The drawer at the end of the analysis shows the source and when each price was pulled."),
     ("Is this investment advice?",
      "No. Meliona is an educational student project. It describes what happened and "
@@ -287,8 +288,9 @@ FAQS = (
     ("Does the site store my data?",
      "No. There is no account and no tracking. Your choices are held in memory for "
      "this visit only and go when you close the tab. The contact form stores nothing: it only prepares "
-     "an email in your own email app. The server keeps public price files and short "
-     "error logs tagged with a random session reference."),
+     "an email in your own email app. The server keeps public price files, short "
+     "error logs tagged with a random session reference, a line when each visit starts, "
+     "and a daily count of visits and starter baskets opened, with nothing about you."),
 )
 
 

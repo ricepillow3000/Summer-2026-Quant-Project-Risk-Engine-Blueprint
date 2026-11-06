@@ -916,21 +916,20 @@ st.markdown("""
       </div>
       <div class="pillar-card">
         <div class="pillar-label">Resilience</div>
-        <div class="pillar-desc">How little it fell, and how fast it came
-          back, in the real crises we replay.</div>
+        <div class="pillar-desc">How little it fell in the real crises we
+          replay, and how often it was back at its pre-crisis price within two years.</div>
       </div>
     </div>
   </div>
   <div class="showcase-section" id="conviction">
     <div class="conv-core">
       <div class="kicker">S&amp;P 500 via SPY, computed live</div>
-      <h2 class="showcase-title">The hardest trade is the one history rewards</h2>
+      <h2 class="showcase-title">What crash buyers saw next</h2>
       <div class="ar-rule"></div>
       <div class="showcase-body">
-        Buying in a crash feels wrong. Here is what a buyer of the S&amp;P 500
-        earned in each crisis we replay: once at the bottom, the lowest close
-        of the crisis, and once at the worst moment, the peak before the
-        fall.
+        Here is what a buyer of the S&amp;P 500 earned after each crisis we
+        replay: once at the bottom, the lowest close inside the crisis's dates,
+        and once at the high before the fall inside those dates.
       </div>
       <a href="#crisis-record" class="cta-btn on-dark" style="margin-top:22px;">
         See the crisis record<span class="cta-arrow" aria-hidden="true"><svg viewBox="0 0 16 30" fill="none" xmlns="http://www.w3.org/2000/svg"><path class="shaft" d="M8 1 V22" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path class="head" d="M2.5 16.5 L8 22.5 L13.5 16.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a>
@@ -975,9 +974,9 @@ try:
         bottom. {round(_t3["pct_positive"] * _t3["n"])} of {_t3["n"]} showed a gain.</div></div>""",
                     unsafe_allow_html=True)
     with _sl3:
-        st.markdown(f"""<div class="slab"><div class="slab-label">Worst possible timing</div>
+        st.markdown(f"""<div class="slab"><div class="slab-label">Bought at the high</div>
         <div class="slab-num">{round(_p3["pct_positive"] * _p3["n"])} of {_p3["n"]}</div>
-        <div class="slab-note">crises: a buyer at the peak before the fall
+        <div class="slab-note">crises: a buyer at the high before the fall
         was ahead three years later. Typical (median) return: {_p3["median"]:+.0%}.</div></div>""",
                     unsafe_allow_html=True)
     st.caption(
@@ -1028,10 +1027,11 @@ with _gungnir_zone:
             "Which side of the trade are you on?",
             ["Bullish: long the book", "Bearish: short the book"],
             horizontal=True, key="bv_direction",
-            help="Bearish runs every number as if you had sold the same stocks "
-                 "short, reset each day. Borrowing fees, margin interest and "
-                 "forced buy-backs are not included, so a real short would do "
-                 "worse than shown.")
+            help="Bearish reruns the headline, the cone, the crisis replays, Risk "
+                 "Breakdown and the map as if you had sold the same stocks short, "
+                 "reset each day. The Book and the Grit Zone stay long-only. "
+                 "Borrowing fees, margin interest and forced buy-backs are not "
+                 "included, so a real short would do worse than shown.")
 bearish = direction.startswith("Bearish")
 _bv_sk_a, _bv_sk_b = ("the short position", "the squeeze cushion") if bearish \
     else ("the high-flyer", "the steady cushion")
@@ -1304,7 +1304,8 @@ def _freshness_ticker(fetched_at_iso: str, live: bool):
     dot = ('<span class="fresh-dot is-live" role="img" aria-label="Data is current"></span>' if live
            else '<span class="fresh-dot is-stale" role="img" aria-label="Data is stale"></span>')
     st.caption(f"{dot} Data pulled {ago} · re-pulled from Yahoo once older "
-               f"than {CACHE_MAX_AGE_HOURS:g}h, on your next interaction, not on a timer.",
+               f"than {CACHE_MAX_AGE_HOURS:g}h, on your next interaction; the starter "
+               "baskets are also refreshed in the background every 5 hours.",
                unsafe_allow_html=True)
 
 
@@ -1454,9 +1455,9 @@ with deck_alloc, st.expander("Weights: how the money is split",
             'style="color:#6A5030;font-weight:700;">!</span> '
             "Panic view: EWMA jumps on one bad day. Half its weight sits in the "
             "last ≈11 trading days, about 73% in the last month, and 90% in the "
-            "last ~37 (λ=0.94). It is the panic the Crisis Conviction tab argues "
-            "against, shown so you can see how jumpy risk looks; the engine does "
-            "not suggest acting on it.</div>",
+            "last ~37 (λ=0.94). It is shown so you can see how jumpy risk can "
+            "look; the Crisis Conviction tab shows what followed past panics, and "
+            "the engine does not suggest acting on either.</div>",
             unsafe_allow_html=True,
         )
     acol1, acol2 = st.columns(2)
@@ -2047,9 +2048,9 @@ st.caption(
 
 with tab_grit:
     st.caption(
-        "Grit ranks your names by how each one came back from its own falls: "
-        "how fast, how fully, and how reliably across real crises. Every name "
-        "here has fallen; this measures what happened next."
+        "Grit ranks your names on three things: how fast and how fully each "
+        "won back its own falls of 5% or more, how often a year of holding it "
+        "ended in a gain, and how it held up in the real crises we replay."
     )
     try:
         grit = load_grit(tuple(loaded))
@@ -2066,8 +2067,8 @@ with tab_grit:
                 width="stretch", config=PLOTLY_CFG,
             )
             read_me(
-                "Longer bar, grittier name. The name at the top has, over its own "
-                "history, come back from its falls the fastest and most reliably. "
+                "Longer bar, grittier name. The name at the top scores highest on "
+                "recovery, consistency and resilience combined, over its own history. "
                 "Scores run 0 to 100 within this basket: they rank these names "
                 "against each other, not against the whole market.")
             grittiest = gscores.index[0]
@@ -2201,9 +2202,9 @@ with tab_conviction:
             st.markdown(
                 '<div class="read-me">'
                 'Each row is a real crisis. Trough buy: you bought the S&amp;P '
-                '500 (SPY) at the lowest close of the crisis, the exact bottom. '
-                'Peak buy: you bought at the top before the fall, the worst '
-                'possible timing. The columns show where that money stood 1 and 3 '
+                '500 (SPY) at its lowest close inside the crisis dates we replay. '
+                'Peak buy: you bought at the highest close inside those dates, '
+                'before the fall, the worst timing within them. The columns show where that money stood 1 and 3 '
                 'trading years later. "-" means the crisis is too recent for that '
                 'span: left out, not estimated.'
                 '</div>', unsafe_allow_html=True)
@@ -2214,7 +2215,7 @@ with tab_conviction:
             _behind = show.loc[_p3y < 0, "Crisis"].tolist()
             st.caption(
                 "Nobody can time the exact bottom, so the trough columns show which "
-                "way the odds lean, not a strategy you could follow. That is why "
+                "way the past record leans, not a strategy you could follow. That is why "
                 "the peak columns sit beside them: the worst-timed buyer was ahead "
                 f"three years later in {int((_p3y > 0).sum())} of "
                 f"{int(_p3y.notna().sum())} crises with three years of data"
@@ -2239,11 +2240,10 @@ DQ_MESSAGES = {"DatetimeIndex confirmed.": "Every row carries a date.",
 
 with tab_dq:
     st.caption(
-        "Every price download is checked before any risk number is worked out "
-        "from it: dates present and in order, prices above zero, enough history, "
+        "The basket's two-year prices are checked here: dates present and in order, prices above zero, enough history, "
         "missing days, how recent it is, and any unusually large one-day move. These checks catch a "
         "broken or implausible feed; they cannot catch a wrong number that "
-        "looks plausible."
+        "looks plausible. The results are reported, not used to stop the analysis."
     )
     report = validate_prices(prices)
     # Palette marks, not colour emoji - the emoji were the only bright colours
@@ -2286,7 +2286,8 @@ with tab_lineage:
             "Yahoo Finance. Every figure above is computed from this source by "
             "the engine's own code; no value originates from a language model. "
             f"A copy older than {CACHE_MAX_AGE_HOURS:g} hours is re-pulled "
-            "automatically on the next interaction."
+            "automatically on the next interaction, and the starter baskets are "
+            "also refreshed in the background every 5 hours."
         )
     else:
         st.caption("Provenance record appears after the first live fetch.")
