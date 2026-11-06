@@ -5153,11 +5153,11 @@ def test_the_freshness_dot_and_the_reading_line_are_honest_and_still():
     assert "@keyframes" in css
     assert _re.search(r'\[data-testid="stMain"\]\s*\{[^}]*scroll-timeline:\s*--page', css), \
         "the reading line must ride the real scroller's own timeline"
-    line = _re.search(r'\[data-testid="stMain"\]::before\s*\{([^}]*)\}', css)
+    line = _re.search(r'\[data-testid="stMain"\]::after\s*\{([^}]*)\}', css)
     assert line and "animation-timeline: --page" in line.group(1), "no JS: a scroll-driven animation"
     assert "scaleX(0)" in line.group(1), "with animations off (reduced motion) the line stays still"
     sup = css.index("@supports (animation-timeline: scroll())")
-    assert sup < css.index('[data-testid="stMain"]::before {') < css.index("}\n}", sup) + 3, \
+    assert sup < css.index('[data-testid="stMain"]::after {') < css.index("}\n}", sup) + 3, \
         "the reading line must sit inside an @supports guard (no full-width bar where timelines are missing)"
     assert _re.search(r"\.fresh-dot\.is-stale\s*\{[^}]*border:[^}]*#7E776B", css), \
         "stale is a hollow ring, not only a missing pulse"
@@ -6875,6 +6875,66 @@ def test_the_case_studies_read_the_live_record():
     finally:
         restore()
 
+
+
+def test_a_key_and_the_wheel_never_paint_a_gold_block():
+    """John, 2026-11-06 : on a first visit, a key press brought a giant
+    block in from the left, and the wheel made the "yellow block" grow until
+    it covered the screen. Streamlit 1.66 draws its own keyboard-focus ring for
+    the page's scroller as stMain:focus-visible::before - sticky, a full screen
+    tall. Our 1px reading line was stMain::before too, so after a click on
+    the page and any key the two merged into one full-screen bronze block,
+    scaled from the left by the scroll timeline. The rule: Streamlit owns
+    stMain::before, so nothing in app.css styles it. Then the real thing:
+    tools/key_wheel_check.mjs boots this app and does it as John did (a fresh
+    browser, a real click, real keys, the real wheel) at 1440x900 and
+    1280x720, and counts bronze pixels. Self-skips without node or
+    playwright."""
+    import re
+    import shutil
+    import socket
+    import subprocess
+    import sys
+    import time
+    import urllib.request
+    import streamlit
+
+    root = pathlib.Path(__file__).resolve().parent.parent
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    assert not re.search(r'\[data-testid="stMain"\][^{,]*::?before', css), \
+        "stMain::before is Streamlit's focus ring - style ::after, or another element"
+    bundle = "".join(f.read_text(encoding="utf-8", errors="ignore") for f in
+                     (pathlib.Path(streamlit.__file__).parent / "static" / "static" / "js").glob("index.*.js"))
+    if bundle:   # the reason for the rule is still true in the pinned Streamlit
+        assert '"&:focus-visible::before"' in bundle, "Streamlit no longer draws the scroller ring on ::before"
+
+    node = shutil.which("node")
+    if not node:
+        print("[skip] node not on PATH - key and wheel check not run")
+        return
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+    app = subprocess.Popen([sys.executable, "-m", "streamlit", "run", "serve.py", "--server.headless", "true",
+                            "--server.port", str(port), "--server.address", "127.0.0.1"],
+                           cwd=root, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        url = f"http://127.0.0.1:{port}/"
+        for _ in range(120):
+            try:
+                urllib.request.urlopen(url + "_stcore/health", timeout=2)   # nosec B310 - our own local server
+                break
+            except OSError:
+                time.sleep(0.5)
+        r = subprocess.run([node, str(root / "tools" / "key_wheel_check.mjs"), url],
+                           capture_output=True, text=True, timeout=600)
+    finally:
+        app.terminate()
+        app.wait(timeout=30)
+    if r.returncode == 3:
+        print("[skip] playwright not installed - key and wheel check not run")
+        return
+    assert r.returncode == 0, r.stdout[-1500:] + r.stderr[-600:]
 
 if __name__ == "__main__":
     import sys
