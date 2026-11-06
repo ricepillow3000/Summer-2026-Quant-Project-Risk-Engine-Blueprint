@@ -7239,7 +7239,7 @@ def test_a_waiting_press_yields_only_to_the_readers_own_hand():
                   and isinstance(n.args[0], ast.Constant) and "__melionaGlide" in n.args[0].value)
     scroll = script[script.index("function onScroll"):script.index("function go(")]
     assert "if (!pointerHeld) { P.__melionaSetY = y;" in scroll, "a wait must ignore scrolls no hand made"
-    assert "if (!waitA.isConnected)" in scroll and "a[href=\"#' + waitId + '\"]" in scroll, \
+    assert "if (!waitA.isConnected)" in scroll and "x.getAttribute('href') === '#' + waitId" in scroll, \
         "a replaced link must be followed, not read as top 0"
     assert "function onPointer(e) { pointerHeld = e.type === 'pointerdown'; }" in script
     for t in ("'pointerdown', 'pointerup', 'pointercancel'",):

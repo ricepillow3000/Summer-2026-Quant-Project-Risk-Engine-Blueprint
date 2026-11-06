@@ -478,7 +478,8 @@ _script_frame("""
       /* A run can replace the waiting link; a detached one reports top 0,
          which reads as the page moving under it. Follow its replacement. */
       if (!waitA.isConnected) {
-        const r = P.querySelector('a[href="#' + waitId + '"]');
+        const r = [].find.call(P.querySelectorAll('a[href^="#"]'),
+                               function (x) { return x.getAttribute('href') === '#' + waitId; });
         if (r) { waitA = r; waitTop = r.getBoundingClientRect().top; }
       }
       /* While a press waits, the reader scrolls only with a hand on the page
