@@ -292,7 +292,7 @@
   var SCROLLER = '[data-testid="stMain"]';
   var aim = null, put = null, run = 0, pos = 0, vel = 0, last = 0;
   function scrolls(n, dy) {                            // can this inner box take the wheel itself?
-    var o = W.getComputedStyle(n).overflowY;
+    var o = (n.ownerDocument.defaultView || W).getComputedStyle(n).overflowY;
     if (o !== 'auto' && o !== 'scroll') return false;
     return dy > 0 ? n.scrollTop + n.clientHeight < n.scrollHeight - 1 : n.scrollTop > 0;
   }
@@ -360,11 +360,20 @@
     if (!gRun) gRun = W.requestAnimationFrame(settleGive);
   }
 
-  W.addEventListener('wheel', function (e) {
+  function onWheel(e) {
     if (e.ctrlKey || e.defaultPrevented || !e.deltaY || gliding()) return;   // zoom; a glide in flight (it reads the wheel itself)
-    var sc = D.querySelector(SCROLLER);
-    if (!sc || !sc.contains(e.target)) return;
-    for (var n = e.target; n && n !== sc; n = n.parentElement) if (scrolls(n, e.deltaY)) return;
+    var sc = D.querySelector(SCROLLER), doc = e.target.ownerDocument || D;
+    // A wheel inside a frame (the Risk Topology map) is the page's wheel at
+    // the frame's place - once nothing inside the frame takes it: a panel
+    // that scrolls, or the frame's own page on a phone.
+    var at = doc === D ? e.target : doc.defaultView && doc.defaultView.frameElement;
+    if (!sc || !at || !sc.contains(at)) return;
+    if (doc !== D) {
+      for (var m = e.target; m && m.nodeType === 1; m = m.parentElement) if (scrolls(m, e.deltaY)) return;
+      var se = doc.scrollingElement;
+      if (se && (e.deltaY > 0 ? se.scrollTop + se.clientHeight < se.scrollHeight - 1 : se.scrollTop > 0)) return;
+    }
+    for (var n = at; n && n !== sc; n = n.parentElement) if (scrolls(n, e.deltaY)) return;
     e.preventDefault();
     var dy = e.deltaMode === 1 ? e.deltaY * 40 : e.deltaMode === 2 ? e.deltaY * sc.clientHeight : e.deltaY;
     var max = sc.scrollHeight - sc.clientHeight;
@@ -374,7 +383,25 @@
     if (give || (!run && (atTop || atEnd) && max > 0)) { band(dy); return; }
     aim = Math.max(0, Math.min((aim === null ? sc.scrollTop : aim) + dy, max));
     if (!run) { pos = put = sc.scrollTop; vel = 0; last = 0; sc.style.scrollBehavior = 'auto'; run = W.requestAnimationFrame(coast); }
-  }, { passive: false });
+  }
+  W.addEventListener('wheel', onWheel, { passive: false });
+  // The map is a same-origin frame, and a wheel over a frame goes to the
+  // frame's own window, never this one: the page fell back to the browser's
+  // step scroll there, the one stretch of the page that did not glide (John,
+  // 2026-11-06). Each frame's window gets the same listener, again after
+  // every load (Streamlit rewrites the map's srcdoc on a rerun, a new window).
+  function hookFrame(f) {
+    if (f.__tow) return;
+    f.__tow = 1;
+    var hook = function () {
+      try {
+        var fw = f.contentWindow;
+        if (fw && !fw.__melionaTow) { fw.__melionaTow = 1; fw.addEventListener('wheel', onWheel, { passive: false }); }
+      } catch (x) { /* a cross-origin frame keeps its own wheel */ }
+    };
+    f.addEventListener('load', hook);
+    hook();
+  }
 
   // ---- tagging -----------------------------------------------------------------
   // If this file arrived after the page had painted (no <head> snippet: a
@@ -386,6 +413,7 @@
   }
   function scan(root) {
     if (root.nodeType !== 1) return;
+    (root.tagName === 'IFRAME' ? [root] : [].slice.call(root.querySelectorAll('iframe'))).forEach(hookFrame);
     (root.matches(POP) ? [root] : [].slice.call(root.querySelectorAll(POP))).forEach(function (pop) {
       W.requestAnimationFrame(function () {
         aimPop(pop);

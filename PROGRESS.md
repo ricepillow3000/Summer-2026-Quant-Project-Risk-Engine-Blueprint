@@ -28,6 +28,16 @@ Paste this into a new chat session to bring it up to speed instantly.
   the receipt pulses once; the wheel tow is heavier (`TOW` 4.6 -> 3.8) and
   the page stretches past its ends and eases back (no bounce anywhere: no
   curve leaves 0..1). Pinned by `test_motion_follows_the_house_rules`.
+- **2026-11-06, the wheel glides over the map:** John saw the page scroll
+  smoothly everywhere but the Risk Topology map, where it went back to the
+  browser's step. A wheel over a frame goes to the frame's own window, so
+  `static/reveal.js`'s tow never saw it. Every same-origin frame's window
+  now gets the same listener (after each load; Streamlit rewrites the map's
+  srcdoc on a rerun), and the map's own scrolling panels still take the
+  wheel first. `tools/map_wheel_check.mjs` (Live audit 8b) measures it with
+  the real wheel at three desktop sizes: one notch over the map moved the
+  page 100px in 1 frame before and ~98px over ~63 frames after; a 14-notch
+  run across the map never steps more than 15px a frame (112px before).
 - **2026-11-06, frozen arrivals fixed:** John saw headings, text and
   buttons stop part-way or sit out of place at the foot of the screen until
   a scroll brought them into full view. Three causes, each measured by a
