@@ -4073,7 +4073,10 @@ def test_blocks_reveal_on_arrival_on_the_gpu_and_never_hide_without_script():
     # scroll (the heading rules' scroll-linked draw parked them half-drawn
     # under a reader who stopped: John, 2026-11-06)
     assert "new IntersectionObserver" in js and "new MutationObserver" in js
-    assert "addEventListener('scroll'" not in js and "animation-range" not in css
+    # The one scroll listener left is the press guard for an opening menu
+    # (2026-11-07): it does nothing unless a press came in the last 500ms.
+    assert js.count("addEventListener('scroll'") == 1 and "animation-range" not in css
+    assert "W.addEventListener('scroll', function (e) {\n    if (!held || Date.now() > held.until) { held = null; return; }" in js
     # an arrival starts BEFORE its slot is on screen, never inside the edge
     # (-8% left headings, cards and the contact button missing or out of
     # place at the screen's foot until a scroll brought them in)
@@ -6225,6 +6228,16 @@ def test_blocks_arrive_from_where_they_sit_and_the_wheel_glides():
     assert "doc.defaultView.frameElement" in js and "doc.scrollingElement" in js
     wf = (pathlib.Path(__file__).resolve().parent.parent / ".github" / "workflows" / "live-audit.yml").read_text(encoding="utf-8")
     assert "node tools/map_wheel_check.mjs http://127.0.0.1:8501" in wf
+    # ...and never under an open menu (John, 2026-11-07: "the menu screen would
+    # lag and automatically close by itself"): react-aria shuts a menu when
+    # the page under it scrolls, so a press stops the tow, an open menu holds
+    # the page, and a scroll event reporting no movement since the press is
+    # dropped before Streamlit sees it. tools/menu_check.mjs (Live audit 8b)
+    # failed 15 of 15 on the old reveal.js for all five dropdowns.
+    assert "if (menuOpen()) {" in js and "e.preventDefault(); stop();" in js
+    assert "D.addEventListener('pointerdown', function () {" in js and "e.stopImmediatePropagation()" in js
+    assert "Math.abs(sc.scrollTop - held.y) < 1" in js, "only a scroll that did not move is ever dropped"
+    assert "node tools/menu_check.mjs http://127.0.0.1:8501" in wf
     # John, 2026-11-04: "heavier ... like a boat being tugged" - a critically
     # damped tow line on the frame's own clock, not a first-order ease
     assert re.search(r"var TOW = \d+(\.\d+)?;", js)
@@ -6236,7 +6249,7 @@ def test_blocks_arrive_from_where_they_sit_and_the_wheel_glides():
     # from the window it was never seen, and the hull's longer momentum then
     # dragged a glide short (glide check, 2026-11-04)
     assert "function gliding() { return !!(D.__melionaStop || W.__melionaStop); }" in js
-    assert "|| gliding()) return;   // zoom; a glide in flight" in js
+    assert "if (!e.deltaY || gliding()) return;                                      // a glide in flight" in js
     main_src = (pathlib.Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
     assert "const P = window.parent.document;" in main_src and "P.__melionaStop = function" in main_src
 

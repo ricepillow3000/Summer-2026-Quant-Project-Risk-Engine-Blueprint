@@ -296,7 +296,7 @@
     if (o !== 'auto' && o !== 'scroll') return false;
     return dy > 0 ? n.scrollTop + n.clientHeight < n.scrollHeight - 1 : n.scrollTop > 0;
   }
-  function stop() { aim = put = null; run = 0; vel = 0; last = 0; }
+  function stop() { if (run) W.cancelAnimationFrame(run); aim = put = null; run = 0; vel = 0; last = 0; }
   // A button's glide is flying: main.py's glide script keeps its stop handle
   // on this document (its P). The old check read the window and never saw it.
   function gliding() { return !!(D.__melionaStop || W.__melionaStop); }
@@ -360,8 +360,21 @@
     if (!gRun) gRun = W.requestAnimationFrame(settleGive);
   }
 
+  // An open menu (a dropdown's list) holds the page still. react-aria shuts
+  // a menu the moment the page under it scrolls, so a menu clicked while the
+  // tow was still gliding, or under a trackpad's resting fingers (1px wheel
+  // ticks), opened and snapped shut by itself (John, 2026-11-07: "the menu
+  // screen would lag and automatically close by itself"). Its own list still
+  // takes the wheel; anywhere else the wheel waits until the menu is closed.
+  var MENU = '[data-testid="stSelectboxVirtualDropdown"], [data-testid="stMultiSelectDropdown"]';
+  function menuOpen() { var m = D.querySelector(MENU); return !!m && !m.hasAttribute('data-exiting'); }
   function onWheel(e) {
-    if (e.ctrlKey || e.defaultPrevented || !e.deltaY || gliding()) return;   // zoom; a glide in flight (it reads the wheel itself)
+    if (e.ctrlKey || e.defaultPrevented) return;                             // zoom
+    if (menuOpen()) {
+      if (!(e.target.closest && e.target.closest(MENU))) { e.preventDefault(); stop(); }
+      return;
+    }
+    if (!e.deltaY || gliding()) return;                                      // a glide in flight (it reads the wheel itself)
     var sc = D.querySelector(SCROLLER), doc = e.target.ownerDocument || D;
     // A wheel inside a frame (the Risk Topology map) is the page's wheel at
     // the frame's place - once nothing inside the frame takes it: a panel
@@ -385,6 +398,29 @@
     if (!run) { pos = put = sc.scrollTop; vel = 0; last = 0; sc.style.scrollBehavior = 'auto'; run = W.requestAnimationFrame(coast); }
   }
   W.addEventListener('wheel', onWheel, { passive: false });
+  // A press takes hold of the page, as a finger stops a flicked list: the
+  // tow's remaining way is dropped before the press lands, so the menu it
+  // opens is not shut by the page still gliding under it.
+  // The browser hands out a frame's scroll event a beat late: the last frame
+  // the tow moved before the press reported its scroll ~35ms after the press,
+  // just after the menu opened, and the menu read it as the page moving and
+  // shut (measured: pointerdown 373ms, menu 397ms, scroll event 409ms at the
+  // SAME position). For half a second after a press, a scroll event that
+  // reports no movement since the press is stopped before the page's own
+  // listeners see it. This file runs in the <head>, before Streamlit, so its
+  // window listener comes first; a real move always passes.
+  var held = null;
+  D.addEventListener('pointerdown', function () {
+    var sc = D.querySelector(SCROLLER);
+    if (run) stop();
+    held = sc ? { y: sc.scrollTop, until: Date.now() + 500 } : null;
+  }, true);
+  W.addEventListener('scroll', function (e) {
+    if (!held || Date.now() > held.until) { held = null; return; }
+    var sc = D.querySelector(SCROLLER);
+    if (e.target === sc && Math.abs(sc.scrollTop - held.y) < 1) e.stopImmediatePropagation();
+    else held = null;
+  }, true);
   // The map is a same-origin frame, and a wheel over a frame goes to the
   // frame's own window, never this one: the page fell back to the browser's
   // step scroll there, the one stretch of the page that did not glide (John,
@@ -413,6 +449,7 @@
   }
   function scan(root) {
     if (root.nodeType !== 1) return;
+    if (root.matches(MENU) || root.querySelector(MENU)) stop();             // a menu opened: the page's way stops under it
     (root.tagName === 'IFRAME' ? [root] : [].slice.call(root.querySelectorAll('iframe'))).forEach(hookFrame);
     (root.matches(POP) ? [root] : [].slice.call(root.querySelectorAll(POP))).forEach(function (pop) {
       W.requestAnimationFrame(function () {

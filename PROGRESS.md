@@ -28,6 +28,20 @@ Paste this into a new chat session to bring it up to speed instantly.
   the receipt pulses once; the wheel tow is heavier (`TOW` 4.6 -> 3.8) and
   the page stretches past its ends and eases back (no bounce anywhere: no
   curve leaves 0..1). Pinned by `test_motion_follows_the_house_rules`.
+- **2026-11-07, dropdowns stay open:** John: "the menu screen would lag
+  and automatically close by itself". react-aria shuts a menu the moment the
+  page under it scrolls, and the wheel's tow keeps the page gliding ~1.5s
+  after the last notch: a menu clicked mid-glide, or under a trackpad's
+  resting fingers (1px wheel ticks), opened and snapped shut. A press now
+  stops the tow, an open menu holds the page still (its own list still
+  scrolls), and because the browser reports the last glide frame's scroll
+  ~35ms late - after the menu has opened - a scroll event that reports no
+  movement since the press is dropped before Streamlit sees it.
+  `tools/menu_check.mjs` (Live audit 8b) opens the drawers and tests all five
+  dropdowns (basket, names, weights, stress test, contact topic): opens in
+  40-80ms, open 8s untouched, open through a trackpad and a wheel notch,
+  closes on Escape and on a click beside it, and stays open when clicked
+  mid-glide 3/3. The old reveal.js failed 15 of 15.
 - **2026-11-06, the wheel glides over the map:** John saw the page scroll
   smoothly everywhere but the Risk Topology map, where it went back to the
   browser's step. A wheel over a frame goes to the frame's own window, so
