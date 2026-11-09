@@ -1536,7 +1536,9 @@ html { font-kerning: normal; text-rendering: optimizeLegibility;
     text-wrap: balance; }
 /* Tracking: type sets at its own spacing - never tightened, which is the
    generated-page look (test_no_negative_letter_spacing_anywhere) - and the
-   capital label voice is opened to .2em so its letters do not crowd. */
+   capital label voice is opened to .2em so its letters do not crowd.
+   Streamlit tightens its own headings by -0.005em; ours are set back. */
+[data-testid="stMain"] .showcase-title, [data-testid="stMain"] .faq-q { letter-spacing: 0; }
 /* OKLCH: the state tints are mixed in a perceptual space, so a 16% bronze
    reads equally strong on paper and on stone. Hex first for old browsers. */
 ::selection { background-color: #D9C7A6; background-color: oklch(84% 0.05 80); color: #2E2A25; }
