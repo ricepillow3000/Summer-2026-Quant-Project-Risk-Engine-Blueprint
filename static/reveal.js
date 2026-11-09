@@ -109,6 +109,44 @@
       if (Date.now() - p.ms < 180000) setTimeout(wait, 100);
     })();
   }, true);
+  // Optimistic update (John, 2026-11-09): a changed setting is answered at
+  // once. Streamlit shows its running sign only 500ms into a run, so a
+  // reader's change looked ignored for half a second; html.m-busy lights the
+  // same rail and "Updating..." tag (app.css) the moment the change is made,
+  // and drops it when the run ends - or at once if no run follows.
+  var busyT = 0;
+  function busy() {
+    var t0 = Date.now(), seen = false;
+    H.classList.add('m-busy');
+    clearInterval(busyT);
+    busyT = setInterval(function () {
+      var app = D.querySelector('.stApp');
+      var on = !!D.querySelector('[data-testid="stStatusWidgetRunningIcon"]') ||
+               (app && app.getAttribute('data-test-script-state') === 'running');
+      if (on) seen = true;
+      if ((seen && !on) || (!seen && Date.now() - t0 > 900) || Date.now() - t0 > 30000) {
+        H.classList.remove('m-busy'); clearInterval(busyT);
+      }
+    }, 80);
+  }
+  D.addEventListener('change', function (e) {
+    if (e.target.closest && e.target.closest('[data-testid="stMain"]')) busy();
+  }, true);
+  // react-aria's radios, toggles and segmented buttons change on a press and
+  // fire no native 'change', so a press on a control that is not already
+  // the chosen one counts too (and a slider when it is let go).
+  var CONTROL = '[role="radiogroup"] label, [data-testid="stCheckbox"] label, [data-testid="stToggle"] label, ' +
+    '[role="option"], .stButton>button, .stFormSubmitButton>button, [data-testid="stButtonGroup"] button, ' +
+    '[data-testid="stSegmentedControl"] button, [data-testid="stPills"] button';
+  D.addEventListener('click', function (e) {
+    var c = e.target.closest && e.target.closest(CONTROL);
+    if (!c || c.querySelector('input[type="radio"]:checked') || c.getAttribute('aria-selected') === 'true' ||
+        c.getAttribute('aria-checked') === 'true' || c.getAttribute('aria-pressed') === 'true') return;
+    if (c.closest('[data-testid="stMain"], [data-testid="stSelectboxVirtualDropdown"], [data-testid="stMultiSelectDropdown"]')) busy();
+  }, true);
+  D.addEventListener('pointerup', function (e) {
+    if (e.target.closest && e.target.closest('[data-testid="stSlider"]')) busy();
+  }, true);
   if (calm) { H.classList.remove('reveal-on'); return; }   // everything as drawn
   // Flat motion on WebKit (every iPhone and iPad browser, and Safari: only
   // WebKit has GestureEvent) and on any touch screen: the same arrivals as
@@ -217,6 +255,7 @@
     el.style.removeProperty('--reveal-depth');
   }
   api.revealAll = function () {                       // the end state, at once (layout probes)
+    landCounts();
     [].forEach.call(D.querySelectorAll('.reveal-item'), function (el) { observer().unobserve(el); done(el); });
     [].forEach.call(D.querySelectorAll('.mask-reveal'), function (el) { veiled.unobserve(el.parentElement); unveil(el); });
   };
@@ -278,6 +317,62 @@
     pop.classList.add('pop-rows');
     setTimeout(function () { pop.classList.remove('pop-rows'); }, 520);
   }
+
+  // ---- origin-aware hover ---------------------------------------------------
+  // A button's hover colour opens from the point the pointer came in at, and
+  // closes toward where it left (app.css: the ::after circle at --mx/--my).
+  var HOVERS = '.stButton>button, .stFormSubmitButton>button, .stLinkButton>a, .cta-btn';
+  function aimHover(e) {
+    var el = e.target.closest && e.target.closest(HOVERS);
+    if (!el || (e.relatedTarget && el.contains(e.relatedTarget))) return;   // moving inside it
+    var r = el.getBoundingClientRect();
+    if (!r.width || !r.height) return;
+    el.style.setProperty('--mx', Math.max(0, Math.min(100, (e.clientX - r.left) / r.width * 100)).toFixed(1) + '%');
+    el.style.setProperty('--my', Math.max(0, Math.min(100, (e.clientY - r.top) / r.height * 100)).toFixed(1) + '%');
+  }
+  D.addEventListener('pointerover', aimHover, { capture: true, passive: true });
+  D.addEventListener('pointerout', aimHover, { capture: true, passive: true });
+
+  // ---- count-up: a headline number counts to its value as it arrives -------
+  // Only the page's own HTML numbers (the verdict, the hero's receipt), never
+  // a Streamlit-owned text node. It counts from the last value that place
+  // showed (0 the first time) and always ends on the server's exact text,
+  // kept in data-count-final; revealAll() lands every count at once.
+  var COUNT = '.verdict-number, .hstat .n', NUM = /^(\D*?)([-\u2212]?)(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?(\D*)$/;
+  var lastNum = {}, counts = [];
+  function countUp(el) {
+    var final = el.textContent.trim(), m = NUM.exec(final);
+    el.setAttribute('data-count-final', final);
+    if (!m) return;
+    var dec = m[4] ? m[4].length - 1 : 0, sign = m[2] ? -1 : 1, commas = m[3].indexOf(',') >= 0;
+    var to = sign * parseFloat(m[3].replace(/,/g, '') + (m[4] || ''));
+    var key = el.className + '|' + [].indexOf.call(D.querySelectorAll(COUNT), el);
+    var from = key in lastNum ? lastNum[key] : 0;
+    lastNum[key] = to;
+    if (from === to) return;
+    var fmt = function (v) {
+      var s = Math.abs(v).toFixed(dec), i = s.split('.');
+      if (commas) i[0] = i[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+      return m[1] + (v < 0 ? (m[2] || '-') : '') + i.join('.') + m[5];
+    };
+    var c = { el: el, final: final, t0: 0 };
+    counts.push(c);
+    el.textContent = fmt(from);                          // starts where it counts from, even under the loading screen
+    (function step(now) {
+      if (c.done) return;
+      if (D.getElementById('boot-skel') && getComputedStyle(D.getElementById('boot-skel')).display !== 'none' &&
+          getComputedStyle(D.getElementById('boot-skel')).opacity > 0.05) { W.requestAnimationFrame(step); return; }
+      if (!c.t0) c.t0 = now;
+      var p = Math.min(1, (now - c.t0) / 900), e = 1 - Math.pow(1 - p, 3);
+      if (!el.isConnected) { c.done = true; return; }       // Streamlit redrew it: the new node counts on its own
+      el.textContent = p < 1 ? fmt(from + (to - from) * e) : final;
+      if (p < 1) W.requestAnimationFrame(step); else c.done = true;
+    })(performance.now());
+  }
+  function landCounts() { counts.forEach(function (c) { if (!c.done) { c.done = true; if (c.el.isConnected) c.el.textContent = c.final; } }); }
+  var counting = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) { if (e.isIntersecting) { counting.unobserve(e.target); countUp(e.target); } });
+  }, { threshold: 0.6 });
 
   // ---- 3. glide ----------------------------------------------------------------
   // A boat on a tow line (John, 2026-11-04: "heavier ... like a boat being
@@ -420,6 +515,12 @@
         W.requestAnimationFrame(function () { aimPop(pop); });
       });
       [60, 140, 260].forEach(function (ms) { setTimeout(function () { aimPop(pop); }, ms); });
+    });
+    (root.matches(COUNT) ? [root] : [].slice.call(root.querySelectorAll(COUNT))).forEach(function (el) {
+      if (el.__ct) return;
+      el.__ct = 1;
+      el.setAttribute('data-count-final', el.textContent.trim());
+      counting.observe(el);
     });
     var masks = root.matches(MASK) ? [root] : [].slice.call(root.querySelectorAll(MASK));
     masks.forEach(function (el) {

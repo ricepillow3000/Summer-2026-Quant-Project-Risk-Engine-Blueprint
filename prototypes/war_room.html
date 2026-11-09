@@ -44,7 +44,9 @@ body {
   color: var(--beige);
   font-family: Georgia, 'Times New Roman', serif;
   overflow: hidden;
-  font-variant-numeric: tabular-nums;
+  /* a ledger's figures: equal widths (the tally does not jitter), on the baseline */
+  font-variant-numeric: tabular-nums lining-nums;
+  font-kerning: normal;
 }
 .shell { position: relative; height: 100vh; min-height: 560px; }
 /* The stage is what the canvases (and the hover tip) are sized and positioned

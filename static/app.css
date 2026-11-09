@@ -211,7 +211,8 @@ html { scroll-behavior: smooth; }
    the button; a charcoal stone block on the right, from the top of the page
    to the band below and out to the right edge, carrying the engine's facts
    as a receipt over the crest's faint engraving. No photograph. */
-.hero-section { --hero-pt: 104px; --hero-pb: 72px; --hero-px: max(7vw, calc(50vw - 744px));
+.hero-section { --hero-pt: 76px; --hero-pb: 100px;   /* optical centre: the words sit ~4% above the middle (CRAFT) */
+    --hero-px: max(7vw, calc(50vw - 744px));
     min-height: 58vh; display: grid;
     grid-template-columns: minmax(0, 1.4fr) minmax(320px, 1fr);
     gap: 0 80px; align-items: center; text-align: left;
@@ -366,7 +367,7 @@ html { scroll-behavior: smooth; }
     font-size: 0.75rem; letter-spacing: .2em; text-transform: uppercase;
     color: #6A5030; margin-bottom: 14px; }
 .slab-num { font-size: 3.25rem; font-weight: 700; color: #3F3B35; line-height: 1;
-    margin-bottom: 12px; font-variant-numeric: tabular-nums; }
+    margin-bottom: 12px; font-variant-numeric: tabular-nums lining-nums; }
 .slab-note { font-size: 0.9375rem; color: #5D574D; line-height: 1.55;
     border-top: 1px solid rgba(63,59,53,.28); padding-top: 12px; }
 
@@ -470,15 +471,18 @@ div:has(> .st-key-glide), .st-key-glide, .st-key-glide div.stElementContainer, .
 .stButton>button:hover, .stFormSubmitButton>button:hover, .stLinkButton>a:hover {
     background-color: #2E2A25; }
 /* The colour change is a MASK, not a dissolve: a flat paper layer behind the
-   words (its ::after; the CTA's old sheen lived on the other pseudo), uncovered from the bottom edge up by its clip-path. */
+   words (its ::after; the CTA's old sheen lived on the other pseudo), uncovered
+   by its clip-path. Origin-aware (John, 2026-11-09): the circle opens from the
+   point the pointer came in at and closes toward where it left (reveal.js sets
+   --mx/--my); without a pointer it rises from the bottom edge's middle. */
 .stButton>button::after, .stFormSubmitButton>button::after, .stLinkButton>a::after,
 .cta-btn::after {
     content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
-    background-color: #EDE9E3; clip-path: inset(100% 0 0 0);
+    background-color: #EDE9E3; clip-path: circle(0% at var(--mx, 50%) var(--my, 100%));
     transition: clip-path var(--wipe) var(--ease-wipe), background-color .15s ease; }
 .stButton>button:hover::after, .stFormSubmitButton>button:hover::after,
 .stLinkButton>a:hover::after, .cta-btn:hover::after, .cta-btn:active::after {
-    clip-path: inset(0 0 0 0); }
+    clip-path: circle(150% at var(--mx, 50%) var(--my, 100%)); }
 
 /* Inputs: flat panel ground, bronze on hover and focus */
 div[data-baseweb="select"] > div, .stNumberInput input,
@@ -503,7 +507,8 @@ div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
 [data-testid="stMultiSelectDropdown"] [role="option"][data-focused] [data-item-hl],
 [data-testid="stSelectboxVirtualDropdown"] [role="option"]:hover [data-item-hl],
 [data-testid="stMultiSelectDropdown"] [role="option"]:hover [data-item-hl] {
-    background-color: rgba(154,123,79,.14) !important; }
+    background-color: rgba(154,123,79,.14) !important;
+    background-color: color-mix(in oklch, #9A7B4F 16%, #F1EDE5) !important; }
 /* The chosen names: square ticker tags in the dark bronze text tone with
    paper words (6.4:1). Streamlit drew them rounded, in the light bronze
    with white words - 3.2:1, under AA. */
@@ -837,7 +842,7 @@ div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
 
 /* Tabular figures on every metric so columns of numbers align like a ledger. */
 [data-testid="stMetricValue"], .verdict-number, .hstat .n {
-    font-variant-numeric: tabular-nums; }
+    font-variant-numeric: tabular-nums lining-nums; }
 
 /* The dark band: the twin showcases sit on one full-bleed slab of flat
    stone between beige fields, a 3px gold cap line top and bottom, the
@@ -1114,17 +1119,20 @@ div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
    moving across the top and a still "Updating…" tag. Neither takes a click.
    The rail's gradient is the moving bar itself, a status sign. */
 @keyframes run-rail { from { background-position: 100% 0; } to { background-position: -150% 0; } }
+html.m-busy body::before,
 body:has([data-testid="stStatusWidgetRunningIcon"])::before { content: "";
     position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 990;
     pointer-events: none;
     background: linear-gradient(90deg, transparent 0 35%, #9A7B4F 35% 65%, transparent 65%);
     background-size: 250% 100%; animation: run-rail 1.4s linear infinite; }
+html.m-busy body::after,
 body:has([data-testid="stStatusWidgetRunningIcon"])::after { content: "Updating\2026";
     position: fixed; top: 10px; right: 12px; z-index: 990; pointer-events: none;
     padding: 7px 11px; background: #2E2A25; color: #EDE9E3;
     font: 0.75rem/1 'Helvetica Neue', Arial, sans-serif; }
 /* Reduced motion stops the rail (global rule); it stays, as a still line. */
 @media (prefers-reduced-motion: reduce) {
+    html.m-busy body::before,
     body:has([data-testid="stStatusWidgetRunningIcon"])::before { background: #9A7B4F; } }
 
 /* --- SHORT-VIEWPORT HERO (moved here from main.py, 2026-10-19) ---------------
@@ -1146,7 +1154,7 @@ body:has([data-testid="stStatusWidgetRunningIcon"])::after { content: "Updating\
 /* The tiers set the hero's padding through its variables, so the stone
    block's bleed (which reads the same variables) follows every tier. */
 @media (max-height: 1000px) {
-  .hero-section { --hero-pt: 56px; --hero-pb: 44px; min-height: 0 !important; }
+  .hero-section { --hero-pt: 40px; --hero-pb: 60px; min-height: 0 !important; }   /* 56/44 before: same height, words at the optical centre */
   .hero-left { gap: 16px !important; }
   .hero-title { font-size: clamp(2.5rem, 8vw, 5rem) !important;
                 line-height: .96 !important; }
@@ -1156,7 +1164,7 @@ body:has([data-testid="stStatusWidgetRunningIcon"])::after { content: "Updating\
   .hstat:first-child { padding: 16px 0 14px !important; }
 }
 @media (max-height: 860px) {
-  .hero-section { --hero-pt: 36px; --hero-pb: 28px; min-height: 0 !important; }
+  .hero-section { --hero-pt: 26px; --hero-pb: 38px; min-height: 0 !important; }   /* 36/28 before */
   .hero-left { gap: 10px !important; }
   .hero-title { font-size: clamp(2.125rem, 6.4vw, 3.75rem) !important;
                 line-height: .98 !important; margin: 0 !important; }
@@ -1168,7 +1176,7 @@ body:has([data-testid="stStatusWidgetRunningIcon"])::after { content: "Updating\
   .hstat:first-child .n { font-size: 2.125rem !important; }
 }
 @media (max-height: 700px) {
-  .hero-section { --hero-pt: 24px; --hero-pb: 20px; }
+  .hero-section { --hero-pt: 18px; --hero-pb: 26px; }   /* 24/20 before */
   .hero-title { font-size: clamp(1.875rem, 5.2vw, 3rem) !important; }
   .hero-sub { font-size: 0.9062rem !important; }
 }
@@ -1499,4 +1507,69 @@ a.pmark:focus-visible, .meliona-footer a.f-mark:focus-visible, .thanks-row a:foc
      2026-11-04: "Privacy covered by a"), so its lines are 44px apart. */
   .meliona-footer .f-links { line-height: 44px; }
   .stButton>button { min-height: 44px; }
+}
+
+/* =========================================================================
+   CRAFT - the details a reader feels before they notice them (John,
+   2026-11-09: "more immersive, alive, less AI and human"). Measured on the
+   rendered page by tools/craft_check.mjs; pinned by
+   test_the_pages_craft_holds_kerning_figures_measure_widows_and_touch.
+   ========================================================================= */
+/* Kerning on, legibility layout, and the figures of a ledger everywhere:
+   tabular (columns align, a number that changes does not jitter) and lining
+   (they stand on the baseline at cap height). font-size-adjust keeps the
+   x-height of the first font for any glyph that falls back to another. */
+html { font-kerning: normal; text-rendering: optimizeLegibility;
+       -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+       font-size-adjust: from-font; font-variant-numeric: tabular-nums lining-nums; }
+/* Measure and widows: prose stops at 68 characters a line (the eye loses
+   the next line past ~75) and wraps "pretty", so no paragraph ends on one
+   word; headings balance their lines. */
+[data-testid="stMain"] [data-testid="stMarkdownContainer"] p,
+[data-testid="stMain"] [data-testid="stCaptionContainer"] p,
+[data-testid="stMain"] [data-testid="stMarkdownContainer"] li,
+.story-p, .faq-a, .book-lede, .about-bio, .hero-sub, .contact-sub, .contact-note,
+.verdict-sentence, .thanks-p, .slab-note, .read-me p {
+    max-width: 68ch; text-wrap: pretty; }
+.hero-title, .showcase-title, .panel-head .s, .faq-q, .story-quote, .verdict-label,
+[data-testid="stMain"] h1, [data-testid="stMain"] h2, [data-testid="stMain"] h3 {
+    text-wrap: balance; }
+/* Tracking: type sets at its own spacing - never tightened, which is the
+   generated-page look (test_no_negative_letter_spacing_anywhere) - and the
+   capital label voice is opened to .2em so its letters do not crowd. */
+/* OKLCH: the state tints are mixed in a perceptual space, so a 16% bronze
+   reads equally strong on paper and on stone. Hex first for old browsers. */
+::selection { background-color: #D9C7A6; background-color: oklch(84% 0.05 80); color: #2E2A25; }
+:where([data-testid="stMain"]) :where(a, button, summary, [role="tab"], [role="button"]):focus-visible {
+    outline: 2px solid #6A5030; outline: 2px solid oklch(44% 0.06 70); outline-offset: 3px; }
+/* Affordance: a link inside a sentence is underlined, quietly, and the line
+   firms up under the pointer. */
+:where(.story-p, .faq-a, .about-bio, .contact-sub, .contact-note, .book-lede,
+       [data-testid="stMain"] [data-testid="stMarkdownContainer"] p,
+       [data-testid="stMain"] [data-testid="stCaptionContainer"] p) a {
+    text-decoration-line: underline; text-decoration-thickness: 1px; text-underline-offset: .2em;
+    text-decoration-color: #9A7B4F; text-decoration-color: color-mix(in oklch, currentColor 45%, transparent); }
+:where(.story-p, .faq-a, .about-bio, .contact-sub, .contact-note, .book-lede,
+       [data-testid="stMain"] [data-testid="stMarkdownContainer"] p,
+       [data-testid="stMain"] [data-testid="stCaptionContainer"] p) a:hover {
+    text-decoration-thickness: 2px; text-decoration-color: currentColor; }
+/* Optimistic update: while the engine works, the old numbers stay readable
+   (dimmed a little, never blanked) and the rail at the top says so. */
+[data-testid="stMain"] [data-stale="true"] { opacity: .72 !important; transition: opacity .3s ease; }
+/* Safe area: the viewport now covers the notch (viewport-fit=cover), so the
+   page's gutters grow to clear it in landscape, and the dock's too. */
+@media (max-width: 900px) {
+  [data-testid="stMainBlockContainer"] {
+      padding-left: max(20px, env(safe-area-inset-left)) !important;
+      padding-right: max(20px, env(safe-area-inset-right)) !important; } }
+.m-dock { padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
+/* Touch targets: on a touch screen every control answers a 44 x 44px
+   finger - the help marks and the pickers' fields included. */
+@media (pointer: coarse) {
+  [data-testid="stTooltipHoverTarget"] { min-height: 44px; min-width: 44px;
+      display: inline-flex; align-items: center; justify-content: center; }
+  [data-testid="stSelectbox"] [role="combobox"], [data-testid="stMultiSelect"] [role="combobox"],
+  [data-testid="stSelectbox"] button, [data-testid="stMultiSelect"] button { min-height: 44px; min-width: 44px; }
+  .thanks-row a { display: inline-flex; align-items: center; min-height: 44px; }
+  .meliona-footer .f-links a { display: inline-block; min-width: 44px; text-align: center; }
 }

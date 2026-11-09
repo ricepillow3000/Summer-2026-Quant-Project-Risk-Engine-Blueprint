@@ -6953,8 +6953,9 @@ def test_motion_follows_the_house_rules():
     assert ".cta-btn:active { transform: scale(var(--press)); }" in css
     assert ".stButton>button:active, .stFormSubmitButton>button:active" in css
     wipe = re.search(r"\.cta-btn::after \{([^}]*)\}", css).group(1)
-    assert "clip-path: inset(100% 0 0 0)" in wipe and "transition: clip-path var(--wipe)" in wipe
-    assert ".stLinkButton>a:hover::after, .cta-btn:hover::after, .cta-btn:active::after {\n    clip-path: inset(0 0 0 0); }" in css
+    # ...origin-aware (2026-11-09): it opens from where the pointer came in
+    assert "clip-path: circle(0% at var(--mx, 50%) var(--my, 100%))" in wipe and "transition: clip-path var(--wipe)" in wipe
+    assert ".stLinkButton>a:hover::after, .cta-btn:hover::after, .cta-btn:active::after {\n    clip-path: circle(150% at var(--mx, 50%) var(--my, 100%)); }" in css
     assert ".stButton>button::after" in css, "the Streamlit buttons share the mask"
     # knobs: stretched while dragged, the position never tweened
     thumb = re.search(r'\[data-testid="stSlider"\] \[data-rac\]:has\(> div > input\[type="range"\]\) \{\s*'
@@ -7097,6 +7098,57 @@ def test_a_key_and_the_wheel_never_paint_a_gold_block():
         print("[skip] playwright not installed - key and wheel check not run")
         return
     assert r.returncode == 0, r.stdout[-1500:] + r.stderr[-600:]
+
+def test_the_pages_craft_holds_kerning_figures_measure_widows_and_touch():
+    """John, 2026-11-09: "make the website feel more immersive, alive, less AI
+    and human" - kerning, optical center, tabular numbers, layout shift,
+    tracking, optimistic update, x-height, touch target, leading, origin aware
+    animation, OKLCH, widow, safe area, stagger, line length, affordance, combo
+    box, interruptible animation, shared element transition. The browser proof
+    is tools/craft_check.mjs (Live audit 8b: 16 of 27 failed before, 27 of 27
+    after); this pins the rules it depends on, so a later edit cannot quietly
+    drop one."""
+    import re
+    root = pathlib.Path(__file__).resolve().parent.parent
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    js = (root / "static" / "reveal.js").read_text(encoding="utf-8")
+    war = (root / "prototypes" / "war_room.html").read_text(encoding="utf-8")
+    pf = (root / "tools" / "public_files.py").read_text(encoding="utf-8")
+    wf = (root / ".github" / "workflows" / "live-audit.yml").read_text(encoding="utf-8")
+    craft = css[css.index("CRAFT - the details a reader feels"):]
+    # type: kerned, legible, a ledger's figures, the x-height kept on a fallback
+    base = re.search(r"html \{([^}]*)\}", craft).group(1)
+    for rule in ("font-kerning: normal", "text-rendering: optimizeLegibility",
+                 "font-size-adjust: from-font", "font-variant-numeric: tabular-nums lining-nums"):
+        assert rule in base, rule
+    assert "font-variant-numeric: tabular-nums lining-nums" in war, "the map's tally and tiles are figures too"
+    # measure and widows: prose stops at 68ch and wraps pretty; headings balance
+    assert "max-width: 68ch; text-wrap: pretty;" in craft and "text-wrap: balance;" in craft
+    # tracking: type at its own spacing (never negative: its own test), the
+    # capital label voice opened to .2em
+    assert "letter-spacing: .2em; text-transform: uppercase;" in css
+    # OKLCH state tints, each after a hex fallback
+    assert craft.count("oklch") >= 3 and "color-mix(in oklch" in css
+    assert re.search(r"::selection \{ background-color: #[0-9A-F]{6}; background-color: oklch\(", craft)
+    # safe area: the viewport covers the notch and the gutters clear it
+    assert 'viewport-fit=cover' in pf and "env(safe-area-inset-left)" in craft
+    # touch: 44px for every control on a touch screen
+    coarse = craft[craft.index("@media (pointer: coarse)"):]
+    assert "min-height: 44px; min-width: 44px" in coarse and ".thanks-row a" in coarse
+    # optical centre: the hero's words sit above the middle - more space under
+    # them than over them in every tier (same totals, so the CTA does not move)
+    for pt, pb in re.findall(r"\.hero-section \{[^}]*?--hero-pt: (\d+)px; --hero-pb: (\d+)px", css):
+        assert int(pt) < int(pb), (pt, pb)
+    # optimistic update: the rail answers the press, not the server's 500ms sign
+    assert "html.m-busy body::before," in css and "H.classList.add('m-busy')" in js
+    assert "[data-stale=\"true\"] { opacity: .72 !important;" in craft, "old numbers stay readable, never blanked"
+    # origin-aware hover and an honest count-up that lands on the server's text
+    assert "el.style.setProperty('--mx'" in js and "circle(150% at var(--mx, 50%)" in css
+    assert "el.setAttribute('data-count-final', final);" in js and "el.textContent = p < 1 ? fmt(from + (to - from) * e) : final;" in js
+    assert "never\n  // a Streamlit-owned text node" in js and "'.verdict-number, .hstat .n'" in js
+    assert "landCounts();" in js, "layout probes land every count at once"
+    assert "node tools/craft_check.mjs http://127.0.0.1:8501" in wf
+
 
 if __name__ == "__main__":
     import sys

@@ -227,6 +227,10 @@ def install(static_dir: pathlib.Path, site_url: str = SITE_URL,
             "<noscript>", f"<noscript><p>{html.escape(TITLE)}. {html.escape(DESCRIPTION)}</p>", 1)
         new = new.replace("<body>", "<body>\n" + boot_block(), 1)
     new = new.replace(STREAMLIT_ICON + "\n", "").replace(STREAMLIT_ICON, "")
+    # Safe area (2026-11-09): the page is laid out under a phone's notch and
+    # home bar too, and static/app.css pads it with env(safe-area-inset-*).
+    if "viewport-fit=cover" not in new:
+        new = new.replace('shrink-to-fit=no"', 'shrink-to-fit=no, viewport-fit=cover"', 1)
     if BOOT_MARK in new:                   # the skeleton follows the hero's copy
         i, j = new.index(BOOT_MARK), new.index(BOOT_END) + len(BOOT_END) + 1
         new = new[:i] + boot_block() + new[j:]
