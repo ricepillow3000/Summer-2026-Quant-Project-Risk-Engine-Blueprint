@@ -196,7 +196,21 @@ def build_map_payload(returns: pd.DataFrame, weights: pd.Series,
         "domain": domain,
         "live": True,
         "provenance": f"Live · Yahoo daily closes · {cal['n_obs']} days fitted",
+        # John, 2026-11-09: "simplify this for non technical users". A
+        # plain-words lead anyone can read; the full model statement, the
+        # disclosure an interviewer checks, stays one click away.
         "footnote": (
+            "<b>How it is drawn:</b> fitted to this book's own past "
+            f"({cal['n_obs']} days of it). "
+            + (f"Tested on that past, the rings were too tight, so they are "
+               f"widened x{cal['dispersion']['k']:.2f} until they held what "
+               "really happened. "
+               if cal["dispersion"].get("measured") and cal["dispersion"]["k"] > 1.0
+               else "")
+            + "Stressed makes every shock 1.4x bigger and Calm 0.7x: a set "
+            "rule, not data. The danger line is a set rule too: three times "
+            "today's swings, or a beta 0.8 further out."
+            "<details><summary>The maths, for specialists</summary>"
             "<b>State model:</b> OU beta and log-OU volatility, calibrated "
             f"by AR(1) on rolling windows of the book's own daily returns "
             f"(market: {proxy}; {cal['n_obs']} state observations; "
@@ -223,6 +237,7 @@ def build_map_payload(returns: pd.DataFrame, weights: pd.Series,
                if bearish else "+0.8 (capped at 1.9)")
             + ". Pair numbers replay real history: monthly rebalance, no "
             "lookahead."
+            + "</details>"
             + (" <b>Calibration clamps hit:</b> "
                + "; ".join(cal["clamp_flags"]) + "."
                if cal.get("clamp_flags") else "")

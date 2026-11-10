@@ -90,6 +90,10 @@ for (const [sel, label, kind] of LINKS) {
   const l = page.locator(sel).first();
   if (!(await l.count())) { fail(label, 'not on the page'); continue; }
   await l.evaluate(a => a.scrollIntoView({ block: 'center' }));
+  // measure the landed link: a block still rising is not "stable" to the
+  // driver, whose retries then scroll it to the screen's top edge and the
+  // ring's ground is sampled off the page (2026-11-09, the footer boxes)
+  await page.evaluate(() => window.__melionaReveal && window.__melionaReveal.revealAll());
   await page.mouse.move(2, 2); await page.waitForTimeout(450);
   const rest = await read(l);
   await l.hover(); await page.waitForTimeout(950);

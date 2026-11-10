@@ -4766,14 +4766,14 @@ def test_fan_chart_caption_claims_block_resampling_only_when_it_happened():
     assert "drawn from the jump model, not from real days" in jd, jd
     iid = caption(monte_carlo(short_hist, w, n_simulations=400))
     assert "crash weeks stay intact" not in iid, f"22-day replay (i.i.d.): {iid}"
-    assert "resampled one real day at a time (window too short for runs)" in iid, iid
+    assert "built one real day at a time: too little history for runs" in iid, iid
     blk = monte_carlo(_clustered_returns(n=800), np.array([1.0]), n_simulations=400)
     assert blk["block_days"] > 1
     # A geometric block of mean N keeps nothing intact by construction, so the
     # caption says what the bootstrap does and claims nothing more (ME-03,
     # 2026-10-22: the default page printed "2-day blocks so crash weeks stay
     # intact").
-    assert f"resampled from runs of real days averaging {blk['block_days']} days" in caption(blk), caption(blk)
+    assert f"built from runs of real days, {blk['block_days']} days long on average" in caption(blk), caption(blk)
     assert "crash weeks" not in caption(blk), caption(blk)
 
 

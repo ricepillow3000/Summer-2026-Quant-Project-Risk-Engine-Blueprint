@@ -144,6 +144,10 @@ select {
   font-size: 10.5px; color: var(--dimtext); line-height: 1.55;
 }
 .side .foot b { color: var(--mute); font-weight: 400; }
+/* the model statement folds under a plain lead (John, 2026-11-09) */
+.side .foot details { margin-top: 6px; }
+.side .foot summary { cursor: pointer; color: var(--mute); }
+.side .foot summary:focus-visible { outline: 2px solid var(--bronze); outline-offset: 2px; }
 
 /* ---- HUD: the statistics band ---- */
 .hud {

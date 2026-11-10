@@ -1500,7 +1500,8 @@ html { font-kerning: normal; text-rendering: optimizeLegibility;
     max-width: 68ch; text-wrap: pretty; }
 /* A figure is never broken: "pretty" would undo the nowrap a slider's value
    label inherits, and "20" stood as a 2 over a 0 under the thumb. */
-[data-testid="stMain"] [data-testid="stSlider"] [data-testid="stMarkdownContainer"] p {
+[data-testid="stMain"] [data-testid="stSliderThumbValue"] p,
+[data-testid="stMain"] [data-testid="stSliderTickBar"] p {
     max-width: none; text-wrap: nowrap; }
 .hero-title, .showcase-title, .panel-head .s, .faq-q, .story-quote, .verdict-label,
 [data-testid="stMain"] h1, [data-testid="stMain"] h2, [data-testid="stMain"] h3 {
