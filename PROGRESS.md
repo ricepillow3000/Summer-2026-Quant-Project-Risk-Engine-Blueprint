@@ -4,7 +4,7 @@ Paste this into a new chat session to bring it up to speed instantly.
 
 ---
 
-## Start here: where things stand (updated 2026-11-06)
+## Start here: where things stand (updated 2026-11-10)
 
 - **Live:** https://summer-2026-quant-project-risk-engine-blueprint-production.up.railway.app
   (Railway deploys `main`; the Live audit on `main` proves the deployed
@@ -14,6 +14,20 @@ Paste this into a new chat session to bring it up to speed instantly.
   iPhone, clean hairline drawers, John's bio and contact (his Gmail plus
   Meliona support plus LinkedIn), the engine's controls in plain words, and
   John's story with his second photo (below, in the done list).
+- **2026-11-09/10, craft, calm motion and plain words (front-end session,
+  PR #57, live at ea65435):** the CRAFT layer in `static/app.css` (kerning,
+  tabular figures, 68ch prose, no widows, OKLCH tints, safe area, 44px touch
+  targets, optical centre, origin-aware hover, an optimistic "Updating"
+  rail, count-up numbers), measured by `tools/craft_check.mjs`. John then
+  said the smooth scroll made him motion sick and forcing past the top
+  showed a gap: every block now arrives one calm way (a 16px rise and a
+  fade over .6s; no side swings, card turns or zoom), the wheel settles in
+  ~0.6s (`TOW` 3.8 -> 10) and the rubber band is gone (hard ends) -
+  `test_motion_is_calm_enough_to_read_while_scrolling`. The crest no longer
+  sits behind "Inside the engine"; About the builder is in John's own voice;
+  the Book's sentences, the cone/map/crisis/data-check captions and the
+  map's model note are in plain words (the full model statement folds
+  under "The maths, for specialists").
 - **2026-11-09, evaluation and back-end clean-up (back-end session, PR #58):**
   `src/` went from 5,551 to 4,934 lines (-617) with every number unchanged:
   comments and docstrings now short and plain, each module still saying how
@@ -37,7 +51,8 @@ Paste this into a new chat session to bring it up to speed instantly.
   blur; the CVaR tick travels an arc; John's photos are uncovered by a mask;
   the receipt pulses once; the wheel tow is heavier (`TOW` 4.6 -> 3.8) and
   the page stretches past its ends and eases back (no bounce anywhere: no
-  curve leaves 0..1). Pinned by `test_motion_follows_the_house_rules`.
+  curve leaves 0..1). (Superseded 2026-11-09: calm arrivals, `TOW` 10, no
+  rubber band.) Pinned by `test_motion_follows_the_house_rules`.
 - **2026-11-09, the page's craft:** John asked for kerning, optical
   centre, tabular numbers, layout shift, tracking, optimistic update,
   x-height, touch targets, leading, origin-aware animation, OKLCH, widows,
