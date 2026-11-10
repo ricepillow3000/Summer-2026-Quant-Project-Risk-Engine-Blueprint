@@ -2382,7 +2382,7 @@ st.markdown(
     # a heading by role, not an <h2>: Streamlit gives every markdown heading
     # an id made from its text, and "contact" would be this section's own id
     # a second time (one element per id: tools/device_check.mjs)
-    '<div class="showcase-title" role="heading" aria-level="2">Contact</div><div class="ar-rule"></div>'
+    '<div class="showcase-title" role="heading" aria-level="2">A question, a role, or a number that looks wrong</div><div class="ar-rule"></div>'
     f'<p class="contact-sub">{RESPONSE_TIME} Questions, feedback, recruiting or a '
     'problem with a number: write it here and your own email app sends it.</p></div>',
     unsafe_allow_html=True)

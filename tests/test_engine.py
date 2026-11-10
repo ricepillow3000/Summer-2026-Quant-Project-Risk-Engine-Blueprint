@@ -2955,7 +2955,7 @@ def test_no_decorative_gradients_glass_or_grain():
     clean = _re.sub(r"/\*.*?\*/", "", css, flags=_re.S)
     for sel, body in _re.findall(r"([^{}]+)\{([^}]*)\}", clean):
         if "gradient(" in body:
-            assert ("#boot-skel" in sel or sel.strip() == ".sk"
+            assert ("#boot-skel" in sel or sel.strip() == ".sk" or "stSpinner" in sel
                     or "stStatusWidgetRunningIcon" in sel), f"decorative gradient on {sel.strip()}"
     for name, text in (("app.css", css), ("war_room.html", page), ("404.html", p404), ("main.py", main)):
         assert "backdrop-filter" not in text, f"{name}: glass (backdrop-filter) is back"
@@ -6366,7 +6366,7 @@ def test_the_contact_form_writes_to_john_and_linkedin_is_the_second_way():
     assert src.count('<span>Meliona support</span><b><a href="mailto:{SUPPORT_EMAIL}">') == 2
     page = (root / "public" / "thanks.html").read_text(encoding="utf-8")
     assert hero.CONTACT_EMAIL in page and "meleona.support@gmail.com" in page
-    assert '<div class="showcase-title" role="heading" aria-level="2">Contact</div>' in src
+    assert '<div class="showcase-title" role="heading" aria-level="2">A question, a role, or a number that looks wrong</div>' in src
     assert hero.LINKEDIN_URL in dict((n, u) for n, u, _ in hero.PROFILE_LINKS).values()
     assert "Computer Information Systems" in hero.PERSON_ROLE and "AI & Analytics" in hero.ABOUT_BIO
     # John, 2026-11-09: his own words, first person, passionate about building
@@ -7215,6 +7215,92 @@ def test_motion_is_calm_enough_to_read_while_scrolling():
     tow = float(re.search(r"var TOW = (\d+(?:\.\d+)?);", js).group(1))
     assert 8.0 <= tow <= 12.0, "the wheel settles in about half a second, no long drift"
     assert "addEventListener('transitioncancel', end)" in js, "an interrupted arrival lands, never hangs"
+
+
+def test_the_page_carries_none_of_the_generated_site_tells():
+    """John, 2026-11-10: "avoid these looks and signals so it doesn't look AI
+    generated" - gradient blobs, circle icons, purple, floating 3D shapes,
+    identical feature cards, rainbow accents, buzzword copy, three-word
+    headlines, FAQs restating the question, emoji, vague CTAs, dead footer
+    links, soft corners on everything, no personality. What can be read from
+    the source is pinned here; tools/craft_check.mjs measures the rendered
+    corners and the footer links on the page itself."""
+    import re
+    import hero
+    root = pathlib.Path(__file__).resolve().parent.parent
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    main = (root / "main.py").read_text(encoding="utf-8")
+    copy = "\n".join((root / f).read_text(encoding="utf-8") for f in
+                     ("hero.py", "main.py", "src/narrative.py", "prototypes/war_room.html",
+                      "public/thanks.html", "public/404.html"))
+    # square corners: the only round thing is the crest's disc (its skeleton)
+    rounded = [r for r in re.findall(r"([^{}]*)\{[^}]*border-radius:\s*([^;}]+)", css)
+               if r[1].strip().split()[0] not in ("0", "0px")]
+    assert [sel.strip().splitlines()[-1] for sel, _ in rounded] == ["#boot-skel .hero-crest"], rounded
+    # square toggles, inputs, tags, checkboxes and tab underline; a square help mark
+    assert "border-radius: 0 !important" in css and "stTooltipHoverTarget\"] button svg { display: none; }" in css
+    # nothing turns in 3D, on arrival or on the first load
+    assert not re.search(r"rotate[XYZ3]|perspective\(", css + main), "a 3D turn is back"
+    # no purple, no rainbow: every colour in the stylesheet is a warm neutral or the bronze/gold family
+    for hexcol in set(re.findall(r"#([0-9A-Fa-f]{6})\b", css)):
+        r, g, b = (int(hexcol[i:i + 2], 16) for i in (0, 2, 4))
+        assert not (b > r + 12 and b > g + 12), f"#{hexcol} is a blue or purple"
+    # no emoji in what a visitor reads
+    assert not re.search(r"[\U0001F300-\U0001FAFF\u2600-\u27BF]", copy), "an emoji is on the page"
+    # no buzzword copy
+    for word in ("seamless", "cutting-edge", "revolutionary", "game-changing", "unlock",
+                 "empower", "supercharge", "next-gen", "state-of-the-art", "world-class",
+                 "best-in-class", "synergy", "effortless", "elevate", "unleash",
+                 "innovative", "ai-powered", "actionable insights", "one-stop"):
+        assert word not in copy.lower(), f"buzzword {word!r}"
+    # headings say something; the FAQ and the contact are not 'Before you ask' and 'Contact'
+    assert "Before you ask" not in copy and 'aria-level="2">Contact</div>' not in main
+    # no identical feature cards: the footer's sections are one index, not three boxes
+    assert "repeat(3, 1fr)" not in css[css.index(".meliona-footer .f-rail"):][:200]
+    # an answer never opens by restating its question
+    stop = {"what", "does", "do", "is", "the", "a", "an", "of", "this", "my", "me", "from", "where", "come", "site"}
+    for q, a in hero.FAQS:
+        qw = {w for w in re.findall(r"[a-z]+", q.lower()) if w not in stop}
+        head = set(re.findall(r"[a-z]+", " ".join(a.split()[:6]).lower()))
+        assert not qw or len(qw & head) < max(1, len(qw) // 2 + 1) or q.startswith("Is "), (q, a[:60])
+    # the status dot is a square mark, not a circle icon
+    assert not re.search(r"\.fresh-dot \{[^}]*border-radius", css)
+
+
+def test_the_page_answers_like_an_app_skeletons_taps_and_offline():
+    """John, 2026-11-10, five tells of a vibe-coded app: buttons that wait
+    for the server (optimistic updates), spinners and blank screens
+    (skeletons), empty first screens (preload, keep the last state, refresh
+    when ready), no tap feedback, and nothing when the connection drops
+    (offline support). tools/craft_check.mjs drives the offline notice and
+    the press on the rendered page."""
+    import re
+    import tools.public_files as pf
+    root = pathlib.Path(__file__).resolve().parent.parent
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    reveal = (root / "static" / "reveal.js").read_text(encoding="utf-8")
+    dock = (root / "static" / "dock.js").read_text(encoding="utf-8")
+    sw = (root / "public" / "sw.js").read_text(encoding="utf-8")
+    offline = (root / "public" / "offline.html").read_text(encoding="utf-8")
+    # 1. optimistic: the press itself raises the Updating rail, old numbers stay readable
+    assert "H.classList.add('m-busy')" in reveal and '[data-stale="true"]' in css
+    # 2. skeletons, not spinners: a loading line is a shimmering grey block, its spinner gone
+    spin = re.search(r'\[data-testid="stSpinner"\] \{([^}]*)\}', css)
+    assert spin and "linear-gradient" in spin.group(1) and "animation:" in spin.group(1)
+    assert re.search(r'\[data-testid="stSpinner"\] (i|svg|\[data-testid="stSpinnerIcon"\])[^{]*\{[^}]*display: none', css)
+    # 3. no empty first screen: the head fetches the dock script with the page
+    head = pf.head_tags("https://example.test")
+    assert 'rel="preload"' in head and "dock.js" in head[head.index('rel="preload"') - 200:][:400]
+    # 4. tap feedback on every control a visitor presses, touch screens included
+    press = " ".join(re.findall(r"([^{}]*):active[^{}]*\{[^}]*scale\(var\(--press\)\)", css))
+    for what in ('[role="tab"]', "stRadioOption", "stCheckbox", ".f-box", ".cta-link"):
+        assert what in press, f"no press on {what}"
+    assert "addEventListener('touchstart'" in reveal, "iOS shows :active only with a touch listener"
+    # 5. offline: a notice that says what still works, and an offline page for a fresh load
+    assert "addEventListener('offline'" in dock and "addEventListener('online'" in dock
+    assert "serviceWorker.register('/sw.js')" in dock
+    assert "e.request.mode !== 'navigate'" in sw and "caches.match(OFFLINE)" in sw
+    assert "addEventListener('online'" in offline and "border-radius: 0" in offline
 
 
 # ---- Mutation tests (John, 2026-11-10): "break it on purpose". 36 bugs were

@@ -193,6 +193,9 @@ def head_tags(site_url: str, build: str = "") -> str:
         "function(){if(!window.__melionaReveal)h.classList.remove('reveal-on')})"
         "})(document.documentElement)</script>\n"
         '<script id="meliona-reveal" defer src="./app/static/reveal.js"></script>\n'
+        # reveal.js loads dock.js (the phone shortcut, the cookie and offline
+        # notices) after it runs; fetching it with the page saves that round trip
+        '<link rel="preload" as="script" href="./app/static/dock.js">\n'
         f"{END}\n"
     )
 

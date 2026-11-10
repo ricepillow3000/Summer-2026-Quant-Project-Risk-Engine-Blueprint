@@ -302,7 +302,7 @@ def faq_html() -> str:
     rows = "".join(f'<div class="faq-row"><h3 class="faq-q">{_html.escape(q)}</h3>'
                    f'<p class="faq-a">{_html.escape(a)}</p></div>' for q, a in FAQS)
     return ('<div class="faq-section" id="faq"><div class="kicker">Questions, answered</div>'
-            '<h2 class="showcase-title">Before you ask</h2><div class="ar-rule"></div>'
+            '<h2 class="showcase-title">What people ask before trusting a number</h2><div class="ar-rule"></div>'
             f'<div class="faq-list">{rows}</div></div>')
 
 

@@ -14,6 +14,12 @@ Paste this into a new chat session to bring it up to speed instantly.
   iPhone, clean hairline drawers, John's bio and contact (his Gmail plus
   Meliona support plus LinkedIn), the engine's controls in plain words, and
   John's story with his second photo (below, in the done list).
+- **2026-11-10, no generated-site tells, and app feel (front-end session,
+  PR #60):** square controls, square help and freshness marks, no 3D on the
+  first load, the footer as one contents index, two generic headings
+  rewritten; loading lines as shimmering skeletons, a press on every
+  control (iPhones too), the dock script preloaded, an offline notice and
+  a service-worker offline page. Pinned by two tests and craft_check.
 - **2026-11-09/10, craft, calm motion and plain words (front-end session,
   PR #57, live at ea65435):** the CRAFT layer in `static/app.css` (kerning,
   tabular figures, 68ch prose, no widows, OKLCH tints, safe area, 44px touch

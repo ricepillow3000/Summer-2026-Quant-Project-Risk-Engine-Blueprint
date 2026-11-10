@@ -52,6 +52,10 @@ try {
 const { chromium, devices } = pw.chromium ? pw : pw.default;
 const [,, url] = process.argv;
 if (!url) { console.error('usage: node tools/craft_check.mjs <url>'); process.exit(2); }
+// before 1.57 Playwright's setOffline did not reach a service worker's own
+// fetches unless this flag was on (CI pins 1.56.1): the offline reload then
+// still got the live page. Read at launch.
+process.env.PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS = '1';
 const b = await chromium.launch(process.env.CHROMIUM ? { executablePath: process.env.CHROMIUM } : {});
 let fails = 0;
 const ok = (pass, what, detail = '') => {
@@ -172,6 +176,14 @@ const type = await p.evaluate(() => {
     .map(e => ({ t: e.textContent.trim().slice(0, 30), wrap: getComputedStyle(e).textWrapStyle || getComputedStyle(e).textWrap || '' }));
   out.heads = heads;
   // a short value is never broken: a slider's figure stays on one line
+  // square corners: a painted box with a rounded corner (radio buttons keep theirs)
+  out.round = [...document.querySelectorAll('body *')].filter(e => vis(e) && !e.closest('#boot-skel, [data-testid="stRadioOption"], .hero-crest')).filter(e => {
+    const cs = getComputedStyle(e);
+    const painted = cs.backgroundColor !== 'rgba(0, 0, 0, 0)' || parseFloat(cs.borderTopWidth) > 0;
+    return painted && parseFloat(cs.borderTopLeftRadius) > 1;
+  }).map(e => (e.closest('[data-testid]')?.getAttribute('data-testid') || e.className.toString().slice(0, 24)) + ' ' + getComputedStyle(e).borderTopLeftRadius);
+  // every in-page link lands on something
+  out.dead = [...document.querySelectorAll('a[href^="#"]')].map(a => a.getAttribute('href')).filter(h => h.length > 1 && !document.getElementById(h.slice(1)));
   out.thumbs = [...main.querySelectorAll('[data-testid="stSliderThumbValue"], [data-testid="stSliderTickBar"] > *')].filter(vis).map(e => {
     const tops = new Set();
     const w = document.createTreeWalker(e, NodeFilter.SHOW_TEXT);
@@ -209,6 +221,8 @@ const badLead = type.prose.filter(x => x.lh < 1.45 || x.lh > 1.8).concat(type.di
 ok(!badLead.length, `leading: prose 1.45-1.8, display 0.9-1.25`, badLead.slice(0, 3).map(x => `"${x.t}" ${x.lh.toFixed(2)}`).join(' '));
 const long = type.prose.filter(x => x.chars > 75);
 const broken = type.thumbs.filter(x => x.lines > 1);
+ok(!type.round.length, 'square: no painted box has a rounded corner', [...new Set(type.round)].slice(0, 6).join(' | '));
+ok(!type.dead.length, 'links: every in-page link lands on a section', type.dead.join(' '));
 ok(type.thumbs.length && !broken.length, `wrapping: ${type.thumbs.length} slider figures each on one line`, broken.map(x => `"${x.t}" on ${x.lines} lines`).join(' '));
 ok(type.prose.length && !long.length, `measure: ${type.prose.length} prose paragraphs at <= 75 characters a line`, long.slice(0, 3).map(x => `"${x.t}" ${Math.round(x.chars)}ch`).join(' '));
 const unwrapped = type.prose.filter(x => !/pretty|balance/.test(x.wrap)).concat(type.heads.filter(h => !/balance/.test(h.wrap)));
@@ -379,6 +393,41 @@ const touch = await q.evaluate(() => {
 ok(!touch.small.length, 'touch: every control on a phone is at least 44 x 44px', touch.small.slice(0, 6).join(' | '));
 ok(touch.padL >= 16 && touch.padR >= 16, 'safe area: the page keeps 16px gutters on a phone', `${touch.padL}px / ${touch.padR}px`);
 await phone.close();
+
+// ---------------------------------------------------------------- app feel
+// John, 2026-11-10: a press that answers, skeletons not spinners, and an
+// offline notice and offline page instead of a page that silently stops.
+const feel = await b.newContext({ viewport: { width: 1440, height: 900 } });
+const f = await open(feel);
+await f.evaluate(() => window.__melionaReveal && window.__melionaReveal.revealAll());
+const tab = f.locator('[data-testid="stMain"] [role="tab"]').first();
+await tab.scrollIntoViewIfNeeded(); await f.waitForTimeout(400);
+const tb = await tab.boundingBox();
+await f.mouse.move(tb.x + tb.width / 2, tb.y + tb.height / 2); await f.mouse.down(); await f.waitForTimeout(200);
+const sunk = await tab.evaluate(e => { const m = getComputedStyle(e).transform; return m === 'none' ? 1 : parseFloat(m.split('(')[1]); });
+await f.mouse.up(); await f.mouse.move(2, 2);
+ok(sunk < 1, 'tap: a tab sinks while it is pressed', `scale ${sunk}`);
+const skel = await f.evaluate(() => {
+  const d = document.createElement('div'); d.setAttribute('data-testid', 'stSpinner');
+  d.innerHTML = '<i data-testid="stSpinnerIcon"></i><div>Simulating</div>';
+  document.querySelector('[data-testid="stMain"]').appendChild(d);
+  const cs = getComputedStyle(d), r = { bg: cs.backgroundImage, anim: cs.animationName, icon: getComputedStyle(d.firstChild).display };
+  d.remove(); return r;
+});
+ok(/gradient/.test(skel.bg) && skel.anim !== 'none' && skel.icon === 'none', 'skeleton: a loading line shimmers as a grey block, no spinning wheel', `${skel.anim}, icon ${skel.icon}`);
+await f.waitForFunction(() => !!(navigator.serviceWorker && navigator.serviceWorker.controller), null, { timeout: 15000 }).catch(() => {});
+const reg = await f.evaluate(async () => { const r = navigator.serviceWorker && await navigator.serviceWorker.getRegistration('/'); return r ? r.scope : ''; });
+ok(!!reg, 'offline: the service worker is registered for the whole site', reg);
+const quiet = await f.evaluate(() => { const e = document.querySelector('.m-offline'); return !!e && getComputedStyle(e).display === 'none'; });
+ok(quiet, 'offline: nothing shows while the page is online (the hidden notice takes no space)');
+await feel.setOffline(true); await f.waitForTimeout(500);
+const offNote = await f.evaluate(() => { const e = document.querySelector('.m-offline'); return !!(e && window.__melionaNotice.offline() && getComputedStyle(e).display !== 'none' && /offline/i.test(e.textContent)); });
+ok(offNote, 'offline: losing the connection shows the offline notice');
+await f.reload({ timeout: 10000 }).catch(() => {}); await f.waitForTimeout(1500);
+const offTitle = await f.evaluate(() => document.title).catch(() => '');
+ok(/Offline/.test(offTitle), 'offline: a fresh load with no connection gets the offline page', offTitle);
+await feel.setOffline(false);
+await feel.close();
 await b.close();
 console.log(fails ? `${fails} craft check(s) failed` : 'the page\'s craft holds');
 process.exit(fails ? 1 : 0);
