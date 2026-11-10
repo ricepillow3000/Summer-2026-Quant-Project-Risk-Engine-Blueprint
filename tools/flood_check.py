@@ -22,24 +22,40 @@ from serve import MESSAGES_PER_MINUTE
 SENT = 4 * MESSAGES_PER_MINUTE         # far past the cap, still a second or two of traffic
 
 
+async def drain(ws) -> None:
+    """read what the server sends, like a browser does. it answers every heartbeat;
+    left unread, the replies fill the client's queue, the client stops reading the
+    socket, and the hang-up sits unseen behind them - under load the flood looked
+    'never cut off' (Live audit on main, 2026-11-10)."""
+    try:
+        async for _ in ws:
+            pass
+    except websockets.ConnectionClosed:
+        pass
+
+
 async def flood(url: str, address: str = "198.51.100.23", count: int = SENT) -> tuple[int, int | None]:
     """-> (messages sent, the close code; None = still open after `count`)."""
     ws_url = url.replace("http", "ws", 1).rstrip("/") + "/_stcore/stream"
     beat = BackMsg(app_heartbeat=True).SerializeToString()
     sent = 0
+    # generous waits: in the Live audit this runs beside ten loading browsers
     async with websockets.connect(ws_url, subprotocols=["streamlit"], origin=url.rstrip("/"),
                                   additional_headers={"X-Forwarded-For": address},
-                                  max_size=None) as ws:
+                                  max_size=None, open_timeout=60) as ws:
+        reader = asyncio.create_task(drain(ws))
         try:
             for _ in range(count):
                 await ws.send(beat)
                 sent += 1
                 await asyncio.sleep(0)
-            await asyncio.wait_for(ws.wait_closed(), timeout=10 if count == SENT else 3)
+            await asyncio.wait_for(ws.wait_closed(), timeout=60 if count == SENT else 5)
         except websockets.ConnectionClosed:
             pass
         except TimeoutError:
             return sent, None
+        finally:
+            reader.cancel()
         return sent, ws.close_code
 
 
@@ -47,12 +63,16 @@ def main(argv: list[str]) -> int:
     if not argv:
         print("usage: python -m tools.flood_check <app url>")
         return 2
-    sent, code = asyncio.run(flood(argv[0], "198.51.100.24", 100))
-    print(f"visitor: {sent} messages sent, close code {code} (None = still connected)")
-    if code is not None:
-        print("FAIL: a busy visitor was cut off")
+    try:
+        sent, code = asyncio.run(flood(argv[0], "198.51.100.24", 100))
+        print(f"visitor: {sent} messages sent, close code {code} (None = still connected)")
+        if code is not None:
+            print("FAIL: a busy visitor was cut off")
+            return 1
+        sent, code = asyncio.run(flood(argv[0]))
+    except (OSError, TimeoutError, websockets.InvalidHandshake) as exc:
+        print(f"FAIL: could not open a websocket ({type(exc).__name__}: {exc})")
         return 1
-    sent, code = asyncio.run(flood(argv[0]))
     print(f"flood: {sent} messages sent, closed with {code} (cap {MESSAGES_PER_MINUTE} a minute)")
     if code != 1013:
         print("FAIL: the flood was never cut off")
