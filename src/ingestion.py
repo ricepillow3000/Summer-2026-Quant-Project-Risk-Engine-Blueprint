@@ -478,6 +478,15 @@ def _write_parquet(frame: pd.DataFrame, path: str) -> None:
     os.replace(tmp, path)
 
 
+def _write_json(path: str, record: dict) -> None:
+    """Same deal as _write_parquet for the little JSON records: temp file,
+    then rename. Writing in place let a reader grab a half file and crash."""
+    tmp = f"{path}.{os.getpid()}.{threading.get_ident()}.tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump(record, fh, indent=2)
+    os.replace(tmp, path)
+
+
 def _write_dollar_volume_cache(tickers: list[str], period: str, dv: pd.DataFrame,
                                pulled: tuple[str, str]) -> None:
     """Persist a daily dollar-volume frame + its provenance record."""
@@ -497,8 +506,7 @@ def _write_dollar_volume_cache(tickers: list[str], period: str, dv: pd.DataFrame
         "rows": len(dv),
         "yfinance_version": getattr(yf, "__version__", "unknown"),
     }
-    with open(_meta_path(cache_path), "w", encoding="utf-8") as fh:
-        json.dump(meta, fh, indent=2)
+    _write_json(_meta_path(cache_path), meta)
 
 
 def fetch_prices(tickers: list[str] | None = None, period: str = "2y",
@@ -577,8 +585,7 @@ def fetch_prices(tickers: list[str] | None = None, period: str = "2y",
             "rows": len(prices),
             "yfinance_version": getattr(yf, "__version__", "unknown"),
         }
-        with open(meta_path, "w", encoding="utf-8") as fh:
-            json.dump(meta, fh, indent=2)
+        _write_json(meta_path, meta)
         # Free bonus from the same download: cache dollar volume over the aligned
         # trading days, so a later average_dollar_volume() call hits cache instead
         # of re-downloading. Never let a volume hiccup break the price fetch.
@@ -593,11 +600,11 @@ def fetch_prices(tickers: list[str] | None = None, period: str = "2y",
 
 def provenance(tickers: list[str] | None = None, period: str = "2y") -> dict | None:
     """Read the provenance record for a cached universe (source, timestamp, etc.)."""
-    meta_path = _meta_path(_cache_path(_clean(tickers), period))
-    if os.path.exists(meta_path):
-        with open(meta_path, encoding="utf-8") as fh:
+    try:
+        with open(_meta_path(_cache_path(_clean(tickers), period)), encoding="utf-8") as fh:
             return json.load(fh)
-    return None
+    except (OSError, ValueError):   # no record yet, or a broken one: same thing to the page
+        return None
 
 
 def fetch_dollar_volume(tickers: list[str] | None = None, period: str = "2y",
@@ -702,8 +709,7 @@ def fetch_risk_free_rate(use_cache: bool = True,
             "fetched_at_utc": datetime.datetime.now(datetime.timezone.utc)
                               .isoformat(timespec="seconds"),
         }
-        with open(path, "w", encoding="utf-8") as fh:
-            json.dump(rec, fh, indent=2)
+        _write_json(path, rec)
     return rate
 
 

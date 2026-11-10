@@ -4452,6 +4452,33 @@ def test_a_cache_file_is_never_seen_half_written():
     assert ".to_parquet(cache_path)" not in src, "a cache write bypasses _write_parquet"
 
 
+def test_a_half_written_provenance_record_never_breaks_the_page():
+    """Evaluation 2026-11-09: the .meta.json beside each cache was written in
+    place (open "w" empties it, then json.dump fills it), and the warm pass
+    rewrites them every 5 hours while visitors read them. A read in between got
+    a torn file and provenance() raised into the page. Records now go through
+    one atomic writer, and a bad one reads as "no record"."""
+    import inspect
+    import tempfile
+
+    from src import ingestion
+
+    original = ingestion.DATA_DIR
+    ingestion.DATA_DIR = tempfile.mkdtemp()
+    try:
+        meta = ingestion._meta_path(ingestion._cache_path(["SPY"], "2y"))
+        with open(meta, "w", encoding="utf-8") as fh:
+            fh.write('{"source": "Yahoo Fin')          # the reader came mid-write
+        assert ingestion.provenance(["SPY"]) is None
+        ingestion._write_json(meta, {"fetched_at_utc": "2026-11-09T00:00:00+00:00"})
+        assert ingestion.provenance(["SPY"]) == {"fetched_at_utc": "2026-11-09T00:00:00+00:00"}
+        assert [p.name for p in pathlib.Path(ingestion.DATA_DIR).iterdir()] == [pathlib.Path(meta).name]   # no temp file left
+    finally:
+        ingestion.DATA_DIR = original
+    assert 'open(path, "w"' not in inspect.getsource(ingestion).replace("def _write_json", ""), \
+        "a JSON record is written in place, not through _write_json"
+
+
 def test_src_is_pure_computation_and_never_imports_the_ui():
     """The layering CLAUDE.md promises: src/ is a numpy/pandas library the UI
     composes, so it is testable without a browser and auditable on its own.
@@ -7098,26 +7125,6 @@ def test_a_key_and_the_wheel_never_paint_a_gold_block():
         return
     assert r.returncode == 0, r.stdout[-1500:] + r.stderr[-600:]
 
-if __name__ == "__main__":
-    import sys
-
-    tests = [v for k, v in sorted(globals().items())
-             if k.startswith("test_") and callable(v)]
-    failed = 0
-    for t in tests:
-        try:
-            t()
-            print(f"PASS  {t.__name__}")
-        except AssertionError as e:
-            failed += 1
-            print(f"FAIL  {t.__name__}: {e}")
-        except Exception as e:  # noqa: BLE001
-            failed += 1
-            print(f"ERROR {t.__name__}: {e!r}")
-    print(f"\n{len(tests) - failed}/{len(tests)} passed")
-    sys.exit(1 if failed else 0)
-
-
 def test_the_batch_audit_re_derives_every_grit_zone_number():
     """John, 2026-11-04: every Grit Zone description - consistency, resilience,
     recovery - accurate and traced to the data. tests/batch_audit.audit_grit
@@ -7156,3 +7163,32 @@ def test_the_batch_audit_re_derives_every_grit_zone_number():
     finally:
         ba.grit_scores = real if "real" in locals() else ba.grit_scores
         ba.results[:] = saved
+
+
+def test_no_test_hides_below_the_script_runner():
+    """`python -m tests.test_engine` collects tests when it reaches the
+    __main__ block, so a test defined below it never ran (the Grit Zone
+    re-derivation sat there from 8b27727 to 2026-11-09)."""
+    src = open(__file__, encoding="utf-8").read()
+    below = src[src.index('\nif __name__ == "__main__":'):]
+    assert "\ndef test_" not in below, "a test below the __main__ block never runs"
+
+
+if __name__ == "__main__":
+    import sys
+
+    tests = [v for k, v in sorted(globals().items())
+             if k.startswith("test_") and callable(v)]
+    failed = 0
+    for t in tests:
+        try:
+            t()
+            print(f"PASS  {t.__name__}")
+        except AssertionError as e:
+            failed += 1
+            print(f"FAIL  {t.__name__}: {e}")
+        except Exception as e:  # noqa: BLE001
+            failed += 1
+            print(f"ERROR {t.__name__}: {e!r}")
+    print(f"\n{len(tests) - failed}/{len(tests)} passed")
+    sys.exit(1 if failed else 0)
