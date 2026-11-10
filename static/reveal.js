@@ -65,6 +65,9 @@
   var calm = !('IntersectionObserver' in W) ||
     (W.matchMedia && W.matchMedia('(prefers-reduced-motion: reduce)').matches);
   var api = W.__melionaReveal = { revealAll: function () {} };
+  // iOS Safari only applies :active (the press) when the page listens for
+  // touches; an empty passive listener is the standard switch.
+  D.addEventListener('touchstart', function () {}, { passive: true });
   // The bottom dock - the phone shortcut and the cookie notice
   // (static/dock.js) - comes with this file: one entry point, so the head and
   // main.py's fallback both bring it. Under reduced motion it loads too (the

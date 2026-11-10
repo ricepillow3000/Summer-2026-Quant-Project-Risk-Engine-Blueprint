@@ -53,6 +53,32 @@
     if (notice) { notice.remove(); notice = null; }
   }
 
+  // ---- 3. offline ----------------------------------------------------------
+  // John, 2026-11-10: when the connection drops, say so instead of leaving a
+  // page that quietly stops answering. What is on screen stays; Streamlit
+  // reconnects by itself. A fresh load with no connection gets the offline
+  // page from the service worker (public/sw.js), not the browser's error.
+  var gone = D.createElement('section');
+  gone.className = 'm-notice m-offline';
+  gone.setAttribute('role', 'status');
+  gone.setAttribute('aria-live', 'polite');
+  gone.hidden = true;
+  stack.appendChild(gone);
+  var back = 0;
+  function net(on) {
+    clearTimeout(back);
+    gone.innerHTML = on ? '<p>Back online. New numbers can come in again.</p>'
+      : '<p>You are offline. What is on screen stays here; new numbers come in once you are back online.</p>';
+    gone.hidden = false;
+    if (on) back = setTimeout(function () { gone.hidden = true; }, 2500);
+  }
+  W.addEventListener('offline', function () { net(false); });
+  W.addEventListener('online', function () { net(true); });
+  if (W.navigator.onLine === false) net(false);
+  if ('serviceWorker' in W.navigator) {
+    W.navigator.serviceWorker.register('/sw.js').catch(function () { /* no offline page: the browser's own */ });
+  }
+
   // ---- 1. the phone shortcut ------------------------------------------------
   var dock = D.createElement('nav');
   dock.className = 'm-dock';
@@ -113,6 +139,7 @@
   W.__melionaNotice = {
     dismiss: dismiss,                                  // press OK (layout probes)
     shown: function () { return !!notice; },
-    dock: function () { return !dock.hidden; }         // is the phone shortcut up?
+    dock: function () { return !dock.hidden; },        // is the phone shortcut up?
+    offline: function () { return !gone.hidden; }      // is the offline notice up?
   };
 })();

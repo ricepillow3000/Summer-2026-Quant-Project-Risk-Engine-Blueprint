@@ -1575,3 +1575,30 @@ html { font-kerning: normal; text-rendering: optimizeLegibility;
     content: "?"; display: inline-flex; align-items: center; justify-content: center;
     box-sizing: border-box; width: 16px; height: 16px; border: 1px solid #6A5030;
     color: #6A5030; font: 700 11px/1 'Helvetica Neue', Helvetica, Arial, sans-serif; }
+
+/* SKELETON - a loading line is a grey block shimmering where its result will
+   land, never a spinning wheel (John, 2026-11-10: "blank screens and
+   spinners" are a tell). The words stay, so it still says what it is doing. */
+[data-testid="stMain"] [data-testid="stSpinner"] {
+    display: flex; align-items: center; min-height: 72px; padding: 16px 20px;
+    box-sizing: border-box; color: #3F3B35;
+    background: linear-gradient(90deg, #E2DCD0 25%, #F1EDE5 45%, #E2DCD0 65%);
+    background-size: 200% 100%; animation: sk-sheen 1.15s linear infinite; }
+[data-testid="stMain"] [data-testid="stSpinner"] [data-testid="stSpinnerIcon"] { display: none; }
+@media (prefers-reduced-motion: reduce) {
+    [data-testid="stMain"] [data-testid="stSpinner"] { animation: none; } }
+
+/* TAP - every control a visitor presses answers the press: it sinks to
+   --press for --press-dur, like the buttons (John, 2026-11-10: "you want
+   buttons to feel like they did something"). reveal.js adds an empty touch
+   listener so iPhones show :active at all. */
+[data-testid="stMain"] [role="tab"],
+[data-testid="stMain"] [data-testid="stRadioOption"],
+[data-testid="stMain"] [data-testid="stCheckbox"] label,
+.meliona-footer .f-box, .cta-link {
+    transition: transform var(--press-dur) var(--ease-out); }
+[data-testid="stMain"] [role="tab"]:active,
+[data-testid="stMain"] [data-testid="stRadioOption"]:active,
+[data-testid="stMain"] [data-testid="stCheckbox"] label:active,
+.meliona-footer .f-box:active, .cta-link:active { transform: scale(var(--press)); }
+

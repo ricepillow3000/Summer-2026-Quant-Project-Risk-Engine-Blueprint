@@ -2955,7 +2955,7 @@ def test_no_decorative_gradients_glass_or_grain():
     clean = _re.sub(r"/\*.*?\*/", "", css, flags=_re.S)
     for sel, body in _re.findall(r"([^{}]+)\{([^}]*)\}", clean):
         if "gradient(" in body:
-            assert ("#boot-skel" in sel or sel.strip() == ".sk"
+            assert ("#boot-skel" in sel or sel.strip() == ".sk" or "stSpinner" in sel
                     or "stStatusWidgetRunningIcon" in sel), f"decorative gradient on {sel.strip()}"
     for name, text in (("app.css", css), ("war_room.html", page), ("404.html", p404), ("main.py", main)):
         assert "backdrop-filter" not in text, f"{name}: glass (backdrop-filter) is back"
@@ -7246,6 +7246,42 @@ def test_the_page_carries_none_of_the_generated_site_tells():
         assert not qw or len(qw & head) < max(1, len(qw) // 2 + 1) or q.startswith("Is "), (q, a[:60])
     # the status dot is a square mark, not a circle icon
     assert not re.search(r"\.fresh-dot \{[^}]*border-radius", css)
+
+
+def test_the_page_answers_like_an_app_skeletons_taps_and_offline():
+    """John, 2026-11-10, five tells of a vibe-coded app: buttons that wait
+    for the server (optimistic updates), spinners and blank screens
+    (skeletons), empty first screens (preload, keep the last state, refresh
+    when ready), no tap feedback, and nothing when the connection drops
+    (offline support). tools/craft_check.mjs drives the offline notice and
+    the press on the rendered page."""
+    import re
+    import tools.public_files as pf
+    root = pathlib.Path(__file__).resolve().parent.parent
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    reveal = (root / "static" / "reveal.js").read_text(encoding="utf-8")
+    dock = (root / "static" / "dock.js").read_text(encoding="utf-8")
+    sw = (root / "public" / "sw.js").read_text(encoding="utf-8")
+    offline = (root / "public" / "offline.html").read_text(encoding="utf-8")
+    # 1. optimistic: the press itself raises the Updating rail, old numbers stay readable
+    assert "H.classList.add('m-busy')" in reveal and '[data-stale="true"]' in css
+    # 2. skeletons, not spinners: a loading line is a shimmering grey block, its spinner gone
+    spin = re.search(r'\[data-testid="stSpinner"\] \{([^}]*)\}', css)
+    assert spin and "linear-gradient" in spin.group(1) and "animation:" in spin.group(1)
+    assert re.search(r'\[data-testid="stSpinner"\] (i|svg|\[data-testid="stSpinnerIcon"\])[^{]*\{[^}]*display: none', css)
+    # 3. no empty first screen: the head fetches the dock script with the page
+    head = pf.head_tags("https://example.test")
+    assert 'rel="preload"' in head and "dock.js" in head[head.index('rel="preload"') - 200:][:400]
+    # 4. tap feedback on every control a visitor presses, touch screens included
+    press = " ".join(re.findall(r"([^{}]*):active[^{}]*\{[^}]*scale\(var\(--press\)\)", css))
+    for what in ('[role="tab"]', "stRadioOption", "stCheckbox", ".f-box", ".cta-link"):
+        assert what in press, f"no press on {what}"
+    assert "addEventListener('touchstart'" in reveal, "iOS shows :active only with a touch listener"
+    # 5. offline: a notice that says what still works, and an offline page for a fresh load
+    assert "addEventListener('offline'" in dock and "addEventListener('online'" in dock
+    assert "serviceWorker.register('/sw.js')" in dock
+    assert "e.request.mode !== 'navigate'" in sw and "caches.match(OFFLINE)" in sw
+    assert "addEventListener('online'" in offline and "border-radius: 0" in offline
 
 
 def test_no_test_hides_below_the_script_runner():

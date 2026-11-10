@@ -389,6 +389,39 @@ const touch = await q.evaluate(() => {
 ok(!touch.small.length, 'touch: every control on a phone is at least 44 x 44px', touch.small.slice(0, 6).join(' | '));
 ok(touch.padL >= 16 && touch.padR >= 16, 'safe area: the page keeps 16px gutters on a phone', `${touch.padL}px / ${touch.padR}px`);
 await phone.close();
+
+// ---------------------------------------------------------------- app feel
+// John, 2026-11-10: a press that answers, skeletons not spinners, and an
+// offline notice and offline page instead of a page that silently stops.
+const feel = await b.newContext({ viewport: { width: 1440, height: 900 } });
+const f = await open(feel);
+await f.evaluate(() => window.__melionaReveal && window.__melionaReveal.revealAll());
+const tab = f.locator('[data-testid="stMain"] [role="tab"]').first();
+await tab.scrollIntoViewIfNeeded(); await f.waitForTimeout(400);
+const tb = await tab.boundingBox();
+await f.mouse.move(tb.x + tb.width / 2, tb.y + tb.height / 2); await f.mouse.down(); await f.waitForTimeout(200);
+const sunk = await tab.evaluate(e => { const m = getComputedStyle(e).transform; return m === 'none' ? 1 : parseFloat(m.split('(')[1]); });
+await f.mouse.up(); await f.mouse.move(2, 2);
+ok(sunk < 1, 'tap: a tab sinks while it is pressed', `scale ${sunk}`);
+const skel = await f.evaluate(() => {
+  const d = document.createElement('div'); d.setAttribute('data-testid', 'stSpinner');
+  d.innerHTML = '<i data-testid="stSpinnerIcon"></i><div>Simulating</div>';
+  document.querySelector('[data-testid="stMain"]').appendChild(d);
+  const cs = getComputedStyle(d), r = { bg: cs.backgroundImage, anim: cs.animationName, icon: getComputedStyle(d.firstChild).display };
+  d.remove(); return r;
+});
+ok(/gradient/.test(skel.bg) && skel.anim !== 'none' && skel.icon === 'none', 'skeleton: a loading line shimmers as a grey block, no spinning wheel', `${skel.anim}, icon ${skel.icon}`);
+await f.waitForFunction(() => !!(navigator.serviceWorker && navigator.serviceWorker.controller), null, { timeout: 15000 }).catch(() => {});
+const reg = await f.evaluate(async () => { const r = navigator.serviceWorker && await navigator.serviceWorker.getRegistration('/'); return r ? r.scope : ''; });
+ok(!!reg, 'offline: the service worker is registered for the whole site', reg);
+await feel.setOffline(true); await f.waitForTimeout(500);
+const offNote = await f.evaluate(() => !!(window.__melionaNotice && window.__melionaNotice.offline()));
+ok(offNote, 'offline: losing the connection shows the offline notice');
+await f.reload({ timeout: 10000 }).catch(() => {}); await f.waitForTimeout(1500);
+const offTitle = await f.evaluate(() => document.title).catch(() => '');
+ok(/Offline/.test(offTitle), 'offline: a fresh load with no connection gets the offline page', offTitle);
+await feel.setOffline(false);
+await feel.close();
 await b.close();
 console.log(fails ? `${fails} craft check(s) failed` : 'the page\'s craft holds');
 process.exit(fails ? 1 : 0);
