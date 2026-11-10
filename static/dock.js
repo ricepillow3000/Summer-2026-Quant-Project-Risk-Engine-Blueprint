@@ -59,7 +59,7 @@
   // reconnects by itself. A fresh load with no connection gets the offline
   // page from the service worker (public/sw.js), not the browser's error.
   var gone = D.createElement('section');
-  gone.className = 'm-notice m-offline';
+  gone.className = 'm-offline';
   gone.setAttribute('role', 'status');
   gone.setAttribute('aria-live', 'polite');
   gone.hidden = true;

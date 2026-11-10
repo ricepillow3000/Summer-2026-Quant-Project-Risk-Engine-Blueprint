@@ -414,8 +414,10 @@ ok(/gradient/.test(skel.bg) && skel.anim !== 'none' && skel.icon === 'none', 'sk
 await f.waitForFunction(() => !!(navigator.serviceWorker && navigator.serviceWorker.controller), null, { timeout: 15000 }).catch(() => {});
 const reg = await f.evaluate(async () => { const r = navigator.serviceWorker && await navigator.serviceWorker.getRegistration('/'); return r ? r.scope : ''; });
 ok(!!reg, 'offline: the service worker is registered for the whole site', reg);
+const quiet = await f.evaluate(() => { const e = document.querySelector('.m-offline'); return !!e && getComputedStyle(e).display === 'none'; });
+ok(quiet, 'offline: nothing shows while the page is online (the hidden notice takes no space)');
 await feel.setOffline(true); await f.waitForTimeout(500);
-const offNote = await f.evaluate(() => !!(window.__melionaNotice && window.__melionaNotice.offline()));
+const offNote = await f.evaluate(() => { const e = document.querySelector('.m-offline'); return !!(e && window.__melionaNotice.offline() && getComputedStyle(e).display !== 'none' && /offline/i.test(e.textContent)); });
 ok(offNote, 'offline: losing the connection shows the offline notice');
 await f.reload({ timeout: 10000 }).catch(() => {}); await f.waitForTimeout(1500);
 const offTitle = await f.evaluate(() => document.title).catch(() => '');
