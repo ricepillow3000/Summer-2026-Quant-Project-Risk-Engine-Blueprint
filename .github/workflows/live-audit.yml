@@ -144,7 +144,7 @@ jobs:
           # hung up on at the cap, and none of them may notice (tools/flood_check.py)
           python -m tools.flood_check http://127.0.0.1:8501 > flood.log 2>&1 & flood=$!
           node tools/load_check.mjs http://127.0.0.1:8501 10 240 simultaneous
-          wait $flood; cat flood.log
+          wait $flood || { cat flood.log; exit 1; }; cat flood.log
           rm -rf /tmp/restore && git worktree add -f /tmp/restore HEAD >/dev/null
           (cd /tmp/restore && nohup streamlit run serve.py --server.port 8504 --server.headless true > /tmp/restore.log 2>&1 &)
           start=$(date +%s)
