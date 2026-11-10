@@ -1,29 +1,26 @@
-"""Market regime clustering on FULL return distributions - Wasserstein k-means.
+"""market regimes by clustering whole return distributions - Wasserstein k-means.
 
-Quant Deep Dive
----------------
-Reproduces the method of Horvath, Issa & Muguruza (2021), "Clustering Market
-Regimes using the Wasserstein Distance": instead of clustering summary
-features (mean, volatility), cluster the ENTIRE empirical return distribution
-of each rolling window. Two regimes can share volatility yet differ violently
-in skew and tail mass - a summary-feature clusterer cannot see that; a
-distributional one can.
+how the math works
+------------------
+copies Horvath, Issa & Muguruza (2021), "Clustering Market Regimes using the
+Wasserstein Distance". instead of clustering a few summary numbers (mean,
+vol), cluster the WHOLE return distribution of each rolling window. two
+stretches can have the same vol but totally different skew and tails - only
+a distribution-level clusterer can tell them apart.
 
-The optimal-transport machinery collapses beautifully in one dimension: the
-p-Wasserstein distance between two empirical distributions with the same
-number of equally-weighted samples is just the L_p distance between their
-SORTED sample vectors (their empirical quantile functions). So:
+in 1-d the optimal transport stuff gets really simple: for two samples of
+the same size, the Wasserstein distance is just the gap between their
+SORTED vectors (their quantile functions). so:
 
   * distance   W2(a, b) = sqrt(mean((sort(a) - sort(b))^2))
-  * barycenter of a cluster = element-wise mean of member quantile vectors
-    (an average of sorted vectors is itself sorted, so it stays a valid
-    quantile vector)
-  * Wasserstein k-means = Lloyd's algorithm on sorted-window vectors
+  * cluster center = element-wise mean of the members' sorted vectors
+    (an average of sorted vectors is still sorted, so it's a valid quantile
+    vector)
+  * Wasserstein k-means = plain Lloyd's algorithm on sorted windows
 
-Honest limits: k is a user choice, labels are in-sample statistical clusters
-(not causal market states), and window/step sizes shape what the clusterer
-can resolve. Educational reproduction of published research - not investment
-advice.
+honest limits: you pick k, the labels are in-sample clusters (not causal
+market states), and window/step size shape what it can see. an educational
+copy of published research, not investment advice.
 """
 from __future__ import annotations
 
@@ -34,12 +31,9 @@ from src.covariance import TRADING_DAYS
 
 
 def rolling_windows(returns: pd.Series, window: int = 20, step: int = 5):
-    """Rolling return windows as sorted quantile vectors.
-
-    Returns (Q, end_dates): Q[i] is the ascending-sorted vector of the
-    `window` daily returns ending at end_dates[i]. Windows advance by `step`
-    days; incomplete windows are dropped.
-    """
+    """rolling windows as sorted quantile vectors -> (Q, end_dates).
+    Q[i] = the `window` daily returns ending on end_dates[i], sorted ascending.
+    steps `step` days at a time; partial windows are dropped."""
     r = returns.dropna()
     vals = r.to_numpy(dtype=float)
     idx = r.index
@@ -54,13 +48,10 @@ def rolling_windows(returns: pd.Series, window: int = 20, step: int = 5):
 
 def wasserstein_kmeans(Q: np.ndarray, k: int = 3, n_init: int = 8,
                        max_iter: int = 100, seed: int = 42):
-    """Lloyd's k-means where rows of Q are sorted quantile vectors.
-
-    Distances are 1-D W2; centers are Wasserstein barycenters (element-wise
-    means of sorted member rows - the mean of sorted vectors is sorted, so
-    every center remains a valid quantile function). Best of `n_init`
-    seeded restarts by inertia. Deterministic for a given seed.
-    """
+    """Lloyd's k-means where each row of Q is a sorted quantile vector.
+    distance = 1-d W2, center = mean of sorted members (still sorted, so still
+    a quantile function). keeps the best of `n_init` seeded restarts by
+    inertia, so the same seed always gives the same answer."""
     Q = np.asarray(Q, dtype=float)
     n = Q.shape[0]
     if n < k:
@@ -71,7 +62,7 @@ def wasserstein_kmeans(Q: np.ndarray, k: int = 3, n_init: int = 8,
         centers = Q[rng.choice(n, size=k, replace=False)].copy()
         labels = np.zeros(n, dtype=int)
         for it in range(max_iter):
-            # assign: squared W2 = mean squared gap between quantile vectors
+            # squared W2 = mean squared gap between quantile vectors
             d2 = ((Q[:, None, :] - centers[None, :, :]) ** 2).mean(axis=2)
             new_labels = d2.argmin(axis=1)
             if it > 0 and (new_labels == labels).all():
@@ -81,7 +72,7 @@ def wasserstein_kmeans(Q: np.ndarray, k: int = 3, n_init: int = 8,
                 members = Q[labels == j]
                 if len(members):
                     centers[j] = members.mean(axis=0)   # barycenter
-                else:                                    # dead center: reseed
+                else:                                    # empty cluster: reseed
                     centers[j] = Q[rng.integers(n)]
         inertia = float(d2[np.arange(n), labels].sum())
         if inertia < best_inertia:
@@ -90,7 +81,7 @@ def wasserstein_kmeans(Q: np.ndarray, k: int = 3, n_init: int = 8,
 
 
 def _vol_order(Q: np.ndarray, labels: np.ndarray, k: int) -> np.ndarray:
-    """Relabel clusters 0..k-1 by ascending member volatility (0 = calmest)."""
+    """renumber clusters by member vol, 0 = calmest."""
     vols = []
     for j in range(k):
         members = Q[labels == j]
@@ -102,11 +93,8 @@ def _vol_order(Q: np.ndarray, labels: np.ndarray, k: int) -> np.ndarray:
 
 
 def regime_stats(Q: np.ndarray, labels: np.ndarray) -> list[dict]:
-    """Per-regime distribution stats, vol-ordered (label 0 = calmest).
-
-    Pools every member window's returns. cvar_95 = mean of the pooled worst
-    5% of daily returns (reported as a loss, positive number).
-    """
+    """stats per regime (0 = calmest), pooling every member window's returns.
+    cvar_95 = average of the worst 5% pooled daily returns, as a positive loss."""
     k = int(labels.max()) + 1
     labels = _vol_order(Q, labels, k)
     out = []
@@ -130,12 +118,12 @@ def regime_stats(Q: np.ndarray, labels: np.ndarray) -> list[dict]:
 
 
 def vol_ordered_labels(Q: np.ndarray, labels: np.ndarray) -> np.ndarray:
-    """Public wrapper: labels relabeled so 0 = calmest regime."""
+    """public version of _vol_order: labels renumbered so 0 = calmest."""
     return _vol_order(Q, labels, int(labels.max()) + 1)
 
 
 def transition_matrix(labels: np.ndarray, k: int) -> np.ndarray:
-    """Empirical P(next regime | current regime) from consecutive windows."""
+    """P(next regime | this regime), counted from back-to-back windows."""
     T = np.zeros((k, k))
     for a, b in zip(labels[:-1], labels[1:]):
         T[a, b] += 1
@@ -146,7 +134,7 @@ def transition_matrix(labels: np.ndarray, k: int) -> np.ndarray:
 
 
 if __name__ == "__main__":
-    # smoke test on live data, same pattern as the other src modules
+    # live-data smoke test, like the other src modules
     from src.ingestion import DataEngine, get_returns
     eng = DataEngine()
     prices = eng.fetch_prices(["SPY", "TLT", "GLD"], period="2y")

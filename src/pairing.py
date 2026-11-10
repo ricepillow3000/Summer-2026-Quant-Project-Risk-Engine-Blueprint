@@ -1,31 +1,27 @@
 """
-Bon Voyage - long-only defensive pairing.
+bon voyage - long-only defensive pairing.
 
-Quant Deep Dive:
-- The idea: tether a high-flying asset (Circle A) to a defensive anchor
-  (Circle B) so a two-asset, long-only blend cushions A's drawdowns. This is
-  NOT pairs trading (no short leg, no cointegration spread) - it is a
-  core-satellite defensive pairing with periodic rebalancing.
-- Tail metric: Expected Shortfall at 97.5% (Basel FRTB standard). ES@97.5 on
-  ~2y of daily data averages ~12 tail observations - defensible, where
-  CVaR@99 on 252 days averages ~2.5 observations (noise). The "safety line"
-  between the circles is the TAIL GAP: ES(A) - ES(B).
-- Anchor screen: rank candidates by LOW correlation to the basket's dominant
-  eigenvector (PC1), low realized vol, and shallow ES. We rank - we never
-  promise. In an all-tech universe every name loads positively on PC1 by
-  construction; a true near-zero loading usually needs another asset class
-  (long Treasuries, gold, staples/utilities/min-vol ETFs).
-- Backtest: replays ACTUAL daily returns (no simulated paths in the product;
-  synthetic data lives only in the test suite). Fixed weights, periodic
-  rebalancing, no lookahead: the weight applied on day t was set at most one
-  rebalance period before t.
+how the math works:
+- tie a high-flyer (circle A) to a defensive anchor (circle B) so a two-asset,
+  long-only blend cushions A's falls. NOT pairs trading (no short leg, no
+  cointegration) - it's core-satellite with periodic rebalancing.
+- tail metric: expected shortfall at 97.5% (the Basel FRTB level). on ~2y of
+  daily data that averages ~12 tail days; cvar@99 on 252 days is ~2.5 days,
+  which is just noise. the "safety line" between the circles is the tail
+  gap: ES(A) - ES(B).
+- anchor screen: rank candidates by low correlation to the basket's main
+  factor (PC1), low vol and a shallow ES. we rank, we never promise. in an
+  all-tech basket everything loads on PC1, so a real near-zero usually needs
+  another asset class (long treasuries, gold, staples/utilities/min-vol etfs).
+- backtest: replays ACTUAL daily returns (fake data only lives in the
+  tests). fixed target weights, periodic rebalance, no lookahead: day t's
+  weight was set at most one rebalance period before t.
 
-Honest limits:
-- Long-only equities have no floor above zero. Diversification CUSHIONS a
-  fall; nothing here CAPS it. Crisis correlations converge toward +1, so the
-  cushion shrinks exactly when it matters most - measured, not hidden: the
-  crisis table reports the realized cushion per replayed regime.
-- Backtests are in-sample descriptions of one history, not forecasts.
+honest limits:
+- long-only stocks have no floor above zero. diversifying CUSHIONS a fall,
+  nothing here CAPS it. in a crisis correlations head to +1, so the cushion
+  shrinks right when you need it - the crisis table measures that per regime.
+- backtests describe one history, they don't forecast.
 """
 
 import numpy as np
@@ -39,39 +35,34 @@ TAIL_CONFIDENCE = 0.975          # ES level (Basel FRTB)
 DEFAULT_W_A = 0.60               # high-flyer weight in the pair
 REBALANCE_DAYS = 21              # ~monthly
 
-# Defensive candidates from OUTSIDE an equity basket. Screened like any
-# other candidate - listed here only so the UI can offer real anchor classes
-# (an all-tech universe cannot hedge itself). Data comes live from Yahoo.
+# defensive picks from OUTSIDE a stock basket (an all-tech basket can't hedge
+# itself). screened like any other candidate; prices come live from yahoo.
 DEFENSIVE_ANCHOR_TICKERS = ["TLT", "GLD", "XLP", "XLU", "USMV"]
 
 
 def expected_shortfall(port_returns: pd.Series,
                        confidence: float = TAIL_CONFIDENCE) -> float:
-    """ES: average loss on the worst (1-confidence) share of days (positive
-    number). risk.cvar at the pairing's FRTB level - one estimator, not two."""
+    """ES: average loss on the worst (1-confidence) share of days, as a
+    positive number. just risk.cvar at the FRTB level - one estimator, not two."""
     return cvar(port_returns, confidence)
 
 
 def pc1_factor_correlations(returns: pd.DataFrame) -> pd.Series:
-    """
-    Correlation of each asset's daily returns with the universe's dominant
-    risk factor (PC1 of the correlation matrix, sign-aligned so the factor
-    represents the common "market" direction).
-    """
+    """each asset's correlation with the basket's main risk factor (PC1 of
+    the correlation matrix, signs fixed so it points the "market" way)."""
     corr = returns.corr()
     vals, vecs = np.linalg.eigh(corr.values)
     vecs = align_eigenvector_signs(vecs)
     v1 = vecs[:, -1]                                   # eigh: ascending order
-    # A correlation-matrix eigenvector is defined on STANDARDIZED returns -
-    # projecting raw returns would let high-vol names hijack the factor
-    # (audit pass 8, trace: Jolliffe, Principal Component Analysis).
+    # a correlation-matrix eigenvector lives on STANDARDIZED returns - raw
+    # ones would let high-vol names hijack the factor (Jolliffe, PCA)
     standardized = (returns - returns.mean()) / returns.std()
     factor = pd.Series(standardized.values @ v1, index=returns.index)
     return returns.corrwith(factor).rename("pc1_corr")
 
 
 def _rank01(raw: pd.Series, higher_is_better: bool) -> pd.Series:
-    """Percentile rank in [0, 1] within the candidate set (grit.py pattern)."""
+    """percentile rank in [0, 1] within the candidates (same idea as grit.py)."""
     ranked = raw.rank(pct=True)
     return ranked if higher_is_better else 1.0 - ranked + 1.0 / len(raw)
 
@@ -80,20 +71,17 @@ def anchor_rank(returns: pd.DataFrame, high_flyer: str,
                 grit: pd.Series | None = None,
                 direction: str = "long") -> pd.DataFrame:
     """
-    Rank every OTHER column of `returns` as an anchor candidate for
-    `high_flyer`. Components (equal-weight composite of percentile ranks):
-      - low |PC1 correlation|  (independence from the dominant factor)
-      - low annualized vol     (steadiness)
-      - shallow ES@97.5        (thin own-tail)
-      - high grit score        (only if provided - resilience record)
-    direction="short": the caller is SHORT the flyer (pass the flyer column
-    already negated). A short's worst day is a squeeze - a sharp rally - and
-    squeezes ride sector rallies, when defensives don't help. So the first
-    component flips: the cushion for a short is a LONG that moves WITH the
-    shorted name (high correlation to the raw asset = low correlation to the
-    negated flyer column), rallying alongside the squeeze. Classic
-    sector-hedged short. Other components unchanged.
-    Returns a DataFrame sorted best anchor first. Ranks, never promises.
+    rank every OTHER column as an anchor for `high_flyer`. score = average of
+    percentile ranks for:
+      - low |PC1 correlation| (independent of the main factor)
+      - low annual vol        (steady)
+      - shallow ES@97.5       (thin own tail)
+      - high grit score       (only if given)
+    direction="short": you're SHORT the flyer (pass its column already
+    negated). a short's worst day is a squeeze - a sharp rally - and squeezes
+    ride sector rallies, when defensives don't help. so the first part flips:
+    the cushion is a LONG that moves WITH the shorted name (a classic
+    sector-hedged short). returns best anchor first. ranks, never promises.
     """
     if direction not in ("long", "short"):
         raise ValueError("direction must be 'long' or 'short'")
@@ -113,11 +101,10 @@ def anchor_rank(returns: pd.DataFrame, high_flyer: str,
         "corr_to_flyer": corr_a,
     })
     if direction == "short":
-        # flyer column arrives negated: corr_to_flyer < 0 means the candidate
-        # moves WITH the underlying asset - exactly the squeeze cushion. The
-        # cushion DOMINATES this screen (weight 3x): a steady but uncorrelated
-        # defensive fails precisely when the squeeze hits, so steadiness and
-        # tail-depth are tie-breakers here, not co-equal votes.
+        # flyer column is negated, so corr_to_flyer < 0 = moves WITH the real
+        # name = the squeeze cushion. it counts 3x: a steady but unrelated
+        # defensive fails exactly when the squeeze hits, so vol and ES are
+        # just tie-breakers here.
         first = _rank01(df["corr_to_flyer"], higher_is_better=False)
         parts = [first, first, first,
                  _rank01(df["ann_vol"], higher_is_better=False),
@@ -139,12 +126,11 @@ def anchor_rank(returns: pd.DataFrame, high_flyer: str,
 
 def pair_weights(returns_a: pd.Series, returns_b: pd.Series) -> dict:
     """
-    Risk-parity split for the two circles: each leg contributes EQUAL RISK,
-    not equal dollars. For two assets this is exact inverse-volatility:
+    risk-parity split: each leg carries EQUAL RISK, not equal dollars. for two
+    assets that's exact inverse-vol:
         w_a * sigma_a = w_b * sigma_b  =>  w_a = sigma_b / (sigma_a + sigma_b)
-    A high-flyer at ~3x the anchor's vol naturally lands near 25/75 - the
-    anchor holds most of the CAPITAL because it needs ~3x the dollars to
-    carry the same RISK as the flyer. Long-only by construction.
+    a flyer with ~3x the anchor's vol lands near 25/75 - the anchor needs ~3x
+    the dollars to carry the same risk. long-only by construction.
     """
     sa = float(pd.Series(returns_a).dropna().std())
     sb = float(pd.Series(returns_b).dropna().std())
@@ -157,21 +143,18 @@ def pair_weights(returns_a: pd.Series, returns_b: pd.Series) -> dict:
 
 def tail_gap(returns: pd.DataFrame, a: str, b: str,
              confidence: float = TAIL_CONFIDENCE) -> dict:
-    """The safety line: distance between the circles in tail-loss units."""
+    """the safety line: how far apart the circles are in tail-loss units."""
     es_a = expected_shortfall(returns[a], confidence)
     es_b = expected_shortfall(returns[b], confidence)
     return {"es_a": es_a, "es_b": es_b, "gap": es_a - es_b}
 
 
 def _max_drawdown(path: pd.Series) -> float:
-    """Max peak-to-trough drawdown of a value path (negative number).
-
-    Both paths here begin AFTER day one - they are cumulative products of the
-    return series - so the 1.0 of starting capital never appears in the path
-    and `cummax` alone cannot see it. Clipping the running peak up to 1.0 puts
-    it back; without it a day-one loss is invisible and every cushion is
-    understated. Callers must pass a path normalised to 1.0 of capital.
-    """
+    """worst peak-to-trough fall of a value path (negative number).
+    the paths start AFTER day one (they're cumprods of returns), so the 1.0
+    of starting money isn't in them and cummax can't see it. clipping the
+    peak up to 1.0 puts it back - otherwise a day-one loss vanishes and every
+    cushion looks smaller. pass a path normalised to 1.0 of capital."""
     return float((path / path.cummax().clip(lower=1.0) - 1.0).min())
 
 
@@ -179,11 +162,10 @@ def backtest_pair(returns_a: pd.Series, returns_b: pd.Series,
                   w_a: float = DEFAULT_W_A,
                   rebalance_days: int = REBALANCE_DAYS) -> dict:
     """
-    Real-history backtest of the long-only pair vs holding A alone.
-
-    Mechanics (no lookahead): start at target weights; legs drift with their
-    ACTUAL daily returns; every `rebalance_days` trading days the blend is
-    reset to target. Day-t weights depend only on returns before t.
+    real-history backtest of the long-only pair vs holding A alone.
+    start at target weights, let each leg drift with its ACTUAL daily
+    returns, reset to target every `rebalance_days` trading days. day t's
+    weight only depends on returns before t (no lookahead).
     """
     if not 0.0 <= w_a <= 1.0:
         raise ValueError("w_a must be in [0, 1] (long-only)")
@@ -192,7 +174,7 @@ def backtest_pair(returns_a: pd.Series, returns_b: pd.Series,
     if len(joined) < 2:
         raise ValueError("not enough overlapping history")
 
-    val_a, val_b = w_a, 1.0 - w_a          # dollar value of each leg
+    val_a, val_b = w_a, 1.0 - w_a          # dollars in each leg
     pair_path, weights_a, pair_rets = [], [], []
     for i, (ra, rb) in enumerate(zip(joined["a"], joined["b"])):
         w_t = val_a / (val_a + val_b)
@@ -227,18 +209,15 @@ def backtest_pair(returns_a: pd.Series, returns_b: pd.Series,
 
 def crisis_cushion(a: str, b: str, w_a: float = DEFAULT_W_A,
                    short_a: bool = False) -> pd.DataFrame:
-    """
-    Per-crisis cushion record on REPLAYED real returns: for each historical
-    regime where both assets traded, max drawdown of A alone vs the
-    rebalanced pair. The honest evidence - including any crisis where the
-    cushion was ~0 because correlations converged.
-    """
+    """per-crisis cushion on REPLAYED real returns: in every historical regime
+    both names traded, A's worst fall alone vs the rebalanced pair. shows the
+    crises where the cushion was ~0 too (correlations converged)."""
     from src.scenarios import HISTORICAL_REGIMES, replay_returns
     rows = {}
     for name, (start, end) in HISTORICAL_REGIMES.items():
         r = replay_returns([a, b], start, end)
         if a not in r.columns or b not in r.columns or len(r) < 5:
-            continue                       # asset absent in window - UI discloses omissions
+            continue                       # name missing in this window - the ui discloses it
         bt = backtest_pair(-r[a] if short_a else r[a], r[b], w_a)
         rows[name] = {"solo_dd": bt["max_dd_solo"], "pair_dd": bt["max_dd_pair"],
                       "cushion": bt["cushion"], "days": bt["n_days"]}
