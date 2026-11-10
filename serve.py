@@ -22,8 +22,9 @@ websocket pass straight through. Pinned by
 test_every_response_carries_the_security_headers.
 
 RateLimit (2026-11-04, John's pre-public list) caps what one network address
-can do: new sessions a minute, sessions open at once, and HTTP requests a
-minute. A visitor never comes near the caps - one page is one session and
+can do: new sessions a minute, sessions open at once, HTTP requests a minute,
+and (2026-11-10) messages a minute over its open sessions - each click is a
+message that reruns the page, and nothing capped them inside an open session. A visitor never comes near the caps - one page is one session and
 about forty requests - so they only stop a script flooding the one process
 every visitor shares. Over a cap: HTTP 429, or the websocket closed with
 1013 ("try again later"). The address is read from the last hop Railway's
@@ -90,6 +91,7 @@ class SecurityHeaders:
 NEW_SESSIONS_PER_MINUTE = 60
 OPEN_SESSIONS = 30
 REQUESTS_PER_MINUTE = 3000
+MESSAGES_PER_MINUTE = 600      # one address's websocket messages; a person sends a few
 NEVER_LIMITED = ("/_stcore/health",)
 WINDOW = 60.0
 MAX_TRACKED = 20_000            # addresses held at once; the oldest go first
@@ -128,6 +130,7 @@ class RateLimit:
         self.app, self.clock = app, clock
         self.sessions = defaultdict(deque)   # address -> start times of sessions
         self.requests = defaultdict(deque)   # address -> times of HTTP requests
+        self.messages = defaultdict(deque)   # address -> times of websocket messages
         self.open = defaultdict(int)          # address -> sessions open now
         self.warned = {}                      # address -> last refusal logged
 
@@ -145,9 +148,9 @@ class RateLimit:
             log.warning("refused %s from client=%s", what, scrambled(addr))
 
     def _tidy(self) -> None:
-        if len(self.requests) + len(self.sessions) > MAX_TRACKED:
+        if len(self.requests) + len(self.sessions) + len(self.messages) > MAX_TRACKED:
             now = self.clock()
-            for table in (self.requests, self.sessions):
+            for table in (self.requests, self.sessions, self.messages):
                 for addr in [a for a, q in table.items() if not q or now - q[-1] > WINDOW]:
                     del table[addr]
             for addr in [a for a, n in self.open.items() if n <= 0]:
@@ -180,8 +183,27 @@ class RateLimit:
             await send({"type": "websocket.close", "code": 1013})
             return
         self.open[addr] += 1
+        closed = []
+
+        async def counted():
+            # past the cap: hang up (1013 "try again later") and hand the app a
+            # disconnect, so the session ends the normal way
+            message = await receive()
+            if message["type"] == "websocket.receive" and not self._within(
+                    self.messages[addr], self.clock(), MESSAGES_PER_MINUTE):
+                self._refused(addr, "messages", self.clock())
+                if not closed:
+                    closed.append(True)
+                    await send({"type": "websocket.close", "code": 1013})
+                return {"type": "websocket.disconnect", "code": 1013}
+            return message
+
+        async def quiet(message):                   # nothing goes out after the close
+            if not closed:
+                await send(message)
+
         try:
-            await self.app(scope, receive, send)
+            await self.app(scope, counted, quiet)
         finally:
             self.open[addr] -= 1
 

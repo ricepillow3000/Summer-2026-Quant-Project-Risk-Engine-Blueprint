@@ -137,10 +137,14 @@ jobs:
       # through serve.py's rate limiter; then a copy of this checkout with no
       # data/ and no logs/ - what a redeploy or a restore from git leaves - is
       # started and timed to its first headline (the restore drill).
-      - name: 8e. This commit - ten visitors at once, and a restore from nothing
+      - name: 8e. This commit - ten visitors at once while one address floods it, and a restore from nothing
         if: always()
         run: |
+          # the flood (another address) runs WHILE the ten visitors load: it must be
+          # hung up on at the cap, and none of them may notice (tools/flood_check.py)
+          python -m tools.flood_check http://127.0.0.1:8501 > flood.log 2>&1 & flood=$!
           node tools/load_check.mjs http://127.0.0.1:8501 10 240 simultaneous
+          wait $flood; cat flood.log
           rm -rf /tmp/restore && git worktree add -f /tmp/restore HEAD >/dev/null
           (cd /tmp/restore && nohup streamlit run serve.py --server.port 8504 --server.headless true > /tmp/restore.log 2>&1 &)
           start=$(date +%s)

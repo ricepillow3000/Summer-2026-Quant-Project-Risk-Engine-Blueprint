@@ -39,7 +39,7 @@ BUGS = [
     ("M12", "src/netguard.py", '    if _SPENT["count"] >= MAX_REQUESTS_PER_DAY:', '    if _SPENT["count"] > MAX_REQUESTS_PER_DAY:', "one request past the cap"),
     ("M13", "src/netguard.py", '    if status["remaining"] < needed:', '    if status["remaining"] < 0:', "spent cap not caught up front"),
     ("M14", "src/topology.py", '.replace("<", "\\\\u003c")', '.replace("<", "<")', "map json can close its script"),
-    ("M15", "src/topology.py", '.replace("\\u2028", "\\\\u2028")', '.replace("\\u2028", "\\u2028")', "line separator breaks the map js"),
+    ("M15", "src/topology.py", "json.dumps(payload, allow_nan=False)", "json.dumps(payload, allow_nan=False, ensure_ascii=False)", "line separator breaks the map js"),
     ("M16", "src/risk.py", "    tail = r[r <= threshold]", "    tail = r[r < threshold]", "cvar skips the var day"),
     ("M17", "src/risk.py", "    return float(-tail.mean())", "    return float(tail.mean())", "cvar sign flipped"),
     ("M18", "src/risk.py", "port_returns, (1 - confidence) * 100))", "port_returns, confidence * 100))", "var reads the gains"),

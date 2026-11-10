@@ -3596,25 +3596,44 @@ def test_no_third_party_assets_are_loaded():
 
 def test_no_credentials_in_tracked_source():
     """There is no API key in this app - yfinance is keyless - so any
-    credential-shaped literal in tracked source is either a real leak or dead
-    weight that will be mistaken for one."""
+    credential-shaped literal in a tracked file is either a real leak or dead
+    weight that will be mistaken for one. Every text file is read: static/ and
+    the map page are what the browser downloads (John, 2026-11-10: never a key
+    in the front end). Both ways: the scan must catch a planted key of each
+    shape, built here at run time so this file never holds one."""
     import re as _re
 
     root = pathlib.Path(__file__).resolve().parent.parent
     cred = _re.compile(
         r"AKIA[0-9A-Z]{16}"
-        r"|sk-[A-Za-z0-9]{20,}"
-        r"|ghp_[A-Za-z0-9]{36}"
+        r"|(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{20,}"          # not the risk-engine in our own url
+        r"|gh[pousr]_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{40,}"
+        r"|AIza[0-9A-Za-z_-]{35}"
         r"|xox[baprs]-[A-Za-z0-9-]{10,}"
-        r"|-----BEGIN [A-Z ]*PRIVATE KEY-----"
+        r"|-----BEGIN [A-Z ]*PRIVATE" r" KEY-----"
         r"|(?:api[_-]?key|secret|password|token)\s*[:=]\s*[\"'][^\"']{12,}[\"']",
         _re.I)
-    offenders = []
-    for path in list(root.glob("*.py")) + list((root / "src").glob("*.py")):
-        for n, ln in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+    fake = "Q7" * 30
+    for planted in ("AKIA" + fake[:16].upper(), "sk-ant-" + fake, "ghp_" + fake[:36],
+                    "github_pat_" + fake, "AIza" + fake[:35], "xoxb-" + fake,
+                    "-----BEGIN RSA PRIVATE" + " KEY-----", 'api_key = "' + fake + '"'):
+        assert cred.search(planted), f"the scan misses a key shaped like {planted[:12]}..."
+    skip = {".git", "node_modules", "data", "logs", "audit", "__pycache__", ".claude"}
+    offenders, scanned = [], 0
+    for path in root.rglob("*"):
+        if not path.is_file() or skip & set(path.relative_to(root).parts) or path == pathlib.Path(__file__).resolve():
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue                                # images, fonts
+        scanned += 1
+        for n, ln in enumerate(text.splitlines(), 1):
             if cred.search(ln):
-                offenders.append(path.name + ":" + str(n))
-    assert not offenders, "credential-shaped literal in source: " + str(offenders)
+                offenders.append(f"{path.relative_to(root)}:{n}")
+    assert scanned > 60, f"only {scanned} files read - the scan is not seeing the repo"
+    assert not offenders, "credential-shaped literal in a tracked file: " + str(offenders)
+    assert not list(root.glob(".env*")) or ".env" in (root / ".gitignore").read_text(encoding="utf-8")
 
 
 def test_src_holds_only_code_the_app_or_its_audits_run():
@@ -7211,7 +7230,9 @@ def test_var_reads_the_loss_tail_and_cvar_averages_the_days_at_or_past_it():
 
     r = pd.Series(np.arange(-10, 11) / 100)        # -10% .. +10%, 21 days
     assert abs(var(r, 0.95) - 0.09) < 1e-12        # 5th percentile is -9%
-    assert abs(cvar(r, 0.95) - 0.095) < 1e-12      # mean of -10% and -9%
+    # at 75% the cut lands exactly on a day (-5%; at 95% float error moves it
+    # off -9%), and that day is in the tail: mean of -10% .. -5% is -7.5%
+    assert abs(var(r, 0.75) - 0.05) < 1e-12 and abs(cvar(r, 0.75) - 0.075) < 1e-12
     assert var(-r.abs(), 0.95) > 0 and cvar(r, 0.95) >= var(r, 0.95)
 
 
@@ -7389,8 +7410,9 @@ def test_a_redirect_off_the_allowlist_is_refused():
 
 
 def test_map_payload_escapes_js_line_separators():
-    """M15: U+2028/U+2029 end a line inside a JS string in older engines;
-    leaving them raw broke the map's script and no check noticed."""
+    """M15: U+2028/U+2029 end a line inside a JS string in older engines.
+    json.dumps' ascii output escapes them; turning that off left them raw in
+    the map's script and no check noticed."""
     import json as _json
 
     from src.topology import war_room_html
@@ -7401,6 +7423,67 @@ def test_map_payload_escapes_js_line_separators():
     body = page[page.index(begin) + len(begin):page.index(end)]
     assert " " not in body and " " not in body
     assert _json.loads(body.strip().removeprefix("const DEMO =").strip().rstrip(";")) == payload
+
+
+def test_one_address_cannot_flood_an_open_session_with_messages():
+    """John, 2026-11-10: rate limits on what people can spam. Sessions and HTTP
+    requests had caps, messages inside an open websocket did not: one address
+    could send reruns non-stop over its 30 sessions and pin the one process
+    every visitor shares. Both ways: a normal session's messages all arrive;
+    past MESSAGES_PER_MINUTE the session is closed with 1013 and the app reads
+    a disconnect; another address is untouched; a minute later it's served."""
+    import asyncio
+
+    import serve
+
+    assert serve.MESSAGES_PER_MINUTE >= 300, "far above a person clicking (a few a second at most)"
+    now = [5000.0]
+    lim = serve.RateLimit(None, clock=lambda: now[0])
+
+    def session(n, xff=b"203.0.113.9, 198.51.100.7"):
+        got, sent = [], []
+
+        async def app(scope, receive, send):
+            await send({"type": "websocket.accept"})
+            while True:
+                m = await receive()
+                got.append(m)
+                if m["type"] == "websocket.disconnect":
+                    await send({"type": "websocket.send", "bytes": b"late"})   # after close: dropped
+                    return
+
+        incoming = [{"type": "websocket.connect"}] + [
+            {"type": "websocket.receive", "bytes": b"x"}] * n + [{"type": "websocket.disconnect", "code": 1000}]
+
+        async def receive():
+            return incoming.pop(0)
+
+        async def send(m):
+            sent.append(m)
+
+        lim.app = app
+        scope = {"type": "websocket", "path": "/_stcore/stream", "client": ("10.0.0.2", 1),
+                 "headers": [(b"x-forwarded-for", xff)]}
+        asyncio.run(lim(scope, receive, send))
+        return [m["type"] for m in got], sent
+
+    old = serve.MESSAGES_PER_MINUTE
+    try:
+        serve.MESSAGES_PER_MINUTE = 5
+        got, sent = session(3)                       # a visitor: every message arrives, never closed
+        assert got.count("websocket.receive") == 3 and got[-1] == "websocket.disconnect"
+        assert not any(m["type"] == "websocket.close" for m in sent)
+        got, sent = session(10)                      # a flood: 2 more get in, then the door shuts
+        assert got.count("websocket.receive") == 2 and got[-1] == "websocket.disconnect"
+        assert [m for m in sent if m["type"] == "websocket.close"] == [{"type": "websocket.close", "code": 1013}]
+        assert {"type": "websocket.send", "bytes": b"late"} not in sent, "the app wrote after the close"
+        got, _ = session(3, xff=b"203.0.113.9, 192.0.2.44")
+        assert got.count("websocket.receive") == 3, "another address must be untouched"
+        now[0] += 61
+        got, sent = session(3)
+        assert got.count("websocket.receive") == 3 and not any(m["type"] == "websocket.close" for m in sent)
+    finally:
+        serve.MESSAGES_PER_MINUTE = old
 
 
 def test_no_test_hides_below_the_script_runner():
