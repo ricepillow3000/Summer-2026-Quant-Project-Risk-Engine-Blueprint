@@ -1,19 +1,18 @@
 """
-Risk-management strategies - institutional methodologies, no proprietary data.
+risk-management strategies - published methods, no secret data.
 
-Everything here runs on the same public price returns the engine already
-fetches. These are published frameworks (risk parity, risk budgeting, managed
-volatility), not any firm's actual positions - the legal, defensible way to
-make a student project look like a real risk desk.
+all of it runs on the same public returns the engine already pulls. these are
+textbook frameworks (risk parity, risk budgeting, managed vol), not any
+firm's real positions.
 
-Quant Deep Dive:
-- Risk contribution answers "where is my risk actually coming from?" Two assets
-  can have equal dollar weight but wildly unequal *risk* weight if one is more
-  volatile or more correlated with the rest.
-- Risk parity (Bridgewater All-Weather style) re-weights so every asset
-  contributes the SAME risk - no single name dominates.
-- Volatility targeting (AQR managed-vol style) scales total exposure up or down
-  to hold a constant target volatility, using leverage when markets are calm.
+how the math works:
+- risk contribution: "where is my risk actually coming from?" two names can
+  have the same dollar weight but very different RISK weight if one is
+  jumpier or moves more with the rest.
+- risk parity (Bridgewater All-Weather style): reweight so every name adds
+  the SAME risk - nobody dominates.
+- vol targeting (AQR managed-vol style): scale the whole book up or down to
+  hold a fixed target vol, levering up when markets are calm.
 """
 
 import numpy as np
@@ -22,41 +21,35 @@ import pandas as pd
 
 def risk_contributions(weights: np.ndarray, cov: pd.DataFrame) -> pd.DataFrame:
     """
-    Decompose portfolio volatility into each asset's contribution.
+    split portfolio vol into each name's share.
 
-    Marginal contribution = (Sigma w)_i / sigma_p
-    Component contribution = w_i * marginal_i   (these sum to sigma_p)
-    Percent               = component / sigma_p (these sum to 100%)
+    marginal  = (Sigma w)_i / sigma_p
+    component = w_i * marginal_i   (sums to sigma_p)
+    percent   = component / sigma_p (sums to 100%)
 
-    Returns a DataFrame indexed by ticker with weight, risk %, and the gap
-    between them - the gap is the concentration story.
+    returns weight and risk % per ticker - the gap between them is the
+    concentration story.
     """
     w = np.asarray(weights, dtype=float)
     sigma = cov.values
     port_vol = float(np.sqrt(w @ sigma @ w))
     marginal = sigma @ w / port_vol
-    component = w * marginal
-    pct = component / port_vol
-
-    return pd.DataFrame({
-        "weight": w,
-        "risk_pct": pct,
-    }, index=cov.index)
+    pct = w * marginal / port_vol
+    return pd.DataFrame({"weight": w, "risk_pct": pct}, index=cov.index)
 
 
 def risk_parity_weights(cov: pd.DataFrame, iters: int = 10000,
                         tol: float = 1e-12) -> np.ndarray:
     """
-    Equal-risk-contribution (ERC) long-only weights via cyclical coordinate
+    equal-risk-contribution (ERC) long-only weights, by cyclical coordinate
     descent on the strictly convex problem
         min 0.5 w'Sigma w - lam * sum_i b_i ln(w_i),
     whose first-order condition w_i (Sigma w)_i = lam b_i IS the ERC
-    condition after normalization (Spinu 2013; Griveau-Billion, Richard &
-    Roncalli 2013). Converges for any positive-definite covariance matrix,
-    including baskets with bond, gold, FX or futures legs where the naive
-    fixed point w <- b/(Sigma w) is a period-2 oscillator and silently
-    returns equal weight (audit 2026-07-18: that failure hit any zero- or
-    negative-correlation universe, e.g. the FX and futures presets).
+    condition once normalized (Spinu 2013; Griveau-Billion, Richard &
+    Roncalli 2013). converges for any positive-definite cov. the naive fixed
+    point w <- b/(Sigma w) just bounces between two points on baskets with
+    zero or negative correlation (bonds, gold, FX, futures) and quietly
+    hands back equal weight.
     """
     sigma = cov.values
     n = sigma.shape[0]
@@ -75,7 +68,7 @@ def risk_parity_weights(cov: pd.DataFrame, iters: int = 10000,
 
 
 def portfolio_vol(weights: np.ndarray, cov: pd.DataFrame) -> float:
-    """Annualized portfolio volatility for a weight vector (cov is annualized)."""
+    """annual portfolio vol for a weight vector (cov is annualized)."""
     w = np.asarray(weights, dtype=float)
     return float(np.sqrt(w @ cov.values @ w))
 
@@ -83,13 +76,13 @@ def portfolio_vol(weights: np.ndarray, cov: pd.DataFrame) -> float:
 def vol_target(weights: np.ndarray, cov: pd.DataFrame,
                target_vol: float = 0.10) -> dict:
     """
-    Managed-volatility overlay: scale exposure to hit a target annual vol.
+    managed-vol overlay: scale exposure to hit a target annual vol.
 
     leverage = target_vol / realized_vol
-      < 1  -> de-risk (portfolio is more volatile than target)
-      > 1  -> lever up (portfolio is calmer than target)
+      < 1  -> de-risk (book is jumpier than the target)
+      > 1  -> lever up (book is calmer than the target)
 
-    Returns the leverage, the scaled weights (sum = leverage), and both vols.
+    returns the leverage, the scaled weights (they sum to leverage), and both vols.
     """
     realized = portfolio_vol(weights, cov)
     leverage = target_vol / realized if realized > 0 else 1.0
@@ -99,12 +92,6 @@ def vol_target(weights: np.ndarray, cov: pd.DataFrame,
         "realized_vol": realized,
         "target_vol": target_vol,
     }
-
-
-# (A hand-tuned SCENARIOS dict of illustrative crisis magnitudes used to live
-# here. Deleted: never imported by the app, and it contradicted the house
-# doctrine that stress magnitudes are whatever actually happened - real
-# replays live in src/scenarios.py HISTORICAL_REGIMES.)
 
 
 if __name__ == "__main__":

@@ -1,25 +1,21 @@
 """
-Liquidity modeling - how many days to unwind the book, from real volume.
+liquidity - how many days it takes to sell the book, from real volume.
 
-Quant Deep Dive:
-Volatility is not the only risk. A position you cannot exit is one that keeps
-hurting you long after the model says "sell." Liquidity risk asks a different
-question: if you HAD to unwind this portfolio, how long would it take - without
-becoming the market and moving the price against yourself?
+vol isn't the only risk: a position you can't get out of keeps hurting after
+the model says "sell". so: if you HAD to unwind, how long would it take
+without moving the price against yourself?
 
-Method (participation-rate model, the industry standard):
-- ADV_i = average daily DOLLAR volume of asset i (price x shares, averaged over
-  a recent lookback window). Comes straight from Yahoo volume data - never
-  estimated.
-- You can realistically trade only a fraction of ADV per day before your own
-  order flow moves the price. That cap is the PARTICIPATION RATE (typically
-  10-20% on a risk desk).
-- Position_i          = book_value x weight_i
-- days_to_liquidate_i = Position_i / (participation_rate x ADV_i)
+quant deep dive (participation-rate model, the desk standard):
+- ADV_i = average daily DOLLAR volume of name i (price x shares over a recent
+  window), straight from Yahoo - never estimated.
+- you can only trade a slice of ADV a day before your own orders move the
+  price. that slice is the PARTICIPATION RATE (usually 10-20%).
+- position_i          = book_value x weight_i
+- days_to_liquidate_i = position_i / (participation_rate x ADV_i)
 
-The portfolio's liquidation horizon is the SLOWEST leg - you are not flat until
-the last share is sold. The dollar-weighted average describes the typical name,
-and the share exitable in a single day is the number a risk memo leads with.
+the book's exit horizon is its SLOWEST leg - you're not flat until the last
+share is gone. we also report the dollar-weighted average and the share you
+can sell in one day.
 """
 
 import numpy as np
@@ -31,25 +27,21 @@ from src.covariance import TRADING_DAYS
 def days_to_liquidate(weights, adv: pd.Series, book_value: float = 1_000_000.0,
                       participation_rate: float = 0.20) -> pd.DataFrame:
     """
-    Days to unwind each position under a participation-rate cap.
+    days to unwind each position under a participation cap.
 
-    Args:
-        weights: portfolio weights, aligned to `adv`'s index order. May sum to
-            more than 1 under a leverage overlay - that is intentional, since a
-            levered book has more notional to sell.
-        adv: average daily DOLLAR volume per asset, indexed by ticker.
-        book_value: total dollars invested (position sizes scale from this).
-        participation_rate: max fraction of a name's ADV traded per day before
-            your own flow moves the price.
+    weights: in `adv`'s order. can sum past 1 under leverage - on purpose,
+        a levered book has more to sell.
+    adv: average daily DOLLAR volume per ticker.
+    book_value: total dollars in the book.
+    participation_rate: max slice of a name's ADV you trade per day.
 
-    Returns a DataFrame indexed by ticker with weight, position_value, adv,
-    daily_capacity, and days. Names with no volume (ADV <= 0, e.g. FX pairs)
-    get days = inf - flagged, never faked.
+    returns weight, position_value, adv, daily_capacity and days per ticker.
+    no volume (ADV <= 0, e.g. FX) means days = inf - flagged, never faked.
     """
     w = np.asarray(weights, dtype=float)
     adv_v = adv.values.astype(float)
-    position = np.abs(w) * book_value               # notional to unwind per name
-    capacity = participation_rate * adv_v           # dollars tradable per day
+    position = np.abs(w) * book_value               # dollars to sell per name
+    capacity = participation_rate * adv_v           # dollars you can sell per day
     with np.errstate(divide="ignore", invalid="ignore"):
         days = np.where(capacity > 0, position / capacity, np.inf)
 
@@ -64,19 +56,18 @@ def days_to_liquidate(weights, adv: pd.Series, book_value: float = 1_000_000.0,
 
 def liquidity_profile(dtl: pd.DataFrame) -> dict:
     """
-    Collapse a days-to-liquidate table into the handful of numbers a risk memo
-    leads with: full-exit horizon, dollar-weighted average, one-day exitable
-    share, the least-liquid name, and any assets with no volume feed.
+    the few numbers worth leading with: full-exit days, weighted-average days,
+    share sellable in one day, the slowest name, and names with no volume.
     """
     finite = dtl[np.isfinite(dtl["days"])]
     no_volume = list(dtl.index[~np.isfinite(dtl["days"])])
 
-    # Share of the book (by weight) that can be fully sold within one day.
+    # share of the book (by weight) you can fully sell in one day
     total_weight = float(np.abs(dtl["weight"]).sum()) or 1.0
     pct_1day = float(np.abs(dtl.loc[dtl["days"] <= 1.0, "weight"]).sum()) / total_weight
 
     if not finite.empty:
-        full_exit_days = float(finite["days"].max())   # flat only when slowest leg is done
+        full_exit_days = float(finite["days"].max())   # flat only when the slowest leg is done
         least_liquid = finite["days"].idxmax()
         w = np.abs(finite["weight"])
         weighted_avg_days = float((finite["days"] * w).sum() / w.sum())
@@ -97,40 +88,32 @@ def liquidity_profile(dtl: pd.DataFrame) -> dict:
 def liquidity_adjusted_cvar(cvar: float, full_exit_days: float,
                             base_horizon_days: int = TRADING_DAYS) -> dict:
     """
-    Liquidity-adjusted CVaR: widen the tail to cover the days the book stays
-    exposed simply because it cannot be sold instantly.
+    CVaR stretched to cover the extra days you're stuck holding the book.
 
-    The headline CVaR assumes the position is closed at the horizon. If fully
-    unwinding actually takes `full_exit_days` MORE trading days (the
-    participation-rate model above, driven by real volume), the book's true
-    exposure window is base_horizon + full_exit_days. Under square-root-of-time
-    scaling - the Basel liquidity-horizon convention - risk grows with the sqrt
-    of the window, so:
+    the headline CVaR assumes you're out at the horizon. if selling everything
+    takes `full_exit_days` MORE days, you're exposed for base + full_exit.
+    square-root-of-time scaling (the Basel liquidity-horizon rule) says risk
+    grows with the sqrt of the window:
 
         multiplier = sqrt((base + full_exit) / base) = sqrt(1 + full_exit/base)
         LVaR       = CVaR * multiplier
 
-    A book exitable in under a day is barely penalised (multiplier ~ 1.0); a
-    book that takes weeks to unwind carries a materially fatter tail. The
-    multiplier is monotonic in full_exit_days, so a less liquid portfolio can
-    never report a smaller liquidity-adjusted tail than a more liquid one with
-    the same CVaR.
+    a book you can dump in a day barely moves (~1.0x); one that takes weeks
+    gets a fatter tail. it only goes up with full_exit_days, so a less liquid
+    book can never look safer than a more liquid one with the same CVaR.
 
-    Honest limit: sqrt-of-time assumes iid returns (no volatility clustering)
-    and prices market-EXPOSURE risk over the unwind, NOT the bid/ask impact
-    cost of trading. That spread cost is what Bangia, Diebold, Schuermann and
-    Stroughair (1999) actually model - they ADD an exogenous bid/ask term to
-    VaR rather than stretching the horizon - so this function is deliberately
-    not an implementation of it, and does not cite it as one. It answers "how much more can the market move against me
-    while I'm stuck holding?", not "what spread do I pay to get out?".
+    limits: sqrt-of-time assumes iid returns (no vol clustering), and this
+    prices how far the market can move while you're stuck - NOT the bid/ask
+    cost of getting out. that spread cost is Bangia, Diebold, Schuermann and
+    Stroughair (1999), who add a bid/ask term instead; this isn't their model.
     """
     finite = np.isfinite(full_exit_days)
     if cvar <= 0:
-        # The worst 5% of years still gain: no tail loss to widen. Scaling it
-        # reported -5.3% against a -5.0% headline, a stuck book reading better.
+        # worst 5% of years still gain: nothing to widen (scaling a gain made
+        # a stuck book look better)
         mult = 1.0
     elif not finite or full_exit_days <= 0:
-        # No-volume book (can't exit at all) -> unbounded; already-liquid -> none.
+        # no volume = can't exit at all -> inf; already liquid -> no penalty
         mult = float("inf") if not finite else 1.0
     else:
         mult = float(np.sqrt(1.0 + full_exit_days / base_horizon_days))

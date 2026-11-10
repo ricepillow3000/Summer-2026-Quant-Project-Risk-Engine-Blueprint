@@ -100,3 +100,4 @@ These come from the project's design intent and should guide any feature work, n
 - Verify every change by running it - smoke-test the affected `src/` module directly, then run the Streamlit app end-to-end.
 - Cache files (`data/*.parquet`, `data/*.meta.json`) and `streamlit.log` are gitignored; don't hand-edit or commit them.
 - Commit after each working feature with a descriptive message.
+- Comments and docstrings in `src/` are short and plain (John, 2026-11-09): say WHY in a line, lowercase is fine, keep each feature's "how the math works" and its paper citations; dates and incident stories go in the commit message, not the code. Every JSON record is written through `ingestion._write_json` (temp file + rename), like every parquet through `_write_parquet`.

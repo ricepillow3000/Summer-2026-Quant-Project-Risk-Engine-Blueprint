@@ -1,26 +1,19 @@
 """
-Egress allowlist for every outbound request this engine makes.
+egress allowlist: every outbound request this engine makes goes through here.
 
-Why this exists (the SSRF control, adapted to an app with no webhooks):
-the classic SSRF sink is a URL the user supplies. This app has none - the only
-user input is a ticker symbol, and `ingestion.VALID_TICKER` already restricts
-it to `[A-Z0-9.\\-=]` at a single funnel, so it cannot carry a scheme, `//`,
-`@`, or a path traversal. The host is chosen by `yfinance`, not by the user.
+the ssrf story: there's no user-supplied url anywhere. the only user input is a
+ticker, and `ingestion.VALID_TICKER` already squeezes that to `[A-Z0-9.\\-=]`,
+so it can't carry a scheme, `//`, `@` or a path. yfinance picks the host, not
+the user. so the funnel is control #1 and this is the backup: if a future
+feature takes a url, a dependency gets owned, or yahoo redirects somewhere
+weird, the request still can't leave the list. fails closed, names the host.
 
-That makes the funnel the control and this module the second line: even if a
-future feature takes a URL, a dependency is compromised, or a Yahoo endpoint
-redirects somewhere unexpected, the request does not leave the allowlist. It
-fails closed and names the host it refused.
-
-Design notes:
-- The session subclasses `curl_cffi.requests.Session` because that is what
-  `yfinance` itself uses. A plain `requests.Session` is accepted by yfinance
-  but draws `YFRateLimitError` immediately (Yahoo rejects the non-impersonated
-  TLS fingerprint) - verified 2026-08-26, so swapping transports to add a
-  security control would have broken the data path instead of hardening it.
-- Both the requested URL and the FINAL url are checked, so a redirect chain
-  cannot walk out of the allowlist.
-- Scheme must be https: no http, no file://, no gopher://.
+notes:
+- we subclass curl_cffi's Session because that's what yfinance uses. a plain
+  requests.Session works but yahoo rate-limits it instantly (wrong tls
+  fingerprint), so "safer" transport = broken data.
+- both the asked url AND the final url get checked, so redirects can't escape.
+- https only. no http, file://, gopher://.
 """
 
 import time
@@ -28,9 +21,8 @@ from urllib.parse import urlparse
 
 from curl_cffi import requests as _curl
 
-# Hosts this engine is allowed to talk to. Yahoo serves quotes from
-# query1/query2 and corporate actions from the main finance host; the rest are
-# the endpoints yfinance uses for its cookie/crumb handshake.
+# yahoo quotes come from query1/query2, corporate actions from finance., the
+# rest is yfinance's cookie/crumb handshake. add a feed = add its host here.
 ALLOWED_HOSTS = frozenset({
     "query1.finance.yahoo.com",
     "query2.finance.yahoo.com",
@@ -38,40 +30,30 @@ ALLOWED_HOSTS = frozenset({
     "fc.yahoo.com",
     "guce.yahoo.com",
     "login.yahoo.com",
-    # markets.businessinsider.com left with the Security Master (2026-10-29):
-    # yfinance's `Ticker.isin` was its only caller. An allowlist entry nothing
-    # uses is a door left open for nothing - reopen it on purpose if ISINs
-    # come back.
+    # markets.businessinsider.com is gone with the isin lookup: a host nothing
+    # uses is just an open door. add it back on purpose if isins return.
 })
 
-# Browser fingerprint yfinance itself impersonates. Kept here so the guarded
-# session behaves exactly like the unguarded one it replaces.
-IMPERSONATE = "chrome"
-# Seconds any one request may take, stated here rather than inherited: the
-# download calls pass their own, but yfinance's cookie/crumb handshake does
-# not, and an unanswered connect would hold a visitor's page open forever.
+IMPERSONATE = "chrome"   # same browser fingerprint yfinance uses on its own
+# yfinance's handshake sets no timeout, so a dead connect would hang a page forever
 TIMEOUT_S = 30
 
 
 # --- outbound budget --------------------------------------------------------
-# The spend cap, for an engine whose only external dependency is free. There
-# is no metered API and no LLM here (project constraint #1: no LLM-originated
-# data, ever), so nothing bills by the token - but Yahoo rate-limits and then
-# BANS by IP, and on a shared free-tier egress address that is the outage this
-# app can actually inflict on itself. So the budget is denominated in requests
-# per day rather than dollars, enforced at the same chokepoint as the
-# allowlist, and exhausting it degrades to cached data instead of hammering
-# the feed. If a paid feed is ever added, its key belongs behind this counter.
+# the spend cap. yahoo is free, so nothing bills us, but it rate-limits and then
+# bans by ip - on shared free-tier egress that's the outage we can cause
+# ourselves. so the cap is requests/day, checked at the same chokepoint, and
+# running out falls back to cached data instead of hammering the feed.
 MAX_REQUESTS_PER_DAY = 5000
 _SPENT: dict[str, float] = {"day": 0.0, "count": 0.0}
 
 
 class EgressBlocked(RuntimeError):
-    """Raised when something tried to reach a host outside the allowlist."""
+    """something tried to reach a host that's not on the allowlist."""
 
 
 class BudgetExhausted(RuntimeError):
-    """Raised when the daily outbound-request budget is spent."""
+    """today's outbound request budget is spent."""
 
 
 def _day_number() -> float:
@@ -79,7 +61,7 @@ def _day_number() -> float:
 
 
 def budget_status() -> dict:
-    """Requests spent today and what is left - surfaced in the provenance UI."""
+    """requests spent today and what's left (the provenance panel shows it)."""
     if _SPENT["day"] != _day_number():
         return {"spent": 0, "remaining": MAX_REQUESTS_PER_DAY,
                 "cap": MAX_REQUESTS_PER_DAY}
@@ -90,13 +72,11 @@ def budget_status() -> dict:
 
 def check_budget(needed: int = 1) -> None:
     """
-    Raise BudgetExhausted BEFORE starting a fetch that has no budget left.
+    raise BudgetExhausted BEFORE a fetch that has no budget left.
 
-    The in-session charge below also guards every individual request, but
-    yfinance catches transport errors itself and reports them as "possibly
-    delisted", so a caller that only relied on the per-request charge would
-    see a confusing data error instead of a budget message. Checking up front
-    is what makes the cap legible.
+    the per-request charge below also guards every call, but yfinance swallows
+    transport errors and calls them "possibly delisted", so without this up-front
+    check a spent cap would look like a weird data error.
     """
     status = budget_status()
     if status["remaining"] < needed:
@@ -106,7 +86,7 @@ def check_budget(needed: int = 1) -> None:
 
 
 def _charge_budget() -> None:
-    """Count one outbound request, rolling over at UTC midnight."""
+    """count one outbound request, resets at utc midnight."""
     today = _day_number()
     if _SPENT["day"] != today:
         _SPENT["day"], _SPENT["count"] = today, 0.0
@@ -118,23 +98,23 @@ def _charge_budget() -> None:
 
 
 def host_allowed(url: str) -> bool:
-    """True if `url` is https and its host is on the allowlist."""
+    """true if `url` is https and its host is on the allowlist."""
     parsed = urlparse(url)
     return parsed.scheme == "https" and (parsed.hostname or "") in ALLOWED_HOSTS
 
 
 class _GuardedSession(_curl.Session):
-    """A curl_cffi session that refuses to leave the allowlist."""
+    """a curl_cffi session that won't leave the allowlist."""
 
     def request(self, method, url, *args, **kwargs):
-        if not host_allowed(url):
+        if not host_allowed(url):           # stops ssrf to any host off the list
             raise EgressBlocked(
                 f"blocked outbound {method} to {urlparse(url).hostname!r} - "
                 "not on the market-data allowlist")
-        _charge_budget()
+        _charge_budget()                    # stops us getting ip-banned by yahoo
         response = super().request(method, url, *args, **kwargs)
         final = getattr(response, "url", url)
-        if not host_allowed(str(final)):
+        if not host_allowed(str(final)):    # stops a redirect walking out
             raise EgressBlocked(
                 f"request to {urlparse(url).hostname!r} redirected to "
                 f"{urlparse(str(final)).hostname!r}, outside the allowlist")
@@ -142,7 +122,7 @@ class _GuardedSession(_curl.Session):
 
 
 def guarded_session() -> _GuardedSession:
-    """The session every market-data call in this engine goes through."""
+    """the session every market-data call goes through."""
     return _GuardedSession(impersonate=IMPERSONATE, timeout=TIMEOUT_S)
 
 

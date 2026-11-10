@@ -1,29 +1,21 @@
 """
-Data quality - automated validation gate on ingest, not a one-time eyeball check.
+data quality: a sanity gate that runs on every price pull, not a one-off eyeball.
 
 Quant Deep Dive:
-A risk number computed on bad data is worse than no risk number - it's a wrong
-answer with a confident-looking chart attached. Production data-engineering
-teams don't trust a feed just because it returned 200 OK; they run a schema
-and sanity gate on every pull and refuse to silently proceed if it fails. This
-module is that gate, hand-rolled (no new dependency) to match this project's
-existing style of transparent, from-scratch statistical checks.
+a risk number on bad data is worse than none - it's a wrong answer with a
+confident chart on top. a feed returning 200 OK doesn't mean the data is fine,
+so every pull goes through these checks (hand-rolled, no extra dependency).
+each one says PASS / WARN / FAIL:
+  - schema: numeric columns, DatetimeIndex, no duplicate dates, sorted.
+  - positivity: no zero or negative prices (that's a broken feed).
+  - coverage: at least MIN_ROWS rows (same floor as src.ingestion).
+  - staleness: last row isn't too old (same count as ingestion.data_health).
+  - extreme moves: a day beyond the threshold gets a WARN, not dropped and not
+    trusted blindly - a real crash day (covid) SHOULD warn, that's the point.
+  - gaps: missing business days beyond weekends and us holidays.
 
-Checks run (each PASS / WARN / FAIL):
-  - Schema: numeric dtype, DatetimeIndex, no duplicate dates, dates sorted.
-  - Positivity: no zero or negative prices (a data-feed corruption signal).
-  - Coverage: enough rows to trust downstream risk math (reuses the same
-    MIN_ROWS floor as src.ingestion).
-  - Staleness: last row not too old (reuses src.ingestion.data_health logic).
-  - Extreme moves: single-day returns beyond a sanity threshold are FLAGGED
-    for review (WARN), not silently dropped or silently trusted - a real
-    circuit breaker day (e.g. COVID crash) SHOULD warn; that's the point.
-  - Gaps: trading-day coverage vs. the full business-day calendar for the
-    window, flagging unexplained holes distinct from normal weekends/holidays.
-
-Honest limits: this validates STRUCTURE and PLAUSIBILITY, not truth - it
-cannot detect a wrong-but-plausible number, only a malformed or implausible
-one.
+limits: this checks shape and plausibility, not truth. a wrong number that
+looks normal gets through.
 """
 
 import numpy as np
@@ -31,7 +23,7 @@ import pandas as pd
 
 from src.ingestion import MIN_ROWS, data_health
 
-EXTREME_MOVE_THRESHOLD = 0.50  # single-day |return| beyond this gets flagged
+EXTREME_MOVE_THRESHOLD = 0.50  # a one-day |return| past this gets flagged
 
 
 def _check(name: str, status: str, message: str) -> dict:
@@ -40,13 +32,13 @@ def _check(name: str, status: str, message: str) -> dict:
 
 def validate_prices(prices: pd.DataFrame) -> dict:
     """
-    Run the full validation gate on a price DataFrame (dates x tickers).
-    Returns {"checks": [...], "passed": bool} - passed is False only on a
-    hard FAIL; WARN checks surface issues without blocking the app.
+    run every check on a price frame (dates x tickers).
+    returns {"checks": [...], "passed": bool}. only a FAIL makes passed False;
+    a WARN shows the issue but doesn't block the app.
     """
     checks = []
 
-    # --- Schema ---
+    # --- schema ---
     if not isinstance(prices.index, pd.DatetimeIndex):
         checks.append(_check("schema.index", "FAIL", "Index is not a DatetimeIndex."))
     else:
@@ -74,7 +66,7 @@ def validate_prices(prices: pd.DataFrame) -> dict:
         else "All columns numeric.",
     ))
 
-    # --- Positivity ---
+    # --- positivity ---
     non_positive = prices.le(0).sum().sum()
     checks.append(_check(
         "positivity.non_positive_prices",
@@ -83,7 +75,7 @@ def validate_prices(prices: pd.DataFrame) -> dict:
         else "All prices strictly positive.",
     ))
 
-    # --- Coverage ---
+    # --- coverage ---
     rows = len(prices)
     checks.append(_check(
         "coverage.min_rows",
@@ -91,9 +83,8 @@ def validate_prices(prices: pd.DataFrame) -> dict:
         f"{rows} trading days (floor: {MIN_ROWS}).",
     ))
 
-    # --- Staleness ---
+    # --- staleness (same count as the page's "Nd old" line) ---
     if rows:
-        # The same count the page's "Data: ... · Nd old" line shows.
         staleness_days = data_health(prices)["staleness_days"]
         checks.append(_check(
             "freshness.staleness",
@@ -101,21 +92,16 @@ def validate_prices(prices: pd.DataFrame) -> dict:
             f"Last row is {staleness_days} business day(s) old.",
         ))
 
-    # --- Gaps vs. full business-day calendar ---
     if rows >= 2:
-        # Not ingestion.data_health's gap_days, deliberately: that one counts
-        # holidays as gaps; this one asks what is missing beyond them.
-        # bdate_range removes weekends ONLY, so all ~9 US market holidays a
-        # year counted as unexplained holes - the exact distinction the module
-        # docstring claims to draw. USFederalHolidayCalendar ships with pandas,
-        # so this needs no new dependency. It is not the NYSE calendar (no Good
-        # Friday, no historical closures), which is why a residual gap is still
-        # only a WARN and never a FAIL.
+        # --- gaps vs the business-day calendar ---
+        # not data_health's gap_days on purpose: that one counts holidays as
+        # gaps, this one asks what's missing beyond them. bdate_range only drops
+        # weekends, so we take out us federal holidays too (ships with pandas).
+        # it's not the nyse calendar (no good friday), so a gap is only ever a WARN.
         from pandas.tseries.holiday import USFederalHolidayCalendar
-        _cal = USFederalHolidayCalendar()
         full_span = pd.bdate_range(prices.index[0], prices.index[-1])
-        _hol = _cal.holidays(full_span[0], full_span[-1])
-        full_span = full_span.difference(_hol)
+        full_span = full_span.difference(
+            USFederalHolidayCalendar().holidays(full_span[0], full_span[-1]))
         gap_days = max(0, len(full_span) - rows)
         gap_pct = gap_days / len(full_span)
         checks.append(_check(
@@ -125,14 +111,11 @@ def validate_prices(prices: pd.DataFrame) -> dict:
             f"({gap_pct:.1%} of the span).",
         ))
 
-    # --- Extreme single-day moves (flagged, not blocking) ---
-    if rows >= 2:
+        # --- extreme one-day moves (flagged, never blocking) ---
         rets = prices.pct_change().dropna()
-        extreme = (rets.abs() > EXTREME_MOVE_THRESHOLD)
-        n_extreme = int(extreme.to_numpy().sum())
+        n_extreme = int((rets.abs() > EXTREME_MOVE_THRESHOLD).to_numpy().sum())
         if n_extreme:
-            worst = rets.abs().to_numpy()
-            worst_val = float(np.nanmax(worst))
+            worst_val = float(np.nanmax(rets.abs().to_numpy()))
             checks.append(_check(
                 "sanity.extreme_moves",
                 "WARN",
