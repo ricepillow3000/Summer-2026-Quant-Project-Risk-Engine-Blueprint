@@ -1,34 +1,27 @@
 """
-Signal Lab: information-coefficient evaluation of a cross-sectional signal.
+Momentum signal, and how to tell if a signal is any good (information coefficient).
 
-Quant Deep Dive:
-- The information coefficient (IC) is the cross-sectional Spearman rank
-  correlation, computed one date at a time, between a signal's ranking of the
-  universe today and the forward returns that actually followed. IC = 1 means
-  the signal ranked every name perfectly; IC = 0 means it carried no
-  information; the sign tells you the direction. Rank (Spearman) correlation
-  is used instead of Pearson because a signal only needs to ORDER the
-  cross-section correctly to be tradable - outlier returns shouldn't dominate.
-- The textbook significance bar: mean IC divided by its standard error,
-  t = mean / (std / sqrt(n)), and a t-stat above ~2 is "significant" at the
-  usual 5% level. Harvey, Liu & Zhu (2016, "...and the Cross-Section of
-  Expected Returns") argue that after decades of the industry testing
-  thousands of candidate factors, the multiple-testing problem means t = 2
-  is far too easy a bar - enough tries and something clears 2 by luck -
-  and propose raising the hurdle toward t = 3. This module reports both bars
-  and says plainly which one a signal clears.
-- Grinold's fundamental law of active management: IR = IC * sqrt(breadth),
-  where breadth is the number of INDEPENDENT bets per year. It converts a
-  per-decision skill number (IC) into a portfolio-level information ratio.
-- Why raw breadth overstates independence: counting tickers x rebalances
-  assumes every bet is independent, but correlated stocks are largely the
-  same bet taken twice. The standard correlation adjustment replaces N names
-  with N / (1 + (N - 1) * avg_pairwise_correlation) effective independent
-  bets - with avg correlation ~0.5, a 10-name book is closer to 2 real bets
-  than 10. The honest IR uses this smaller, effective breadth.
-- All of this is measured IN-SAMPLE on the loaded history: no transaction
-  costs, no out-of-sample validation, and ICs decay once a signal is known.
-  Educational analysis, not investment advice.
+How it works:
+- the IC is the Spearman rank correlation, one date at a time, between how a
+  signal ranks the names today and the returns that actually came next. 1 =
+  ranked everything perfectly, 0 = no info, the sign says which way. ranks
+  instead of Pearson because a signal only has to get the ORDER right to be
+  tradable - one wild return shouldn't run the show.
+- the textbook bar: t = mean / (std / sqrt(n)), and t > ~2 is "significant"
+  at 5%. Harvey, Liu & Zhu (2016, "...and the Cross-Section of Expected
+  Returns") point out the industry has tested thousands of factors, so with
+  enough tries something clears 2 by luck - they push the bar toward t = 3.
+  we report both bars and say which one a signal clears.
+- Grinold's fundamental law: IR = IC * sqrt(breadth), breadth = INDEPENDENT
+  bets per year. turns a per-call skill number (IC) into a portfolio-level
+  information ratio.
+- raw breadth (tickers x rebalances) oversells it: correlated stocks are
+  mostly the same bet twice. the usual fix swaps N names for
+  N / (1 + (N - 1) * avg_pairwise_correlation) real bets - at avg corr ~0.5 a
+  10-name book is closer to 2 bets than 10. the honest IR uses that.
+- all of it is IN-SAMPLE on the loaded history: no costs, no out-of-sample
+  check, and ICs fade once a signal is known. educational, not investment
+  advice.
 """
 
 import numpy as np
@@ -37,52 +30,40 @@ import pandas as pd
 from src.covariance import TRADING_DAYS
 
 
-# The demo signal's window, read by the Signal Lab's words and The Book's
-# sentences rather than restated in them.
+# the momentum window - The Book's sentences read these instead of retyping them
 MOMENTUM_LOOKBACK = 60   # formation window, trading days
-MOMENTUM_SKIP = 5        # most recent days left out: dodges short-term reversal
-IC_HORIZON = 5           # forward-return window the IC is scored against
+MOMENTUM_SKIP = 5        # skip the latest days: dodges short-term reversal
+IC_HORIZON = 5           # forward-return window the IC is scored on
 
 
 def momentum_signal(prices: pd.DataFrame, lookback: int = MOMENTUM_LOOKBACK,
                     skip: int = MOMENTUM_SKIP) -> pd.DataFrame:
     """
-    Cross-sectional momentum: the return over `lookback` days ending `skip`
-    days ago. Skipping the most recent days avoids contamination from the
-    well-documented short-term reversal effect.
+    Momentum: the return over `lookback` days ending `skip` days ago. skipping
+    the last few days dodges the well-known short-term reversal effect.
 
-    Args:
-        prices: DataFrame of prices (dates x tickers).
-        lookback: formation window in trading days.
-        skip: most-recent days excluded from the formation window.
-
-    Returns:
-        DataFrame (dates x tickers) of momentum values; NaN until a ticker
-        has `lookback + skip` days of history.
+    NaN until a name has `lookback + skip` days of history.
     """
     return prices.shift(skip) / prices.shift(skip + lookback) - 1.0
 
 
 def forward_returns(prices: pd.DataFrame, horizon: int = IC_HORIZON) -> pd.DataFrame:
     """
-    Next-`horizon`-day return, aligned so row t holds the return from t to
-    t + horizon (i.e. what a signal observed at t is trying to predict).
-    The last `horizon` rows are NaN - those returns haven't happened yet.
+    Next-`horizon`-day return: row t holds the return from t to t + horizon
+    (what a signal seen at t is trying to call). the last `horizon` rows are
+    NaN - those days haven't happened yet.
     """
     return prices.shift(-horizon) / prices - 1.0
 
 
 def daily_ic(signal: pd.DataFrame, fwd: pd.DataFrame, min_pairs: int = 3) -> pd.Series:
     """
-    Per-date cross-sectional Spearman rank correlation between the signal and
-    forward returns across tickers - the daily information coefficient.
+    The daily IC: rank correlation of signal vs forward returns across names,
+    one date at a time (Pearson on ranks = Spearman's rho).
 
-    Dates with fewer than `min_pairs` valid (non-NaN in both) ticker pairs are
-    dropped, as are dates where the correlation is undefined (e.g. a constant
-    signal). Pearson correlation on ranks equals Spearman's rho.
-
-    Returns:
-        Series indexed by date, values in [-1, 1], named "ic".
+    skips dates with fewer than `min_pairs` names that have both values, and
+    dates where it's undefined (e.g. a flat signal). returns a Series named
+    "ic", values in [-1, 1].
     """
     idx = signal.index.intersection(fwd.index)
     cols = signal.columns.intersection(fwd.columns)
@@ -103,14 +84,8 @@ def daily_ic(signal: pd.DataFrame, fwd: pd.DataFrame, min_pairs: int = 3) -> pd.
 
 def ic_summary(ic: pd.Series) -> dict:
     """
-    Summary statistics for a daily IC series.
-
-    Returns a dict with:
-      - mean_ic: average daily IC
-      - std_ic: sample standard deviation (ddof=1)
-      - n_days: number of IC observations
-      - t_stat: mean / (std / sqrt(n)) - the textbook significance statistic
-      - hit_rate: share of days with IC > 0
+    Stats for a daily IC series: mean_ic, std_ic (ddof=1), n_days,
+    t_stat = mean / (std / sqrt(n)), and hit_rate (share of days IC > 0).
     """
     ic = ic.dropna()
     n = int(len(ic))
@@ -123,24 +98,21 @@ def ic_summary(ic: pd.Series) -> dict:
 
 def fundamental_law_ir(mean_ic: float, breadth: float) -> float:
     """
-    Grinold's fundamental law of active management: IR = IC * sqrt(breadth).
-    `breadth` is the number of independent bets per year - see
-    effective_breadth() for why the raw count overstates it.
+    Grinold: IR = IC * sqrt(breadth), breadth = independent bets per year
+    (see effective_breadth for why the raw count oversells it).
     """
     return float(mean_ic * np.sqrt(breadth))
 
 
 def effective_breadth(returns: pd.DataFrame) -> float:
     """
-    Honest-breadth estimate: the correlation-adjusted count of independent
-    bets among N correlated assets,
+    How many truly independent bets N correlated names add up to:
 
         N_eff = N / (1 + (N - 1) * avg_pairwise_correlation)
 
-    Perfectly correlated names collapse to ~1 independent bet; uncorrelated
-    names keep all N. The average pairwise correlation is clamped to [0, 1)
-    for stability (a slightly negative sample average would otherwise inflate
-    breadth beyond N, which overstates independence).
+    perfectly correlated names shrink to ~1 bet; uncorrelated ones keep all N.
+    avg correlation is clamped to [0, 1) - a slightly negative sample average
+    would push breadth past N, which oversells independence.
     """
     n = returns.shape[1]
     if n <= 1:

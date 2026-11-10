@@ -1,29 +1,28 @@
 """
-Historical regime replication.
+Crisis replays: rerun real crashes on today's book.
 
-Quant Deep Dive:
-- Parametric stress ("apply a -30% drawdown") is an approximation you impose.
-- Regime *replication* is stronger: it replays the ACTUAL daily returns from a
-  real crisis window, so the simulation inherits that period's true correlation
-  breakdown, volatility spike, and drawdown path - jointly, not as separate
-  knobs. This is how risk desks ask "what if 2008 happened to today's book?"
-- We Monte-Carlo from the crisis window's empirical returns. Bootstrapping a
-  1-year path from a short, severe window deliberately concentrates that
-  regime - that is the stress.
+How it works:
+- a made-up shock ("say it drops 30%") is a guess you pick. a replay is better:
+  it plays back the ACTUAL daily returns from a real crisis, so the book gets
+  that period's real correlation blowup, vol spike and drawdown path all at
+  once, not as separate knobs. it's how risk desks ask "what if 2008 hit us now?"
+- the monte carlo draws from the crisis window's own returns. pulling a 1-year
+  path out of a short, nasty window piles that regime up on purpose - that's
+  the stress.
 
 Honest limits:
-- An asset that didn't trade during the window (later IPO, new ETF, an FX pair
-  Yahoo lacks history for) is excluded from that scenario, and we say so. So
-  is one that lists more than MAX_LEAD_GAP_DAYS after the window opens (it
-  would cut every survivor's window short) and one priced at or below zero
-  in it (simple returns are undefined across a sign change).
-- Magnitudes are whatever actually happened; nothing is hand-tuned.
+- a name that didn't trade in the window (later IPO, new ETF, an FX pair yahoo
+  has no history for) sits that scenario out, and we say so. same for one that
+  lists more than MAX_LEAD_GAP_DAYS after the window opens (it would cut
+  everyone else's window short) and one priced at or below zero in it (simple
+  returns break across a sign change).
+- sizes are whatever really happened; nothing is hand-tuned.
 """
 
 import pandas as pd
 from src.ingestion import fetch_prices
 
-# (start, end) windows for notable risk regimes - major and minor.
+# (start, end) for big and small risk regimes
 HISTORICAL_REGIMES = {
     "Dot-com crash (2000-02)": ("2000-03-01", "2001-04-30"),
     "Global Financial Crisis (2008)": ("2008-09-01", "2009-03-31"),
@@ -37,52 +36,46 @@ HISTORICAL_REGIMES = {
     "SVB banking stress (Mar 2023)": ("2023-03-01", "2023-03-31"),
 }
 
-# How stale the pre-window close may be and still count as "the previous
-# session": a long weekend plus a holiday. Beyond this the lead-in is refused.
+# how old the close before the window can be and still count as "yesterday":
+# a long weekend plus a holiday. older than that and we don't use it
 MAX_LEAD_GAP_DAYS = 7
 
 
 def replay_returns(tickers: list[str], start: str, end: str) -> pd.DataFrame:
     """
-    Daily returns for the requested universe over a historical window.
+    Daily returns for the basket over a crisis window.
 
-    Pulls full history WITHOUT cross-asset date alignment (so different IPO
-    dates don't truncate everyone), slices the window, drops assets with no
-    data in it, a non-positive price in it, or a first price more than
-    MAX_LEAD_GAP_DAYS after the earliest one, then aligns the surviving subset
-    within the window.
+    pulls full history WITHOUT lining dates up across names (so a late IPO
+    doesn't cut everyone short), slices the window, drops names with no data,
+    a price <= 0, or a first price more than MAX_LEAD_GAP_DAYS after the
+    earliest one, then lines up the survivors.
 
-    The window's OPENING day is included. pct_change() taken inside the slice
-    has no prior close to measure the first bar against, so it used to drop
-    that bar - and in a crash window the opening day is frequently the largest
-    single move in the whole replay (COVID-19 opens 2020-02-19, the exact top).
-    The last complete close BEFORE the window is re-attached, returns are
-    taken, and the lead-in falls away with its own NaN row.
+    the window's first day counts too. pct_change() inside the slice has no
+    close before day one, so it used to lose it - and in a crash that's often
+    the biggest move (COVID opens on 2020-02-19, the exact top). so we glue
+    on the last close before the window, take returns, and drop that row.
     """
     prices = fetch_prices(tickers, period="max", align=False)
     window = prices.loc[start:end]
-    window = window.dropna(axis=1, how="all")  # drop assets absent in this window
-    # Simple returns are undefined across a sign change: WTI's -37.63 settle
-    # (2020-04-20) turned a +47.64 $/bbl rebound into a -126.6% "loss".
+    window = window.dropna(axis=1, how="all")  # name not around in this window
+    # returns break across a sign change: WTI's -37.63 settle (2020) turned a
+    # +47.64 $/bbl bounce into a fake -126.6% "loss"
     window = window.loc[:, (window > 0).sum() == window.notna().sum()]
-    # A name that lists partway in would drag every survivor's start to its
-    # listing (IVV/IWM cut Mar-May 2000 off Dot-com), so it counts as absent.
+    # a name that lists partway in would drag everyone's start to its listing
+    # (IVV/IWM cut Mar-May 2000 off dot-com), so it counts as absent
     if not window.empty:
         firsts = window.notna().idxmax()
         window = window.loc[:, firsts <= firsts.min() + pd.Timedelta(days=MAX_LEAD_GAP_DAYS)]
-    window = window.dropna()                    # align the survivors over the window
+    window = window.dropna()                    # line up the survivors
     if window.empty:
         return window
 
     first = window.index[0]
     lead = prices.loc[:first, window.columns]
     lead = lead[lead.index < first].dropna().tail(1)
-    # Only usable if it really is the PREVIOUS session. A stale close from
-    # weeks earlier - a name that had not traded, or a gap in the feed - would
-    # manufacture a multi-week move and label it one day, which is worse than
-    # losing the bar. Beyond the guard the old behaviour stands and the window
-    # opens on day two, honestly short one observation. A lead-in close at or
-    # below zero is refused for the same sign-change reason as above.
+    # only use it if it really is the day before. a close from weeks back would
+    # fake a multi-week move as one day - worse than losing the bar, so then the
+    # window just starts on day two. a lead close <= 0 is out too (sign change).
     if (not lead.empty and (first - lead.index[-1]).days <= MAX_LEAD_GAP_DAYS
             and (lead.to_numpy() > 0).all()):
         window = pd.concat([lead, window])
