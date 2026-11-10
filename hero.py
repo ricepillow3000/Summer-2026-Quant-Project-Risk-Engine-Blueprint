@@ -79,8 +79,7 @@ def hero_html(skeleton: bool = False, crest: str = "") -> str:
     The banner's layout (tools/og_image.html): on the paper, the crest beside
     a kicker, the name, the annual-report rule, the sentence and the button;
     on a charcoal block to the right, the engine's facts as a receipt - a gold
-    caps line, a gold rule, then rows of label and value - over the crest's
-    faint engraving."""
+    caps line, a gold rule, then rows of label and value, on plain stone."""
     ink = (lambda t: f'<span class="sk-ink">{t}</span>') if skeleton else (lambda t: t)
     title = "".join(f'<span class="hline">{ink(line)}</span>' for line in HERO_TITLE_LINES)
     kicker = "<br>".join(ink(line) for line in HERO_KICKER)
@@ -103,7 +102,7 @@ def hero_html(skeleton: bool = False, crest: str = "") -> str:
             f'<div class="kicker">{kicker}</div></div>'
             f'<h1 class="hero-title">{title}</h1><div class="ar-rule"></div>'
             f'<div class="hero-sub">{ink(HERO_SUB)}</div>{cta}</div>'
-            f'<div class="hero-stats">{crest_engraving()}<div class="hreceipt-h">{ink(HERO_RECEIPT)}</div>'
+            f'<div class="hero-stats"><div class="hreceipt-h">{ink(HERO_RECEIPT)}</div>'
             f'<div class="hstat-list">{stats}</div></div></div>')
 
 
@@ -120,9 +119,13 @@ def boot_skeleton_html() -> str:
 # (tools/public_files.py), so the page and the schema cannot disagree.
 PERSON_NAME = "John Nguyen"
 PERSON_ROLE = "Computer Information Systems student specializing in AI & Analytics"
-ABOUT_BIO = ("John Nguyen is a Computer Information Systems student specializing "
-             "in AI & Analytics. He built Meliona: the price feed, the risk engine "
-             "and this page. Its code is public, so every number can be checked.")
+# John, 2026-11-09: in his own voice, deeply passionate about building tools
+# with AI, and still corporate and clean.
+ABOUT_BIO = ("Hello! I am John, a Computer Information Systems student specializing "
+             "in AI & Analytics. Building tools with AI is the work I go deepest on: "
+             "I pick one problem and stay with it until every detail holds. I built "
+             "Meliona that way, from the price feed to the risk engine to this page. "
+             "Its code is public so that anyone can check every number.")
 # Where the contact form's email goes (John, 2026-11-05: his personal inbox,
 # "I'm more active there"), with LinkedIn as the second way to reach him.
 # main.py reads it through host_setting("CONTACT_EMAIL", ...) so a deployment

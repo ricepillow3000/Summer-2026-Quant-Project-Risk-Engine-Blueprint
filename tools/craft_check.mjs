@@ -141,7 +141,7 @@ const type = await p.evaluate(() => {
   out.disp = disp; out.labels = labels;
   // prose: paragraphs of real reading length
   const prose = [];
-  main.querySelectorAll('p, .story-p, .faq-a, .book-lede, .about-bio, .hero-sub, .contact-sub').forEach(e => {
+  main.querySelectorAll('p, .story-p, .faq-a, .book-lede, .book-text, .about-bio, .hero-sub, .contact-sub').forEach(e => {
     if (!vis(e) || e.closest('[data-testid="stExpander"] details:not([open])')) return;
     const t = (e.textContent || '').trim();
     if (t.length < 160) return;
@@ -152,7 +152,8 @@ const type = await p.evaluate(() => {
     probe.style.cssText = 'display:inline-block;width:50ch;height:0;position:absolute;visibility:hidden';
     e.appendChild(probe); const ch = probe.getBoundingClientRect().width / 50; probe.remove();
     // a widow: the last word alone on the last line
-    const tn = [...e.querySelectorAll('*'), e].flatMap(x => [...x.childNodes]).filter(n => n.nodeType === 3 && n.textContent.trim());
+    const tw = document.createTreeWalker(e, NodeFilter.SHOW_TEXT), tn = [];  // in reading order
+    for (let n = tw.nextNode(); n; n = tw.nextNode()) if (n.textContent.trim()) tn.push(n);
     let widow = false;
     if (tn.length) {
       const last = tn[tn.length - 1], s = last.textContent.replace(/\s+$/, ''), i = s.search(/\S+$/);
@@ -170,6 +171,17 @@ const type = await p.evaluate(() => {
   const heads = [...main.querySelectorAll('.hero-title, .showcase-title, .panel-head .s, h1, h2, h3')].filter(vis)
     .map(e => ({ t: e.textContent.trim().slice(0, 30), wrap: getComputedStyle(e).textWrapStyle || getComputedStyle(e).textWrap || '' }));
   out.heads = heads;
+  // a short value is never broken: a slider's figure stays on one line
+  out.thumbs = [...main.querySelectorAll('[data-testid="stSliderThumbValue"], [data-testid="stSliderTickBar"] > *')].filter(vis).map(e => {
+    const tops = new Set();
+    const w = document.createTreeWalker(e, NodeFilter.SHOW_TEXT);
+    for (let n = w.nextNode(); n; n = w.nextNode()) {
+      if (!n.textContent.trim()) continue;
+      const r = document.createRange(); r.selectNodeContents(n);
+      [...r.getClientRects()].filter(q => q.width > 0).forEach(q => tops.add(Math.round(q.top)));
+    }
+    return { t: e.textContent.trim(), lines: tops.size };
+  });
   // links in prose and the pointer on buttons
   out.links = [...main.querySelectorAll('p a, .story-p a, .faq-a a, .about-bio a, .contact-sub a, .contact-note a')].filter(vis)
     .map(a => ({ t: a.textContent.trim().slice(0, 30), u: /underline/.test(getComputedStyle(a).textDecorationLine) }));
@@ -196,6 +208,8 @@ ok(type.labels.length && !tightLab.length, `tracking: ${type.labels.length} capi
 const badLead = type.prose.filter(x => x.lh < 1.45 || x.lh > 1.8).concat(type.disp.filter(d => d.lh < 0.9 || d.lh > 1.25));
 ok(!badLead.length, `leading: prose 1.45-1.8, display 0.9-1.25`, badLead.slice(0, 3).map(x => `"${x.t}" ${x.lh.toFixed(2)}`).join(' '));
 const long = type.prose.filter(x => x.chars > 75);
+const broken = type.thumbs.filter(x => x.lines > 1);
+ok(type.thumbs.length && !broken.length, `wrapping: ${type.thumbs.length} slider figures each on one line`, broken.map(x => `"${x.t}" on ${x.lines} lines`).join(' '));
 ok(type.prose.length && !long.length, `measure: ${type.prose.length} prose paragraphs at <= 75 characters a line`, long.slice(0, 3).map(x => `"${x.t}" ${Math.round(x.chars)}ch`).join(' '));
 const unwrapped = type.prose.filter(x => !/pretty|balance/.test(x.wrap)).concat(type.heads.filter(h => !/balance/.test(h.wrap)));
 ok(!unwrapped.length, 'widows: prose wraps pretty, headings balance', unwrapped.slice(0, 3).map(x => `"${x.t}" ${x.wrap || 'wrap'}`).join(' '));

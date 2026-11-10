@@ -1905,11 +1905,11 @@ with _bk_more:
             _note = role_note(_d)
             if _note:
                 _lbl += f'<br><span class="role-note">{_note}</span>'
-            _flag = (' &middot; <span class="book-flag">from outside your '
+            _flag = (' &middot;&nbsp;<span class="book-flag">from outside your '
                      'list</span>' if _d.is_fallback_anchor else "")
             # Redundant on a card that was already excluded FOR capacity - the
             # sentence there already names the breakpoint.
-            _bind = (' &middot; <span class="book-flag">trading volume, not '
+            _bind = (' &middot;&nbsp;<span class="book-flag">trading volume, not '
                      'risk, set this size</span>'
                      if _d.liquidity_binding and _d.role is not Role.EXCLUDED else "")
             # leaders and anchors stay on the page; the rest is in the drawer
