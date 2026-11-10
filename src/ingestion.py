@@ -1,23 +1,20 @@
 """
-DataEngine: pulls and caches live price data for an arbitrary universe.
+pulls live prices from yahoo for any basket and caches them on disk.
 
-Data sourcing (read this before trusting a number):
-- Every price comes from Yahoo Finance via the `yfinance` library, fetched at
-  runtime. Nothing here originates from a language model or static fixture.
-- Each download writes a provenance record (source, UTC timestamp, symbols,
-  coverage) so any figure on the dashboard traces back to where and when it
-  was pulled.
+where the numbers come from (read this before trusting one):
+- every price is from yahoo finance via `yfinance`, fetched at runtime. nothing
+  here comes from a language model or a static fixture.
+- every download writes a provenance record (source, utc time, symbols,
+  coverage), so any number on the page traces back to where and when it came from.
 
-Caching strategy for a live web app:
-- Per-universe disk cache keyed by ticker-set, so different baskets don't
-  collide and repeat views are instant (no Yahoo rate-limiting on refresh).
-- The cache is FRESHNESS-AWARE: it re-pulls once it ages past `max_age_hours`,
-  so a deployed app never serves indefinitely-stale data.
-  `python -m tools.warm_cache --drill` forces a re-pull - an operator action,
-  not a visitor one.
+caching:
+- one disk cache per basket, keyed by the ticker set, so baskets don't collide
+  and repeat views are instant (and don't get us rate-limited).
+- it goes stale after `max_age_hours` and re-pulls, so the live app never
+  serves old data forever. `python -m tools.warm_cache --drill` forces a
+  re-pull - that's an operator thing, not a visitor thing.
 
-Universe is fully configurable - equities, ETFs, FX (EURUSD=X), or futures
-(GC=F) - so the engine speaks to any audience, not just one watchlist.
+any yahoo symbol works - stocks, etfs, fx (EURUSD=X), futures (GC=F).
 """
 
 import os
@@ -35,37 +32,26 @@ from src.netguard import BudgetExhausted, check_budget, guarded_session
 
 DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data")
 
-# Default universe (used when none is supplied).
 DEFAULT_UNIVERSE = ["QQQ", "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA"]
 
-# Minimum history we consider statistically usable for risk estimates.
-MIN_ROWS = 60
-
-# How long a disk cache stays valid before we re-pull from Yahoo.
-CACHE_MAX_AGE_HOURS = 6
+MIN_ROWS = 60               # fewer rows than this is too thin for risk stats
+CACHE_MAX_AGE_HOURS = 6     # cache older than this gets re-pulled
 
 # --- complexity budget ------------------------------------------------------
-# The public app has no login and no queue: one visitor's request is the whole
-# server's work. Cost scales with the number of tickers (each one is a Yahoo
-# leg, a covariance row, a Grit Zone full-history pull and a map unit), so the
-# universe size IS this engine's query-complexity dimension - the analogue of
-# a depth/complexity limit on a query language. Bounded here, at the same
-# funnel that validates ticker shape, so no caller can exceed it; the UI
-# enforces it visibly rather than letting the funnel truncate in silence.
+# no login, no queue: one visitor's request is the whole server's work, and
+# every ticker costs a download, a covariance row, a full-history pull and a
+# map unit. so basket size is our "query complexity" and it's capped at the
+# same funnel that checks ticker shape - stops one visitor from eating the box.
 MAX_UNIVERSE = 25
 
-# Cache is derived data (re-fetchable, no secrets), but the disk it sits on is
-# a small ephemeral volume and any visitor can mint a new cache key by typing
-# a new ticker combination. Bound it so a stream of novel baskets cannot fill
-# the volume; oldest entries go first. 1500: a warm pass writes ~720 files
-# (~270 basket files + ~450 per-name files, see _raw_path); at 240 a pass
-# already evicted its own first presets
-# (test_a_warm_pass_fits_inside_the_cache_budget).
+# the cache is re-fetchable data, but anyone can mint a new cache key by typing
+# a new basket. capped so a stream of new baskets can't fill the disk; oldest
+# goes first. a warm pass writes ~720 files, so 1500 leaves room (at 240 a
+# pass evicted its own first presets).
 CACHE_MAX_FILES = 1500
 CACHE_MAX_MB = 200
 
-# One-click starting baskets for a wider audience. These are representative,
-# illustrative groupings - NOT any firm's actual holdings.
+# one-click starter baskets. illustrative groupings, NOT anyone's real holdings.
 PRESETS = {
     "Hedge-fund favorites (13F-popular)": [
         "MSFT", "AMZN", "META", "GOOGL", "NVDA", "AAPL",
@@ -88,8 +74,7 @@ PRESETS = {
     "Futures (index & commodity)": [
         "ES=F", "NQ=F", "CL=F", "GC=F", "SI=F", "ZN=F",
     ],
-    # Institutional staples - what a rates/credit desk, a commodities book,
-    # or a global-macro fund actually watches, via liquid ETF proxies.
+    # what a rates desk, a commodities book or a macro fund watches, via etfs
     "Rates & credit (ETF proxies)": [
         "TLT", "IEF", "SHY", "LQD", "HYG", "TIP",
     ],
@@ -99,20 +84,15 @@ PRESETS = {
     "Global macro (multi-asset ETFs)": [
         "SPY", "EFA", "EEM", "TLT", "GLD", "UUP",
     ],
-    # Small/micro-cap names, deliberately chosen for THIN volume rather than any
-    # view on the companies. Every basket above is mega-cap or ETF, so days-to-
-    # liquidate rounds to zero and the liquidity adjustment reads 0% no
-    # matter where the sliders go - the model looks broken when it is merely
-    # unstressed. On this basket the participation-rate cap actually binds.
+    # picked for THIN volume, not as a view on the companies. every other
+    # basket is mega-cap or etf, so liquidity always read 0% and looked broken;
+    # here the participation cap actually bites.
     "Small-cap liquidity stress (thin volume)": [
         "CRWS", "WEYS", "BSET", "VRA", "HBB",
         "FLWS", "LAKE", "JOUT", "UNTY", "SMP",
     ],
-    # Sector and theme baskets, added 2026-08-26 after a walkthrough found that
-    # a visitor's own holding - NFLX, AMD, BAC, PFE - was in none of the
-    # starter baskets, so the picker's suggestion list never offered it. The
-    # box has always accepted any Yahoo symbol typed in full; these exist so a
-    # visitor can RECOGNISE their names rather than having to know the ticker.
+    # sector baskets so visitors can spot their own names (NFLX, AMD, BAC, PFE
+    # were in no basket, so the picker never suggested them)
     "Semiconductors": [
         "NVDA", "AMD", "AVGO", "TSM", "MU", "QCOM", "TXN", "INTC", "AMAT", "ASML",
     ],
@@ -126,13 +106,8 @@ PRESETS = {
         "COST", "WMT", "TGT", "HD", "LOW", "NKE", "SBUX", "MCD", "PEP", "KO",
     ],
     "Streaming, media & platforms": [
-        # EA was dropped 2026-08-27: it went private and its last print was
-        # 2026-08-13, leaving 20 usable days. The short-history guard in
-        # main.py catches that and says so, but a one-click preset should not
-        # need rescuing - TTWO and RBLX already carry the gaming exposure.
-        # WBD was dropped 2026-10-15: the live audit found Yahoo returns only
-        # 4 days for it (2026-10-05 -> 2026-10-08), which cut this whole
-        # preset to 4 common days. Re-add only once its history is back.
+        # no EA (went private, ~20 usable days) and no WBD (yahoo had 4 days
+        # for it, which cut the whole basket to 4). add back once history is.
         "NFLX", "DIS", "SPOT", "META", "GOOGL", "RBLX", "CMCSA", "TTWO", "PARA",
     ],
     "Software & cloud": [
@@ -150,13 +125,9 @@ PRESETS = {
 }
 
 
-# Names offered as suggestions in the ticker picker. A superset of every preset
-# above: the box accepts any Yahoo symbol, but a visitor should be able to find
-# a familiar company by typing the first letters of its ticker instead of
-# needing to know it by heart. Every name here is checked live, alone and in
-# every pair, by tests/pair_audit.py: on 2026-10-17 Yahoo answered "Quote not
-# found" for BK and K (Kellanova, taken private), so a visitor picking either
-# got no data - both left this list, and the audit fails on the next one.
+# the picker's suggestion list: every preset name plus more familiar ones, so
+# you can find a company by its first letters. tests/pair_audit.py checks every
+# name live (alone and in pairs) - BK and K got "quote not found" and were cut.
 SUGGESTIONS = sorted({t for basket in PRESETS.values() for t in basket} | {
     "T", "VZ", "TMUS", "CMCSA", "CVS", "CI", "ELV", "HUM", "MDT", "BMY",
     "GILD", "REGN", "VRTX", "ZTS", "SYK", "BSX", "DHR", "MCK",
@@ -181,25 +152,22 @@ SUGGESTIONS = sorted({t for basket in PRESETS.values() for t in basket} | {
 })
 
 
-# Yahoo Finance symbols are letters, digits and a small punctuation set:
-# BRK-B, EURUSD=X, GC=F, ^IRX. Nothing else is a ticker.
+# yahoo symbols are letters, digits and a bit of punctuation: BRK-B, EURUSD=X,
+# GC=F, ^IRX. nothing else is a ticker.
 #
-# This is a SECURITY boundary, not just tidiness. The ticker box accepts
-# arbitrary user text (accept_new_options=True), and the app renders several
-# strings containing ticker names through `unsafe_allow_html=True` - the
-# headline verdict interpolates the excluded-ticker list straight into a
-# <div>. Without this filter a "ticker" of <IMG SRC=X ONERROR=...> is stored
-# HTML injection, and upper-casing does not help because HTML tags are
-# case-insensitive. Validating here, at the one funnel every ticker list
-# passes through, closes every downstream sink at once - far safer than
-# escaping at 32 separate render sites and hoping none is missed.
+# SECURITY: this is the main control. the ticker box takes any text, and ticker
+# names end up in html (unsafe_allow_html), file paths and fetch urls. without
+# this, a "ticker" like <IMG SRC=X ONERROR=...> is stored html injection
+# (upper-casing doesn't help, tags are case-insensitive). checking once here,
+# where every ticker list passes, closes every sink at once instead of
+# escaping at 30+ render sites and hoping none got missed.
 VALID_TICKER = re.compile(r"^\^?[A-Z0-9][A-Z0-9.\-=]{0,14}$")
 
 
 class NoDataError(RuntimeError):
-    """Yahoo returned nothing usable for the request. Its message is written
-    for a visitor - no paths, no internals - so the UI may show it verbatim,
-    unlike every other exception (see safe_err in main.py)."""
+    """yahoo gave back nothing usable. the message is written for visitors (no
+    paths, no internals), so the ui can show it as-is - unlike every other
+    exception (see safe_err in main.py)."""
 
 
 NO_DATA_MSG = ("Yahoo Finance returned no price history for these symbols. "
@@ -210,72 +178,77 @@ NO_OVERLAP_MSG = ("These symbols share no common trading days. Remove the "
 
 
 def valid_ticker(symbol: str) -> bool:
-    """True if `symbol` is shaped like a Yahoo Finance ticker."""
+    """true if `symbol` looks like a yahoo ticker."""
     return bool(VALID_TICKER.match(str(symbol).strip().upper()))
 
 
 def _clean(tickers: list[str] | None) -> list[str]:
     cleaned = {t.strip().upper() for t in (tickers or DEFAULT_UNIVERSE) if t.strip()}
     valid = sorted(t for t in cleaned if VALID_TICKER.match(t))
-    # Hard complexity bound: a caller that ignores MAX_UNIVERSE still cannot
-    # make the server do unbounded work (see MAX_UNIVERSE above).
+    # hard cap: even a caller that ignores MAX_UNIVERSE can't make unbounded work
     return valid[:MAX_UNIVERSE]
 
 
+def _hash(text: str) -> str:
+    # a filename, not a security control: usedforsecurity=False says so
+    return hashlib.md5(text.encode(), usedforsecurity=False).hexdigest()[:12]
+
+
 def _cache_path(tickers: list[str], period: str, align: bool = True) -> str:
-    """Stable per-universe cache filename so different baskets don't collide."""
-    flag = "a" if align else "r"
-    # A filename, not a security control: usedforsecurity=False says so.
-    key = hashlib.md5((",".join(tickers) + "|" + period + "|" + flag).encode(),
-                      usedforsecurity=False).hexdigest()[:12]
+    """one cache file per basket so different baskets don't collide."""
+    key = _hash(",".join(tickers) + "|" + period + "|" + ("a" if align else "r"))
     return os.path.join(DATA_DIR, f"prices_{key}.parquet")
+
+
+def _dv_cache_path(tickers: list[str], period: str) -> str:
+    """cache file for a basket's daily dollar volume."""
+    key = _hash(",".join(tickers) + "|" + period + "|dv")
+    return os.path.join(DATA_DIR, f"dollarvol_{key}.parquet")
+
+
+def _raw_path(ticker: str, period: str) -> str:
+    """one name's own (Close, Volume) download for one period."""
+    return os.path.join(DATA_DIR, f"raw_{_hash(ticker + '|' + period + '|raw')}.parquet")
 
 
 def _meta_path(cache_path: str) -> str:
     return cache_path.replace(".parquet", ".meta.json")
 
 
-def _cache_is_fresh(meta_path: str, max_age_hours: float) -> bool:
-    """True if a provenance record exists and was written within max_age_hours."""
-    if not os.path.exists(meta_path):
-        return False
-    try:
-        with open(meta_path, encoding="utf-8") as fh:
-            fetched = datetime.datetime.fromisoformat(json.load(fh)["fetched_at_utc"])
-    except (ValueError, KeyError, json.JSONDecodeError):
-        return False
+def _is_fresh(stamp: str, max_age_hours: float) -> bool:
+    """true if an iso utc stamp is at most max_age_hours old."""
+    fetched = datetime.datetime.fromisoformat(stamp)
     age = datetime.datetime.now(datetime.timezone.utc) - fetched
     return age <= datetime.timedelta(hours=max_age_hours)
 
 
-def _dv_cache_path(tickers: list[str], period: str) -> str:
-    """Cache filename for a universe's daily dollar-volume history."""
-    key = hashlib.md5((",".join(tickers) + "|" + period + "|dv").encode(),
-                      usedforsecurity=False).hexdigest()[:12]
-    return os.path.join(DATA_DIR, f"dollarvol_{key}.parquet")
+def _cache_is_fresh(meta_path: str, max_age_hours: float) -> bool:
+    """true if a provenance record exists and was written recently enough."""
+    if not os.path.exists(meta_path):
+        return False
+    try:
+        with open(meta_path, encoding="utf-8") as fh:
+            return _is_fresh(json.load(fh)["fetched_at_utc"], max_age_hours)
+    except (ValueError, KeyError, json.JSONDecodeError):
+        return False
 
 
 def _prune_cache(max_files: int = CACHE_MAX_FILES,
                  max_mb: float = CACHE_MAX_MB) -> int:
     """
-    Keep the parquet cache inside its budget, oldest entry first. Returns how
-    many files were dropped. Cache entries are derived market data - dropping
-    one costs a re-fetch, never information.
+    keep the cache under budget, oldest first. returns how many files got
+    dropped. it's all re-fetchable, so dropping costs a download, never data.
 
-    The presets' own downloads go last (2026-11-04 security review): oldest
-    first alone let a stranger typing new baskets push every preset name out
-    between two warm passes, so the next visitor paid the cold pulls. Typed-in
-    entries are dropped before any preset name's download; the presets are
-    dropped only if they alone overflow the budget.
+    typed-in baskets go before the presets' own downloads, so a stranger typing
+    new baskets can't push every preset out and make the next visitor wait.
+    presets only go if they alone blow the budget.
     """
-    keep = _preset_raw_paths()
+    names = {t for basket in PRESETS.values() for t in basket} | {"SPY"}
+    keep = {_raw_path(t, p) for t in names for p in ("2y", "max")}   # periods a preset page pulls
     try:
-        names = [f for f in os.listdir(DATA_DIR)
-                 if f.endswith(".parquet") or f.endswith(".meta.json")]
-        entries = [(os.path.join(DATA_DIR, f) in keep,
-                    os.path.getmtime(os.path.join(DATA_DIR, f)),
-                    os.path.getsize(os.path.join(DATA_DIR, f)),
-                    os.path.join(DATA_DIR, f)) for f in names]
+        paths = [os.path.join(DATA_DIR, f) for f in os.listdir(DATA_DIR)
+                 if f.endswith((".parquet", ".meta.json"))]
+        entries = [(p in keep, os.path.getmtime(p), os.path.getsize(p), p) for p in paths]
     except OSError:
         return 0
     entries.sort()                       # typed-in first, then oldest first
@@ -292,38 +265,20 @@ def _prune_cache(max_files: int = CACHE_MAX_FILES,
     return dropped
 
 
-_PRESET_PERIODS = ("2y", "max")      # the periods a preset page pulls
-
-
-def _preset_raw_paths() -> set[str]:
-    """Each preset name's own download, in every period its page pulls."""
-    names = {t for basket in PRESETS.values() for t in basket} | {"SPY"}
-    return {_raw_path(t, p) for t in names for p in _PRESET_PERIODS}
-
-
-def _raw_path(ticker: str, period: str) -> str:
-    """One name's own (Close, Volume) download for one period."""
-    key = hashlib.md5((ticker + "|" + period + "|raw").encode(),
-                      usedforsecurity=False).hexdigest()[:12]
-    return os.path.join(DATA_DIR, f"raw_{key}.parquet")
-
-
 def _read_raw(ticker: str, period: str, max_age_hours: float) -> pd.DataFrame | None:
-    """A name's cached download if its RECORDED pull time is fresh (a copied or
+    """a name's cached download if its RECORDED pull time is fresh (a copied or
     touched file keeps its old stamp), else None."""
     try:
         frame = pd.read_parquet(_raw_path(ticker, period))
-        fetched = datetime.datetime.fromisoformat(frame.attrs["fetched_at_utc"])
+        return frame if _is_fresh(frame.attrs["fetched_at_utc"], max_age_hours) else None
     except (OSError, ValueError, KeyError):
         return None
-    age = datetime.datetime.now(datetime.timezone.utc) - fetched
-    return frame if age <= datetime.timedelta(hours=max_age_hours) else None
 
 
 def _own_rows(raw: pd.DataFrame, ticker: str, alone: bool) -> pd.DataFrame:
-    """One name's rows out of a yf.download frame. yfinance fills a name's
-    missing volume with 0 and drops its all-empty rows, so a row with no
-    Volume is one the download added only to line up with another name."""
+    """one name's rows out of a yf.download frame. yfinance fills missing volume
+    with 0 and drops all-empty rows, so a row with no Volume is one it only
+    added to line up with another name."""
     if isinstance(raw.columns, pd.MultiIndex):
         if ticker not in raw.columns.get_level_values(1):
             return pd.DataFrame()
@@ -336,12 +291,9 @@ def _own_rows(raw: pd.DataFrame, ticker: str, alone: bool) -> pd.DataFrame:
     return own[own["Volume"].notna()]
 
 
-# A name that comes back empty is asked for again, alone, at most RETRIES more
-# times, RETRY_PAUSE * attempt seconds apart. Pair audit run 31 (2026-10-22)
-# lost BA to "OperationalError('database is locked')" - yfinance's timezone
-# cache, under its own download threads - and run 28 lost BAC; the same lock
-# can drop a name from a visitor's basket here. Nothing else is retried, and a
-# name still empty is left out exactly as before.
+# yahoo sometimes drops a name (yfinance's tz cache hits "database is locked"),
+# so an empty name is asked for again, alone, up to 2 more times. nothing else
+# is retried, and a name still empty after that is just left out.
 RETRIES = 2
 RETRY_PAUSE = 0.5
 
@@ -350,22 +302,19 @@ def _download_close_volume(tickers: list[str], period: str,
                            max_age_hours: float = CACHE_MAX_AGE_HOURS,
                            use_cache: bool = True) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
-    Normalized (close, volume) frames, tickers-as-columns: the single chokepoint
-    that feeds BOTH the price cache and the dollar-volume cache.
+    (close, volume) frames, tickers as columns. the one chokepoint that feeds
+    both the price cache and the dollar-volume cache.
 
-    Each name's own download is kept per period, and only names not already
-    held are downloaded - in ONE yf.download. John, 2026-10-20: a typed-in
-    basket was slow because the cache kept whole baskets, so three new names
-    re-downloaded all fifteen under each of the page's five keys, and
-    yfinance's repair pass costs seconds of CPU per name per download.
-    yf.download is itself per name (Ticker.history, timezone strip, union of
-    dates, sorted columns), so a basket stitched from names equals one download
-    of it exactly (test_a_basket_stitched_from_single_names_matches_one_download).
-    Names may now be pulled at different moments inside the freshness window;
-    close.attrs carries the oldest and newest pull so provenance says so.
+    each name's download is cached per period and only missing names get
+    downloaded, in ONE yf.download - otherwise 3 new names re-pulled all 15,
+    and yfinance's repair pass costs seconds of cpu per name. yf.download is
+    per name anyway, so a basket stitched from names equals one download
+    exactly (test_a_basket_stitched_from_single_names_matches_one_download).
+    names can be pulled at different times, so close.attrs keeps the oldest
+    and newest pull for provenance.
     """
-    # yfinance relabels an ISIN with the ticker it resolves to, so a cached
-    # ticker beside its ISIN would be one series twice: those take one download.
+    # yfinance relabels an isin with its ticker, so a cached ticker next to its
+    # isin would be the same series twice: those baskets skip the cache
     has_isin = any(yf.utils.is_isin(t) for t in tickers)
     use_cache = use_cache and not has_isin
     frames = {}
@@ -376,18 +325,15 @@ def _download_close_volume(tickers: list[str], period: str,
                 frames[t] = cached
     missing = [t for t in tickers if t not in frames]
     if missing:
-        # Every outbound call goes through the egress allowlist (src/netguard.py):
-        # the ticker funnel is the primary control, this is the second line.
-        # The budget is checked up front so an exhausted cap reads as a cap, not
-        # as a mysterious "possibly delisted" from inside yfinance.
+        # spend cap checked up front, so a spent cap reads as a cap and not as
+        # yfinance's confusing "possibly delisted". every call below goes
+        # through the egress allowlist (guarded_session).
         check_budget()
-        # No retry beside an ISIN: there a name can come back "empty" because
-        # yfinance filed its series under the ISIN, and asking for it again
-        # would put the same series in twice (a singular covariance).
+        # no retry next to an isin: the name may be "empty" because yfinance
+        # filed it under the isin, and asking again would add it twice
         for attempt in range(1 + (0 if has_isin else RETRIES)):
             if attempt:
-                # Only for names that came back empty, and only with budget
-                # left: the normal path never gets here.
+                # only for names that came back empty, and only with budget left
                 try:
                     check_budget()
                 except BudgetExhausted:
@@ -400,7 +346,7 @@ def _download_close_volume(tickers: list[str], period: str,
                 own = (pd.DataFrame() if raw is None or raw.empty
                        else _own_rows(raw, t, alone=len(missing) == 1))
                 if own.empty:
-                    continue        # a typo or an outage is retried, never remembered
+                    continue        # a typo or an outage is retried, never cached
                 own.attrs["fetched_at_utc"] = now
                 if use_cache:
                     os.makedirs(DATA_DIR, exist_ok=True)
@@ -411,17 +357,16 @@ def _download_close_volume(tickers: list[str], period: str,
                 break
     if not frames:
         raise NoDataError(NO_DATA_MSG)
-    # A name with no data stays an all-NaN column, as in one multi download.
+    # a name with no data stays an all-NaN column, same as one multi download
     names = sorted(set(tickers))
     close = pd.concat({t: f["Close"] for t, f in frames.items()}, axis=1,
                       sort=True).reindex(columns=names)
     volume = pd.concat({t: f["Volume"] for t, f in frames.items()}, axis=1,
                        sort=True).reindex(columns=names)
     stamps = sorted(f.attrs["fetched_at_utc"] for f in frames.values())
-    # VALID_TICKER guards what a visitor types; these names are the FEED's, and
-    # yfinance can label a column after a search result. 2026-10-15 security
-    # audit: they flow into the map, captions and tables, so only ticker-shaped
-    # columns leave this chokepoint (it feeds prices and dollar volume alike).
+    # SECURITY: VALID_TICKER covers what visitors type, but these column names
+    # are the FEED's (yfinance can label one after a search hit) and they reach
+    # the map, captions and tables - so only ticker-shaped columns get out.
     keep = [c for c in close.columns if valid_ticker(c)]
     close = close[keep].rename_axis(columns="Ticker")
     close.attrs = {"fetched_at_utc": stamps[0], "fetched_newest_utc": stamps[-1]}
@@ -429,8 +374,8 @@ def _download_close_volume(tickers: list[str], period: str,
 
 
 def _pulled(close: pd.DataFrame) -> tuple[str, str]:
-    """(oldest, newest) pull behind a frame from _download_close_volume; now
-    for a frame served without stamps (tests/pair_audit)."""
+    """(oldest, newest) pull time behind a frame from _download_close_volume;
+    'now' for a frame with no stamps (tests/pair_audit)."""
     now = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
     return (close.attrs.get("fetched_at_utc", now),
             close.attrs.get("fetched_newest_utc", now))
@@ -438,17 +383,15 @@ def _pulled(close: pd.DataFrame) -> tuple[str, str]:
 
 def _clean_price_frame(prices: pd.DataFrame, align: bool) -> pd.DataFrame:
     """
-    Data-integrity pass on a raw price frame. FX, futures, and equities trade on
-    different calendars; a naive join leaves NaN holes that silently corrupt
-    covariance/returns. Drop empty assets, forward-fill only tiny holiday gaps,
-    then (when aligning) keep the common trading days so every asset is measured
-    over the same dates.
+    clean up a raw price frame. fx, futures and stocks trade on different
+    calendars and a naive join leaves NaN holes that quietly wreck covariance.
+    drop empty assets, ffill tiny holiday gaps, and (if aligning) keep only
+    the days every asset traded.
     """
     prices = prices.dropna(axis=1, how="all")
-    # Crypto trades on weekends. Filled before the align, every Saturday and
-    # Sunday survived with stale stock prices: SPY vol read 16% low and the
-    # 252-row "year" spanned 0.69 calendar years. The engine's year is 252
-    # trading days, so weekends go; crypto's Friday->Monday move stays whole.
+    # drop weekends BEFORE filling: crypto trades on weekends, and filling first
+    # kept every sat/sun with stale stock prices (SPY vol read 16% low, a
+    # 252-row "year" was 0.69 years). crypto's fri->mon move stays whole.
     prices = prices[prices.index.dayofweek < 5].ffill(limit=3)
     if align:
         prices = prices.dropna()
@@ -456,11 +399,10 @@ def _clean_price_frame(prices: pd.DataFrame, align: bool) -> pd.DataFrame:
 
 
 def _dollar_volume(close: pd.DataFrame, volume: pd.DataFrame) -> pd.DataFrame:
-    """Close x volume, except futures. Yahoo's =F Volume counts contracts and
-    Close is per unit (oz, bbl, index point); with no contract multiplier the
-    product is not dollars - SI=F read 2,240 days to exit a $5B book that
-    clears in half a day. Zero is what an FX pair reports, so futures take the
-    same no-volume path the page discloses as excluded, not estimated."""
+    """close x volume, except futures. yahoo's =F volume is contracts and close
+    is per unit (oz, bbl, point), and with no contract multiplier that's not
+    dollars (SI=F said 2,240 days to exit a book that clears in half a day).
+    so futures get zero, like fx, and the page says they're excluded."""
     dv = close * volume
     fut = [c for c in dv.columns if str(c).endswith("=F")]
     dv[fut] = dv[fut] * 0.0
@@ -468,19 +410,18 @@ def _dollar_volume(close: pd.DataFrame, volume: pd.DataFrame) -> pd.DataFrame:
 
 
 def _write_parquet(frame: pd.DataFrame, path: str) -> None:
-    """Write to a temporary name, then rename into place: the web process
-    re-warms these files while visitors read them (Procfile), and a rename is
-    atomic, so a reader gets the old file or the new one, never a torn one.
-    The thread is in the name too: two visitors' threads that pull the same
-    new name at once must not write one temp file."""
+    """write to a temp file, then rename into place. the app re-warms these
+    files while visitors read them, and a rename is atomic, so a reader gets
+    the old file or the new one, never a half-written one. thread id is in the
+    temp name so two threads pulling the same name don't share a temp file."""
     tmp = f"{path}.{os.getpid()}.{threading.get_ident()}.tmp"
     frame.to_parquet(tmp)
     os.replace(tmp, path)
 
 
-def _write_json(path: str, record: dict) -> None:
-    """Same deal as _write_parquet for the little JSON records: temp file,
-    then rename. Writing in place let a reader grab a half file and crash."""
+def _write_json(record: dict, path: str) -> None:
+    """same deal as _write_parquet for the little json records: temp file, then
+    rename. writing in place let a reader grab half a file and crash the page."""
     tmp = f"{path}.{os.getpid()}.{threading.get_ident()}.tmp"
     with open(tmp, "w", encoding="utf-8") as fh:
         json.dump(record, fh, indent=2)
@@ -489,14 +430,14 @@ def _write_json(path: str, record: dict) -> None:
 
 def _write_dollar_volume_cache(tickers: list[str], period: str, dv: pd.DataFrame,
                                pulled: tuple[str, str]) -> None:
-    """Persist a daily dollar-volume frame + its provenance record."""
+    """save a daily dollar-volume frame + its provenance record."""
     dv = dv.dropna(axis=1, how="all")
     if dv.empty:
         return
     cache_path = _dv_cache_path(tickers, period)
     _write_parquet(dv, cache_path)
-    _prune_cache()          # keep the cache inside its disk budget
-    meta = {
+    _prune_cache()          # stay inside the disk budget
+    _write_json({
         "source": "Yahoo Finance (via yfinance)",
         "metric": "daily dollar volume (adj close x volume)",
         "fetched_at_utc": pulled[0],
@@ -505,8 +446,7 @@ def _write_dollar_volume_cache(tickers: list[str], period: str, dv: pd.DataFrame
         "period": period,
         "rows": len(dv),
         "yfinance_version": getattr(yf, "__version__", "unknown"),
-    }
-    _write_json(_meta_path(cache_path), meta)
+    }, _meta_path(cache_path))
 
 
 def fetch_prices(tickers: list[str] | None = None, period: str = "2y",
@@ -514,27 +454,24 @@ def fetch_prices(tickers: list[str] | None = None, period: str = "2y",
                  max_age_hours: float = CACHE_MAX_AGE_HOURS,
                  align: bool = True) -> pd.DataFrame:
     """
-    Return daily adjusted closing prices for the given universe, from Yahoo.
+    daily adjusted closes for a basket, from yahoo.
 
-    Uses a freshness-aware disk cache: a cached pull newer than `max_age_hours`
-    is reused; otherwise the data is re-downloaded and re-stamped. The SAME
-    download also populates the dollar-volume cache (see `average_dollar_volume`),
-    so the dashboard's cold load costs one network round-trip, not two.
+    reuses a cached pull younger than `max_age_hours`, else re-downloads and
+    re-stamps. the same download also fills the dollar-volume cache (see
+    `average_dollar_volume`), so a cold page load is one round-trip, not two.
 
     Args:
-        tickers: Yahoo Finance symbols. Defaults to DEFAULT_UNIVERSE if None.
+        tickers: yahoo symbols. None means DEFAULT_UNIVERSE.
         period:  yfinance period string - "1y", "2y", "5y", "max", etc.
         use_cache: read/write the disk cache.
-        max_age_hours: how old a cache may be before re-pulling.
-        align: if True, keep only common trading days across all assets (the
-            right choice for current risk). Set False for historical replay,
-            where assets have different inception dates and you slice a window
-            later - forcing common dates over full history would truncate
-            everything to the youngest asset's IPO.
+        max_age_hours: how old the cache can get before re-pulling.
+        align: True keeps only days every asset traded (right for current
+            risk). False is for historical replay: assets start at different
+            dates, and forcing common dates would cut everything to the
+            youngest asset's ipo.
 
     Returns:
-        DataFrame with dates as index and tickers as columns. Symbols that
-        return no data are dropped - check the columns to see what loaded.
+        dates x tickers. symbols with no data are dropped, so check the columns.
     """
     tickers = _clean(tickers)
     if not tickers:
@@ -550,31 +487,27 @@ def fetch_prices(tickers: list[str] | None = None, period: str = "2y",
     try:
         close, volume = _download_close_volume(tickers, period, max_age_hours, use_cache)
     except BudgetExhausted:
-        # The spend cap is spent. Degrade to stale cache rather than hammering
-        # a feed that is already rate-limiting us - and let the provenance
-        # panel keep reading the old .meta.json, so the page says how old the
-        # data is instead of pretending it is live. With no cache at all there
-        # is nothing honest to show, so the error stands.
+        # spend cap is spent: serve the stale cache instead of hammering a feed
+        # that's already limiting us. the old .meta.json stays, so the page
+        # still says how old it is. no cache at all = nothing honest to show.
         if use_cache and os.path.exists(cache_path):
             return pd.read_parquet(cache_path)
         raise
     prices = _clean_price_frame(close, align)
     if prices.empty:
-        # A typo'd symbol and a Yahoo outage look identical from here (yfinance
-        # swallows the error and hands back NaNs), so the message names both.
+        # a typo and a yahoo outage look the same from here (yfinance swallows
+        # the error and returns NaNs), so the message covers both
         raise NoDataError(NO_DATA_MSG if close.dropna(how="all").empty
                           else NO_OVERLAP_MSG)
 
     if use_cache:
         _write_parquet(prices, cache_path)
-        _prune_cache()      # keep the cache inside its disk budget
-        # Provenance: stamp exactly where this data came from and when, so every
-        # downstream number is traceable to a real source - not the model.
-        # Names are pulled separately: the oldest pull is the basket's age
-        # (it drives freshness and the "pulled N min ago" line), the newest
-        # says how far apart they are.
+        _prune_cache()      # stay inside the disk budget
+        # provenance: where and when this came from. names are pulled separately,
+        # so the oldest pull is the basket's age (drives freshness and "pulled N
+        # min ago") and the newest shows how far apart they are.
         pulled = _pulled(close)
-        meta = {
+        _write_json({
             "source": "Yahoo Finance (via yfinance)",
             "fetched_at_utc": pulled[0],
             "fetched_newest_utc": pulled[1],
@@ -584,11 +517,10 @@ def fetch_prices(tickers: list[str] | None = None, period: str = "2y",
             "end": prices.index[-1].date().isoformat(),
             "rows": len(prices),
             "yfinance_version": getattr(yf, "__version__", "unknown"),
-        }
-        _write_json(meta_path, meta)
-        # Free bonus from the same download: cache dollar volume over the aligned
-        # trading days, so a later average_dollar_volume() call hits cache instead
-        # of re-downloading. Never let a volume hiccup break the price fetch.
+        }, meta_path)
+        # free bonus from the same download: cache dollar volume on the aligned
+        # days so average_dollar_volume() hits cache. a volume hiccup must
+        # never break the price fetch.
         if align:
             try:
                 dv = _dollar_volume(close, volume).reindex(index=prices.index)[prices.columns]
@@ -599,7 +531,7 @@ def fetch_prices(tickers: list[str] | None = None, period: str = "2y",
 
 
 def provenance(tickers: list[str] | None = None, period: str = "2y") -> dict | None:
-    """Read the provenance record for a cached universe (source, timestamp, etc.)."""
+    """the provenance record of a cached basket (source, time, etc.)."""
     try:
         with open(_meta_path(_cache_path(_clean(tickers), period)), encoding="utf-8") as fh:
             return json.load(fh)
@@ -611,16 +543,15 @@ def fetch_dollar_volume(tickers: list[str] | None = None, period: str = "2y",
                         use_cache: bool = True,
                         max_age_hours: float = CACHE_MAX_AGE_HOURS) -> pd.DataFrame:
     """
-    Daily DOLLAR volume (adjusted close x share volume) per asset, from Yahoo.
+    daily DOLLAR volume (adjusted close x shares) per asset, from yahoo.
 
-    Dollar volume - not share count - is the liquidity metric that matters: a
-    million shares of a $5 stock and a million shares of a $500 stock absorb
-    wildly different amounts of capital. Normally this reads the cache that
-    `fetch_prices` already populated from a shared download; it only hits the
-    network if called standalone or the cache has aged out.
+    dollars, not shares: a million shares of a $5 stock and of a $500 stock
+    are very different amounts of money. usually this just reads what
+    `fetch_prices` already cached; it only hits the network standalone or
+    once the cache is stale.
 
-    Assets that report no volume (Yahoo returns 0 for FX pairs, for instance)
-    come back as columns of zeros - surfaced honestly downstream, never faked.
+    assets with no volume (yahoo says 0 for fx) come back as zeros - shown
+    honestly downstream, never faked.
     """
     tickers = _clean(tickers)
     if not tickers:
@@ -634,11 +565,9 @@ def fetch_dollar_volume(tickers: list[str] | None = None, period: str = "2y",
         return pd.read_parquet(cache_path)
 
     close, volume = _download_close_volume(tickers, period, max_age_hours, use_cache)
-    # On the trading days fetch_prices caches volume on (aligned, weekdays), so
-    # the 63-session ADV is one number whichever of the two ran first. Left on
-    # the raw calendar, a crypto name's weekends counted as sessions: BTC-USD +
-    # SPY read SPY's ADV over 45 sessions here and 63 there, 3% apart (Options
-    # audit, 2026-10-30).
+    # use the same days fetch_prices caches volume on (aligned weekdays), so the
+    # 63-day ADV is one number whichever ran first. on the raw calendar crypto's
+    # weekends counted as sessions and SPY's ADV came out 3% different.
     days = _clean_price_frame(close, align=True)
     dollar_vol = _dollar_volume(close, volume)
     if not days.empty:
@@ -654,13 +583,12 @@ def fetch_dollar_volume(tickers: list[str] | None = None, period: str = "2y",
 def average_dollar_volume(tickers: list[str] | None = None, period: str = "2y",
                           lookback_days: int = 63, **kwargs) -> pd.Series:
     """
-    Mean daily dollar volume over the last `lookback_days` (default ~3 months of
-    trading), as a Series indexed by ticker. Recent volume, not a multi-year
-    average, is what tells you how much a name can absorb *today*. The `period`
-    matches `fetch_prices` so both share one cached download.
+    mean daily dollar volume over the last `lookback_days` (~3 months), per
+    ticker. recent volume, not a multi-year average, is what a name can absorb
+    *today*. `period` matches `fetch_prices` so both share one download.
 
-    Assets with no volume data (e.g. Yahoo FX pairs) return 0.0 - a flag for the
-    caller to treat as "not liquidatable from this feed," never a fabricated fill.
+    no volume data (yahoo fx) gives 0.0 - the caller reads that as "can't
+    liquidate from this feed", never as a made-up fill.
     """
     dv = fetch_dollar_volume(tickers, period=period, **kwargs)
     return dv.tail(lookback_days).mean().fillna(0.0)
@@ -669,12 +597,12 @@ def average_dollar_volume(tickers: list[str] | None = None, period: str = "2y",
 def fetch_risk_free_rate(use_cache: bool = True,
                          max_age_hours: float = CACHE_MAX_AGE_HOURS) -> float | None:
     """
-    Latest US 13-week Treasury-bill yield (^IRX) as an annual decimal - e.g.
-    0.0525 for 5.25%. Yahoo quotes ^IRX in percent, so we divide by 100.
+    latest us 13-week t-bill yield (^IRX) as a decimal, e.g. 0.0525 for 5.25%
+    (yahoo quotes it in percent, so /100).
 
-    This is the risk-free leg of the Sharpe ratio. Returns None if the fetch
-    fails - we never fabricate a rate, so Sharpe hides rather than lying.
-    Cached in a small JSON with the same freshness window as prices.
+    it's the risk-free leg of the sharpe ratio. returns None if the fetch
+    fails - we never make up a rate, sharpe just hides. cached in a small json
+    with the same freshness window as prices.
     """
     os.makedirs(DATA_DIR, exist_ok=True)
     path = os.path.join(DATA_DIR, "riskfree.json")
@@ -683,9 +611,7 @@ def fetch_risk_free_rate(use_cache: bool = True,
         try:
             with open(path, encoding="utf-8") as fh:
                 rec = json.load(fh)
-            fetched = datetime.datetime.fromisoformat(rec["fetched_at_utc"])
-            age = datetime.datetime.now(datetime.timezone.utc) - fetched
-            if age <= datetime.timedelta(hours=max_age_hours):
+            if _is_fresh(rec["fetched_at_utc"], max_age_hours):
                 return rec["rate"]
         except (ValueError, KeyError, json.JSONDecodeError):
             pass
@@ -697,34 +623,32 @@ def fetch_risk_free_rate(use_cache: bool = True,
         if isinstance(close, pd.DataFrame):
             close = close.iloc[:, 0]
         rate = float(close.dropna().iloc[-1]) / 100.0
-    except Exception:  # noqa: BLE001 - no rate is better than a fake one
+    except Exception:  # noqa: BLE001 - no rate beats a fake one
         return None
     if not np.isfinite(rate):
         return None
 
     if use_cache:
-        rec = {
+        _write_json({
             "rate": rate,
             "source": "^IRX (US 13-week T-bill) via Yahoo Finance",
             "fetched_at_utc": datetime.datetime.now(datetime.timezone.utc)
                               .isoformat(timespec="seconds"),
-        }
-        _write_json(path, rec)
+        }, path)
     return rate
 
 
 def data_health(prices: pd.DataFrame) -> dict:
     """
-    Summarize data-pipeline integrity for display. Catches the failure modes
-    that quietly break a risk model: too little history, stale feeds, or
-    calendar gaps left after alignment.
+    pipeline health for the page: catches the stuff that quietly breaks a
+    risk model - too little history, a stale feed, gaps after aligning.
     """
     last_date = prices.index[-1]
     today = pd.Timestamp.now().normalize()
     staleness_days = int(np.busday_count(last_date.date(), today.date()))
 
-    # Weekday holes INCLUDING holidays; data_quality's calendar check asks the
-    # other question (what is missing beyond US federal holidays).
+    # weekday holes INCLUDING holidays; data_quality's calendar check asks the
+    # other question (what's missing beyond us federal holidays)
     full_span = pd.bdate_range(prices.index[0], prices.index[-1])
     gap_days = int(len(full_span) - len(prices))
 
@@ -740,17 +664,14 @@ def data_health(prices: pd.DataFrame) -> dict:
 
 
 def flat_columns(returns: pd.DataFrame) -> list[str]:
-    """Assets whose price never moved in the window (zero return variance).
-
-    A cash or money-market fund holding $1.00 looks like this. It has no
-    correlation to estimate and no risk-parity weight - the ERC solver divides
-    by its variance - so the app excludes it, and says so, before any math.
-    """
+    """assets whose price never moved (zero variance), like a $1.00 money-market
+    fund. nothing to correlate, and the risk-parity solver divides by its
+    variance, so the app drops it - and says so - before any math."""
     return [c for c in returns.columns if not float(returns[c].std()) > 1e-12]
 
 
 def get_returns(prices: pd.DataFrame) -> pd.DataFrame:
-    """Convert prices to daily returns - standard in quant finance."""
+    """prices to daily returns."""
     return prices.pct_change().dropna()
 
 

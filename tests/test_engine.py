@@ -4470,7 +4470,7 @@ def test_a_half_written_provenance_record_never_breaks_the_page():
         with open(meta, "w", encoding="utf-8") as fh:
             fh.write('{"source": "Yahoo Fin')          # the reader came mid-write
         assert ingestion.provenance(["SPY"]) is None
-        ingestion._write_json(meta, {"fetched_at_utc": "2026-11-09T00:00:00+00:00"})
+        ingestion._write_json({"fetched_at_utc": "2026-11-09T00:00:00+00:00"}, meta)
         assert ingestion.provenance(["SPY"]) == {"fetched_at_utc": "2026-11-09T00:00:00+00:00"}
         assert [p.name for p in pathlib.Path(ingestion.DATA_DIR).iterdir()] == [pathlib.Path(meta).name]   # no temp file left
     finally:
