@@ -1,37 +1,26 @@
 """
-Grit Zone - how much perseverance a name has shown, not how cheap or hot it is.
+grit zone - when a name gets knocked down, does it get back up?
 
-Concept:
-Fear & Greed indices measure market MOOD. Grit measures something different:
-whether an asset, when it gets knocked down, actually gets back up - and does
-so consistently, across real crises, over its own history. There is no such
-thing as a perfect stock; every name in a basket has drawdowns. Grit is not
-about avoiding setbacks, it's about what happens after one.
+fear & greed measures mood. grit measures what happens after a fall. every
+stock has drawdowns, so this is about the bounce, not dodging the hit.
 
-Quant Deep Dive - three real, computable components, no vibes:
-  1. Recovery:    of this asset's own historical drawdowns (>=5%), how many
-                  did it actually claw back from, and how fast?
-  2. Consistency: what fraction of rolling 1-year holding periods ended
-                  positive? (steady long-run grinding forward, not one lucky
-                  run)
-  3. Resilience:  across the REAL historical crisis windows this asset lived
-                  through (src.scenarios.HISTORICAL_REGIMES), how shallow was
-                  the drawdown and how fast did it reclaim its pre-crisis
-                  price afterward?
+how the math works (three parts, all from the name's own price history):
+  1. recovery:    of its drawdowns of 5%+, how many did it win back, and how
+                  fast (median trading days from the low back to the old high)?
+  2. consistency: share of rolling 1-year holds that ended positive.
+  3. resilience:  in each real crisis it traded through
+                  (src.scenarios.HISTORICAL_REGIMES), how deep was the fall and
+                  did it reclaim its pre-crisis price within ~2 years?
+each part is percentile-ranked against the other names in the basket, then
+averaged into one score out of 100.
 
-Honest limits:
-  - The Grit Score is RELATIVE to the universe you're analyzing right now -
-    each component is percentile-ranked against the other assets you chose,
-    not against some absolute universal scale. A different basket produces
-    different scores for the same ticker. That's disclosed in the UI, not
-    hidden.
-  - Assets with too little price history (< MIN_HISTORY_DAYS) are excluded
-    from ranking rather than scored on thin data.
-  - An asset that never traded through a given historical regime (later IPO)
-    simply contributes no observation for that regime - same "excluded, not
-    estimated" honesty as src.scenarios and src.liquidity.
-  - Nothing here is a claim about a company's character. It's a description
-    of its OWN historical price path: how it has behaved after past setbacks.
+honest limits:
+  - scores are relative to the basket you picked: swap the basket and the
+    same ticker scores differently. the ui says so.
+  - under MIN_HISTORY_DAYS of data = excluded, not scored on thin data.
+  - a crisis a name never traded through (later ipo) just doesn't count for
+    it - excluded, not estimated, same as src.scenarios and src.liquidity.
+  - it describes a price path, not a company's character.
 """
 
 import numpy as np
@@ -40,32 +29,26 @@ import pandas as pd
 from src.scenarios import HISTORICAL_REGIMES
 from src.covariance import TRADING_DAYS
 
-# Need enough history to say anything about multi-year drawdown recovery and
-# rolling-window consistency - much longer than the 60-row floor risk.py uses
-# for day-to-day VaR/CVaR.
+# need years of data to judge recoveries and rolling 1y windows
+# (way more than the 60 rows risk.py needs for var/cvar)
 MIN_HISTORY_DAYS = 400
 
-# Trading days of drawdown from a running peak before we call it a real
-# "episode" worth timing a recovery from (vs. day-to-day noise).
+# a dip has to sit 5% under the high to count as a drawdown, not noise
 DEFAULT_DD_THRESHOLD = 0.05
 
-# Trading days of rolling window for the consistency metric (~1 year).
+# rolling window for consistency (~1 trading year)
 DEFAULT_CONSISTENCY_WINDOW = TRADING_DAYS
 
-# How far past a crisis window we'll look for the price to reclaim its
-# pre-crisis level before calling it "not recovered" (~2 trading years).
+# how long after a crisis we wait for the pre-crisis price (~2 trading years)
 REGIME_RECOVERY_HORIZON_DAYS = 504
 
 
 def drawdown_episodes(prices: pd.Series, threshold: float = DEFAULT_DD_THRESHOLD) -> pd.DataFrame:
     """
-    Segment a price series into distinct drawdown episodes: peak -> trough ->
-    recovery (or still-open if the series ends before recovering).
-
-    An episode starts the first day the price falls more than `threshold`
-    below its running all-time high, and closes the day the price reclaims
-    that prior high. `days_to_recover` is measured in trading days from the
-    trough, not calendar days.
+    split a price series into drawdowns: peak -> trough -> recovery (or still
+    open if the data ends first). one starts the first day price is more than
+    `threshold` under its running high and ends the day it gets that high
+    back. days are trading days; days_to_recover counts from the trough.
     """
     idx = prices.index
     vals = prices.to_numpy(dtype=float)
@@ -78,54 +61,43 @@ def drawdown_episodes(prices: pd.Series, threshold: float = DEFAULT_DD_THRESHOLD
     in_dd = False
     trough_val = trough_pos = None
 
+    def episode(i):  # i = recovery day, None if still underwater
+        return {
+            "peak_date": idx[peak_pos], "peak_value": peak_val,
+            "trough_date": idx[trough_pos], "trough_value": trough_val,
+            "recovery_date": None if i is None else idx[i],
+            "depth": trough_val / peak_val - 1.0,
+            "days_to_trough": trough_pos - peak_pos,
+            "days_to_recover": None if i is None else i - trough_pos,
+        }
+
     for i in range(1, n):
         v = vals[i]
         if in_dd:
             if v < trough_val:
                 trough_val, trough_pos = v, i
             if v >= peak_val:
-                episodes.append({
-                    "peak_date": idx[peak_pos], "peak_value": peak_val,
-                    "trough_date": idx[trough_pos], "trough_value": trough_val,
-                    "recovery_date": idx[i],
-                    "depth": trough_val / peak_val - 1.0,
-                    "days_to_trough": trough_pos - peak_pos,
-                    "days_to_recover": i - trough_pos,
-                })
+                episodes.append(episode(i))
                 in_dd = False
                 peak_val, peak_pos = v, i
-                continue
-        if v > peak_val:
+        elif v > peak_val:
             peak_val, peak_pos = v, i
-            continue
-        if not in_dd:
-            dd = v / peak_val - 1.0
-            if dd <= -threshold:
-                in_dd = True
-                trough_val, trough_pos = v, i
+        elif v / peak_val - 1.0 <= -threshold:
+            in_dd = True
+            trough_val, trough_pos = v, i
 
     if in_dd:
-        episodes.append({
-            "peak_date": idx[peak_pos], "peak_value": peak_val,
-            "trough_date": idx[trough_pos], "trough_value": trough_val,
-            "recovery_date": None,
-            "depth": trough_val / peak_val - 1.0,
-            "days_to_trough": trough_pos - peak_pos,
-            "days_to_recover": None,
-        })
-
+        episodes.append(episode(None))
     return pd.DataFrame(episodes)
 
 
 def recovery_stats(prices: pd.Series, threshold: float = DEFAULT_DD_THRESHOLD) -> dict:
-    """Summarize an asset's own drawdown/recovery track record."""
+    """a name's own drawdown/recovery track record."""
     episodes = drawdown_episodes(prices, threshold)
     current_dd = float(prices.iloc[-1] / prices.cummax().iloc[-1] - 1.0)
 
     if episodes.empty:
-        # No episodes = an UNKNOWN recovery record, not a perfect one. NaN is
-        # the codebase's existing signal for it: _score01 maps NaN to 0.0
-        # ("an unknown is never rewarded as if it were resilient").
+        # no drawdowns = unknown record, not a perfect one. nan -> _score01 gives 0
         return {
             "n_episodes": 0, "n_recovered": 0, "pct_recovered": float("nan"),
             "median_recovery_days": float("nan"), "still_underwater": False,
@@ -146,12 +118,8 @@ def recovery_stats(prices: pd.Series, threshold: float = DEFAULT_DD_THRESHOLD) -
 
 
 def rolling_consistency(prices: pd.Series, window: int = DEFAULT_CONSISTENCY_WINDOW) -> float:
-    """
-    Fraction of rolling `window`-day holding periods (any start day) that
-    ended in a positive total return. 1.0 = every 1-year stretch you could
-    have bought made money; 0.0 = none did. NaN if there isn't yet a full
-    window of history.
-    """
+    """share of every `window`-day hold (any start day) that ended up positive.
+    1.0 = every 1y stretch made money, 0.0 = none did, nan = not a full window yet."""
     if len(prices) <= window:
         return float("nan")
     roll_ret = (prices / prices.shift(window) - 1.0).dropna()
@@ -162,22 +130,15 @@ def rolling_consistency(prices: pd.Series, window: int = DEFAULT_CONSISTENCY_WIN
 
 def regime_drawdown_and_recovery(prices_full: pd.Series, start: str, end: str,
                                  recovery_horizon_days: int = REGIME_RECOVERY_HORIZON_DAYS) -> dict | None:
-    """
-    Max drawdown an asset suffered DURING a named historical crisis window,
-    and whether/how fast it reclaimed its pre-crisis price afterward.
-
-    Returns None if the asset has no price history in the window at all
-    (later IPO, etc.) - same "excluded, not estimated" convention as
-    src.scenarios.replay_returns.
-    """
+    """worst drawdown inside one crisis window, and how many trading days after
+    it the price took to get back to where the window started. None if the
+    name has no prices in the window at all (excluded, not estimated)."""
     window = prices_full.loc[start:end].dropna()
     if window.empty:
         return None
 
     pre_crisis_price = float(window.iloc[0])
-    running_max = window.cummax()
-    dd = window / running_max - 1.0
-    max_dd = float(dd.min())
+    max_dd = float((window / window.cummax() - 1.0).min())
 
     after = prices_full.loc[window.index[-1]:].iloc[1:1 + recovery_horizon_days].dropna()
     recovered_at = after[after >= pre_crisis_price]
@@ -192,8 +153,7 @@ def regime_drawdown_and_recovery(prices_full: pd.Series, start: str, end: str,
 
 
 def regime_resilience(prices_full: pd.Series) -> dict:
-    """Aggregate an asset's drawdown/recovery behavior across every named
-    historical crisis window it actually has price data for."""
+    """roll up drawdown/recovery over every crisis the name has data for."""
     results = {}
     for name, (s, e) in HISTORICAL_REGIMES.items():
         r = regime_drawdown_and_recovery(prices_full, s, e)
@@ -215,12 +175,8 @@ def regime_resilience(prices_full: pd.Series) -> dict:
 
 
 def _score01(raw: pd.Series, higher_is_better: bool = True) -> pd.Series:
-    """
-    Percentile-rank a metric to [0, 1] across the peer group; 1.0 = grittiest
-    on this metric. A NaN (couldn't be computed - e.g. no drawdown episodes
-    yet to time a recovery from) always scores 0.0: an unknown is never
-    rewarded as if it were resilient.
-    """
+    """percentile-rank a metric to [0, 1] across the basket, 1.0 = grittiest.
+    nan (couldn't be measured) always gets 0 - an unknown never gets rewarded."""
     x = raw if higher_is_better else -raw
     valid = x.dropna()
     out = pd.Series(0.0, index=raw.index)
@@ -237,21 +193,15 @@ def grit_scores(tickers: list[str], prices: pd.DataFrame | None = None,
                 dd_threshold: float = DEFAULT_DD_THRESHOLD,
                 consistency_window: int = DEFAULT_CONSISTENCY_WINDOW) -> dict:
     """
-    Composite Grit Score per ticker, ranked RELATIVE to the other tickers in
-    `tickers` (there's no universal "grit" scale - only relative perseverance
-    within the peer group you're actually comparing).
+    grit score per ticker, ranked against the other `tickers` (there's no
+    universal grit scale, only who held up best in this group).
 
-    Args:
-        tickers: universe to score.
-        prices: optional pre-fetched full-history price DataFrame (unaligned,
-            NaN before each asset's inception is fine). If omitted, pulls
-            full history via src.ingestion.fetch_prices(period="max",
-            align=False) - the same approach src.scenarios uses for regime
-            replay, so different IPO dates don't truncate everyone.
+    `prices`: optional full-history closes, unaligned (nan before each ipo is
+    fine). if missing we pull fetch_prices(period="max", align=False), same as
+    src.scenarios, so a young name doesn't cut everyone's history short.
 
-    Returns:
-        {"scores": DataFrame indexed by ticker, sorted by grit_score desc,
-         "excluded": tickers dropped for having < MIN_HISTORY_DAYS of data}
+    returns {"scores": df sorted by grit_score desc,
+             "excluded": tickers with < MIN_HISTORY_DAYS of data}
     """
     if prices is None:
         from src.ingestion import fetch_prices
@@ -284,14 +234,9 @@ def grit_scores(tickers: list[str], prices: pd.DataFrame | None = None,
 
     df = pd.DataFrame(rows).T
 
-    # These blend weights are a DISCLOSED JUDGEMENT CALL, not estimated from
-    # data and not claimed optimal. Recovery leans 60/40 toward whether a
-    # drawdown was recovered at all over how fast, because a name that never
-    # gets back is a different animal from one that takes its time. Resilience
-    # splits evenly, since depth and recovery matter equally there. Nothing in
-    # the engine fits or tunes these - change them and the ranking shifts,
-    # which is exactly why they are stated here rather than left as bare
-    # numbers in an expression.
+    # these weights are a stated judgement call, nothing fits or tunes them.
+    # recovery leans 60/40 to "did it come back at all" over "how fast" (never
+    # coming back is a different animal). resilience splits 50/50.
     recovery_component = (
         0.6 * _score01(df["pct_recovered"], higher_is_better=True)
         + 0.4 * _score01(df["median_recovery_days"], higher_is_better=False)

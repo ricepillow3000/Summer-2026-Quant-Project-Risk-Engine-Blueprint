@@ -1,13 +1,12 @@
 """
-Risk Engine: CVaR and Monte Carlo simulation.
+risk engine: VaR, CVaR, tail fits, backtests and two monte carlos.
 
-Quant Deep Dive:
-- VaR (Value at Risk) answers: "What's the most I lose on a bad day (95th pctile)?"
-- CVaR (Conditional VaR) answers: "When things ARE that bad, how bad on average?"
-  CVaR is strictly better - VaR ignores what happens in the tail, CVaR measures it.
-- Monte Carlo: instead of assuming returns are normally distributed (they aren't),
-  we bootstrap from real historical returns. This captures actual fat tails -
-  the real crash days that a normal distribution would say are "impossible."
+how the math works:
+- VaR: "how much do i lose on a bad day?" (the 95th-percentile loss)
+- CVaR: "ok, and when it IS that bad, how bad on average?" - it actually
+  looks inside the tail, VaR only says where the tail starts.
+- monte carlo: returns aren't normal, so we resample real history instead.
+  that keeps the real fat tails - the crash days a bell curve calls impossible.
 """
 
 import numpy as np
@@ -18,30 +17,22 @@ from src.ingestion import fetch_prices, get_returns
 
 
 def portfolio_daily_returns(returns: pd.DataFrame, weights: np.ndarray) -> pd.Series:
-    """Compute daily portfolio returns for a given weight vector."""
+    """daily returns of the whole book for these weights."""
     return returns @ weights
 
 
 def var(port_returns: pd.Series, confidence: float = 0.95) -> float:
-    """
-    Historical Value at Risk.
-    The loss threshold you exceed only (1 - confidence)% of the time.
-
-    Returns a positive number representing the loss (e.g. 0.032 = 3.2% loss).
-    """
+    """historical VaR: the loss you only beat (1 - confidence) of the time.
+    positive = loss, so 0.032 means a 3.2% loss."""
     return float(-np.percentile(port_returns, (1 - confidence) * 100))
 
 
 def cvar(port_returns: pd.Series, confidence: float = 0.95) -> float:
-    """
-    Conditional Value at Risk (Expected Shortfall).
-    Average loss on the worst (1 - confidence)% of days.
-
-    This is the number risk desks actually use - it captures tail severity,
-    not just where the tail begins.
-    """
-    # The engine's one ES estimator: pairing.expected_shortfall is this at
-    # the pairing's ES 97.5. Missing days are dropped, never read as returns.
+    """CVaR / expected shortfall: the average loss on the worst (1 - confidence)
+    of days. this is the one risk desks actually use - it sees how deep the
+    tail goes, not just where it starts."""
+    # the engine's only ES; pairing.expected_shortfall calls this at 97.5.
+    # missing days get dropped, never read as returns
     r = pd.Series(port_returns).dropna()
     threshold = np.percentile(r, (1 - confidence) * 100)
     tail = r[r <= threshold]
@@ -50,31 +41,21 @@ def cvar(port_returns: pd.Series, confidence: float = 0.95) -> float:
 
 def sharpe_ratio(port_returns: pd.Series, risk_free_rate: float = 0.0,
                  periods: int = TRADING_DAYS) -> float:
-    """
-    Annualized Sharpe ratio: excess return per unit of volatility.
-
-    Sharpe = (annualized return - risk_free_rate) / annualized volatility
-
-    `risk_free_rate` is an annual decimal (e.g. 0.05). Daily returns are
-    annualized by 252 (return) and sqrt(252) (volatility). The single most
-    common one-line summary of risk-adjusted performance on a desk.
-    """
+    """annualized sharpe: (annual return - risk free) / annual vol.
+    risk_free_rate is an annual decimal (0.05). daily mean scales by `periods`,
+    daily std by sqrt(periods)."""
     mu = float(port_returns.mean()) * periods
     sigma = float(port_returns.std()) * np.sqrt(periods)
-    if sigma < 1e-12:            # (near-)zero vol: Sharpe undefined, don't explode
+    if sigma < 1e-12:            # ~zero vol: sharpe is undefined, don't blow up
         return float("nan")
     return (mu - risk_free_rate) / sigma
 
 
-# genpareto.fit spends ~95% of its time in scipy's generic objective
-# (_penalized_nnlf): argument checks and dispatch around a few numpy calls,
-# run ~150 times per fit and 200 fits per bootstrap. This is that objective
-# for genpareto with loc fixed at 0, the same numpy calls in the same order,
-# so the optimizer walks the same path to the same floats - 3x faster
-# (2026-10-20, John: "speed up the tail model fit"). Equal bit for bit on
-# scipy 1.18.1, which requirements.txt pins
-# (test_the_lean_tail_objective_equals_scipys_bit_for_bit). np.log, not
-# math.log: they differ in the last bit on some scales, which moves the fit.
+# scipy's genpareto.fit burns ~95% of its time in generic arg checks around its
+# objective. _lean_nnlf is that objective for genpareto with loc=0: same numpy
+# calls, same order, so the optimizer walks the same path to the same floats,
+# 3x faster. bit-for-bit only on scipy 1.18.1 (pinned; a test checks it).
+# np.log not math.log - they differ in the last bit sometimes and move the fit
 _LOGXMAX = np.log(np.finfo(float).max)
 
 
@@ -101,9 +82,8 @@ def _lean_nnlf(theta, data):
 
 
 def _lean_fmin(func, x0, args=(), disp=0):
-    # scipy's own default optimizer, handed the lean objective instead of func.
-    # func is ignored, so this is right only for MLE with floc=0 and nothing
-    # else fixed - the one call gpd_tail_fit makes.
+    # scipy's default optimizer, but on the lean objective. ignores func, so
+    # it's only right for the floc=0 MLE gpd_tail_fit runs
     return optimize.fmin(_lean_nnlf, x0, args=args, disp=disp)
 
 
@@ -112,56 +92,47 @@ def gpd_tail_fit(port_returns: pd.Series, threshold_quantile: float = 0.95,
                  n_boot: int = 200, seed: int = 0,
                  min_exceedances: int = 50) -> dict:
     """
-    Extreme Value Theory: peaks-over-threshold fit of a Generalized Pareto
-    to the loss tail. Answers "how heavy is the tail, and is there a worst
-    case at all" - which CVaR cannot.
+    peaks-over-threshold EVT: fit a generalized Pareto (GPD) to the loss tail.
+    says how heavy the tail is and whether a worst case even exists - CVaR can't.
 
-    Quant Deep Dive:
-    CVaR/ES already reports the MEAN loss beyond VaR. What neither VaR nor ES
-    tells you is the tail's SHAPE - how fast it decays, and therefore how much
-    worse things can get past the data you happen to own. The
-    Pickands-Balkema-de Haan theorem says that for a wide class of
-    distributions, exceedances over a high threshold u converge to a
-    Generalized Pareto:
+    how the math works:
+    CVaR gives the average loss past VaR, but not the tail's SHAPE (how fast it
+    dies off). Pickands-Balkema-de Haan: losses over a high threshold u end up
+    looking like a generalized Pareto:
 
         G(y) = 1 - (1 + xi*y/beta)^(-1/xi)      y = L - u,  L = loss > u
 
-    The shape parameter xi is the whole story:
-      xi > 0   heavy tail, polynomial decay, NO finite worst case
+    xi is the whole story:
+      xi > 0   heavy tail, no finite worst case
       xi = 0   exponential tail
-      xi < 0   bounded tail with a finite right endpoint at u - beta/xi
+      xi < 0   bounded tail, worst case at u - beta/xi
 
-    Equity daily losses fit xi > 0 essentially always, so THE HONEST ANSWER TO
-    "what is the absolute maximum I can lose" IS THAT NO FINITE MAXIMUM EXISTS
-    - only -100% from limited liability. This function reports that rather
-    than inventing a number. A fitted xi < 0 on equity data is far more likely
-    sample noise than a real bound, and is labelled as such.
+    stock losses basically always fit xi > 0, so the honest answer to "what's
+    the most i can lose" is: no finite max, just -100% from limited liability.
+    we say that instead of making up a number. xi < 0 on stocks is way more
+    likely noise than a real bound, and gets labelled that way.
 
-    xi also says when the engine's OWN numbers stop being meaningful, since
-    E[L^k] is finite only if xi < 1/k:
-      xi >= 0.5  infinite variance   (volatility is not estimable)
-      xi >= 1    infinite mean       (ES does not exist at all)
+    xi also says when our own numbers break, since E[L^k] is finite only if
+    xi < 1/k:
+      xi >= 0.5  infinite variance (vol can't be estimated)
+      xi >= 1    infinite mean (ES doesn't exist)
 
-    Tail estimates (McNeil-Frey / Embrechts et al.), with n total
-    observations and N_u exceedances:
+    tail estimates (McNeil-Frey / Embrechts et al.), n obs, N_u exceedances:
 
         VaR_q = u + (beta/xi) * [ ((n/N_u)(1-q))^(-xi) - 1 ]
         ES_q  = VaR_q/(1-xi) + (beta - xi*u)/(1-xi)          (needs xi < 1)
 
-    Both are used in their xi -> 0 limiting forms near zero
-    (VaR_q -> u + beta*ln(N_u/(n(1-q))), ES_q -> VaR_q + beta) rather than
-    dividing by a near-zero xi.
+    near xi = 0 we use the limits (VaR_q -> u + beta*ln(N_u/(n(1-q))),
+    ES_q -> VaR_q + beta) so we never divide by ~0.
 
-    Honest limits, stated because they change how the number should be read:
-    - POT assumes exceedances are i.i.d. The Christoffersen test in this same
-      module exists precisely to detect that they cluster; when it rejects
-      independence, xi here is biased upward and its interval is too narrow.
-      The fix is conditional EVT (McNeil-Frey: fit the GPD to EWMA-standardised
-      residuals rather than raw returns) - not implemented here, flagged.
-    - The confidence interval is a percentile bootstrap over exceedances. It
-      captures estimation noise, NOT threshold-choice risk.
-    - With fewer than `min_exceedances` points above u the asymptotics do not
-      apply. This refuses to fit rather than return a shaky number.
+    limits:
+    - POT assumes exceedances are iid. if christoffersen_test says they
+      cluster, xi here runs high and its CI too narrow - mcneil_frey_tail
+      (conditional EVT) is the fix.
+    - the CI is a percentile bootstrap over exceedances: estimation noise
+      only, not threshold choice.
+    - under `min_exceedances` points above u the theory doesn't apply, so we
+      refuse to fit instead of returning a shaky number.
     """
     losses = -pd.Series(port_returns).dropna().astype(float)
     n = int(len(losses))
@@ -185,12 +156,12 @@ def gpd_tail_fit(port_returns: pd.Series, threshold_quantile: float = 0.95,
                          f"{min_exceedances} needed for the GPD asymptotics")
         return out
 
-    # floc=0 because exceedances are already measured FROM the threshold.
+    # floc=0: exceedances are already measured from the threshold
     xi, _loc, beta = stats.genpareto.fit(exceed, floc=0.0, optimizer=_lean_fmin)
     xi, beta = float(xi), float(beta)
     out["xi"], out["beta"], out["fitted"] = xi, beta, True
 
-    rng = np.random.default_rng(seed)   # fixed: a CI must not flicker on rerun
+    rng = np.random.default_rng(seed)   # fixed seed so the CI doesn't flicker on rerun
     boot = []
     for _ in range(n_boot):
         sample = rng.choice(exceed, size=n_u, replace=True)
@@ -203,10 +174,10 @@ def gpd_tail_fit(port_returns: pd.Series, threshold_quantile: float = 0.95,
         lo, hi = np.percentile(boot, [2.5, 97.5])
         out["xi_ci"] = (float(lo), float(hi))
 
-    # Finite worst case exists only for xi < 0.
+    # a finite worst case only exists when xi < 0
     out["finite_endpoint"] = (u - beta / xi) if xi < 0 else None
     out["moments_finite"] = {
-        "mean": xi < 1.0,          # ES exists only if the mean does
+        "mean": xi < 1.0,          # ES needs the mean to exist
         "variance": xi < 0.5,
         "kurtosis": xi < 0.25,
     }
@@ -219,7 +190,7 @@ def gpd_tail_fit(port_returns: pd.Series, threshold_quantile: float = 0.95,
         else:
             var_q = u + (beta / xi) * (ratio ** (-xi) - 1.0)
         if xi >= 1.0:
-            es_q = None                          # mean does not exist
+            es_q = None                          # no mean, no ES
         elif abs(xi) < tiny:
             es_q = var_q + beta
         else:
@@ -232,16 +203,15 @@ def gpd_tail_fit(port_returns: pd.Series, threshold_quantile: float = 0.95,
 def ewma_volatility(returns, lam: float = RISKMETRICS_LAMBDA,
                     seed_window: int = 60) -> tuple:
     """
-    RiskMetrics EWMA conditional volatility, plus the one-step-ahead forecast.
+    RiskMetrics EWMA vol, plus tomorrow's forecast.
 
         sigma^2_t = lam * sigma^2_{t-1} + (1 - lam) * r^2_{t-1}
 
-    Note the t-1 on the return: sigma_t is a FORECAST made before day t is
-    observed, so standardising r_t by it involves no look-ahead. The variance
-    is seeded from the first `seed_window` returns; those early points are
-    burnt in by the caller rather than trusted.
+    note the t-1 on r: sigma_t is a forecast made BEFORE day t, so dividing
+    r_t by it has no look-ahead. seeded from the first `seed_window` returns;
+    the caller throws those early points away.
 
-    Returns (sigma array aligned to `returns`, one-step-ahead sigma for T+1).
+    returns (sigma per day, aligned to `returns`; sigma for T+1).
     """
     r = np.asarray(returns, dtype=float)
     n = len(r)
@@ -258,48 +228,33 @@ def ewma_volatility(returns, lam: float = RISKMETRICS_LAMBDA,
 def mcneil_frey_tail(port_returns: pd.Series, lam: float = RISKMETRICS_LAMBDA,
                      burn_in: int = 60, **gpd_kwargs) -> dict:
     """
-    Conditional EVT - McNeil & Frey (2000), two-stage.
+    conditional EVT - McNeil & Frey (2000), two steps.
 
-    Quant Deep Dive:
-    Plain peaks-over-threshold assumes exceedances are i.i.d. Financial returns
-    are not: volatility clusters, so big losses arrive in bunches. That is not
-    a hypothetical objection here - the Christoffersen test in this module
-    exists to measure exactly that, and when it rejects independence the
-    unconditional xi is biased UPWARD, because clustering masquerades as a
-    fatter tail. The engine would then be citing its own violated assumption
-    as evidence of danger.
+    how the math works:
+    plain POT assumes big losses are iid, but vol clusters, so they come in
+    bunches. when christoffersen_test rejects independence, the plain xi runs
+    HIGH - clustering looks like a fatter tail. so we strip the vol out first:
 
-    McNeil-Frey removes the volatility first, then does EVT on what is left:
-
-      1. Filter: estimate conditional volatility sigma_t, standardise
-         z_t = r_t / sigma_t. Clustering lives in sigma, so z is far closer
-         to i.i.d. than r.
-      2. Fit: peaks-over-threshold GPD on the standardised residuals z.
-         The xi from this stage is the asset's TRUE tail heaviness, with the
-         volatility dynamics stripped out.
-      3. Rescale: a risk number for tomorrow is the residual quantile blown
-         back up by tomorrow's volatility forecast:
+      1. filter: get conditional vol sigma_t, set z_t = r_t / sigma_t. the
+         clustering lives in sigma, so z is way closer to iid than r.
+      2. fit: POT GPD on z. this xi is the tail's real heaviness.
+      3. rescale: tomorrow's risk = the residual quantile times tomorrow's vol:
 
              VaR_{T+1} = sigma_{T+1} * z_q
              ES_{T+1}  = sigma_{T+1} * z_ES
 
-    This is why conditional EVT is the honest version: xi answers "how heavy
-    is this tail really", while sigma_{T+1} answers "how dangerous is right
-    now". The unconditional fit confounds the two.
+    xi answers "how heavy is this tail", sigma_{T+1} answers "how risky is
+    right now". the plain fit mixes the two up.
 
-    Deviation from the paper, stated rather than glossed: McNeil-Frey specify
-    AR(1)-GARCH(1,1). This filters with EWMA, which is IGARCH(1,1) with lam
-    fixed at the RiskMetrics 0.94 already used elsewhere in this engine. The
-    trade is deliberate - NO volatility parameters are fitted to the sample,
-    so the filter cannot overfit it, and no extra dependency is required. The
-    conditional mean is taken as zero: at a one-day horizon the equity drift
-    is ~2 orders of magnitude below the daily volatility, so the paper's AR(1)
-    mean term would add estimation noise rather than accuracy.
+    where we differ from the paper: they use AR(1)-GARCH(1,1), we filter with
+    EWMA (IGARCH(1,1) with lam fixed at RiskMetrics 0.94). nothing gets fitted
+    to the sample so it can't overfit, and no extra dependency. mean is taken
+    as zero: one-day drift is ~100x smaller than daily vol, so an AR(1) mean
+    term would add noise, not accuracy.
 
-    Returns the GPD fit on standardised residuals, plus `sigma_next` and a
-    `conditional` block holding the rescaled VaR/ES per quantile, and
-    `unconditional_xi` so the two fits can be compared directly - the gap
-    between them IS the clustering bias.
+    returns the GPD fit on z plus `sigma_next`, a `conditional` block with the
+    rescaled VaR/ES per quantile, and `unconditional_xi` - the gap between the
+    two xi's IS the clustering bias.
     """
     r = pd.Series(port_returns).dropna().astype(float)
     if len(r) <= burn_in + 100:
@@ -309,17 +264,12 @@ def mcneil_frey_tail(port_returns: pd.Series, lam: float = RISKMETRICS_LAMBDA,
                 "sigma_next": None, "conditional": {}, "unconditional_xi": None}
 
     sigma, sigma_next = ewma_volatility(r.values, lam=lam, seed_window=burn_in)
-    # Drop the burn-in: those sigmas still carry the seed rather than the
-    # recursion, so their residuals are not comparable to the rest.
+    # skip the burn-in: those sigmas still remember the seed, not the recursion
     z = pd.Series(r.values[burn_in:] / sigma[burn_in:], index=r.index[burn_in:])
 
     fit = gpd_tail_fit(z, **gpd_kwargs)
-    # EVERYTHING gpd_tail_fit returns here is in STANDARDISED-RESIDUAL units,
-    # because it was fitted on z = r / sigma. Only var/es were being rescaled
-    # below, so `threshold`, `beta` and `finite_endpoint` stayed in z-units
-    # while the UI printed them as percentage losses - a 2.1 residual read as
-    # "2.10%". Flag the scale explicitly and publish return-scale companions,
-    # so a caller can never mistake one for the other.
+    # everything from that fit is in z-units (r / sigma). the UI once printed a
+    # 2.1 residual threshold as "2.10%", so tag the scale and add return-scale twins
     fit["scale"] = "standardised residuals (z = r / sigma)"
     fit["threshold_z"] = fit.get("threshold")
     fit["threshold_return"] = (None if fit.get("threshold") is None
@@ -337,8 +287,7 @@ def mcneil_frey_tail(port_returns: pd.Series, lam: float = RISKMETRICS_LAMBDA,
                 "var": sigma_next * vals["var"],
                 "es": None if vals["es"] is None else sigma_next * vals["es"],
             }
-    # For the side-by-side that makes the clustering bias visible. Only its xi
-    # is shown, so its bootstrap (half the panel's time) is not run.
+    # the raw fit is only here for its xi, so skip its bootstrap (half the time)
     raw = gpd_tail_fit(r, **{**gpd_kwargs, "n_boot": 0})
     fit["unconditional_xi"] = raw["xi"]
     return fit
@@ -348,44 +297,34 @@ def christoffersen_test(breach_flags, kupiec_lr: float | None = None) -> dict:
     """
     Christoffersen (1998) independence + conditional coverage tests.
 
-    Quant Deep Dive:
-    Kupiec asks only "were there about the right NUMBER of breaches?" It is
-    blind to WHEN they happened. Twelve breaches spread evenly across a year
-    and twelve breaches all inside one week score identically - yet the second
-    is a model that works in calm markets and collapses in stress, which is
-    the only time a risk number matters.
+    how the math works:
+    Kupiec only checks the NUMBER of breaches, not WHEN. 12 breaches spread
+    over a year and 12 in one week score the same - but the second is a model
+    that breaks in a crash, the only time it matters.
 
-    Christoffersen tests the missing dimension. Treat the breach indicator as
-    a Markov chain and count transitions:
+    so treat the breach flag as a markov chain and count transitions:
 
-        n_ij = # of days where I(t-1) = i and I(t) = j
+        n_ij = # days where I(t-1) = i and I(t) = j
 
         pi01 = n01 / (n00 + n01)      P(breach | no breach yesterday)
         pi11 = n11 / (n10 + n11)      P(breach | breach yesterday)
-        pi   = (n01 + n11) / N        unconditional breach rate
+        pi   = (n01 + n11) / N        overall breach rate
 
-    Under independence pi01 = pi11 = pi: yesterday tells you nothing. The
-    likelihood ratio
+    if breaches are independent, pi01 = pi11 = pi. the likelihood ratio
 
         LR_ind = -2 [ log L(independent) - log L(Markov) ]   ~ chi2(1)
 
-    rejects when breaches predict breaches - i.e. they cluster.
-
-    Conditional coverage combines both dimensions, and the statistics are
-    additive by construction:
+    rejects when breaches predict breaches (they cluster). conditional
+    coverage just adds the two:
 
         LR_cc = LR_uc + LR_ind                               ~ chi2(2)
 
-    Implementation notes that matter for correctness:
-    - `xlogy(x, y)` is x*log(y) with xlogy(0, 0) = 0, which is the correct
-      limit of the 0*log(0) terms and avoids a spurious -inf when a transition
-      count is zero. Every case where the log argument is 0 has a matching
-      zero count, so no term is ever genuinely infinite.
-    - If no breach is ever followed by another observation (n10 + n11 = 0,
-      which happens with zero breaches or a single breach on the last day),
-      pi11 is not estimable. Then LR_ind does not exist and this returns None
-      for it rather than substituting 0 - a 0 would read as "passed
-      independence", which would be a fabricated verdict.
+    notes:
+    - xlogy(x, y) = x*log(y) with xlogy(0, 0) = 0, the right limit for the
+      0*log(0) terms when a count is zero, so no fake -inf.
+    - if no breach is ever followed by another day (zero breaches, or one on
+      the last day), pi11 can't be estimated. then LR_ind is None, not 0 -
+      a 0 would read as "passed", a made-up verdict.
     """
     I = np.asarray(pd.Series(breach_flags).values, dtype=int)
     prev, cur = I[:-1], I[1:]
@@ -402,8 +341,7 @@ def christoffersen_test(breach_flags, kupiec_lr: float | None = None) -> dict:
         "lr_cc": None, "p_cc": None, "passed_cc": None,
         "pi01": None, "pi11": None,
     }
-    # Both conditional probabilities must be estimable, or the Markov
-    # alternative is not identified and no honest statistic exists.
+    # need both conditional probs or there's no honest statistic
     if total == 0 or (n00 + n01) == 0 or (n10 + n11) == 0:
         return out
 
@@ -419,8 +357,8 @@ def christoffersen_test(breach_flags, kupiec_lr: float | None = None) -> dict:
         special.xlogy(n00 + n10, 1 - pi) + special.xlogy(n01 + n11, pi)
     )
     lr_ind = float(-2.0 * (log_l_indep - log_l_markov))
-    # Clamp microscopic negatives from floating-point error; a genuine
-    # negative LR is impossible since the Markov model nests independence.
+    # a real negative LR is impossible (markov nests independence), so tiny
+    # negatives are float noise
     if -1e-9 < lr_ind < 0:
         lr_ind = 0.0
 
@@ -440,33 +378,22 @@ def christoffersen_test(breach_flags, kupiec_lr: float | None = None) -> dict:
 def var_backtest(port_returns: pd.Series, confidence: float = 0.95,
                  window: int = 250) -> dict:
     """
-    WALK-FORWARD backtest of historical VaR (Kupiec POF test).
+    walk-forward VaR backtest (Kupiec POF test).
 
-    A VaR model is only trustworthy if losses breach it about as often as it
-    claims - a 95% VaR should be exceeded ~5% of days. Too many breaches = the
-    model understates risk; too few = it's needlessly conservative. The Kupiec
-    proportion-of-failures test turns "is the breach rate acceptable?" into a
-    formal hypothesis test (chi-square, 1 dof, 95% critical value 3.841).
+    a 95% VaR should get breached on ~5% of days. too many = it hides risk,
+    too few = it's overly scared. Kupiec's proportion-of-failures test makes
+    "is the breach rate ok?" a real test (chi-square, 1 dof, 3.841 at 95%).
 
-    Why walk-forward, and why this used to be broken:
-    the previous version took `np.percentile(port_returns, 5)` over the WHOLE
-    series and counted how many of those same returns fell below it. That is
-    not a test - a sample's own 5th percentile has exactly 5% of the sample
-    below it by construction, so breaches were always ~5%, LR was always ~0,
-    and `passed` was always True no matter how broken the model was. Calm
-    normal returns and a series of catastrophic clustered crashes both scored
-    identically.
-
-    Here the VaR for day t is estimated ONLY from the `window` days strictly
-    before t, then tested against day t's actual return. `.shift(1)` is what
-    enforces that: without it the rolling quantile would include the very
-    return it is judging. Now the test can genuinely fail, which is the point.
+    why walk-forward: an old version took the 5th percentile of the WHOLE
+    series and counted how many of those same returns fell below it - always
+    ~5% by construction, so it always passed. here day t's VaR comes ONLY
+    from the `window` days before t (the `.shift(1)` stops the rolling
+    quantile from seeing the day it's judging), so the test can actually fail.
     """
     q = 1.0 - confidence
     n_obs = len(port_returns)
-    # Need at least one out-of-sample day. On a short sample shrink the
-    # estimation window rather than refusing to test - half the sample,
-    # floored at 60 days, is still an honest walk-forward.
+    # short sample: shrink the window (half the data, at least 60 days) so
+    # there's still an out-of-sample day to test
     win = window if n_obs > window else max(60, n_obs // 2)
 
     var_line = port_returns.rolling(win).quantile(q).shift(1)
@@ -478,8 +405,7 @@ def var_backtest(port_returns: pd.Series, confidence: float = 0.95,
     n = int(len(tested))
     expected_rate = q
     if n == 0:
-        # Fewer than ~60 usable days: no out-of-sample day exists. Report that
-        # honestly instead of inventing a verdict.
+        # no out-of-sample day at all, so say so instead of faking a verdict
         return {
             "breaches": 0, "n": 0, "expected_breaches": 0.0,
             "observed_rate": float("nan"), "expected_rate": expected_rate,
@@ -488,27 +414,17 @@ def var_backtest(port_returns: pd.Series, confidence: float = 0.95,
         }
     observed_rate = breaches / n
 
-    # Kupiec likelihood-ratio statistic for proportion of failures.
+    # Kupiec LR. x = 0 or x = n is fine: xlogy gives 0*log(0) = 0, so zero
+    # breaches gives LR = -2n*ln(1-p) - usually a REJECT. (an old version
+    # called that nan and then a pass.)
     p = expected_rate
     x = breaches
-    # x == 0 and x == n are NOT undefined. The unrestricted likelihood is
-    # (1-x/n)^(n-x) * (x/n)^x, which at x=0 equals 1, leaving LR = -2n*ln(1-p)
-    # - normally a decisive REJECTION, not a pass. The previous version sent
-    # both boundaries into the nan branch, and `np.isnan(lr) or ...` then
-    # reported passed=True: a zero-breach model scored a fabricated PASS on
-    # the one panel whose whole purpose is model validation. xlogy supplies
-    # the correct 0*log(0) = 0 limits, exactly as christoffersen_test already
-    # does in this module. Only n == 0 is genuinely undefined, and that is
-    # handled by the `testable` branch above.
-    if n > 0:
-        lr = -2.0 * (
-            (n - x) * np.log(1 - p) + x * np.log(p)
-            - special.xlogy(n - x, 1 - x / n) - special.xlogy(x, x / n)
-        )
-    else:
-        lr = float("nan")
+    lr = -2.0 * (
+        (n - x) * np.log(1 - p) + x * np.log(p)
+        - special.xlogy(n - x, 1 - x / n) - special.xlogy(x, x / n)
+    )
     crit = 3.841  # chi-square(1) at 95%
-    # An incomputable statistic must never read as a pass.
+    # a stat we can't compute never counts as a pass
     passed = None if np.isnan(lr) else bool(lr <= crit)
 
     result = {
@@ -521,14 +437,10 @@ def var_backtest(port_returns: pd.Series, confidence: float = 0.95,
         "passed": passed,
         "testable": True,
         "window": win,
-        # Kept for the Christoffersen independence test, which asks whether
-        # these breaches CLUSTER rather than just how many there are.
-        "breach_flags": breach_flags,
+        "breach_flags": breach_flags,   # christoffersen needs these
     }
-    # Second dimension: Kupiec counts breaches, Christoffersen asks whether
-    # they arrive independently. A model can pass one and fail the other, and
-    # failing independence is the more dangerous failure - it means the model
-    # holds in calm markets and breaks exactly when it is needed.
+    # Kupiec counts breaches, Christoffersen checks if they cluster. failing
+    # that one is worse: the model holds when calm and breaks when it matters
     result["christoffersen"] = christoffersen_test(
         breach_flags, None if np.isnan(lr) else float(lr))
     return result
@@ -536,18 +448,16 @@ def var_backtest(port_returns: pd.Series, confidence: float = 0.95,
 
 def mean_block_length(port_returns: np.ndarray, cap: int = 40) -> int:
     """
-    Expected block length for the stationary bootstrap, measured from the data.
+    how long the bootstrap's blocks should be, measured from the data.
 
-    Volatility clustering is dependence in |r|, not in r, so a block has to be
-    long enough to carry a cluster. This uses the integrated autocorrelation
-    time of |r| - 1 + 2 * sum of its positive autocorrelations - the standard
-    "how many observations before this series forgets itself" measure.
-    Summation stops at the first non-positive lag (Geyer's initial-positive-
-    sequence rule) so noise at long lags cannot inflate it.
+    vol clustering lives in |r|, not r, so a block has to be long enough to
+    hold a cluster. we use the integrated autocorrelation time of |r|:
+    1 + 2 * (sum of its positive autocorrelations), i.e. "how many days until
+    the series forgets itself". we stop at the first non-positive lag (Geyer's
+    initial-positive-sequence rule) so long-lag noise can't pump it up.
 
-    Clamped to [2, cap]: 1 would be the i.i.d. bootstrap this exists to replace,
-    and blocks longer than a couple of months on two years of history would
-    resample the same stretch over and over.
+    clamped to [2, cap]: 1 is just the iid bootstrap we're replacing, and huge
+    blocks on two years of data would replay the same stretch over and over.
     """
     x = np.abs(np.asarray(port_returns, dtype=float))
     x = x[np.isfinite(x)]
@@ -571,11 +481,10 @@ def _stationary_bootstrap(n_obs: int, n_paths: int, horizon: int,
     """
     Politis & Romano (1994) stationary bootstrap indices.
 
-    Start at a random day; with probability p = 1/mean_block jump to another
-    random day, otherwise step to the next day, wrapping at the end of history.
-    Block lengths are geometric with mean `mean_block`, and the resampled series
-    is stationary - unlike a fixed-block bootstrap, whose joins land on the same
-    dates in every path.
+    start on a random day; each step, jump to a new random day with
+    p = 1/mean_block, else move to the next day (wrapping at the end).
+    block lengths come out geometric with mean `mean_block` and the result is
+    stationary - fixed blocks would put their joins on the same dates every path.
     """
     p = 1.0 / mean_block
     idx = np.empty((n_paths, horizon), dtype=np.int64)
@@ -596,38 +505,25 @@ def monte_carlo(
     block: bool = True,
 ) -> dict:
     """
-    Block-bootstrap Monte Carlo simulation of portfolio returns.
+    block-bootstrap monte carlo of the book's returns.
 
-    Quant Deep Dive - why this is not a plain i.i.d. bootstrap:
-    resampling single days independently assumes returns are i.i.d. They are
-    not. Daily returns are nearly uncorrelated in SIGN, but their magnitudes
-    cluster hard - quiet weeks follow quiet weeks and crashes arrive in bursts
-    (Mandelbrot 1963; the whole ARCH literature exists because of it). Shuffling
-    days individually scatters one crash week across a hundred different
-    simulated years, so the simulated one-year tail comes out too thin. That
-    tail is the number this engine reports as CVaR.
+    how the math works: daily returns barely correlate in SIGN, but their SIZE
+    clusters hard - calm weeks follow calm weeks, crashes come in bursts
+    (Mandelbrot 1963, and the whole ARCH literature). shuffling single days
+    spreads one crash week across a hundred fake years, so the one-year tail
+    (the CVaR we report) comes out too thin.
 
-    The stationary bootstrap (Politis & Romano 1994) resamples CONTIGUOUS
-    stretches of history with geometrically distributed lengths, so a path can
-    inherit a whole bad month. The expected block length is measured from the
-    book's own |returns| autocorrelation (`mean_block_length`), never typed in.
-    `block=False` restores i.i.d. sampling for comparison.
+    the stationary bootstrap (Politis & Romano 1994) resamples whole runs of
+    history with random geometric lengths, so a path can inherit a full bad
+    month. the average block length is measured from the book's own |returns|
+    (`mean_block_length`), never typed in. block=False goes back to iid.
 
-    Args:
-        returns: historical daily returns DataFrame.
-        weights: portfolio weight vector.
-        n_simulations: number of simulated futures to run.
-        horizon_days: trading days to simulate (252 = 1 year).
-        confidence: CVaR confidence level.
-        block: use the stationary block bootstrap (default) or i.i.d. sampling.
-
-    Returns:
-        dict with simulation results and risk metrics.
+    returns a dict of the simulated paths and their risk numbers.
     """
     port_returns = portfolio_daily_returns(returns, weights).values
     rng = np.random.default_rng(seed=42)
 
-    # Each row = one simulated year of daily returns
+    # each row = one simulated year of daily returns
     if block and port_returns.size >= 30:
         mean_block = mean_block_length(port_returns)
         sampled = port_returns[_stationary_bootstrap(
@@ -637,7 +533,7 @@ def monte_carlo(
         sampled = rng.choice(port_returns, size=(n_simulations, horizon_days),
                              replace=True)
 
-    # Compound into cumulative value paths (start = $1); last column = final value
+    # compound into value paths starting at $1; last column = final value
     value_paths = np.cumprod(1 + sampled, axis=1)
     return _simulation_summary(
         value_paths, horizon_days, n_simulations, confidence,
@@ -647,16 +543,9 @@ def monte_carlo(
 
 def _simulation_summary(value_paths: np.ndarray, horizon_days: int,
                         n_simulations: int, confidence: float, **engine) -> dict:
-    """
-    The result both Monte Carlo engines report, derived once.
-
-    `monte_carlo` and `jump_diffusion_mc` build their paths differently - one
-    compounds resampled arithmetic returns, the other exponentiates cumulative
-    log-returns - but from `value_paths` onward every number is the same
-    calculation. It was written out twice, which let the two engines drift
-    apart silently; main.py consumes them interchangeably, so they must not.
-    Engine-specific keys are passed through as `**engine`.
-    """
+    """the result dict both monte carlos return, built in one place so the two
+    engines can't drift apart (main.py swaps them freely). engine-specific keys
+    come in through **engine."""
     final_values = value_paths[:, -1]
     total_returns = final_values - 1
     threshold = np.percentile(total_returns, (1 - confidence) * 100)
@@ -682,29 +571,18 @@ def _simulation_summary(value_paths: np.ndarray, horizon_days: int,
 
 
 def _mc_standard_error(tail: np.ndarray) -> float:
-    """
-    Monte Carlo sampling error of the CVaR estimate.
-
-    CVaR is the MEAN of the simulated tail sample, so its standard error is
-    the classic std/sqrt(n) of that sample - shrinking as 1/sqrt(N) with more
-    simulations. Reporting it makes the headline honest: a simulated 19.3%
-    CVaR at 10,000 paths is "19.3% ± se", not an exact truth. (This prices
-    SIMULATION noise only - model error, e.g. whether history resembles the
-    future, is disclosed separately and cannot be reduced by more paths.)
-    """
+    """simulation noise on the CVaR: it's the mean of the tail sample, so its
+    standard error is std/sqrt(n). makes the headline "19.3% ± se", not an
+    exact truth. covers simulation noise only - model error (is the future
+    like history?) can't be fixed with more paths."""
     if tail.size < 2:
         return float("nan")
     return float(tail.std(ddof=1) / np.sqrt(tail.size))
 
 
 def _path_bands(value_paths: np.ndarray, horizon_days: int) -> dict:
-    """
-    Percentile bands of the simulated cumulative-value paths, for a fan chart.
-
-    Returns each band as a RETURN series (value - 1) over the horizon, so the
-    y-axis reads directly in profit/loss terms. p5..p95 form the outcome cone;
-    p50 is the median path.
-    """
+    """fan-chart bands: the p5/p25/p50/p75/p95 paths, as returns (value - 1)
+    so the y-axis reads straight as profit/loss."""
     pct = np.percentile(value_paths, [5, 25, 50, 75, 95], axis=0) - 1.0
     return {
         "days": np.arange(1, horizon_days + 1),
@@ -715,23 +593,13 @@ def _path_bands(value_paths: np.ndarray, horizon_days: int) -> dict:
 def path_density(value_paths: np.ndarray, n_day_steps: int = 40,
                  n_return_bins: int = 60) -> dict:
     """
-    Downsample the full simulated-path matrix into a (day, return-bin) density
-    surface, for a 3D view of how the outcome distribution evolves over the
-    horizon - the fan chart's cone, but as a probability surface instead of
-    percentile lines.
+    shrink the (n_simulations, horizon_days) value-path matrix (same one
+    _path_bands uses) into a (day, return-bin) density surface - the fan
+    chart's cone as a probability surface.
 
-    Args:
-        value_paths: (n_simulations, horizon_days) cumulative-value matrix,
-            the same array _path_bands() is built from (start = $1).
-        n_day_steps: number of horizon days to sample (evenly spaced) -
-            plotting all 252 days makes the surface noisy and slow to rotate.
-        n_return_bins: number of return histogram bins per day.
-
-    Returns:
-        dict with `days` (n_day_steps,), `returns` (n_return_bins, bin
-        centers as decimals), and `density` (n_day_steps, n_return_bins)
-        where each row integrates to 1 (a proper density, not a raw count -
-        comparable across days regardless of simulation count).
+    n_day_steps evenly spaced days (all of them is noisy and slow), n_return_bins
+    histogram bins per day. returns `days`, `returns` (bin centers) and `density`,
+    where each row integrates to 1 so days compare whatever the path count.
     """
     n_sims, horizon_days = value_paths.shape
     day_idx = np.unique(np.linspace(0, horizon_days - 1, n_day_steps, dtype=int))
@@ -742,10 +610,10 @@ def path_density(value_paths: np.ndarray, n_day_steps: int = 40,
     for row, di in enumerate(day_idx):
         returns_at_day = value_paths[:, di] - 1.0
         counts, _ = np.histogram(returns_at_day, bins=edges)
-        density[row] = counts / (n_sims * np.diff(edges))  # normalize to a density
+        density[row] = counts / (n_sims * np.diff(edges))  # counts -> density
 
     return {
-        "days": day_idx + 1,      # 1-indexed trading days, matching path_bands
+        "days": day_idx + 1,      # 1-indexed, same as path_bands
         "returns": centers,
         "density": density,
     }
@@ -753,30 +621,28 @@ def path_density(value_paths: np.ndarray, n_day_steps: int = 40,
 
 def calibrate_jump_diffusion(port_returns, k: float = 3.0) -> dict:
     """
-    Split a daily return series into a Gaussian DIFFUSION part and a discrete
-    JUMP part, then estimate Merton (1976) jump-diffusion parameters from data.
+    split daily returns into a normal DIFFUSION part and a JUMP part, then
+    estimate Merton (1976) jump-diffusion params from the data.
 
-    Method - transparent k-sigma thresholding, not a black box:
-      1. Work in log-returns, so diffusion and jumps add cleanly.
-      2. Flag any day more than k standard deviations from the mean as a JUMP.
-      3. Diffusion mu/sigma come from the CALM (non-jump) days.
-      4. Jump intensity lambda = jump-days / total-days; jump-size mean and std
-         come from the excess move on JUMP days.
+    how it works (plain k-sigma thresholding, nothing hidden):
+      1. use log-returns so diffusion and jumps just add.
+      2. any day more than k std devs from the mean is a JUMP.
+      3. diffusion mu/sigma come from the calm days.
+      4. jump rate lambda = jump days / all days; jump size mean/std come from
+         the extra move on jump days.
 
-    Every parameter is estimated from the real series - nothing is assumed. The
-    split is mean-consistent by construction: mu_d + lambda*mu_j equals the
-    empirical mean exactly. (Full Merton calibration uses MLE/EM; thresholding
-    is the honest, reproducible version a reviewer can re-derive by hand.)
+    every param comes from the real series. mean-consistent by construction:
+    mu_d + lambda*mu_j equals the sample mean exactly. (full Merton uses
+    MLE/EM; thresholding is the version a reviewer can redo by hand.)
 
-    Returns daily-scale parameters plus the jump count for display.
+    returns daily-scale params plus the jump count.
     """
     r = np.asarray(port_returns, dtype=float)
     lr = np.log1p(r)                       # log-returns: diffusion + jumps add
-    # ddof=1: this is a method of moments on each part's own days, not a
-    # Gaussian MLE, so the unbiased variance is the estimator. ddof=0 cut the
-    # variance by (n-1)/n - ~7% on a 15-day crisis window (ME-10).
+    # ddof=1: method of moments on each part's own days, not a gaussian MLE.
+    # ddof=0 shrank the variance ~7% on a 15-day crisis window
     m, s = float(lr.mean()), float(lr.std(ddof=1))
-    if s == 0:                             # degenerate constant series
+    if s == 0:                             # flat series, nothing to split
         return {"mu_d": m, "sigma_d": 0.0, "lambda_daily": 0.0,
                 "mu_j": 0.0, "sigma_j": 0.0, "k": k, "n_jumps": 0, "n_days": len(lr)}
 
@@ -787,7 +653,7 @@ def calibrate_jump_diffusion(port_returns, k: float = 3.0) -> dict:
     sigma_d = float(calm.std(ddof=1)) if calm.size > 1 else s
     lambda_daily = float(is_jump.mean())
     if jumps.size:
-        mu_j = float(jumps.mean() - mu_d)          # jump = move in EXCESS of drift
+        mu_j = float(jumps.mean() - mu_d)          # jump = the move beyond drift
         sigma_j = float(jumps.std(ddof=1)) if jumps.size > 1 else 0.0
     else:
         mu_j = sigma_j = 0.0
@@ -808,20 +674,19 @@ def jump_diffusion_mc(
     k: float = 3.0,
 ) -> dict:
     """
-    Merton jump-diffusion Monte Carlo - same signature and output dict as
-    monte_carlo(), so it drops into the dashboard as an interchangeable engine.
+    Merton jump-diffusion monte carlo - same inputs and output as monte_carlo(),
+    so the dashboard can swap them.
 
-    Why it differs from the bootstrap: resampling can only ever replay tail days
-    it has already seen. A jump-diffusion process GENERATES new extreme paths -
-    two jumps landing in the same week, or a crash deeper than any single day in
-    the sample - so VaR/CVaR reflect what the process can produce, not just what
-    happened to occur in the last two years.
+    why it's different: a bootstrap can only replay tail days it's seen. a
+    jump process MAKES new ones - two jumps in one week, or a crash deeper
+    than any day in the sample - so VaR/CVaR show what the process can do,
+    not just what happened in the last two years.
 
-    Each simulated daily log-return:
-        r_t = mu_d + sigma_d * Z          (diffusion)
-            + N_t*mu_j + sigma_j*sqrt(N_t)*Z'    (jumps, N_t ~ Poisson(lambda))
-    using that a sum of N_t iid Normal(mu_j, sigma_j^2) is Normal(N_t*mu_j,
-    N_t*sigma_j^2) - which lets us vectorize the whole jump term.
+    each simulated daily log-return:
+        r_t = mu_d + sigma_d * Z                    (diffusion)
+            + N_t*mu_j + sigma_j*sqrt(N_t)*Z'       (jumps, N_t ~ Poisson(lambda))
+    since a sum of N_t iid Normal(mu_j, sigma_j^2) is Normal(N_t*mu_j,
+    N_t*sigma_j^2), the whole jump term vectorizes.
     """
     port_returns = portfolio_daily_returns(returns, weights).values
     params = calibrate_jump_diffusion(port_returns, k=k)
@@ -833,7 +698,7 @@ def jump_diffusion_mc(
     jump = (n_jumps * params["mu_j"]
             + params["sigma_j"] * np.sqrt(n_jumps) * rng.standard_normal(shape))
 
-    cum_log = np.cumsum(diffusion + jump, axis=1)  # compound in log-space, per day
+    cum_log = np.cumsum(diffusion + jump, axis=1)  # compound in log space
     value_paths = np.exp(cum_log)
     return _simulation_summary(
         value_paths, horizon_days, n_simulations, confidence,
@@ -848,14 +713,12 @@ if __name__ == "__main__":
     equal_weights = np.ones(n) / n
     port_returns = portfolio_daily_returns(returns, equal_weights)
 
-    # Historical risk metrics
     h_var = var(port_returns)
     h_cvar = cvar(port_returns)
     print("--- Historical Risk (Equal-Weight Portfolio) ---")
     print(f"  Daily VaR  (95%): {h_var:.2%}  - on a bad day, expect to lose at least this")
     print(f"  Daily CVaR (95%): {h_cvar:.2%}  - when it's bad, this is the average loss")
 
-    # Monte Carlo
     print("\n--- Running 10,000 Monte Carlo Simulations (1-Year Horizon) ---")
     mc = monte_carlo(returns, equal_weights)
     print(f"  Median 1-year return : {mc['median_return']:+.1%}")
@@ -866,7 +729,6 @@ if __name__ == "__main__":
     print(f"  Best simulated year  : {mc['best_case']:+.1%}")
     print(f"  Probability of loss  : {mc['prob_loss']:.1%}")
 
-    # Jump-diffusion engine - fat-tailed alternative to the bootstrap
     print("\n--- Merton Jump-Diffusion Monte Carlo (same portfolio) ---")
     jd = jump_diffusion_mc(returns, equal_weights)
     p = jd["jump_params"]
@@ -878,7 +740,7 @@ if __name__ == "__main__":
     print(f"  Worst simulated year : {jd['worst_case']:+.1%}")
     print("\n  Tail comparison (CVaR): "
           f"bootstrap {mc['cvar']:.1%}  vs  jump-diffusion {jd['cvar']:.1%}")
-    # Mean-consistency check: mu_d + lambda*mu_j should match the empirical mean.
+    # mu_d + lambda*mu_j should match the sample mean
     emp = float(np.log1p(port_returns.values).mean())
     recon = p["mu_d"] + p["lambda_daily"] * p["mu_j"]
     print(f"  Mean-consistency: empirical {emp:.2e} vs mu_d+lambda*mu_j {recon:.2e}")

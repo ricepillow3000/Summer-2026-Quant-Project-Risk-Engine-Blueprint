@@ -1,39 +1,34 @@
 """
-State-dynamics calibration for the Risk Topology map.
+fits the (beta, vol) state the Risk Topology map moves around.
 
-The map simulates the portfolio's (beta, volatility) state over a short
-horizon with two mean-reverting processes:
+the map runs two mean-reverting processes over a short horizon:
 
     d(beta)   = theta_b * (mu_b - beta) dt + sigma_b dW1        (OU on level)
     d(ln vol) = theta_v * (ln mu_v - ln vol) dt + eta_v dW2     (OU on log)
 
-with corr(dW1, dW2) = rho (betas drift up when vol spikes) and a leverage
-effect lev = corr(return shock, vol shock) < 0 (losses arrive with vol).
+with corr(dW1, dW2) = rho (betas climb when vol spikes) and a leverage
+effect lev = corr(return shock, vol shock) < 0 (losses show up with vol).
 
-Quant deep dive - every parameter is ESTIMATED from observed history, never
-typed in. An OU process observed at interval dt is exactly an AR(1):
+quant deep dive: nothing here is typed in, it's all fit from history.
+an OU process sampled every dt is exactly an AR(1):
 
     x_{t+1} = c + phi * x_t + eps,   eps ~ N(0, s^2)
     phi = exp(-theta dt)      =>  theta = -ln(phi) / dt
     mu  = c / (1 - phi)
     s^2 = sigma^2 (1 - phi^2) / (2 theta)  =>  sigma = s * sqrt(2 theta / (1 - phi^2))
 
-(the standard Vasicek/OU discretization, e.g. Glasserman, "Monte Carlo
-Methods in Financial Engineering", ch. 3). We build rolling realized beta
-and realized vol series from actual daily returns, fit the AR(1) by OLS,
-and map back to continuous-time parameters.
+(standard Vasicek/OU discretization, Glasserman, "Monte Carlo Methods in
+Financial Engineering", ch. 3). we build rolling beta and rolling vol from
+real daily returns, fit the AR(1) by OLS, then map back to theta/mu/sigma.
 
-Honest limits, disclosed wherever these numbers surface:
-- Rolling windows overlap, which smooths the series and biases phi upward
-  (mean reversion looks slower than it is). This is a stylized state model
-  for a probability TERRAIN, not a forecasting model.
-- That smoothing also drew the terrain too NARROW, which is now measured and
-  corrected: `dispersion_correction` walks the book's own history forward and
-  widens both shock sizes by the factor that makes the rings hold their
-  labelled mass out of sample (see the block above `_clamp`). The factor is
-  reported alongside the parameters and never shrinks the terrain.
-- The "calm" and "stressed" calibrations are the base estimate with
-  disclosed policy multipliers on the shock sizes, not separate estimates.
+honest limits:
+- rolling windows overlap, so the series is smooth and phi comes out too high
+  (reversion looks slower than it is). it's a terrain, not a forecast.
+- that smoothing also made the terrain too narrow, so we measure it and fix
+  it: `dispersion_correction` widens both shocks by k (see below). k is
+  reported and never shrinks anything.
+- "calm" and "stressed" are the base fit times disclosed policy multipliers,
+  not separate fits.
 """
 
 import numpy as np
@@ -44,10 +39,10 @@ from src.covariance import TRADING_DAYS
 
 DT = 1.0 / TRADING_DAYS
 
-# Sanity clamps: keep a degenerate fit (short history, flat series) from
-# producing an absurd terrain. Values landing ON a clamp are flagged.
+# sanity bands so a bad fit (short or flat history) can't draw a crazy terrain.
+# anything that lands on a band gets flagged.
 CLAMPS = {
-    "theta": (0.5, 60.0),        # mean-reversion half-life between ~3 days and ~1.4y
+    "theta": (0.5, 60.0),        # half-life between ~3 days and ~1.4y
     "sig_b": (0.05, 3.0),        # beta diffusion, per sqrt(year)
     "eta_v": (0.2, 4.0),         # vol-of-vol, per sqrt(year)
     "rho": (-0.95, 0.95),
@@ -55,18 +50,18 @@ CLAMPS = {
     "mu_b": (-0.5, 2.0),         # long-run beta the state reverts to
 }
 
-# Policy multipliers for the alternative calibrations (disclosed, not data).
+# policy multipliers for calm/stressed (disclosed, not data)
 STRESS_SHOCK_MULT = 1.4
 CALM_SHOCK_MULT = 0.7
 STRESS_RHO_ADD = 0.10
 
-MIN_OBS = 120                    # fits on fewer state observations are refused
+MIN_OBS = 120                    # fewer state points than this and we refuse to fit
 
 
 def rolling_state_series(port_returns: pd.Series, market_returns: pd.Series,
                          beta_window: int = 63, vol_window: int = 21) -> pd.DataFrame:
     """
-    Observed (beta, vol) state history from actual daily returns.
+    (beta, vol) history from real daily returns.
 
     beta_t = rolling Cov(r_p, r_m) / Var(r_m) over `beta_window` days;
     vol_t  = rolling std of r_p over `vol_window` days, annualized.
@@ -75,32 +70,29 @@ def rolling_state_series(port_returns: pd.Series, market_returns: pd.Series,
                        axis=1).dropna()
     if len(joined) < max(beta_window, vol_window) + MIN_OBS // 2:
         raise ValueError(f"need more overlapping history, got {len(joined)} days")
-    cov_pm = joined["p"].rolling(beta_window).cov(joined["m"])
-    var_m = joined["m"].rolling(beta_window).var()
-    beta = cov_pm / var_m
+    beta = joined["p"].rolling(beta_window).cov(joined["m"]) / joined["m"].rolling(beta_window).var()
     vol = joined["p"].rolling(vol_window).std() * np.sqrt(TRADING_DAYS)
     out = pd.DataFrame({"beta": beta, "vol": vol}).dropna()
-    out = out[np.isfinite(out).all(axis=1)]
-    return out
+    return out[np.isfinite(out).all(axis=1)]
 
 
 def fit_ou(series: pd.Series, dt: float = DT) -> dict:
     """
-    Exact AR(1) -> OU mapping by OLS. Returns theta (mean-reversion speed,
-    per year), mu (long-run level), sigma (diffusion, per sqrt(year)),
-    phi (daily AR coefficient) and the residual series (for cross-corrs).
+    AR(1) by OLS, mapped exactly to OU. gives theta (reversion speed, per
+    year), mu (long-run level), sigma (per sqrt(year)), phi (daily AR slope)
+    and the residuals (for the cross-correlations).
     """
-    x = series.dropna().to_numpy(dtype=float)
+    clean = series.dropna()
+    x = clean.to_numpy(dtype=float)
     if x.size < MIN_OBS:
         raise ValueError(f"need >= {MIN_OBS} state observations, got {x.size}")
     x0, x1 = x[:-1], x[1:]
-    # OLS slope/intercept of x_{t+1} on x_t
     vx = np.var(x0)
     if vx <= 0:
         raise ValueError("state series is constant; nothing to fit")
     phi_raw = float(np.cov(x0, x1, bias=True)[0, 1] / vx)
-    # stationary, mean-reverting. Overlapping rolling windows make the state
-    # series smooth, so the upper bound binds on live data; the caller flags it
+    # keep it stationary + mean-reverting. smooth rolling series hit the top
+    # bound on live data a lot; the caller flags it
     phi = float(np.clip(phi_raw, 0.20, 0.995))
     c = float(np.mean(x1) - phi * np.mean(x0))
     resid = x1 - (c + phi * x0)
@@ -109,55 +101,41 @@ def fit_ou(series: pd.Series, dt: float = DT) -> dict:
     mu = c / (1.0 - phi)
     sigma = s * np.sqrt(2.0 * theta / (1.0 - phi * phi))
     return {"theta": float(theta), "mu": float(mu), "sigma": float(sigma),
-            "s": s, "dt": dt,
-            "phi": phi, "phi_raw": phi_raw,
-            "resid": pd.Series(resid, index=series.dropna().index[1:])}
+            "s": s, "dt": dt, "phi": phi, "phi_raw": phi_raw,
+            "resid": pd.Series(resid, index=clean.index[1:])}
 
 
 # --- dispersion correction -------------------------------------------------
-# Rolling windows overlap, so the observed state series is smoothed: the AR(1)
-# slope comes back too close to 1 and the fitted one-step shock too small. The
-# terrain the map draws is then NARROWER than what actually happens - measured
-# 2026-08-26 on 11 preset universes, where the nominal 68.3% ring covered a
-# median of ~53% of realized 30-day-ahead states.
+# the terrain came out too narrow: on 11 presets the 68.3% ring only held ~53%
+# of where the state really ended up 30 days later. two reasons:
+# - overlapping windows smooth the series (phi too close to 1, shocks too small)
+# - plug-in error: the forecast uses point estimates of theta/mu/sigma and
+#   ignores how unsure they are. even on fake paths drawn from this exact
+#   model the ring held only ~47% (test_dispersion_correction_prices_plug_in_estimation_error)
 #
-# The fix is measured rather than assumed. Walk the book's own history forward:
-# refit on observations strictly before each date, form the closed-form
-# horizon-ahead distribution, and score where the state actually landed by
-# Mahalanobis distance. Under a correctly-sized model d^2 ~ chi2(2). Scaling
-# both shock sizes by k scales every d by exactly 1/k, so the k that restores
-# coverage is a ratio of quantiles - no search, no fitted parameter:
+# so we measure the fix instead of guessing it. walk the book's history
+# forward: fit on data strictly before each date, build the closed-form
+# 30-day-ahead distribution, score where the state landed by Mahalanobis
+# distance. if the model is sized right, d^2 ~ chi2(2). scaling both shocks by
+# k divides every d by k, so the k that fixes coverage is just a quantile ratio:
 #
 #     k = quantile_p(d_observed) / sqrt(chi2.ppf(p, 2))
 #
-# TWO effects share the blame, and k prices both:
-# - the overlapping-window smoothing above; and
-# - plug-in estimation error. The horizon-ahead distribution is built from
-#   POINT estimates of theta, mu and sigma, so it ignores their uncertainty.
-#   Measured on synthetic state paths drawn from exactly this model - no
-#   smoothing anywhere - the nominal 68.3% ring still held only ~47% of
-#   realized states, and k came back ~1.2-1.5 (see
-#   test_dispersion_correction_prices_plug_in_estimation_error).
-#
-# Honest limits, disclosed wherever the corrected numbers surface:
-# - k absorbs mean-prediction error too (a mis-estimated reversion speed shows
-#   up as distance, not as bias), so it is a COVERAGE correction, not a claim
-#   that the shocks were literally k times too small.
-# - The dates overlap heavily, so k is noisy; it is clamped, and a correction
-#   below 1 is never applied - this widens a too-narrow terrain, it does not
-#   shrink a conservative one into a tighter story.
-COVERAGE_P = 0.683               # ring the correction is calibrated to hold
-COVERAGE_HORIZON = 30            # trading days ahead, matches the map's horizon
+# limits: k also soaks up mean-forecast error, so read it as a coverage fix,
+# not "shocks were k times too small". dates overlap so k is noisy - it's
+# clamped, and k < 1 is never applied (we widen, we never narrow).
+COVERAGE_P = 0.683               # ring the fix is tuned to hold
+COVERAGE_HORIZON = 30            # trading days ahead, same as the map
 COVERAGE_STEP = 5               # walk-forward stride
-MIN_COVERAGE_DATES = 10          # below this, no correction is claimed
+MIN_COVERAGE_DATES = 10          # fewer than this, no correction claimed
 K_CLAMP = (1.0, 3.0)
 
 
 def _end_moments(p: dict, mu_b: float, mu_v: float, b0: float, v0: float,
                  days: int) -> tuple:
     """
-    Mean vector and covariance of (beta, ln vol) `days` ahead under the exact
-    discrete OU recursion the simulator uses (Glasserman ch. 3):
+    mean + covariance of (beta, ln vol) `days` ahead, using the same exact
+    discrete OU step the simulator uses (Glasserman ch. 3):
         mean = mu + (x0 - mu) phi^n,  var = s^2 (1 - phi^(2n)) / (1 - phi^2),
         cov  = rho s_b s_v (1 - (phi_b phi_v)^n) / (1 - phi_b phi_v).
     """
@@ -173,7 +151,7 @@ def _end_moments(p: dict, mu_b: float, mu_v: float, b0: float, v0: float,
 
 
 def _fit_state(state: pd.DataFrame) -> dict | None:
-    """OU parameters for both state coordinates plus their shock correlation."""
+    """OU fits for beta and ln vol, plus their shock correlation."""
     try:
         fb = fit_ou(state["beta"])
         fv = fit_ou(np.log(state["vol"]))
@@ -192,9 +170,8 @@ def _fit_state(state: pd.DataFrame) -> dict | None:
 def state_distances(state: pd.DataFrame, horizon: int = COVERAGE_HORIZON,
                     step: int = COVERAGE_STEP) -> np.ndarray:
     """
-    Walk-forward Mahalanobis distances between the predicted state distribution
-    and what the state actually did `horizon` days later. Each fit uses only
-    observations strictly before the date it is judged on.
+    walk-forward Mahalanobis distance between the forecast and where the state
+    really was `horizon` days later. each fit only sees data before its date.
     """
     b, lv = state["beta"], np.log(state["vol"])
     out = []
@@ -214,9 +191,9 @@ def state_distances(state: pd.DataFrame, horizon: int = COVERAGE_HORIZON,
 def dispersion_correction(state: pd.DataFrame, horizon: int = COVERAGE_HORIZON,
                           step: int = COVERAGE_STEP) -> dict:
     """
-    The measured factor the shock sizes are widened by, plus the coverage it
-    was measured from. `k = 1.0` (no correction) whenever there are too few
-    out-of-sample dates to measure one, or the terrain is already wide enough.
+    the k the shocks get widened by, plus the coverage it came from. k = 1.0
+    (no fix) when there are too few dates to measure, or the terrain is
+    already wide enough.
     """
     d = state_distances(state, horizon, step)
     ring = float(np.sqrt(sstats.chi2.ppf(COVERAGE_P, 2)))
@@ -226,12 +203,8 @@ def dispersion_correction(state: pd.DataFrame, horizon: int = COVERAGE_HORIZON,
     raw = float((d <= ring).mean())
     k_raw = float(np.quantile(d, COVERAGE_P) / ring)
     k = float(np.clip(k_raw, *K_CLAMP))
-    # Deliberately NOT reporting a "corrected coverage". k is DEFINED as
-    # quantile(d, COVERAGE_P) / ring, so mean(d / k <= ring) is identically
-    # COVERAGE_P whenever k is inside its clamp - it reads 68.3% on a perfectly
-    # calibrated terrain and on a hopelessly miscalibrated one alike, and so
-    # says nothing. What the correction is worth out-of-sample is measured by
-    # MAP-12 in tests/batch_audit.py, on dates the factor had not yet seen.
+    # no "corrected coverage" on purpose: k is built so it'd always read 68.3%,
+    # good model or bad. MAP-12 in tests/batch_audit.py checks k on unseen dates.
     return {"k": k, "k_uncapped": k_raw, "n_dates": int(len(d)),
             "coverage_raw": raw, "measured": True}
 
@@ -246,16 +219,13 @@ def _clamp(value: float, key: str, flags: list, band: tuple | None = None) -> fl
 
 def mu_b_band(beta: pd.Series) -> tuple:
     """
-    The long-run-beta clamp band, mirrored for a book that is net SHORT.
+    the long-run beta band, flipped for a net SHORT book.
 
-    `CLAMPS["mu_b"]` is (-0.5, 2.0) - a LONG-book prior: it refuses a fit
-    claiming the book reverts to a strongly negative beta. A short book's beta
-    series is the mirror image of a long one (the caller negates the return
-    series before calibrating), so applying the same band to it pulls, say, a
-    -1.24 short toward -0.5: an invented de-risking drift the data never showed,
-    which makes the short terrain look tamer than the book is. Mirroring keeps
-    exactly the same refusal - "no absurd long-run beta" - pointed the way the
-    book actually leans. Books with a positive mean beta are untouched.
+    CLAMPS["mu_b"] = (-0.5, 2.0) is a long-book band. a short book's betas are
+    the mirror image (the caller negates its returns), so the long band would
+    drag a -1.24 short toward -0.5 - a fake de-risking drift that makes the
+    short look tamer than it is. flipping keeps the same rule ("no absurd
+    long-run beta") pointed the way the book leans. long books are untouched.
     """
     lo, hi = CLAMPS["mu_b"]
     return (-hi, -lo) if float(beta.mean()) < 0 else (lo, hi)
@@ -264,12 +234,11 @@ def mu_b_band(beta: pd.Series) -> tuple:
 def calibrate_state_dynamics(port_returns: pd.Series,
                              market_returns: pd.Series) -> dict:
     """
-    Full calibration: rolling state series -> two OU fits -> shock
-    correlations -> {calm, base, stress} parameter sets for the map.
+    full fit: rolling state -> two OU fits -> shock correlations ->
+    {calm, base, stress} parameter sets for the map.
 
-    Every number in the result traces to `port_returns` / `market_returns`;
-    the only non-estimated inputs are the disclosed clamp and multiplier
-    policies above.
+    every number comes from `port_returns` / `market_returns`; the only things
+    not estimated are the clamp bands and multipliers above.
     """
     state = rolling_state_series(port_returns, market_returns)
     flags: list = []
@@ -277,19 +246,16 @@ def calibrate_state_dynamics(port_returns: pd.Series,
     fb = fit_ou(state["beta"])
     fv = fit_ou(np.log(state["vol"]))
 
-    # Every clamp names the parameter it bound - the footnote lists these as
-    # the numbers on the map that are policy, not estimate.
+    # every clamp names what it bound - the footnote lists these as policy
     for key, fit in (("phi_b", fb), ("phi_v", fv)):
         if fit["phi"] != fit["phi_raw"]:
             flags.append(f"{key} clamped {fit['phi_raw']:.6g} -> {fit['phi']:.6g}")
     th_b = _clamp(fb["theta"], "theta_b", flags, band=CLAMPS["theta"])
     th_v = _clamp(fv["theta"], "theta_v", flags, band=CLAMPS["theta"])
-    # If theta landed on a clamp, the (theta, sigma) pair from fit_ou no
-    # longer reproduces the fitted one-step residual variance - the exact
-    # transition the simulator uses would then imply a different daily shock
-    # than the one measured. Recompute sigma from the fitted residual s under
-    # the CLAMPED theta so the innovation variance survives:
-    # s'^2 = sigma^2 (1 - e^{-2 theta dt}) / (2 theta)  ==  s^2.
+
+    # if theta got clamped, the old sigma no longer gives the measured daily
+    # shock. redo sigma from the fitted s under the clamped theta so the
+    # one-step variance stays the same: s^2 = sigma^2 (1 - e^{-2 theta dt}) / (2 theta)
     def _sigma_for(theta_c: float, fit: dict) -> float:
         return float(fit["s"] * np.sqrt(
             2.0 * theta_c / (1.0 - np.exp(-2.0 * theta_c * fit["dt"]))))
@@ -300,16 +266,15 @@ def calibrate_state_dynamics(port_returns: pd.Series,
     mu_v = _clamp(float(np.exp(fv["mu"])), "mu_v", flags)
     mu_b = _clamp(fb["mu"], "mu_b", flags, band=mu_b_band(state["beta"]))
 
-    # shock correlations, measured on the AR(1) residuals
+    # shock correlation, from the AR(1) residuals
     resid = pd.concat([fb["resid"].rename("b"), fv["resid"].rename("v")],
                       axis=1).dropna()
     rho = _clamp(float(resid["b"].corr(resid["v"])), "rho", flags)
-    # leverage effect: portfolio return vs same-day vol innovation
-    port_aligned = port_returns.reindex(resid.index)
-    lev = _clamp(float(port_aligned.corr(resid["v"])), "lev", flags, band=CLAMPS["rho"])
+    # leverage effect: book return vs same-day vol shock
+    lev = _clamp(float(port_returns.reindex(resid.index).corr(resid["v"])), "lev", flags,
+                 band=CLAMPS["rho"])
 
-    # Widen the shocks by the factor measured against realized history, so the
-    # drawn terrain holds the mass its rings are labelled with out of sample.
+    # widen the shocks by the measured k so the rings hold what they say
     disp = dispersion_correction(state)
     if disp.get("k_uncapped", 1.0) > K_CLAMP[1]:
         flags.append(f"k clamped {disp['k_uncapped']:.3g} -> {disp['k']:.3g}")
@@ -337,8 +302,7 @@ def calibrate_state_dynamics(port_returns: pd.Series,
 
 
 if __name__ == "__main__":
-    # Smoke test: generate a synthetic OU path with known parameters and
-    # confirm the fitter recovers them to sane accuracy.
+    # smoke test: fake an OU path with known params, check the fit gets them back
     rng = np.random.default_rng(7)
     theta_true, mu_true, sigma_true = 8.0, 1.0, 0.9
     n = 2000

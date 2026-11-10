@@ -1,16 +1,14 @@
 """
-Analytics: covariance mapping and eigen-decomposition.
+analytics: covariance, correlation and eigen-decomposition.
 
-Quant Deep Dive:
-- The covariance matrix tells you how each asset moves relative to every other.
-  A high number between NVDA and TSLA means they tend to crash together - that
-  is concentration risk. Owning both doesn't protect you.
-- Eigen-decomposition breaks the covariance matrix into "risk factors" -
-  hidden forces driving the portfolio. The first eigenvector almost always
-  turns out to be a "market factor" (everything goes up/down together).
-  The second might be "growth vs value." These are the building blocks of PCA.
-- In a real hedge fund, risk systems run this decomposition every night to
-  understand where the portfolio's risk is actually coming from.
+how the math works:
+- the covariance matrix says how each name moves vs every other. a big number
+  between NVDA and TSLA means they crash together - that's concentration
+  risk, owning both doesn't protect you.
+- eigen-decomposition splits that matrix into hidden "risk factors". the
+  first one is almost always the market (everything moving together), the
+  next might be growth vs value. this is PCA's building block, and real risk
+  desks run it every night to see where the risk actually lives.
 """
 
 import numpy as np
@@ -20,70 +18,37 @@ from src.covariance import TRADING_DAYS
 
 
 def covariance_matrix(returns: pd.DataFrame, annualize: bool = True) -> pd.DataFrame:
-    """
-    Compute the sample covariance matrix from daily returns.
-
-    Args:
-        returns: DataFrame of daily percent returns (assets as columns).
-        annualize: If True, multiply by 252 (trading days/year) to express
-                   risk in annual terms - standard for quant reporting.
-
-    Returns:
-        Covariance matrix as a DataFrame (tickers x tickers).
-    """
+    """sample covariance of daily returns (tickers x tickers), annualized by
+    TRADING_DAYS unless annualize=False."""
     cov = returns.cov()
-    if annualize:
-        cov = cov * TRADING_DAYS
-    return cov
+    return cov * TRADING_DAYS if annualize else cov
 
 
 def correlation_matrix(returns: pd.DataFrame) -> pd.DataFrame:
-    """
-    Pearson correlation matrix - covariance scaled to [-1, 1].
-    Easier to read at a glance: 1.0 = move in lockstep, 0 = independent.
-    """
+    """pearson correlation - covariance squeezed into [-1, 1].
+    1 = moves in lockstep, 0 = unrelated."""
     return returns.corr()
 
 
 def eigen_decomposition(cov: pd.DataFrame) -> dict:
-    """
-    Decompose the covariance matrix into eigenvalues and eigenvectors.
-
-    Returns a dict with:
-      - eigenvalues: variance explained by each risk factor (descending order)
-      - eigenvectors: the risk factors themselves (columns)
-      - variance_explained: what % of total portfolio risk each factor drives
-      - tickers: asset labels for reference
-    """
+    """eigenvalues/vectors of the cov, biggest factor first. returns
+    eigenvalues, eigenvectors (columns), variance_explained (% of total risk
+    per factor) and tickers."""
     values, vectors = np.linalg.eigh(cov.values)
-
-    # eigh returns ascending order - reverse so the biggest factor is first
-    idx = np.argsort(values)[::-1]
+    idx = np.argsort(values)[::-1]   # eigh sorts ascending, we want biggest first
     values = values[idx]
     vectors = vectors[:, idx]
-
-    variance_explained = values / values.sum() * 100
-
     return {
         "eigenvalues": values,
         "eigenvectors": pd.DataFrame(vectors, index=cov.index),
-        "variance_explained": variance_explained,
+        "variance_explained": values / values.sum() * 100,
         "tickers": list(cov.columns),
     }
 
 
 def portfolio_volatility(weights: np.ndarray, cov: pd.DataFrame) -> float:
-    """
-    Annualized portfolio volatility (standard deviation) for a given weight vector.
-    Formula: sqrt(w^T * Sigma * w)
-
-    Args:
-        weights: array of asset weights that sum to 1.
-        cov: annualized covariance matrix.
-
-    Returns:
-        Volatility as a decimal (e.g. 0.18 = 18% annualized vol).
-    """
+    """annual portfolio vol, sqrt(w' Sigma w), from weights summing to 1 and
+    an annualized cov. 0.18 = 18%."""
     return float(np.sqrt(weights @ cov.values @ weights))
 
 

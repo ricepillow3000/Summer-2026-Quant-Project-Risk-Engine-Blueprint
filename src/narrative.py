@@ -1,57 +1,54 @@
 """
-The Book: one dossier per stock, and the dependency chain that produces it.
+The Book: one dossier per stock, plus the chain of steps that builds it.
 
-Quant Deep Dive:
-The rest of this engine answers questions. This module answers them IN ORDER,
-because the order is the point. A dashboard of sixteen charts states sixteen
-facts and leaves the reader to assemble them; a book states one fact, uses it
-to narrow the next question, and repeats. Nothing here is new mathematics -
-every number comes from liquidity.py, grit.py, strategies.py, pairing.py or
-signals.py. What is new is that each stage's output RESTRICTS the next stage's
-domain, so the sequence cannot be reordered or skipped.
+How it works:
+the rest of the engine answers questions; this module answers them IN ORDER,
+because the order is the point. a dashboard of sixteen charts hands you sixteen
+facts to piece together yourself; a book states one fact, uses it to narrow
+the next question, and repeats. no new math here - every number comes from
+liquidity.py, grit.py, strategies.py, pairing.py or signals.py. what's new is
+that each step's output LIMITS what the next step can pick from, so the steps
+can't be reordered or skipped.
 
     book size -> per-name capacity -> eligible set -> flyers -> cushions -> pairs
 
-Why liquidity comes first. `days_to_liquidate` needs weights, and weights come
-from the optimizer, which should already know which names are tradable - a
-cycle. It is broken by inverting the same arithmetic instead of calling it:
+why liquidity goes first: `days_to_liquidate` needs weights, weights come from
+the optimizer, and the optimizer should already know what's tradable - a loop.
+we break it by flipping the same math around instead of calling it:
 
     days_i = weight_i * book / (participation * ADV_i)
     => the weight that exits in exactly one day is  participation * ADV_i / book
 
-so `capacity_weight_per_day` is weight-free, monotone in book size, and needs
-no optimizer output. It is the honest statement of the physics: this is the
-share of your book that this name can absorb per day of exiting. Multiply by
-the exit limit you are willing to live with and you have a box constraint in
-the same units the optimizer already speaks.
+so `capacity_weight_per_day` needs no weights, grows as the book shrinks, and
+needs nothing from the optimizer. it's the plain physics: the slice of your
+book this name can soak up per day of selling. times the exit limit you'll
+accept, that's a box constraint in the optimizer's own units.
 
-What this module refuses to do:
-- No free text. Every field is a number, an Enum, a ticker, or None. Sentences
-  are slot-filled templates keyed by a `SentenceKey`, so a renderer that holds
-  only a dossier cannot invent a claim - it has no prices to invent from.
-- No silent clipping. When liquidity cuts a position, `liquidity_binding` says
+What it won't do:
+- no free text. every field is a number, an Enum, a ticker or None. sentences
+  are fill-in-the-blank templates keyed by a `SentenceKey`, so a renderer that
+  only holds a dossier can't invent a claim - it has no prices to invent from.
+- no silent clipping. when liquidity cuts a position, `liquidity_binding` says
   so and both weights are kept.
-- No unknown dressed as a zero. A number that could not be measured is None,
-  never 0.0 - `grit._score01` already ranks a NaN last, and a dossier must be
-  able to say "not measured" rather than "measured as bad".
-- No blended "short-term grit". See the ruling below.
+- no unknown passed off as zero. a number we couldn't measure is None, never
+  0.0 - `grit._score01` already ranks a NaN last, and a dossier has to be able
+  to say "not measured" instead of "measured as bad".
+- no blended "short-term grit". see below.
 
-Ruling on short-horizon grit (council, 2026-08-26):
-`grit.py` measures recovery from drawdown episodes and needs MIN_HISTORY_DAYS
-of history; a 60-day window contains roughly zero complete drawdown-recovery
-cycles, so a "short-term grit score" would be a statistic computed on a sample
-that does not exist. The two axes are therefore kept apart and never blended:
-grit stays LONG-horizon and acts as an eligibility gate ("this name has a
-recovery record at all"), while the short leg is ranked on `momentum_per_vol`,
-a measured trailing quantity that is never called grit.
+Why there's no short-term grit:
+`grit.py` measures recovery from drawdowns and needs MIN_HISTORY_DAYS of
+history; a 60-day window holds about zero full fall-and-recover cycles, so a
+"short-term grit score" would be a stat on a sample that doesn't exist. so the
+two stay apart, never blended: grit is LONG-horizon and works as a gate ("this
+name has a recovery record at all"), while the short leg ranks on
+`momentum_per_vol`, a measured trailing number we never call grit.
 
-Honest limit on the liquidity gate: ADV is a trailing average taken over calm
-and busy days alike, but the day you are forced to exit is the day volume dries
-up and every holder wants the same door. Per-name exit days are individually
-true and jointly optimistic. `adv_stressed` (the 5th percentile of the same
-window) is carried alongside the mean and is what the gate actually uses, which
-makes the eligibility claim a stressed one rather than an average one. It is
-still not a market-impact model.
+Honest limit on the liquidity gate: ADV averages calm and busy days, but the
+day you're forced out is the day volume dries up and everyone wants the same
+door. each name's exit days are true alone and too rosy together. so
+`adv_stressed` (the 5th percentile of the same window) rides along with the
+mean and is what the gate actually uses - a stressed claim, not an average
+one. it's still not a market-impact model.
 """
 
 from __future__ import annotations
@@ -70,30 +67,27 @@ from src.covariance import TRADING_DAYS
 from src.signals import MOMENTUM_LOOKBACK, MOMENTUM_SKIP, momentum_signal
 from src.strategies import risk_parity_weights
 
-# --- Disclosed judgement calls (not fitted, not optimal - stated so they can
-#     be argued with). Changing any of these changes who is eligible.
+# judgement calls, not fitted - written down so they can be argued with.
+# change any of these and who's eligible changes.
 DEFAULT_PARTICIPATION = 0.20      # share of a name's daily volume we'd take
-DEFAULT_MAX_EXIT_DAYS = 1.0       # a position we cannot leave in a day is too big
+DEFAULT_MAX_EXIT_DAYS = 1.0       # can't get out in a day = too big
 DEFAULT_N_FLYERS = 3
-MIN_MEANINGFUL_WEIGHT = 0.01      # below 1% of the book a position is noise
-ADV_LOOKBACK_DAYS = 63            # ~3 months, matches ingestion.average_dollar_volume
-ADV_STRESS_QUANTILE = 0.05        # the quiet-tape volume the gate is held to
-# MOMENTUM_LOOKBACK / MOMENTUM_SKIP come from src.signals: one definition of
-# the momentum window, which the Signal Lab demonstrates and the Book ranks on.
+MIN_MEANINGFUL_WEIGHT = 0.01      # under 1% of the book is noise
+ADV_LOOKBACK_DAYS = 63            # ~3 months, same as ingestion.average_dollar_volume
+ADV_STRESS_QUANTILE = 0.05        # the quiet-day volume the gate is held to
+# MOMENTUM_LOOKBACK / MOMENTUM_SKIP live in src.signals: one momentum window
 VOL_WINDOW = 60
-# A flyer must actually be flying. Rank alone is relative: in a falling market
-# the "best" of a bad set still has a negative trailing return, and calling it a
-# high-flyer would be the ranking dressing up as a fact.
+# a flyer has to actually be flying. rank is relative: in a falling market the
+# "best" of a bad bunch is still down, and calling it a high-flyer would be lying
 MIN_FLYER_MOMENTUM = 0.0
-# The brief is the GRITTIEST cushion, but anchor_rank scores grit as only one of
-# four components. So a pool is cut to the grittiest half FIRST and anchor_rank
-# picks within that. The same fraction optionally gates flyers - see
-# `flyer_grit_floor`, which is a toggle rather than a default because the two
-# readings of "grittiest high-flyer" are both defensible and the difference is
-# worth showing rather than deciding silently.
+# we want the GRITTIEST cushion, but anchor_rank counts grit as just 1 of 4
+# parts. so each pool gets cut to its grittiest half first, then anchor_rank
+# picks inside it. the same cut can gate flyers too (`flyer_grit_floor`) - a
+# toggle, not a default, since "grittiest high-flyer" reads two fair ways and
+# it's better to show the difference than pick one quietly.
 GRIT_TOP_FRACTION = 0.5
 
-# Interview-fatal vocabulary. tests/test_narrative.py greps SENTENCES for these.
+# words that sink you in an interview. tests/test_narrative.py greps SENTENCES for these.
 FORBIDDEN_WORDS = (
     "capped", "guaranteed", "guarantee", "ensures", "ensure", "fortress",
     "risk-free", "riskless", "protects", "protected", "pairs trading",
@@ -118,10 +112,9 @@ class ExcludedReason(str, Enum):
 
 
 class ExitBucket(str, Enum):
-    """How long the exit takes, in words. `days_to_exit` collapses to "0.00"
-    for a mega-cap at a small book, which reads as broken rather than as
-    instant; the bucket is what the sentence says and the number stays in the
-    dossier for the table."""
+    """How long getting out takes, in words. `days_to_exit` shows "0.00" for a
+    mega-cap in a small book, which looks broken, not instant - so the sentence
+    says the bucket and the number stays in the dossier for the table."""
     SAME_DAY = "the same day"
     DAYS = "within a few days"
     WEEKS = "over weeks"
@@ -144,9 +137,9 @@ class SentenceKey(str, Enum):
     EXCLUDED_RANK = "excluded_rank"
 
 
-# One template per SentenceKey. Slots are dossier field names ONLY - the
-# renderer never sees prices, so it cannot say anything the dossier does not
-# already contain. Every verb here describes something that has been measured.
+# one template per SentenceKey. slots are dossier field names ONLY - the renderer
+# never sees prices, so it can't say anything the dossier doesn't already hold.
+# every verb here describes something we measured.
 SENTENCES: dict[SentenceKey, str] = {
     # John, 2026-11-09: "simplify this for non technical users ... fun to
     # read and they understand 100%". Short sentences, everyday words, the
@@ -247,7 +240,7 @@ SENTENCES: dict[SentenceKey, str] = {
 
 
 def exit_bucket(days: float) -> ExitBucket:
-    """Bucket an exit horizon. The boundaries are disclosed, not fitted."""
+    """Bucket an exit time. the cutoffs are stated, not fitted."""
     if not np.isfinite(days):
         return ExitBucket.NEVER
     if days < 1.0:
@@ -261,19 +254,18 @@ def exit_bucket(days: float) -> ExitBucket:
 class TickerDossier:
     """Everything the renderer is allowed to know about one stock.
 
-    Every field is a number, an Enum, a ticker string, or None. There is no
-    free-text field by construction: that is what stops a sentence from
-    saying something the engine did not measure.
+    every field is a number, an Enum, a ticker or None. no free-text field on
+    purpose: that's what stops a sentence saying something we didn't measure.
     """
 
-    # identity and provenance
+    # who and where from
     ticker: str
     as_of: str                      # ISO date of the last price bar used
-    universe_hash: str              # which universe every rank is relative to
+    universe_hash: str              # which basket every rank is relative to
     n_universe: int
     n_eligible: int
 
-    # the book this dossier is about (a dossier is meaningless without it)
+    # the book this is about (a dossier means nothing without it)
     book_value: float
     participation_rate: float
     max_exit_days: float
@@ -292,7 +284,7 @@ class TickerDossier:
     position_value: float
     days_to_exit: float             # inf when there is no volume feed
 
-    # role inputs - separately measured, NEVER blended into one score
+    # role inputs - measured separately, NEVER blended into one score
     grit_score: float | None        # long-horizon recovery record; None = unmeasured
     recovery_pct: float | None      # None = no drawdown episode deep enough yet
     momentum_60d: float | None
@@ -318,18 +310,17 @@ class TickerDossier:
     momentum_skip: int = MOMENTUM_SKIP
 
     def sentence(self) -> str:
-        """Render this dossier's one sentence. Pure function of the fields.
+        """This dossier's one sentence, built only from its fields.
 
-        Enum values are substituted as their text, and `tail_gap_abs` is
-        offered so a template can state a deeper tail as a positive magnitude
-        without ever printing "-0.8% shallower", which asserts the opposite of
-        what the number says.
+        enums go in as their text, and `tail_gap_abs` lets a template state a
+        deeper tail as a positive size - never "-0.8% shallower", which says
+        the opposite of the number.
         """
         d = {k: (v.value if isinstance(v, Enum) else v)
              for k, v in asdict(self).items()}
         d["tail_gap_abs"] = abs(self.tail_gap) if self.tail_gap is not None else None
-        # A gap between two ES figures is a difference of percentages, so it is
-        # printed in points ("2.4 points shallower"), like the map does.
+        # a gap between two ES numbers is a difference of percents, so it's
+        # printed in points ("2.4 points shallower"), like the map does
         d["tail_gap_pts"] = None if self.tail_gap is None else 100 * self.tail_gap
         d["tail_gap_abs_pts"] = (None if self.tail_gap is None
                                  else 100 * abs(self.tail_gap))
@@ -337,18 +328,18 @@ class TickerDossier:
 
 
 def _universe_hash(tickers) -> str:
-    """Short stable digest of the universe every percentile rank is relative to.
-    Without it, "ranks 1 of 12" is a claim with no stated denominator."""
+    """Short stable hash of the basket every rank is relative to - without it
+    "ranks 1 of 12" has no stated "of what"."""
     return hashlib.sha1("|".join(sorted(tickers)).encode(), usedforsecurity=False).hexdigest()[:8]
 
 
 def capacity_weight_per_day(adv_stressed, book_value: float,
                             participation_rate: float = DEFAULT_PARTICIPATION):
-    """Share of the book this name absorbs per day of exiting.
+    """Share of the book this name can soak up per day of selling.
 
-    The inversion of `liquidity.days_to_liquidate`: that function asks how long
-    a given weight takes to sell, this one asks what weight sells in a day. It
-    takes no weights, so it can gate the optimizer instead of depending on it.
+    `liquidity.days_to_liquidate` flipped: that asks how long a weight takes
+    to sell, this asks what weight sells in a day. no weights needed, so it
+    can gate the optimizer instead of waiting on it.
     """
     if book_value <= 0:
         raise ValueError("book_value must be positive")
@@ -358,8 +349,8 @@ def capacity_weight_per_day(adv_stressed, book_value: float,
 def book_breakpoint(adv_stressed: float, participation_rate: float,
                     max_exit_days: float,
                     min_weight: float = MIN_MEANINGFUL_WEIGHT) -> float | None:
-    """The book size above which this name can no longer hold a meaningful
-    position inside the exit limit. None when it has no volume feed."""
+    """Book size past which this name can't hold a real position inside the
+    exit limit. None if it has no volume feed."""
     if not np.isfinite(adv_stressed) or adv_stressed <= 0:
         return None
     return float(participation_rate * adv_stressed * max_exit_days / min_weight)
@@ -378,45 +369,42 @@ def build_book(prices: pd.DataFrame, dollar_volume: pd.DataFrame,
     """
     The chain, in the only order it can run.
 
-    Pure: no network, no Streamlit, no caching. Callers fetch `prices` and
-    `dollar_volume` and hand them in, which is what makes the whole thing
-    testable offline against synthetic data.
+    pure: no network, no streamlit, no caching. callers fetch `prices` and
+    `dollar_volume` and pass them in, so the whole thing tests offline on
+    synthetic data.
 
     Args:
         prices: dates x tickers price history.
         dollar_volume: dates x tickers daily DOLLAR volume (ingestion
-            .fetch_dollar_volume). Names with no feed report 0.0.
-        book_value: dollars invested. This is the parameter the whole story
-            turns on - raise it and names fall out.
-        flyer_grit_floor: when True a flyer must ALSO sit in the grittiest
-            GRIT_TOP_FRACTION of the eligible names, not merely have a
-            measurable recovery record. Off by default: "grittiest high-flyer"
-            reads two ways and the engine shows the difference rather than
-            picking one silently.
-        fallback_anchors: columns of `prices` that are defensive holdings from
-            OUTSIDE the user's chosen universe. They are not part of it: they
-            are never counted, ranked or scored beside the user's names, never
-            rank as flyers, and get a dossier and a weight only when chosen as
-            a cushion - which happens only when nothing inside the universe
-            produced a thinner tail. Disclosed on screen when used.
+            .fetch_dollar_volume). names with no feed report 0.0.
+        book_value: dollars invested. the knob the whole story turns on -
+            raise it and names drop out.
+        flyer_grit_floor: if True a flyer must ALSO be in the grittiest
+            GRIT_TOP_FRACTION of the eligible names, not just have a recovery
+            record. off by default: "grittiest high-flyer" reads two ways and
+            we'd rather show the difference than pick one quietly.
+        fallback_anchors: columns of `prices` that are steady holdings from
+            OUTSIDE the user's basket. they're never counted, ranked or scored
+            next to the user's names, never flyers, and only get a dossier and
+            a weight if picked as a cushion - which only happens when nothing
+            inside the basket had a thinner tail. shown on screen when used.
         grit: a grit_scores() result on FULL history for the user's names
-            (every column not in `fallback_anchors`) - the same peer group the
-            Grit Zone tab ranks. Omitted, grit is scored on `prices` - right
-            only when `prices` is itself long-horizon: on a 2-year window no
-            named crisis falls, so the resilience third of every score was 0
-            (council 2026-10-17).
-        fallback_grit: a grit_scores() result covering the fallback columns,
-            used only to screen the fallbacks against each other. Omitted, it
-            is scored on `prices` over every column.
+            (every column not in `fallback_anchors`) - same peer group the
+            Grit Zone tab ranks. if left out, grit is scored on `prices`, which
+            is only right when `prices` is long: a 2-year window holds no named
+            crisis, so a third of every score (resilience) came out 0.
+        fallback_grit: a grit_scores() result for the fallback columns, only
+            used to screen them against each other. if left out, it's scored
+            on `prices` over every column.
 
     Returns one TickerDossier per user name plus one per fallback actually
-    chosen as an anchor: flyers first, then cushions, then everything excluded.
+    picked as an anchor: flyers first, then cushions, then everyone excluded.
     """
     if book_value <= 0:
         raise ValueError("book_value must be positive")
-    # The user's names and the outside shelf are kept apart from here on:
-    # counted together, a 12-name basket read "17 of 17 names" and its grit
-    # ranked against five ETFs nobody chose (ME-08, 2026-10-22).
+    # user's names and the outside shelf stay apart from here on: lumped
+    # together, a 12-name basket read "17 of 17 names" and its grit got ranked
+    # against five ETFs nobody picked
     fallback = set(fallback_anchors or ()) & set(prices.columns)
     universe = [t for t in prices.columns if t not in fallback]
     shelf = [t for t in prices.columns if t in fallback]
@@ -427,9 +415,8 @@ def build_book(prices: pd.DataFrame, dollar_volume: pd.DataFrame,
     as_of = str(pd.Timestamp(prices.index[-1]).date())
     uhash, n_universe = _universe_hash(universe), len(universe)
 
-    # 1. Grit on the FULL universe, BEFORE any liquidity gate, so that no
-    #    score is a function of book size. A name's recovery record does not
-    #    change because you brought more money.
+    # 1. grit on the WHOLE basket, BEFORE any liquidity gate, so no score
+    #    depends on book size. bringing more money doesn't change a recovery record
     gr = grit if grit is not None else grit_scores(universe, prices=prices[universe])
     gscores = gr["scores"]
     short_history = set(gr["excluded"])
@@ -441,8 +428,8 @@ def build_book(prices: pd.DataFrame, dollar_volume: pd.DataFrame,
     else:
         shelf_grit = gscores
 
-    # 2. Liquidity, weight-free. adv_stressed drives the gate; adv is carried
-    #    beside it so the optimism of an average tape is visible, not hidden.
+    # 2. liquidity, no weights needed. adv_stressed runs the gate; plain adv
+    #    rides along so you can see how rosy the average day is
     window = dollar_volume.tail(ADV_LOOKBACK_DAYS)
     every = universe + shelf
     adv = window.mean().reindex(every).fillna(0.0)
@@ -452,8 +439,8 @@ def build_book(prices: pd.DataFrame, dollar_volume: pd.DataFrame,
         index=every)
     capacity = cap_per_day * max_exit_days
 
-    # 3. Eligibility. Order matters: a name with no feed is a different story
-    #    from one that is merely too big for this book.
+    # 3. who's eligible. order matters: no feed is a different story from
+    #    just too big for this book
     reason = pd.Series(ExcludedReason.NONE, index=every, dtype=object)
     reason[adv_stressed <= 0] = ExcludedReason.NO_VOLUME
     for t in short_history:
@@ -463,22 +450,21 @@ def build_book(prices: pd.DataFrame, dollar_volume: pd.DataFrame,
     reason[too_small] = ExcludedReason.CAPACITY_AT_BOOK
     eligible = reason == ExcludedReason.NONE
 
-    # 4. The short leg. Measured trailing return per unit of measured
-    #    volatility - deliberately NOT called grit (see module docstring).
+    # 4. the short leg: trailing return per unit of vol - NOT called grit on
+    #    purpose (see the module docstring)
     mom = momentum_signal(prices, MOMENTUM_LOOKBACK, MOMENTUM_SKIP).iloc[-1]
     vol = returns.tail(VOL_WINDOW).std() * np.sqrt(TRADING_DAYS)
     with np.errstate(divide="ignore", invalid="ignore"):
         mpv = (mom / vol.replace(0.0, np.nan)).reindex(every)
 
-    # Ranked among the user's names only: a fallback never takes a flyer rank.
+    # ranked among the user's names only: a fallback never gets a flyer rank
     elig = [t for t in universe if bool(eligible.get(t, False))]
     ranked = mpv[elig].dropna().sort_values(ascending=False)
     mom_rank = {t: i + 1 for i, t in enumerate(ranked.index)}
 
-    # Rank is relative; "high-flyer" is not. A name only leads the book if its
-    # trailing return per unit of volatility is actually positive, so a falling
-    # market produces fewer flyers rather than a best-of-a-bad-set. Defensive
-    # fallback holdings never lead the book at all.
+    # rank is relative, "high-flyer" isn't: a name only leads if its return per
+    # unit of vol is actually positive, so a falling market gives fewer flyers,
+    # not a best-of-a-bad-bunch. fallbacks never lead at all.
     rising = ranked[ranked > MIN_FLYER_MOMENTUM]
     flyer_pool = list(rising.index)
     grit_floored = set()
@@ -491,12 +477,10 @@ def build_book(prices: pd.DataFrame, dollar_volume: pd.DataFrame,
             flyer_pool = [t for t in flyer_pool if t not in grit_floored]
     flyers = flyer_pool[:n_flyers]
 
-    # 5. Cushions. anchor_rank is reused unchanged and still ranks, never
-    #    promises - but it scores grit as one component of four and the brief
-    #    is the GRITTIEST cushion, so each pool is cut to its grittiest half
-    #    before anchor_rank picks inside it. The chosen universe is tried
-    #    FIRST; a defensive holding from outside it is used only when nothing
-    #    inside produced a thinner tail, and is disclosed when it is.
+    # 5. cushions. anchor_rank counts grit as just 1 of 4 parts and we want the
+    #    GRITTIEST cushion, so each pool is cut to its grittiest half first. the
+    #    user's basket goes FIRST; an outside holding is only used when nothing
+    #    inside had a thinner tail, and we say so when it is.
     partner, gap, anchor, external = {}, {}, {}, set()
 
     def _grittiest_half(names, scores):
@@ -507,8 +491,8 @@ def build_book(prices: pd.DataFrame, dollar_volume: pd.DataFrame,
         return list(g.index[:max(1, int(round(len(g) * GRIT_TOP_FRACTION)))])
 
     def _best_anchor(flyer, names, scores):
-        """(ticker, gap, anchor_score) for the best anchor in `names`, else None.
-        gap is ES(flyer) - ES(anchor): positive means the anchor is thinner."""
+        """(ticker, gap, anchor_score) for the best anchor in `names`, or None.
+        gap = ES(flyer) - ES(anchor): positive means the anchor's tail is thinner."""
         cands = [n for n in names if n != flyer and n not in partner]
         if not cands:
             return None
@@ -535,12 +519,12 @@ def build_book(prices: pd.DataFrame, dollar_volume: pd.DataFrame,
     outside = [t for t in shelf if bool(eligible.get(t, False))]
     for f in flyers:
         pick = _best_anchor(f, _grittiest_half(inside, gscores), gscores)
-        # Reach outside the universe ONLY when the universe itself failed to
-        # thin the tail, and only if the outsider actually does better.
+        # only look outside when the basket couldn't thin the tail, and only
+        # take the outsider if it actually does better
         if outside and (pick is None or pick[1] <= 0):
             alt = _best_anchor(f, _grittiest_half(outside, shelf_grit), shelf_grit)
-            # The outside sentences say "shallower", so an outsider must be
-            # thinner, not merely less deep than the inside pick.
+            # the outside sentences say "shallower", so an outsider has to be
+            # actually thinner, not just less deep than the inside pick
             if (alt is not None and alt[1] > 0
                     and (pick is None or alt[1] > pick[1])):
                 external.add(alt[0])
@@ -555,14 +539,11 @@ def build_book(prices: pd.DataFrame, dollar_volume: pd.DataFrame,
     cushions = {v for k, v in partner.items() if k in flyers}
     n_eligible = int(eligible[universe].sum())
 
-    # 6. What risk alone would have wanted, then what liquidity allows - over
-    #    the user's names plus only the outside anchors actually chosen, so an
-    #    unused fallback holds nothing and the shelf toggle changes nothing
-    #    unless an anchor is used (ME-08). Covariance is fitted on the
-    #    long-history names only: complete-case dropna() across the whole
-    #    universe would let ONE recent listing throw away years of overlap for
-    #    every other name. Short-history names are excluded from the book
-    #    anyway, so they get target 0.
+    # 6. what risk alone wants, then what liquidity allows - over the user's
+    #    names plus only the outside anchors actually picked (an unused fallback
+    #    holds nothing). covariance uses long-history names only: a dropna()
+    #    across everyone would let ONE new listing throw away years of data for
+    #    every other name. short-history names are out anyway, so target 0.
     in_book = universe + [t for t in shelf if t in external]
     long_names = [t for t in in_book if t not in short_history]
     if len(long_names) >= 2:
@@ -581,10 +562,9 @@ def build_book(prices: pd.DataFrame, dollar_volume: pd.DataFrame,
     out = []
     for t in in_book:
         is_flyer, is_cushion = t in flyers, t in cushions
-        # gap is ES(flyer) - ES(cushion) for BOTH legs, so > 0 always means the
-        # anchor's own tail is the thinner one. The wording follows the sign
-        # rather than assuming it: "-0.8% shallower" says the opposite of what
-        # the number says.
+        # gap = ES(flyer) - ES(cushion) on BOTH legs, so > 0 always means the
+        # anchor's tail is thinner. the wording follows the sign instead of
+        # assuming it: "-0.8% shallower" says the opposite of the number
         g_t = gap.get(t)
         thinner = g_t is not None and g_t > 0
         if is_flyer:
@@ -623,8 +603,8 @@ def build_book(prices: pd.DataFrame, dollar_volume: pd.DataFrame,
                 ExcludedReason.RANK_BELOW_CUT: SentenceKey.EXCLUDED_RANK,
             }[why]
 
-        # An outside anchor's grit is from the shelf screen it won; no
-        # sentence prints it beside the user's names.
+        # an outside anchor's grit comes from the shelf screen it won; no
+        # sentence prints it next to the user's names
         gt = shelf_grit if t in fallback else gscores
         in_g = t in gt.index
         gs = (float(gt.loc[t, "grit_score"])
@@ -661,13 +641,13 @@ def build_book(prices: pd.DataFrame, dollar_volume: pd.DataFrame,
 
 
 def role_label(d: TickerDossier) -> str:
-    """The card's chip, read off the dossier's role AND its weight.
+    """The card's chip, from the dossier's role AND its weight.
 
     Role.EXCLUDED means "no lead or anchor role", not "not in the book": an
-    eligible name below the momentum cut still holds its risk-parity size
-    (capped by liquidity). Labelling those "Left out" read as holding nothing
-    (ME-12). Only a name with no weight at all is left out. Sentence case, like
-    every label on the page (2026-11-04: the chips were shouted in capitals).
+    eligible name under the momentum cut still holds its risk-parity size
+    (capped by liquidity), and calling it "Left out" read like it held nothing.
+    only a name with zero weight is left out. sentence case, like every label
+    on the page.
     """
     if d.role is Role.FLYER:
         return "Leads"
@@ -677,8 +657,8 @@ def role_label(d: TickerDossier) -> str:
 
 
 def role_note(d: TickerDossier) -> str:
-    """What a "No role" card holds, so "still held" can be checked on the card.
-    A sliver under a tenth of a percent reads "<0.1%", never "0.0%"."""
+    """What a "No role" card holds, so "still held" can be checked right there.
+    a sliver under 0.1% reads "<0.1%", never "0.0%"."""
     if role_label(d) != "No role":
         return ""
     w = d.final_weight
@@ -686,19 +666,19 @@ def role_note(d: TickerDossier) -> str:
 
 
 def headline(book: list[TickerDossier]) -> str:
-    """The one number the book leads with, per Meliona constraint 3."""
+    """The one number the book leads with (constraint 3: lead with one number)."""
     if not book:
         return "No names in this universe."
     d = book[0]
-    # An outside anchor is not one of the universe's names (ME-08).
+    # an outside anchor isn't one of the user's names
     n_ok = sum(1 for x in book if x.eligible and not x.is_fallback_anchor)
     days = f"{d.max_exit_days:.0f} day" + ("" if f"{d.max_exit_days:.0f}" == "1" else "s")
     line = (f"${d.book_value:,.0f} book: {n_ok} of your {d.n_universe} names "
             f"can hold at least 1% of the book and sell it within {days}, "
             f"trading at most {d.participation_rate:.0%} of a quiet day's volume "
             f"(only 5 in 100 of the last {ADV_LOOKBACK_DAYS} trading days trade less).")
-    # The count is of the visitor's names; an outside anchor also holds part
-    # of the same book, so it is named with its weight beside the count.
+    # the count is the visitor's names only; an outside anchor still holds
+    # part of the book, so it gets named with its weight
     out = [x for x in book if x.is_fallback_anchor]
     if out:
         names = " and ".join(x.ticker for x in out)

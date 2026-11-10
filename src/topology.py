@@ -1,22 +1,20 @@
 """
-Risk Topology map payload - the ONE place the map's numbers are assembled.
+the Risk Topology map's payload - the ONE place its numbers get built.
 
-`main.py` renders `prototypes/war_room.html` with this dict spliced in, and
-`tests/batch_audit.py` re-derives every field of it from raw prices to prove
-the map is measurement, not decoration. Keeping the builder here (instead of
-inline in the Streamlit script) is what makes that audit possible: the audited
-payload and the shipped payload are byte-identical because they are the same
-function call.
+`main.py` splices this dict into `prototypes/war_room.html`, and
+`tests/batch_audit.py` re-derives every field from raw prices. living here
+(not inline in main.py) means the audited payload and the shipped one are the
+same function call, so they can't drift.
 
-Provenance of each field:
+where each field comes from:
   base/assets      - rolling beta (63d Cov/Var) and realized vol (21d std,
-                     annualized) computed from yfinance daily returns.
+                     annualized) from yfinance daily returns.
   cal/muV/muB      - `src.state_calibration.calibrate_state_dynamics`
-                     (AR(1) -> OU inversion, Glasserman ch. 3).
+                     (AR(1) -> OU, Glasserman ch. 3).
   pairs            - `src.pairing.anchor_rank` / `pair_weights` /
-                     `backtest_pair`: ES(97.5) and cushion replayed on actual
+                     `backtest_pair`: ES(97.5) and cushion replayed on real
                      overlapping history, monthly rebalance, no lookahead.
-  hazard           - DISCLOSED POLICY, not an estimate (see HAZARD_* below).
+  hazard           - DISCLOSED POLICY, not an estimate (HAZARD_* below).
 """
 
 import json
@@ -32,9 +30,8 @@ from src.state_calibration import calibrate_state_dynamics
 from src.covariance import TRADING_DAYS
 
 
-# Hazard perimeter policy - disclosed in the map footnote, deliberately NOT
-# calibrated: it is a risk-limit convention, and the audit checks the drawn
-# perimeter against exactly these constants.
+# hazard perimeter = a risk-limit rule, not a fit. the footnote says so and the
+# audit checks the drawn line against exactly these.
 HAZARD_VOL_MULT = 3.0
 HAZARD_VOL_FLOOR = 0.35
 HAZARD_VOL_CAP = 0.90
@@ -47,13 +44,10 @@ VOL_WINDOW = 21
 
 def anchor_frame(returns: pd.DataFrame) -> pd.DataFrame:
     """
-    Universe returns joined, on common days, with the defensive anchors it does
-    not already hold - a held anchor stays once, as a holding. Joining the whole
-    pool raised on the shared column, and every caller's fallback then dropped
-    all anchors: 4 of 20 presets drew no anchor pool (every-pair audit,
-    2026-10-17). The map reads the pool here, never through a second
-    hand-written join. Offline,
-    or when every anchor is held: the universe alone.
+    the universe's returns plus the defensive anchors it doesn't already hold,
+    on common days. a held anchor stays once, as a holding (joining the full
+    pool crashed on the shared column and dropped every anchor). offline, or
+    when every anchor is held: just the universe.
     """
     pool = [t for t in DEFENSIVE_ANCHOR_TICKERS if t not in returns.columns]
     try:
@@ -67,9 +61,8 @@ def build_map_payload(returns: pd.DataFrame, weights: pd.Series,
                       loaded: list[str], bearish: bool = False,
                       days: int = 30) -> dict:
     """
-    Assemble the Risk Topology payload from live returns. Raises if the
-    history is too short to calibrate - the map is never shown with
-    fabricated numbers.
+    build the map payload from live returns. raises if there's too little
+    history to fit - the map never shows made-up numbers.
     """
     try:
         market = fetch_prices(["SPY"], period="2y").pct_change().dropna()["SPY"]
@@ -83,40 +76,27 @@ def build_map_payload(returns: pd.DataFrame, weights: pd.Series,
         port = -port
     cal = calibrate_state_dynamics(port, market)
 
-    # every unit on the map: universe + defensive anchor pool
+    # every dot on the map: universe + anchor pool
     frame = anchor_frame(returns)
     common = frame.index.intersection(market.index)
-    # KNOWN, DISCLOSED MISMATCH (audit finding, 2026-08-25, still open):
-    # these are FULL-SAMPLE statistics, while the portfolio mark comes from
-    # calibrate_state_dynamics, whose state is a 63-day rolling beta and a
-    # 21-day realized vol. Two estimators share one plane, so a dot can sit
-    # left of the book partly because it was averaged over two years while the
-    # book was measured over the last month. Matching the windows was tried on
-    # 2026-09-02 and reverted before deploy: it moved every asset coordinate in
-    # all 19 preset universes and tests/batch_audit.py MAP-02 re-derives this
-    # definition independently, so the change could only be validated by
-    # rewriting its own verifier. Fix the pair together or not at all.
+    # known, disclosed mismatch: dots are full-sample (2y) stats but the book's
+    # mark is 63d beta / 21d vol. batch_audit MAP-02 re-derives this exact
+    # definition, so change both together or not at all.
     mvar = float(market.loc[common].var())
     assets = []
     for t in frame.columns:
         b = float(frame[t].loc[common].cov(market.loc[common]) / mvar)
         v = float(frame[t].std() * np.sqrt(TRADING_DAYS))
         if bearish and t in loaded:
-            # The book above is negated when short, so the holdings must be
-            # too: a short of a name carries the opposite beta. Volatility is
-            # sign-invariant and stays as measured. The anchor pool is NOT
-            # held - it is the candidate hedge, bought LONG against the short
-            # (pairing.anchor_rank, direction="short") - so it stays at its own
-            # measured beta. An anchor picked from the universe itself is
-            # still drawn here, at its shorted beta, while the pair numbers
-            # hold it long: the link joins the dots, not the hedge's address.
+            # short book = flipped holdings, so their betas flip too (vol
+            # doesn't care about sign). anchor-pool names aren't held - they're
+            # the hedge, bought long - so they keep their own beta.
             b = -b
         if np.isfinite(b) and np.isfinite(v):
             assets.append({"t": t, "b": round(b, 3), "v": round(v, 4),
                            "f": "Universe" if t in loaded else "Anchor pool"})
 
-    # Bon Voyage tournament: the flyer against the top anchor candidates,
-    # each linkage backtested on actual overlapping history
+    # the flyer vs its top anchor picks, each pair backtested on real history
     pairs = []
     try:
         vols = returns.std() * np.sqrt(TRADING_DAYS)
@@ -126,7 +106,7 @@ def build_map_payload(returns: pd.DataFrame, weights: pd.Series,
             bt_frame[flyer] = -bt_frame[flyer]
         rank = anchor_rank(bt_frame, flyer, direction="short" if bearish else "long")
         corr = bt_frame.corr()
-        for an in list(rank.index[:4]):
+        for an in rank.index[:4]:
             pw = pair_weights(bt_frame[flyer], bt_frame[an])
             bt = backtest_pair(bt_frame[flyer], bt_frame[an], pw["w_a"])
             pairs.append({
@@ -148,30 +128,18 @@ def build_map_payload(returns: pd.DataFrame, weights: pd.Series,
     vol0 = round(float(cal["vol_now"]), 4)
     hvol = round(float(min(HAZARD_VOL_CAP,
                            max(HAZARD_VOL_FLOOR, HAZARD_VOL_MULT * vol0))), 2)
-    # The beta perimeter is the disclosed policy "+0.8, capped at 1.9" applied
-    # in the direction the book actually carries market risk. A SHORT book's
-    # betas are negated, so danger is MORE NEGATIVE beta, and the long formula
-    # put the line on the wrong side of the book entirely: a -1.24 short got a
-    # perimeter at -0.44 (between the book and zero, i.e. marking de-risking as
-    # the hazard) and a -2.86 short got -2.06, which slips the 1.9 magnitude cap
-    # completely because min() picks the more negative number. Mirroring applies
-    # the same policy to |beta| and hands the sign back. `betaSign` travels with
-    # the payload so the map tests and draws the perimeter on the right side.
-    if bearish:
-        hbeta = round(float(-min(HAZARD_BETA_CAP, -beta0 + HAZARD_BETA_ADD)), 2)
-    else:
-        hbeta = round(float(min(HAZARD_BETA_CAP, beta0 + HAZARD_BETA_ADD)), 2)
-    bmax = max([a["b"] for a in assets] + [hbeta, beta0])
-    # hbeta belongs in BOTH extremes, not just the max: for a short book it is
-    # the most negative thing on the plane, and MAP-04 requires the drawn domain
-    # to contain the perimeter. (It cannot move a long book's b0 - hbeta only
-    # falls below every asset when all of them exceed 1.9, and the -1.0 floor
-    # already wins there.)
-    bmin = min([a["b"] for a in assets] + [beta0, hbeta])
+    # beta line = "+0.8, capped at 1.9" in the direction the book carries risk.
+    # for a short that's more NEGATIVE beta - the long formula put the line on
+    # the wrong side, so we apply it to |beta| and flip the sign back.
+    # the map tests `betaSign * b > betaSign * betaMax` the same way.
+    sign = -1 if bearish else 1
+    hbeta = round(float(sign * min(HAZARD_BETA_CAP, sign * beta0 + HAZARD_BETA_ADD)), 2)
+    bs = [a["b"] for a in assets]
+    # hbeta goes in the min too: for a short it's the lowest thing on the
+    # plane, and MAP-04 needs the domain to contain the perimeter
+    bmax, bmin = max(bs + [hbeta, beta0]), min(bs + [beta0, hbeta])
     vmax = max([a["v"] for a in assets] + [hvol, vol0])
-    # Minimum extents mirror too: a short book's content all sits left of zero,
-    # so the long window [-1, +2] would spend two thirds of the plot on empty
-    # positive beta.
+    # a short sits left of zero, so mirror the minimum window too
     b_lo, b_hi = (-2.0, 1.0) if bearish else (-1.0, 2.0)
     domain = {
         "b0": float(min(b_lo, np.floor((bmin - 0.25) * 2) / 2)),
@@ -183,10 +151,7 @@ def build_map_payload(returns: pd.DataFrame, weights: pd.Series,
     return {
         "base": {"beta": beta0, "vol": vol0},
         "hazard": {"volMax": hvol, "betaMax": hbeta},
-        # +1 long book, -1 short. The map compares beta against the perimeter
-        # as `betaSign * b > betaSign * betaMax`, so the breach test, the hatch
-        # and the boundary all sit on the side the risk is actually on.
-        "betaSign": -1 if bearish else 1,
+        "betaSign": sign,
         "assets": assets,
         "pairs": pairs,
         "muFlyer": 0.0, "muAnchor": 0.0, "muBook": 0.0,
@@ -250,24 +215,17 @@ WAR_ROOM_FILE = Path(__file__).resolve().parent.parent / "prototypes" / "war_roo
 
 def war_room_html(payload: dict) -> str:
     """
-    The Risk Topology map (prototypes/war_room.html) with the LIVE engine
-    payload spliced between its __PAYLOAD__ markers. The page renders only
-    what this payload carries: every number traces back to the yfinance
-    returns and the calibration/backtest code in src/. The file's built-in
-    demo block is replaced wholesale here, so no demo number can leak into
-    the product.
+    the map page with the live payload spliced between its __PAYLOAD__
+    markers. the file's demo block gets replaced whole, so no demo number can
+    leak onto the real page.
     """
     html = WAR_ROOM_FILE.read_text(encoding="utf-8")
     begin, end = "/* __PAYLOAD_BEGIN__ */", "/* __PAYLOAD_END__ */"
     i = html.index(begin) + len(begin)
     j = html.index(end)
-    # The payload lands INSIDE a <script> block, and json.dumps does not escape
-    # "<": a string containing "</script>" would close the block early and
-    # everything after it would parse as markup. Ticker names cannot carry "<"
-    # (ingestion.VALID_TICKER), but this payload also carries engine prose and
-    # third-party strings, so escape at the splice rather than trusting the
-    # funnel. \u003c / \u003e / \u0026 are the same JSON string to the parser;
-    # \u2028 / \u2029 are JS line terminators that would break the literal.
+    # this lands inside a <script>, and json.dumps doesn't escape "<", so a
+    # "</script>" in any string would end the block early. escape here instead
+    # of trusting the ticker funnel. \u2028/\u2029 would break the JS literal.
     blob = (json.dumps(payload, allow_nan=False)
             .replace("<", "\\u003c").replace(">", "\\u003e")
             .replace("&", "\\u0026")
