@@ -172,6 +172,14 @@ const type = await p.evaluate(() => {
     .map(e => ({ t: e.textContent.trim().slice(0, 30), wrap: getComputedStyle(e).textWrapStyle || getComputedStyle(e).textWrap || '' }));
   out.heads = heads;
   // a short value is never broken: a slider's figure stays on one line
+  // square corners: a painted box with a rounded corner (radio buttons keep theirs)
+  out.round = [...document.querySelectorAll('body *')].filter(e => vis(e) && !e.closest('#boot-skel, [data-testid="stRadioOption"], .hero-crest')).filter(e => {
+    const cs = getComputedStyle(e);
+    const painted = cs.backgroundColor !== 'rgba(0, 0, 0, 0)' || parseFloat(cs.borderTopWidth) > 0;
+    return painted && parseFloat(cs.borderTopLeftRadius) > 1;
+  }).map(e => (e.closest('[data-testid]')?.getAttribute('data-testid') || e.className.toString().slice(0, 24)) + ' ' + getComputedStyle(e).borderTopLeftRadius);
+  // every in-page link lands on something
+  out.dead = [...document.querySelectorAll('a[href^="#"]')].map(a => a.getAttribute('href')).filter(h => h.length > 1 && !document.getElementById(h.slice(1)));
   out.thumbs = [...main.querySelectorAll('[data-testid="stSliderThumbValue"], [data-testid="stSliderTickBar"] > *')].filter(vis).map(e => {
     const tops = new Set();
     const w = document.createTreeWalker(e, NodeFilter.SHOW_TEXT);
@@ -209,6 +217,8 @@ const badLead = type.prose.filter(x => x.lh < 1.45 || x.lh > 1.8).concat(type.di
 ok(!badLead.length, `leading: prose 1.45-1.8, display 0.9-1.25`, badLead.slice(0, 3).map(x => `"${x.t}" ${x.lh.toFixed(2)}`).join(' '));
 const long = type.prose.filter(x => x.chars > 75);
 const broken = type.thumbs.filter(x => x.lines > 1);
+ok(!type.round.length, 'square: no painted box has a rounded corner', [...new Set(type.round)].slice(0, 6).join(' | '));
+ok(!type.dead.length, 'links: every in-page link lands on a section', type.dead.join(' '));
 ok(type.thumbs.length && !broken.length, `wrapping: ${type.thumbs.length} slider figures each on one line`, broken.map(x => `"${x.t}" on ${x.lines} lines`).join(' '));
 ok(type.prose.length && !long.length, `measure: ${type.prose.length} prose paragraphs at <= 75 characters a line`, long.slice(0, 3).map(x => `"${x.t}" ${Math.round(x.chars)}ch`).join(' '));
 const unwrapped = type.prose.filter(x => !/pretty|balance/.test(x.wrap)).concat(type.heads.filter(h => !/balance/.test(h.wrap)));

@@ -581,7 +581,7 @@ div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
                           to   { background-position: -200% 55%; } }
 #boot-skel .sk-ink, #boot-skel .sk-ink * { color: transparent !important;
     -webkit-text-fill-color: transparent; }
-#boot-skel .sk-ink { border-radius: 6px;
+#boot-skel .sk-ink {
     background: linear-gradient(90deg, #E2DCD0 25%, #F1EDE5 45%, #E2DCD0 65%) repeat-x;
     background-size: 200% 62%; animation: sk-ink-sheen 1.15s linear infinite;
     -webkit-box-decoration-break: clone; box-decoration-break: clone; }
@@ -619,15 +619,16 @@ div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
 
 .hero-left, .hero-stats { position: relative; z-index: 1; }
 
-/* --- ARRIVAL (after citadel.com, John 2026-10-30) ---
-   lift-face: an element laid face-down on its bottom edge stands up to face
-   the reader - the crest and the stat tiles, first load only (main.py's boot
-   block). from-left: a headline or its line slides in from the left. */
+/* --- ARRIVAL (after citadel.com, John 2026-10-30; calmed 2026-11-10) ---
+   The hero's first load: the crest, the stat rows, the headline and its
+   line each rise 16px and fade in, one after another. No 3D turn and no
+   slide from the side (John: the turns made him motion sick, and floating
+   3D is a generated-site tell). The keyframe names stay for main.py. */
 @keyframes lift-face {
-    from { opacity: 0; transform: perspective(900px) rotateX(-78deg); }
+    from { opacity: 0; transform: translateY(16px); }
     to   { opacity: 1; transform: none; } }
 @keyframes from-left {
-    from { opacity: 0; transform: translateX(-44px); }
+    from { opacity: 0; transform: translateY(16px); }
     to   { opacity: 1; transform: none; } }
 .hero-crest, .hstat { transform-origin: 50% 100%; }
 
@@ -984,16 +985,19 @@ div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
 .meliona-footer { background: #26221E; border-top: 3px solid #B8955E;
     margin: 96px calc(50% - 50vw) -96px; padding: 64px max(7vw, calc(50vw - 744px)) 56px; }
 @media (max-width: 640px) { .meliona-footer { padding-bottom: 128px; } }
-.meliona-footer .f-rail { display: grid; grid-template-columns: repeat(3, 1fr);
-    gap: 24px; margin-bottom: 48px; }
-@media (max-width: 1100px) { .meliona-footer .f-rail { grid-template-columns: 1fr; } }
-.meliona-footer .f-box { display: block; border-top: 3px solid #B8955E;
-    padding: 18px 0 20px; color: #EDE9E3 !important; text-decoration: none !important;
+/* The page's index, read down like an annual report's contents - not three
+   identical feature cards side by side (John, 2026-11-10). */
+.meliona-footer .f-rail { display: grid; grid-template-columns: 1fr;
+    max-width: 760px; margin-bottom: 48px; border-top: 3px solid #B8955E; }
+.meliona-footer .f-box { display: grid; grid-template-columns: minmax(0, 15rem) minmax(0, 1fr);
+    gap: 4px 24px; align-items: baseline; border-bottom: 1px solid rgba(196,189,174,.28);
+    padding: 16px 0; color: #EDE9E3 !important; text-decoration: none !important;
     font-family: Georgia, serif; font-size: 1.125rem; font-weight: 700;
     transition: color .25s ease; }
 .meliona-footer .f-box:hover { color: #C6A26B !important; }
 .meliona-footer .f-box small { font-weight: 400; }
-.meliona-footer .f-box small { display: block; margin-top: 8px; color: #B4AB9B;
+@media (max-width: 640px) { .meliona-footer .f-box { grid-template-columns: 1fr; } }
+.meliona-footer .f-box small { display: block; color: #B4AB9B;
     font-family: Georgia, serif; font-size: 0.8125rem; line-height: 1.5; }
 .meliona-footer .f-bar { border-top: 1px solid rgba(196,189,174,.28);
     padding-top: 18px; display: flex; justify-content: space-between;
@@ -1342,14 +1346,14 @@ a.pmark:focus-visible, .meliona-footer a.f-mark:focus-visible, .thanks-row a:foc
     border: 1px solid #9A7B4F; color: #6A5030; font-size: 0.75rem;
     letter-spacing: 0; text-transform: none; vertical-align: 1px; }
 
-/* The freshness dot beside "Data pulled N min ago": one pulse per minute tick
+/* The freshness mark beside "Data pulled N min ago": one pulse per minute tick
    (the fragment re-renders, the animation runs once) while the data is live;
    still and grey once it is stale. The words beside it say the same. */
-.fresh-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+.fresh-dot { display: inline-block; width: 7px; height: 7px;
     margin-right: 6px; vertical-align: 1px; }
 /* Live and stale differ in shape, not only in the pulse (a still page shows
-   no pulse): live is a filled bronze dot (3.26:1 on the column), stale a
-   hollow grey ring (3.67:1; the old filled #8E877B was 2.94:1, Council B). */
+   no pulse): live is a filled bronze square (3.26:1 on the column), stale a
+   hollow grey square (3.67:1; the old filled #8E877B was 2.94:1, Council B). */
 .fresh-dot { box-sizing: border-box; }
 .fresh-dot.is-live { background: #9A7B4F; animation: fresh-pulse 1.6s ease-out 1; }
 .fresh-dot.is-stale { background: transparent; border: 1.5px solid #7E776B; }
@@ -1547,3 +1551,27 @@ html { font-kerning: normal; text-rendering: optimizeLegibility;
   .thanks-row a { display: inline-flex; align-items: center; min-height: 44px; }
   .meliona-footer .f-links a { display: inline-block; min-width: 44px; text-align: center; }
 }
+
+/* SQUARE - no soft corners and no circle icons (John, 2026-11-10: "soft
+   corner radius on everything" and "circle icons" read as a generated
+   site). Streamlit rounds its inputs, tags, checkboxes, toggles and the tab
+   underline; the house is square. Radio buttons keep their round shape: it
+   is what tells a radio from a checkbox. The help mark's circled "?" becomes
+   a square one. */
+[data-testid="stMain"] [data-testid="stNumberInputContainer"],
+[data-testid="stMain"] [data-testid="stNumberInputContainer"] *,
+[data-testid="stMain"] [data-testid="stMultiSelect"] [role="group"],
+[data-testid="stMain"] [data-testid="stMultiSelect"] [role="group"] *,
+[data-testid="stMain"] [data-testid="stSelectbox"] *,
+[data-testid="stMain"] [data-testid="stCheckbox"] *,
+[data-testid="stMain"] [data-testid="stTextInput"] *,
+[data-testid="stMain"] [data-testid="stTextArea"] *,
+[data-testid="stMain"] [data-testid="stTab"] *,
+[data-testid="stMain"] .stButton > button,
+[data-testid="stMain"] .stFormSubmitButton > button {
+    border-radius: 0 !important; }
+[data-testid="stTooltipHoverTarget"] button svg { display: none; }
+[data-testid="stTooltipHoverTarget"] button::before {
+    content: "?"; display: inline-flex; align-items: center; justify-content: center;
+    box-sizing: border-box; width: 16px; height: 16px; border: 1px solid #6A5030;
+    color: #6A5030; font: 700 11px/1 'Helvetica Neue', Helvetica, Arial, sans-serif; }

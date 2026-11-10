@@ -6347,7 +6347,7 @@ def test_the_contact_form_writes_to_john_and_linkedin_is_the_second_way():
     assert src.count('<span>Meliona support</span><b><a href="mailto:{SUPPORT_EMAIL}">') == 2
     page = (root / "public" / "thanks.html").read_text(encoding="utf-8")
     assert hero.CONTACT_EMAIL in page and "meleona.support@gmail.com" in page
-    assert '<div class="showcase-title" role="heading" aria-level="2">Contact</div>' in src
+    assert '<div class="showcase-title" role="heading" aria-level="2">A question, a role, or a number that looks wrong</div>' in src
     assert hero.LINKEDIN_URL in dict((n, u) for n, u, _ in hero.PROFILE_LINKS).values()
     assert "Computer Information Systems" in hero.PERSON_ROLE and "AI & Analytics" in hero.ABOUT_BIO
     # John, 2026-11-09: his own words, first person, passionate about building
@@ -7196,6 +7196,56 @@ def test_motion_is_calm_enough_to_read_while_scrolling():
     tow = float(re.search(r"var TOW = (\d+(?:\.\d+)?);", js).group(1))
     assert 8.0 <= tow <= 12.0, "the wheel settles in about half a second, no long drift"
     assert "addEventListener('transitioncancel', end)" in js, "an interrupted arrival lands, never hangs"
+
+
+def test_the_page_carries_none_of_the_generated_site_tells():
+    """John, 2026-11-10: "avoid these looks and signals so it doesn't look AI
+    generated" - gradient blobs, circle icons, purple, floating 3D shapes,
+    identical feature cards, rainbow accents, buzzword copy, three-word
+    headlines, FAQs restating the question, emoji, vague CTAs, dead footer
+    links, soft corners on everything, no personality. What can be read from
+    the source is pinned here; tools/craft_check.mjs measures the rendered
+    corners and the footer links on the page itself."""
+    import re
+    import hero
+    root = pathlib.Path(__file__).resolve().parent.parent
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    main = (root / "main.py").read_text(encoding="utf-8")
+    copy = "\n".join((root / f).read_text(encoding="utf-8") for f in
+                     ("hero.py", "main.py", "src/narrative.py", "prototypes/war_room.html",
+                      "public/thanks.html", "public/404.html"))
+    # square corners: the only round thing is the crest's disc (its skeleton)
+    rounded = [r for r in re.findall(r"([^{}]*)\{[^}]*border-radius:\s*([^;}]+)", css)
+               if r[1].strip().split()[0] not in ("0", "0px")]
+    assert [sel.strip().splitlines()[-1] for sel, _ in rounded] == ["#boot-skel .hero-crest"], rounded
+    # square toggles, inputs, tags, checkboxes and tab underline; a square help mark
+    assert "border-radius: 0 !important" in css and "stTooltipHoverTarget\"] button svg { display: none; }" in css
+    # nothing turns in 3D, on arrival or on the first load
+    assert not re.search(r"rotate[XYZ3]|perspective\(", css + main), "a 3D turn is back"
+    # no purple, no rainbow: every colour in the stylesheet is a warm neutral or the bronze/gold family
+    for hexcol in set(re.findall(r"#([0-9A-Fa-f]{6})\b", css)):
+        r, g, b = (int(hexcol[i:i + 2], 16) for i in (0, 2, 4))
+        assert not (b > r + 12 and b > g + 12), f"#{hexcol} is a blue or purple"
+    # no emoji in what a visitor reads
+    assert not re.search(r"[\U0001F300-\U0001FAFF\u2600-\u27BF]", copy), "an emoji is on the page"
+    # no buzzword copy
+    for word in ("seamless", "cutting-edge", "revolutionary", "game-changing", "unlock",
+                 "empower", "supercharge", "next-gen", "state-of-the-art", "world-class",
+                 "best-in-class", "synergy", "effortless", "elevate", "unleash",
+                 "innovative", "ai-powered", "actionable insights", "one-stop"):
+        assert word not in copy.lower(), f"buzzword {word!r}"
+    # headings say something; the FAQ and the contact are not 'Before you ask' and 'Contact'
+    assert "Before you ask" not in copy and 'aria-level="2">Contact</div>' not in main
+    # no identical feature cards: the footer's sections are one index, not three boxes
+    assert "repeat(3, 1fr)" not in css[css.index(".meliona-footer .f-rail"):][:200]
+    # an answer never opens by restating its question
+    stop = {"what", "does", "do", "is", "the", "a", "an", "of", "this", "my", "me", "from", "where", "come", "site"}
+    for q, a in hero.FAQS:
+        qw = {w for w in re.findall(r"[a-z]+", q.lower()) if w not in stop}
+        head = set(re.findall(r"[a-z]+", " ".join(a.split()[:6]).lower()))
+        assert not qw or len(qw & head) < max(1, len(qw) // 2 + 1) or q.startswith("Is "), (q, a[:60])
+    # the status dot is a square mark, not a circle icon
+    assert not re.search(r"\.fresh-dot \{[^}]*border-radius", css)
 
 
 def test_no_test_hides_below_the_script_runner():
