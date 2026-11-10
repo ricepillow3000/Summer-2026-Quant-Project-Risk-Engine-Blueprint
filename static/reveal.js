@@ -1,10 +1,8 @@
 /* Meliona motion: how the page arrives as you scroll.
  *
  *   1. Reveals - every block on the page arrives the first time it enters the
- *      screen, from where it sits (John, 2026-11-02): a block on the left
- *      third slides in from the left, one on the right third from the right,
- *      and one in the middle turns face up like a dealt card (a wide one tips
- *      up off its bottom edge, a narrow one turns on its spine). An
+ *      screen, one calm way: a short rise and a fade (John, 2026-11-09: the
+ *      side swings and card turns made him motion sick). An
  *      IntersectionObserver reports the moment it arrives; nothing listens to
  *      every scrolled pixel. Blocks that arrive together are staggered top to
  *      bottom, left to right.
@@ -15,9 +13,8 @@
  *   3. Glide - a mouse wheel or trackpad tows the page, like a boat on a line, to where it was sent
  *      instead of stepping it there. It stands aside while a button's glide
  *      flies, inside anything that scrolls on its own (a table, a list), and
- *      for touch and keys, which keep the browser's own scrolling. Pushed
- *      past either end of the page it stretches, with resistance, and eases
- *      back when let go: a rubber band, never a bounce.
+ *      for touch and keys, which keep the browser's own scrolling. The page's
+ *      ends are hard: pushed past the top it stays put, no gap shows.
  *   4. Popovers - a dropdown or a help tip grows out of the control that
  *      opened it and shrinks back into it (--pop-origin), and a menu's rows
  *      arrive 30ms apart. 5. Masks - John's photographs are uncovered from
@@ -63,11 +60,6 @@
   // and it is where iPhones froze blocks mid-turn (John's screenshots,
   // 2026-11-05: the Weights and Stress test drawers, the Book's drawer).
   var OPENED = '[data-testid="stExpanderDetails"], [data-testid="stTabPanel"]';
-  // Where a block sits decides how it arrives: its centre in the left or right
-  // share of the page slides in from that side; in the middle it turns over.
-  var SIDE = 0.42;        // left of 42% (or right of 58%) of the page's width
-  var WIDE = 0.6;         // wider than 60% of the page: tips up, not turns
-  var CARD = 0.45;        // a card is narrower than 45% of the page; a wider block in the middle tips up
   var LEAD = '15%';       // an arrival starts this far below the screen's bottom edge
 
   var calm = !('IntersectionObserver' in W) ||
@@ -109,21 +101,52 @@
       if (Date.now() - p.ms < 180000) setTimeout(wait, 100);
     })();
   }, true);
+  // Optimistic update (John, 2026-11-09): a changed setting is answered at
+  // once. Streamlit shows its running sign only 500ms into a run, so a
+  // reader's change looked ignored for half a second; html.m-busy lights the
+  // same rail and "Updating..." tag (app.css) the moment the change is made,
+  // and drops it when the run ends - or at once if no run follows.
+  var busyT = 0;
+  function busy() {
+    var t0 = Date.now(), seen = false;
+    H.classList.add('m-busy');
+    clearInterval(busyT);
+    busyT = setInterval(function () {
+      var app = D.querySelector('.stApp');
+      var on = !!D.querySelector('[data-testid="stStatusWidgetRunningIcon"]') ||
+               (app && app.getAttribute('data-test-script-state') === 'running');
+      if (on) seen = true;
+      if ((seen && !on) || (!seen && Date.now() - t0 > 900) || Date.now() - t0 > 30000) {
+        H.classList.remove('m-busy'); clearInterval(busyT);
+      }
+    }, 80);
+  }
+  D.addEventListener('change', function (e) {
+    if (e.target.closest && e.target.closest('[data-testid="stMain"]')) busy();
+  }, true);
+  // react-aria's radios, toggles and segmented buttons change on a press and
+  // fire no native 'change', so a press on a control that is not already
+  // the chosen one counts too (and a slider when it is let go).
+  var CONTROL = '[role="radiogroup"] label, [data-testid="stCheckbox"] label, [data-testid="stToggle"] label, ' +
+    '[role="option"], .stButton>button, .stFormSubmitButton>button, [data-testid="stButtonGroup"] button, ' +
+    '[data-testid="stSegmentedControl"] button, [data-testid="stPills"] button';
+  D.addEventListener('click', function (e) {
+    var c = e.target.closest && e.target.closest(CONTROL);
+    if (!c || c.querySelector('input[type="radio"]:checked') || c.getAttribute('aria-selected') === 'true' ||
+        c.getAttribute('aria-checked') === 'true' || c.getAttribute('aria-pressed') === 'true') return;
+    if (c.closest('[data-testid="stMain"], [data-testid="stSelectboxVirtualDropdown"], [data-testid="stMultiSelectDropdown"]')) busy();
+  }, true);
+  D.addEventListener('pointerup', function (e) {
+    if (e.target.closest && e.target.closest('[data-testid="stSlider"]')) busy();
+  }, true);
   if (calm) { H.classList.remove('reveal-on'); return; }   // everything as drawn
-  // Flat motion on WebKit (every iPhone and iPad browser, and Safari: only
-  // WebKit has GestureEvent) and on any touch screen: the same arrivals as
-  // slides and rises, with no perspective turn. WebKit left 3D-turned blocks
-  // frozen part-way, squeezed and sideways (John's iPhone, 2026-11-05); a
-  // phone gains nothing from a turn anyway - every block is the full width.
-  var flat = 'GestureEvent' in W || !!(W.matchMedia && W.matchMedia('(pointer: coarse)').matches);
-  if (flat) H.classList.add('reveal-flat');
 
   // ---- 1. reveals ----------------------------------------------------------
   function arrive(entries) {
     entries.filter(function (e) { return e.isIntersecting; })
       // reading order = document order: a row of metrics left to right, a
       // heading before its line. (Their boxes are still mid-transform, so
-      // on-screen positions would mis-sort a tilted card against a slid one.)
+      // on-screen positions would mis-sort them.)
       .sort(function (a, b) {
         return a.target.compareDocumentPosition(b.target) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
       })
@@ -156,12 +179,7 @@
 
   function show(el, delay) {
     observer().unobserve(el);
-    var how = side(el);
-    el.classList.add('reveal-item--' + how);          // jumps there while still invisible
-    // A card turns on its spine with the eye 3x its width away, never closer:
-    // nearer, its front edge swings past the eye and it draws as a sliver.
-    el.style.setProperty('--reveal-depth', Math.max(1000, 3 * el.offsetWidth) + 'px');
-    void el.offsetWidth;                               // ...and starts from there
+    void el.offsetWidth;                               // starts from its waiting state
     el.style.setProperty('--reveal-delay', delay + 'ms');
     el.classList.add('is-visible');
     var end = function (ev) {
@@ -172,51 +190,16 @@
     el.addEventListener('transitionend', end);
     el.addEventListener('transitioncancel', end);     // interrupted: land, never hang mid-way
     el.__rvTimer = setTimeout(end, delay + 2200);     // a tab hidden mid-way never ends
-    // A CARD whose content is redrawn while it turns (Streamlit fills a
-    // placeholder after a rerun: the Book's sentence, 2026-11-04) changes
-    // size mid-turn. Its turn was chosen for the old size, so it lands at
-    // once instead of finishing a turn meant for a different block. Only a
-    // card: a slide or a tip-up stays right whatever the size, and on a cold
-    // load nearly every block grows while it arrives - landing those at once
-    // made the whole page appear without its motion (John, 2026-11-04).
-    el.__rvW = el.offsetWidth; el.__rvH = el.offsetHeight;
-    if (grew && how === 'card') grew.observe(el);
-  }
-  var grew = W.ResizeObserver ? new ResizeObserver(function (entries) {
-    entries.forEach(function (e) {
-      var el = e.target, w = el.offsetWidth, h = el.offsetHeight;
-      if (!el.classList.contains('is-visible')) { grew.unobserve(el); return; }
-      if (Math.abs(w - el.__rvW) > 24 || Math.abs(h - el.__rvH) > 24) done(el);
-    });
-  }) : null;
-  // Measured as it arrives, not when tagged: Streamlit lays a block out after
-  // adding it, and a tab or drawer opened later sits wherever it opens. The
-  // hidden state only lifts and shrinks about the centre, so the centre read
-  // here is where the block will land.
-  // Widths are layout widths (offsetWidth): the waiting state's transform
-  // must not make a block look narrower than it is. A block with no size yet
-  // (an empty placeholder) tips up: it can never be mistaken for a card.
-  function side(el) {
-    var sc = D.querySelector(SCROLLER) || D.body;
-    var page = sc.getBoundingClientRect(), pw = sc.clientWidth || page.width;
-    var w = el.offsetWidth, r = el.getBoundingClientRect();
-    if (!pw || !w || !el.offsetHeight) return 'flip';
-    if (w > WIDE * pw) return 'flip';
-    var f = ((r.left + r.right) / 2 - page.left) / pw;
-    if (f >= SIDE && f <= 1 - SIDE && w > CARD * pw) return 'flip';
-    return f < SIDE ? 'left' : f > 1 - SIDE ? 'right' : 'card';
   }
   // Landed: hand the block back to its own styles (hover lifts, transitions)
   // and drop will-change, so the GPU layer it held is released.
   function done(el) {
     clearTimeout(el.__rvTimer);
-    if (grew) grew.unobserve(el);
-    el.classList.remove('reveal-item', 'reveal-item--left', 'reveal-item--right', 'reveal-item--flip',
-                        'reveal-item--card', 'is-visible');
+    el.classList.remove('reveal-item', 'is-visible');
     el.style.removeProperty('--reveal-delay');
-    el.style.removeProperty('--reveal-depth');
   }
   api.revealAll = function () {                       // the end state, at once (layout probes)
+    landCounts();
     [].forEach.call(D.querySelectorAll('.reveal-item'), function (el) { observer().unobserve(el); done(el); });
     [].forEach.call(D.querySelectorAll('.mask-reveal'), function (el) { veiled.unobserve(el.parentElement); unveil(el); });
   };
@@ -279,6 +262,62 @@
     setTimeout(function () { pop.classList.remove('pop-rows'); }, 520);
   }
 
+  // ---- origin-aware hover ---------------------------------------------------
+  // A button's hover colour opens from the point the pointer came in at, and
+  // closes toward where it left (app.css: the ::after circle at --mx/--my).
+  var HOVERS = '.stButton>button, .stFormSubmitButton>button, .stLinkButton>a, .cta-btn';
+  function aimHover(e) {
+    var el = e.target.closest && e.target.closest(HOVERS);
+    if (!el || (e.relatedTarget && el.contains(e.relatedTarget))) return;   // moving inside it
+    var r = el.getBoundingClientRect();
+    if (!r.width || !r.height) return;
+    el.style.setProperty('--mx', Math.max(0, Math.min(100, (e.clientX - r.left) / r.width * 100)).toFixed(1) + '%');
+    el.style.setProperty('--my', Math.max(0, Math.min(100, (e.clientY - r.top) / r.height * 100)).toFixed(1) + '%');
+  }
+  D.addEventListener('pointerover', aimHover, { capture: true, passive: true });
+  D.addEventListener('pointerout', aimHover, { capture: true, passive: true });
+
+  // ---- count-up: a headline number counts to its value as it arrives -------
+  // Only the page's own HTML numbers (the verdict, the hero's receipt), never
+  // a Streamlit-owned text node. It counts from the last value that place
+  // showed (0 the first time) and always ends on the server's exact text,
+  // kept in data-count-final; revealAll() lands every count at once.
+  var COUNT = '.verdict-number, .hstat .n', NUM = /^(\D*?)([-\u2212]?)(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?(\D*)$/;
+  var lastNum = {}, counts = [];
+  function countUp(el) {
+    var final = el.textContent.trim(), m = NUM.exec(final);
+    el.setAttribute('data-count-final', final);
+    if (!m) return;
+    var dec = m[4] ? m[4].length - 1 : 0, sign = m[2] ? -1 : 1, commas = m[3].indexOf(',') >= 0;
+    var to = sign * parseFloat(m[3].replace(/,/g, '') + (m[4] || ''));
+    var key = el.className + '|' + [].indexOf.call(D.querySelectorAll(COUNT), el);
+    var from = key in lastNum ? lastNum[key] : 0;
+    lastNum[key] = to;
+    if (from === to) return;
+    var fmt = function (v) {
+      var s = Math.abs(v).toFixed(dec), i = s.split('.');
+      if (commas) i[0] = i[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+      return m[1] + (v < 0 ? (m[2] || '-') : '') + i.join('.') + m[5];
+    };
+    var c = { el: el, final: final, t0: 0 };
+    counts.push(c);
+    el.textContent = fmt(from);                          // starts where it counts from, even under the loading screen
+    (function step(now) {
+      if (c.done) return;
+      if (D.getElementById('boot-skel') && getComputedStyle(D.getElementById('boot-skel')).display !== 'none' &&
+          getComputedStyle(D.getElementById('boot-skel')).opacity > 0.05) { W.requestAnimationFrame(step); return; }
+      if (!c.t0) c.t0 = now;
+      var p = Math.min(1, (now - c.t0) / 900), e = 1 - Math.pow(1 - p, 3);
+      if (!el.isConnected) { c.done = true; return; }       // Streamlit redrew it: the new node counts on its own
+      el.textContent = p < 1 ? fmt(from + (to - from) * e) : final;
+      if (p < 1) W.requestAnimationFrame(step); else c.done = true;
+    })(performance.now());
+  }
+  function landCounts() { counts.forEach(function (c) { if (!c.done) { c.done = true; if (c.el.isConnected) c.el.textContent = c.final; } }); }
+  var counting = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) { if (e.isIntersecting) { counting.unobserve(e.target); countUp(e.target); } });
+  }, { threshold: 0.6 });
+
   // ---- 3. glide ----------------------------------------------------------------
   // A boat on a tow line (John, 2026-11-04: "heavier ... like a boat being
   // tugged", not static). The wheel moves the tug - where the page is going
@@ -287,8 +326,9 @@
   // through the next notch of the wheel, and comes to rest on the aim without
   // overshooting or bouncing back. Integrated on the frame's own clock, so a
   // fast and a slow screen move the hull alike.
-  var TOW = 3.8;          // the tow line's natural frequency (rad/s): lower = heavier hull; ~1.7 s to settle
-                          // (John, 2026-11-06: "heavy ... slightly delayed ... more fluid": 4.6 -> 3.8)
+  var TOW = 10;           // the tow line's natural frequency (rad/s): lower = heavier hull; ~0.6 s to settle
+                          // (John, 2026-11-09: 3.8 drifted ~1.7 s after the wheel stopped and made him
+                          // motion sick; smooth, but done by the time the eye looks for the line)
   var SCROLLER = '[data-testid="stMain"]';
   var aim = null, put = null, run = 0, pos = 0, vel = 0, last = 0;
   function scrolls(n, dy) {                            // can this inner box take the wheel itself?
@@ -318,47 +358,6 @@
     if (pos === aim && vel === 0) { stop(); return; }
     run = W.requestAnimationFrame(coast);
   }
-  // ---- the rubber band at the page's ends ---------------------------------
-  // Taking the wheel took the browser's own elastic ends with it. Pushed past
-  // the top or the bottom, the page now gives with resistance - it follows
-  // the hand at once (never tweened), less and less the further it is pushed,
-  // to at most BAND px - and eases back when the hand lets go, on a
-  // critically damped spring: no overshoot, no bounce.
-  var BAND = 72;          // the furthest the page gives past an end (px)
-  var RETURN = 16;        // how briskly it comes back (rad/s): ~0.35 s
-  var BODY = '[data-testid="stMainBlockContainer"]';
-  var give = 0, gv = 0, gRun = 0, gLast = 0, gAt = 0;
-  function stretch(px) {                               // pull (raw px) -> give (px shown)
-    var a = Math.abs(px);
-    return (px < 0 ? -1 : 1) * BAND * (1 - 1 / (a / (BAND * 1.8) + 1));
-  }
-  function unstretch(g) {                              // give -> the pull that shows it
-    var a = Math.min(Math.abs(g) / BAND, 0.999);
-    return (g < 0 ? -1 : 1) * BAND * 1.8 * (1 / (1 - a) - 1);
-  }
-  function paintGive() {
-    var b = D.querySelector(BODY);
-    if (!b) return;
-    b.style.transform = Math.abs(give) < 0.25 ? '' : 'translate3d(0,' + (-give).toFixed(2) + 'px,0)';
-  }
-  function settleGive(now) {
-    gRun = 0;
-    if (now - gAt < 90) { gRun = W.requestAnimationFrame(settleGive); return; }   // the hand is still on it
-    var dt = gLast ? Math.min(0.05, (now - gLast) / 1000) : 1 / 60;
-    gLast = now;
-    for (var i = 0; i < 4; i++) { var h = dt / 4; gv += (-RETURN * RETURN * give - 2 * RETURN * gv) * h; give += gv * h; }
-    if (Math.abs(give) < 0.25 && Math.abs(gv) < 4) { give = gv = 0; gLast = 0; paintGive(); return; }
-    paintGive();
-    gRun = W.requestAnimationFrame(settleGive);
-  }
-  function band(dy) {                                  // a push past the end, or back from it
-    // from where the page stands now - mid-return included - so it never jumps
-    var pull = (give ? unstretch(give) : 0) + dy;
-    if (give && Math.sign(pull) !== Math.sign(give)) pull = 0;   // pulled back through the end
-    give = stretch(pull); gv = 0; gLast = 0; gAt = performance.now();
-    paintGive();
-    if (!gRun) gRun = W.requestAnimationFrame(settleGive);
-  }
 
   function onWheel(e) {
     if (e.ctrlKey || e.defaultPrevented || !e.deltaY || gliding()) return;   // zoom; a glide in flight (it reads the wheel itself)
@@ -377,10 +376,6 @@
     e.preventDefault();
     var dy = e.deltaMode === 1 ? e.deltaY * 40 : e.deltaMode === 2 ? e.deltaY * sc.clientHeight : e.deltaY;
     var max = sc.scrollHeight - sc.clientHeight;
-    // At rest on an end and pushed on past it - or already stretched: the band
-    // takes the wheel (pulling back first undoes the stretch).
-    var atTop = sc.scrollTop <= 0 && dy < 0, atEnd = sc.scrollTop >= max - 1 && dy > 0;
-    if (give || (!run && (atTop || atEnd) && max > 0)) { band(dy); return; }
     aim = Math.max(0, Math.min((aim === null ? sc.scrollTop : aim) + dy, max));
     if (!run) { pos = put = sc.scrollTop; vel = 0; last = 0; sc.style.scrollBehavior = 'auto'; run = W.requestAnimationFrame(coast); }
   }
@@ -420,6 +415,12 @@
         W.requestAnimationFrame(function () { aimPop(pop); });
       });
       [60, 140, 260].forEach(function (ms) { setTimeout(function () { aimPop(pop); }, ms); });
+    });
+    (root.matches(COUNT) ? [root] : [].slice.call(root.querySelectorAll(COUNT))).forEach(function (el) {
+      if (el.__ct) return;
+      el.__ct = 1;
+      el.setAttribute('data-count-final', el.textContent.trim());
+      counting.observe(el);
     });
     var masks = root.matches(MASK) ? [root] : [].slice.call(root.querySelectorAll(MASK));
     masks.forEach(function (el) {

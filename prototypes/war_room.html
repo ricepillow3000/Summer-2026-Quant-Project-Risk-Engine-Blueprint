@@ -44,7 +44,9 @@ body {
   color: var(--beige);
   font-family: Georgia, 'Times New Roman', serif;
   overflow: hidden;
-  font-variant-numeric: tabular-nums;
+  /* a ledger's figures: equal widths (the tally does not jitter), on the baseline */
+  font-variant-numeric: tabular-nums lining-nums;
+  font-kerning: normal;
 }
 .shell { position: relative; height: 100vh; min-height: 560px; }
 /* The stage is what the canvases (and the hover tip) are sized and positioned
@@ -142,6 +144,10 @@ select {
   font-size: 10.5px; color: var(--dimtext); line-height: 1.55;
 }
 .side .foot b { color: var(--mute); font-weight: 400; }
+/* the model statement folds under a plain lead (John, 2026-11-09) */
+.side .foot details { margin-top: 6px; }
+.side .foot summary { cursor: pointer; color: var(--mute); }
+.side .foot summary:focus-visible { outline: 2px solid var(--bronze); outline-offset: 2px; }
 
 /* ---- HUD: the statistics band ---- */
 .hud {

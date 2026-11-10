@@ -106,6 +106,8 @@ jobs:
           node tools/key_wheel_check.mjs http://127.0.0.1:8501 site-shots/keys
           # the wheel glides over the Risk Topology map too, not the browser's step (John, 2026-11-06)
           node tools/map_wheel_check.mjs http://127.0.0.1:8501
+          # the page's craft: type, figures, measure, widows, touch, safe area, motion (John, 2026-11-09)
+          node tools/craft_check.mjs http://127.0.0.1:8501
       # Every button glide lands (tools/glide_load_check.mjs): on the settled
       # page, through a trackpad flick, under a reader's swipe back and a
       # steady mouse wheel - and pressed while the page is still loading. Each

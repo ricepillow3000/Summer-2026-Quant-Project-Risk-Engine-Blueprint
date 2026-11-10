@@ -1793,20 +1793,19 @@ with f_col:
     st.plotly_chart(fan_chart(mc["path_bands"]), width="stretch", config=PLOTLY_CFG)
     # Jump-diffusion resamples nothing, and a replay under 30 days falls back to
     # i.i.d. (block_days=1): both used to claim "crash weeks stay intact".
-    _se_txt = (f" Chance alone could move the bad-year loss by about "
-               f"±{mc['cvar_se']:.2%} (its sampling error; {mc['n_simulations']:,} "
-               f"simulated years, "
+    _se_txt = (f" Luck alone could shift the big number by about "
+               f"±{mc['cvar_se']:.2%} ({mc['n_simulations']:,} simulated years, "
                + ("drawn from the jump model, not from real days"
                   if mc.get("engine") == "jump-diffusion"
-                  else f"resampled from runs of real days averaging {mc['block_days']} days"
+                  else f"built from runs of real days, {mc['block_days']} days long on average"
                   if mc.get("block_days", 1) > 1
-                  else "resampled one real day at a time (window too short for runs)")
-               + "). It is an estimate, not an exact value."
+                  else "built one real day at a time: too little history for runs")
+               + ")."
                if np.isfinite(mc.get("cvar_se", float("nan"))) else "")
+    # John, 2026-11-09: long explanations in plain, short words
     st.caption(
-        "Each simulated year chains together a year of daily returns. A range of "
-        "what could happen, not a forecast. The curves are smoothed between "
-        "computed points." + _se_txt
+        "Each simulated year is stitched together from real days, so this "
+        "shows what could happen, not a forecast. Lines are smoothed." + _se_txt
     )
 
 # ---- The Book: the guided arc, deliberately AHEAD of the tab strip ----
@@ -1905,11 +1904,11 @@ with _bk_more:
             _note = role_note(_d)
             if _note:
                 _lbl += f'<br><span class="role-note">{_note}</span>'
-            _flag = (' &middot; <span class="book-flag">from outside your '
+            _flag = (' &middot;&nbsp;<span class="book-flag">from outside your '
                      'list</span>' if _d.is_fallback_anchor else "")
             # Redundant on a card that was already excluded FOR capacity - the
             # sentence there already names the breakpoint.
-            _bind = (' &middot; <span class="book-flag">trading volume, not '
+            _bind = (' &middot;&nbsp;<span class="book-flag">trading volume, not '
                      'risk, set this size</span>'
                      if _d.liquidity_binding and _d.role is not Role.EXCLUDED else "")
             # leaders and anchors stay on the page; the rest is in the drawer
@@ -1965,12 +1964,12 @@ with tab_3d:
         with st.container(key="risk-map"):
             st.iframe(war_room_html(_wr_payload), width="stretch", height=820)
         st.caption(
-            "The simulation drawn as a map: across, how much the book moves with "
-            "the market (beta); up, how much it swings (volatility). The lit ground "
-            "holds 68 in 100 of the places the book could be in 30 days, and night "
-            "falls at 99.7 in 100; the outer line is a stated danger limit, not an "
-            "estimate. The paths are fitted to this book's own history. Estimates, "
-            "not forecasts. The Explain button on the map defines every term."
+            "Where your book could drift in the next 30 days. Left to right: how "
+            "much it moves with the market (beta). Bottom to top: how much it "
+            "swings (volatility). The bright ground holds 68 in 100 of the likely "
+            "spots and goes dark past 99.7 in 100. The outer line is a set danger "
+            "limit. Fitted to this book's own past: estimates, not forecasts. "
+            "Explain the map names every term."
         )
     except Exception as _wr_exc:  # noqa: BLE001 - never fake the map
         st.info(
@@ -2239,13 +2238,12 @@ with tab_conviction:
             _p3y = pd.to_numeric(show["Peak buy, 3y later"], errors="coerce")
             _behind = show.loc[_p3y < 0, "Crisis"].tolist()
             st.caption(
-                "Nobody can time the exact bottom, so the trough columns show which "
-                "way the past record leans, not a strategy you could follow. That is why "
-                "the peak columns sit beside them: the worst-timed buyer was ahead "
-                f"three years later in {int((_p3y > 0).sum())} of "
+                "No one can buy at the exact bottom, so the bottom columns only show "
+                "which way history leans, not a plan to follow. The peak columns show "
+                "the unluckiest buyer, who bought at the top: they were ahead three "
+                f"years later in {int((_p3y > 0).sum())} of "
                 f"{int(_p3y.notna().sum())} crises with three years of data"
-                + (f". The exception{'s' if len(_behind) > 1 else ''}: "
-                   f"{', '.join(_behind)}, where three years was not enough."
+                + (f". Three years was not enough after {', '.join(_behind)}."
                    if _behind else ".")
             )
     except Exception as exc:  # noqa: BLE001
@@ -2265,10 +2263,10 @@ DQ_MESSAGES = {"DatetimeIndex confirmed.": "Every row carries a date.",
 
 with tab_dq:
     st.caption(
-        "The prices behind the headline are checked here: dates present and in order, prices above zero, enough history, "
-        "missing days, how recent it is, and any unusually large one-day move. These checks catch a "
-        "broken or implausible feed; they cannot catch a wrong number that "
-        "looks plausible. The results are reported, not used to stop the analysis."
+        "Before any maths, the prices are checked: dates in order, no zero "
+        "prices, enough history, missing days, freshness and any huge one-day "
+        "jump. This catches a broken feed, not a wrong number that looks "
+        "normal. Results are shown here; they never stop the page."
     )
     report = validate_prices(prices)
     # Palette marks, not colour emoji - the emoji were the only bright colours

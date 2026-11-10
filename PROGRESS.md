@@ -38,6 +38,29 @@ Paste this into a new chat session to bring it up to speed instantly.
   the receipt pulses once; the wheel tow is heavier (`TOW` 4.6 -> 3.8) and
   the page stretches past its ends and eases back (no bounce anywhere: no
   curve leaves 0..1). Pinned by `test_motion_follows_the_house_rules`.
+- **2026-11-09, the page's craft:** John asked for kerning, optical
+  centre, tabular numbers, layout shift, tracking, optimistic update,
+  x-height, touch targets, leading, origin-aware animation, OKLCH, widows,
+  safe area, stagger, line length, affordance, combo box, interruptible
+  animation and shared element transitions, plus whatever makes the page feel
+  alive while keeping the data plain. `tools/craft_check.mjs` turns each into
+  a reading of the rendered page (desktop and an iPhone): 16 of 27 failed
+  before, 27 of 27 pass after. Added in `static/app.css` "CRAFT" and
+  `static/reveal.js`: kerning and legibility, tabular lining figures (map
+  included), `font-size-adjust`, 68ch prose wrapping pretty and balanced
+  headings, OKLCH state tints, `viewport-fit=cover` plus safe-area gutters,
+  44px touch targets (help marks, pickers, contact and footer links), the
+  hero's words lifted to the optical centre in every height tier with the same
+  totals (the CTA does not move), a button hover that opens from where the
+  pointer came in, an "Updating" rail lit on the press itself (Streamlit's own
+  sign waits 500ms; react-aria radios fire no `change`, so a press on an
+  unchosen control counts), stale numbers kept readable at .72, and the
+  verdict and hero receipt counting up to the server's exact text. Already
+  true and now measured: stagger 90ms, the shared tab underline (it also
+  retargets mid-slide on its own - a fix for that was written, measured
+  unneeded, and deleted), the ticker combobox filtering as you type, layout
+  shift 0.0002 once the loading screen lifts (the page assembles under it).
+  Negative tracking stays banned (2026-11-04: the generated-page look).
 - **2026-11-06, the wheel glides over the map:** John saw the page scroll
   smoothly everywhere but the Risk Topology map, where it went back to the
   browser's step. A wheel over a frame goes to the frame's own window, so

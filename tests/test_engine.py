@@ -4224,10 +4224,11 @@ def test_the_crest_engraving_is_the_banners_and_used_sparingly():
     mark = hero.crest_engraving()
     assert 'fill="none"' in mark and 'aria-hidden="true"' in mark and "<text" not in mark
     assert mark.count("<polygon") == 5 and "gradient" not in mark.lower()
-    # once in the hero (inside the stone receipt), once in main.py (the band)
+    # once, in main.py's dark band - never behind the hero's receipt (John,
+    # 2026-11-09: "remove the logo in the background" of Inside the engine)
     page = hero.hero_html()
-    assert page.count('class="crest-engraving"') == 1
-    assert page.index('class="hero-stats"') < page.index('class="crest-engraving"')
+    assert 'crest-engraving' not in page and '.hero-stats .crest-engraving' not in \
+        (root / "static" / "app.css").read_text(encoding="utf-8")
     main = (root / "main.py").read_text(encoding="utf-8")
     assert main.count("crest_engraving()") == 1
     band = main[main.index('<div class="showcase-row">'):main.index('.replace("__ENGRAVING__", crest_engraving())')]
@@ -4792,14 +4793,14 @@ def test_fan_chart_caption_claims_block_resampling_only_when_it_happened():
     assert "drawn from the jump model, not from real days" in jd, jd
     iid = caption(monte_carlo(short_hist, w, n_simulations=400))
     assert "crash weeks stay intact" not in iid, f"22-day replay (i.i.d.): {iid}"
-    assert "resampled one real day at a time (window too short for runs)" in iid, iid
+    assert "built one real day at a time: too little history for runs" in iid, iid
     blk = monte_carlo(_clustered_returns(n=800), np.array([1.0]), n_simulations=400)
     assert blk["block_days"] > 1
     # A geometric block of mean N keeps nothing intact by construction, so the
     # caption says what the bootstrap does and claims nothing more (ME-03,
     # 2026-10-22: the default page printed "2-day blocks so crash weeks stay
     # intact").
-    assert f"resampled from runs of real days averaging {blk['block_days']} days" in caption(blk), caption(blk)
+    assert f"built from runs of real days, {blk['block_days']} days long on average" in caption(blk), caption(blk)
     assert "crash weeks" not in caption(blk), caption(blk)
 
 
@@ -6223,15 +6224,9 @@ def test_blocks_arrive_from_where_they_sit_and_the_wheel_glides():
     root = pathlib.Path(__file__).resolve().parent.parent
     css = (root / "static" / "app.css").read_text(encoding="utf-8")
     js = (root / "static" / "reveal.js").read_text(encoding="utf-8")
-    # four entrances, each a transform only (the GPU rule above still holds)
-    for kind in ("left", "right", "card", "flip"):
-        assert re.search(r"\.reveal-on \.reveal-item--" + kind + r"\s*\{[^}]*transform:", css), kind
-    assert "translate3d(calc(-1 * var(--reveal-x))" in css and "translate3d(var(--reveal-x), 0, 0)" in css
-    assert "rotateY(-92deg)" in css and "rotateX(-68deg)" in css
-    # the side is read from where the block sits, as it arrives
-    assert re.search(r"var SIDE = 0\.\d+;", js) and re.search(r"var WIDE = 0\.\d+;", js)
-    assert "return f < SIDE ? 'left' : f > 1 - SIDE ? 'right' : 'card';" in js
-    assert "var how = side(el);" in js and "el.classList.add('reveal-item--' + how);" in js
+    # how a block arrives: test_motion_is_calm_enough_to_read_while_scrolling
+    # (John, 2026-11-09, motion sickness: the side swings and turns are gone)
+    assert ".reveal-on .reveal-item {" in css
     # every block, not a fixed list: Streamlit's leaf containers - the engine's
     # controls, captions and cards - arrive too
     assert "var LEAF = '[data-testid=\"stElementContainer\"]';" in js and "var ITEMS = NAMED + ',' + LEAF;" in js
@@ -6256,8 +6251,6 @@ def test_blocks_arrive_from_where_they_sit_and_the_wheel_glides():
     # damped tow line on the frame's own clock, not a first-order ease
     assert re.search(r"var TOW = \d+(\.\d+)?;", js)
     assert "acc = TOW * TOW * (aim - pos) - 2 * TOW * vel;" in js
-    tow = float(re.search(r"var TOW = (\d+(?:\.\d+)?);", js).group(1))
-    assert 3.0 <= tow <= 7.0, "settles in about a second: heavy, not sluggish"
     # it stands aside while a button's glide flies - and main.py's glide keeps
     # its stop handle on the DOCUMENT (its P = window.parent.document): read
     # from the window it was never seen, and the hull's longer momentum then
@@ -6266,36 +6259,6 @@ def test_blocks_arrive_from_where_they_sit_and_the_wheel_glides():
     assert "|| gliding()) return;   // zoom; a glide in flight" in js
     main_src = (pathlib.Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
     assert "const P = window.parent.document;" in main_src and "P.__melionaStop = function" in main_src
-
-
-def test_a_wide_block_never_turns_like_a_card_and_never_hangs_mid_turn():
-    """John, 2026-11-04 (screenshot): the Book's 1,488px sentence stood frozen
-    as a sliver mid-turn. A card turn is for a narrow block; given to a wide
-    one (measured while its placeholder was still small, then filled in) its
-    near edge swings past the eye at perspective 1000px. Rules: widths are
-    layout widths, a block with no size yet or wider than CARD in the middle
-    tips up instead, the card's eye distance is 3x its width, a block resized
-    mid-move lands at once, and an interrupted move lands too."""
-    import re
-    root = pathlib.Path(__file__).resolve().parent.parent
-    js = (root / "static" / "reveal.js").read_text(encoding="utf-8")
-    css = (root / "static" / "app.css").read_text(encoding="utf-8")
-    side = re.search(r"function side\(el\) \{(.*?)\n  \}", js, re.S).group(1)
-    assert "el.offsetWidth" in side and "getBoundingClientRect().width" not in side
-    assert "if (!pw || !w || !el.offsetHeight) return 'flip';" in side
-    assert "w > CARD * pw) return 'flip';" in side
-    card = float(re.search(r"var CARD = (0\.\d+);", js).group(1))
-    wide = float(re.search(r"var WIDE = (0\.\d+);", js).group(1))
-    assert card < wide and card <= 0.5
-    assert "Math.max(1000, 3 * el.offsetWidth)" in js
-    assert re.search(r"\.reveal-item--card \{\s*transform: perspective\(var\(--reveal-depth, 1000px\)\)", css)
-    assert "addEventListener('transitioncancel', end)" in js
-    assert "new ResizeObserver" in js and "if (grew) grew.unobserve(el);" in js
-    # only a CARD lands at once when it changes size: on a cold load nearly
-    # every block grows while it arrives, and landing those at once made the
-    # live page appear with no motion at all (John, 2026-11-04)
-    assert "if (grew && how === 'card') grew.observe(el);" in js
-    assert "el.style.removeProperty('--reveal-depth');" in js
 
 
 def test_what_the_reader_opens_never_animates_and_touch_screens_move_flat():
@@ -6309,19 +6272,11 @@ def test_what_the_reader_opens_never_animates_and_touch_screens_move_flat():
     import re
     root = pathlib.Path(__file__).resolve().parent.parent
     js = (root / "static" / "reveal.js").read_text(encoding="utf-8")
-    css = (root / "static" / "app.css").read_text(encoding="utf-8")
     opened = re.search(r"var OPENED = '([^']+)';", js).group(1)
     assert '[data-testid="stExpanderDetails"]' in opened and '[data-testid="stTabPanel"]' in opened
     assert "if (el.__rv || el.closest(SKIP) || el.closest(OPENED)) return;" in js
-    assert "var flat = 'GestureEvent' in W || !!(W.matchMedia && W.matchMedia('(pointer: coarse)').matches);" in js
-    assert js.index("if (calm)") < js.index("H.classList.add('reveal-flat')"), "flat is a kind of motion"
-    flat = re.findall(r"\.reveal-on\.reveal-flat \.reveal-item--(\w+)[^{]*\{([^}]*)\}", css)
-    kinds = set(re.findall(r"\.reveal-on\.reveal-flat \.reveal-item--(\w+)", css))
-    assert {"left", "right", "card", "flip"} <= kinds, kinds
-    for _, body in flat:
-        assert "perspective" not in body and "rotate" not in body and "scale" not in body, body
-    # same specificity as the landed state, so it must come first or it wins
-    assert css.index(".reveal-on.reveal-flat .reveal-item--left") < css.index(".reveal-on .reveal-item.is-visible")
+    # what was flat motion for touch screens (no perspective turn) is now
+    # every screen's motion: test_motion_is_calm_enough_to_read_while_scrolling
 
 
 def test_drawers_are_the_old_hairline_box_made_clean_and_corporate():
@@ -6395,6 +6350,11 @@ def test_the_contact_form_writes_to_john_and_linkedin_is_the_second_way():
     assert '<div class="showcase-title" role="heading" aria-level="2">Contact</div>' in src
     assert hero.LINKEDIN_URL in dict((n, u) for n, u, _ in hero.PROFILE_LINKS).values()
     assert "Computer Information Systems" in hero.PERSON_ROLE and "AI & Analytics" in hero.ABOUT_BIO
+    # John, 2026-11-09: his own words, first person, passionate about building
+    # tools with AI and still corporate - no promise, no advice
+    assert hero.ABOUT_BIO.startswith("Hello! I am John") and "Building tools with AI" in hero.ABOUT_BIO
+    assert "check every number" in hero.ABOUT_BIO
+    assert not any(w in hero.ABOUT_BIO.lower() for w in ("guarantee", "should buy", "will make", "!!"))
     assert "&amp; Analytics" in hero.about_html(), "the bio's ampersand is escaped in the page"
 
 
@@ -6980,8 +6940,9 @@ def test_motion_follows_the_house_rules():
     assert ".cta-btn:active { transform: scale(var(--press)); }" in css
     assert ".stButton>button:active, .stFormSubmitButton>button:active" in css
     wipe = re.search(r"\.cta-btn::after \{([^}]*)\}", css).group(1)
-    assert "clip-path: inset(100% 0 0 0)" in wipe and "transition: clip-path var(--wipe)" in wipe
-    assert ".stLinkButton>a:hover::after, .cta-btn:hover::after, .cta-btn:active::after {\n    clip-path: inset(0 0 0 0); }" in css
+    # ...origin-aware (2026-11-09): it opens from where the pointer came in
+    assert "clip-path: circle(0% at var(--mx, 50%) var(--my, 100%))" in wipe and "transition: clip-path var(--wipe)" in wipe
+    assert ".stLinkButton>a:hover::after, .cta-btn:hover::after, .cta-btn:active::after {\n    clip-path: circle(150% at var(--mx, 50%) var(--my, 100%)); }" in css
     assert ".stButton>button::after" in css, "the Streamlit buttons share the mask"
     # knobs: stretched while dragged, the position never tweened
     thumb = re.search(r'\[data-testid="stSlider"\] \[data-rac\]:has\(> div > input\[type="range"\]\) \{\s*'
@@ -6996,12 +6957,8 @@ def test_motion_follows_the_house_rules():
     icon = re.search(r"@keyframes icon-in \{([^}]*\})", css).group(1)
     assert "scale(" in icon and "blur(" in icon and "opacity: 0" in icon
     assert "animation: success-pulse 900ms" in css and "@keyframes success-pulse" in css
-    # the wheel: heavy, and a rubber band (critically damped, so it never bounces) past the ends
-    tow = float(re.search(r"var TOW = (\d+(?:\.\d+)?);", js).group(1))
-    assert 3.0 <= tow <= 4.2, "heavy: the hull takes about a second to arrive"
-    assert int(re.search(r"var BAND = (\d+);", js).group(1)) <= 80
-    assert "gv += (-RETURN * RETURN * give - 2 * RETURN * gv) * h;" in js, "the band's return must be critically damped"
-    assert js.index("if (calm)") < js.index("function band(dy)"), "no band under reduced motion"
+    # the wheel's settle and the page's hard ends:
+    # test_motion_is_calm_enough_to_read_while_scrolling
 
 
 def test_the_cvar_tick_hops_an_arc_only_when_it_really_moves():
@@ -7125,6 +7082,57 @@ def test_a_key_and_the_wheel_never_paint_a_gold_block():
         return
     assert r.returncode == 0, r.stdout[-1500:] + r.stderr[-600:]
 
+def test_the_pages_craft_holds_kerning_figures_measure_widows_and_touch():
+    """John, 2026-11-09: "make the website feel more immersive, alive, less AI
+    and human" - kerning, optical center, tabular numbers, layout shift,
+    tracking, optimistic update, x-height, touch target, leading, origin aware
+    animation, OKLCH, widow, safe area, stagger, line length, affordance, combo
+    box, interruptible animation, shared element transition. The browser proof
+    is tools/craft_check.mjs (Live audit 8b: 16 of 27 failed before, 27 of 27
+    after); this pins the rules it depends on, so a later edit cannot quietly
+    drop one."""
+    import re
+    root = pathlib.Path(__file__).resolve().parent.parent
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    js = (root / "static" / "reveal.js").read_text(encoding="utf-8")
+    war = (root / "prototypes" / "war_room.html").read_text(encoding="utf-8")
+    pf = (root / "tools" / "public_files.py").read_text(encoding="utf-8")
+    wf = (root / ".github" / "workflows" / "live-audit.yml").read_text(encoding="utf-8")
+    craft = css[css.index("CRAFT - the details a reader feels"):]
+    # type: kerned, legible, a ledger's figures, the x-height kept on a fallback
+    base = re.search(r"html \{([^}]*)\}", craft).group(1)
+    for rule in ("font-kerning: normal", "text-rendering: optimizeLegibility",
+                 "font-size-adjust: from-font", "font-variant-numeric: tabular-nums lining-nums"):
+        assert rule in base, rule
+    assert "font-variant-numeric: tabular-nums lining-nums" in war, "the map's tally and tiles are figures too"
+    # measure and widows: prose stops at 68ch and wraps pretty; headings balance
+    assert "max-width: 68ch; text-wrap: pretty;" in craft and "text-wrap: balance;" in craft
+    # tracking: type at its own spacing (never negative: its own test), the
+    # capital label voice opened to .2em
+    assert "letter-spacing: .2em; text-transform: uppercase;" in css
+    # OKLCH state tints, each after a hex fallback
+    assert craft.count("oklch") >= 3 and "color-mix(in oklch" in css
+    assert re.search(r"::selection \{ background-color: #[0-9A-F]{6}; background-color: oklch\(", craft)
+    # safe area: the viewport covers the notch and the gutters clear it
+    assert 'viewport-fit=cover' in pf and "env(safe-area-inset-left)" in craft
+    # touch: 44px for every control on a touch screen
+    coarse = craft[craft.index("@media (pointer: coarse)"):]
+    assert "min-height: 44px; min-width: 44px" in coarse and ".thanks-row a" in coarse
+    # optical centre: the hero's words sit above the middle - more space under
+    # them than over them in every tier (same totals, so the CTA does not move)
+    for pt, pb in re.findall(r"\.hero-section \{[^}]*?--hero-pt: (\d+)px; --hero-pb: (\d+)px", css):
+        assert int(pt) < int(pb), (pt, pb)
+    # optimistic update: the rail answers the press, not the server's 500ms sign
+    assert "html.m-busy body::before," in css and "H.classList.add('m-busy')" in js
+    assert "[data-stale=\"true\"] { opacity: .72 !important;" in craft, "old numbers stay readable, never blanked"
+    # origin-aware hover and an honest count-up that lands on the server's text
+    assert "el.style.setProperty('--mx'" in js and "circle(150% at var(--mx, 50%)" in css
+    assert "el.setAttribute('data-count-final', final);" in js and "el.textContent = p < 1 ? fmt(from + (to - from) * e) : final;" in js
+    assert "never\n  // a Streamlit-owned text node" in js and "'.verdict-number, .hstat .n'" in js
+    assert "landCounts();" in js, "layout probes land every count at once"
+    assert "node tools/craft_check.mjs http://127.0.0.1:8501" in wf
+
+
 def test_the_batch_audit_re_derives_every_grit_zone_number():
     """John, 2026-11-04: every Grit Zone description - consistency, resilience,
     recovery - accurate and traced to the data. tests/batch_audit.audit_grit
@@ -7163,6 +7171,31 @@ def test_the_batch_audit_re_derives_every_grit_zone_number():
     finally:
         ba.grit_scores = real if "real" in locals() else ba.grit_scores
         ba.results[:] = saved
+
+
+def test_motion_is_calm_enough_to_read_while_scrolling():
+    """John, 2026-11-09: the smooth scroll "gives me motion sickness and
+    unfocuses my eyes", and forcing the page past its top showed a gap. A
+    reader's eye tracks the page up and down; blocks swinging in from the
+    sides, turning like cards (a 3D turn smears the text) and a hull still
+    drifting 1.7 s after the wheel stopped all fight it. So: every block
+    arrives the one calm way - a short rise and a fade - the wheel settles in
+    well under a second, and the page has hard ends, no stretch."""
+    import re
+    root = pathlib.Path(__file__).resolve().parent.parent
+    js = (root / "static" / "reveal.js").read_text(encoding="utf-8")
+    css = (root / "static" / "app.css").read_text(encoding="utf-8")
+    reveal = " ".join(b for sel, b in re.findall(r"([^{}]*\.reveal-item[^{}]*)\{([^}]*)\}", css))
+    for move in ("rotate", "perspective", "scale(", "--reveal-x"):
+        assert move not in reveal, f"an arrival still moves by {move}"
+    rise = re.search(r"--reveal-y: (\d+)px", css)
+    dur = re.search(r"--reveal-dur: (\d*\.?\d+)s", css)
+    assert rise and int(rise.group(1)) <= 20 and dur and float(dur.group(1)) <= 0.7
+    for gone in ("function side(", "reveal-item--", "reveal-flat", "function band(", "var BAND"):
+        assert gone not in js + css, f"{gone} is left over"
+    tow = float(re.search(r"var TOW = (\d+(?:\.\d+)?);", js).group(1))
+    assert 8.0 <= tow <= 12.0, "the wheel settles in about half a second, no long drift"
+    assert "addEventListener('transitioncancel', end)" in js, "an interrupted arrival lands, never hangs"
 
 
 def test_no_test_hides_below_the_script_runner():
