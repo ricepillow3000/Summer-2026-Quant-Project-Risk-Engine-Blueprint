@@ -14,6 +14,16 @@ Paste this into a new chat session to bring it up to speed instantly.
   iPhone, clean hairline drawers, John's bio and contact (his Gmail plus
   Meliona support plus LinkedIn), the engine's controls in plain words, and
   John's story with his second photo (below, in the done list).
+- **2026-11-09, evaluation and back-end clean-up (back-end session, PR #58):**
+  `src/` went from 5,551 to 4,934 lines (-617) with every number unchanged:
+  comments and docstrings now short and plain, each module still saying how
+  its math works and citing its papers; each batch was checked old vs new
+  output for exact equality, then by the full suite. Two bugs fixed: a
+  basket's provenance `.meta.json` was written in place while the warm pass
+  rewrites it under live visitors, so a read mid-write crashed the page
+  (`_write_json`, atomic; `provenance()` reads a bad file as no record); and
+  the Grit Zone re-derivation test sat below `tests/test_engine.py`'s
+  `__main__` block, so it never ran (`test_no_test_hides_below_the_script_runner`).
 - **2026-11-06, motion (front-end session):** one motion vocabulary for the
   whole page - `static/app.css` "MOTION" holds the tokens and rules, and
   `static/reveal.js` the parts that need script. Dropdowns and help tips
