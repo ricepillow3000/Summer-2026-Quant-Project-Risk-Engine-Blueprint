@@ -225,9 +225,9 @@ def war_room_html(payload: dict) -> str:
     j = html.index(end)
     # this lands inside a <script>, and json.dumps doesn't escape "<", so a
     # "</script>" in any string would end the block early. escape here instead
-    # of trusting the ticker funnel. \u2028/\u2029 would break the JS literal.
+    # of trusting the ticker funnel. json.dumps' default ascii output already
+    # escapes \u2028/\u2029, which would break the JS literal raw.
     blob = (json.dumps(payload, allow_nan=False)
             .replace("<", "\\u003c").replace(">", "\\u003e")
-            .replace("&", "\\u0026")
-            .replace("\u2028", "\\u2028").replace("\u2029", "\\u2029"))
+            .replace("&", "\\u0026"))
     return html[:i] + "\nconst DEMO = " + blob + ";\n" + html[j:]
