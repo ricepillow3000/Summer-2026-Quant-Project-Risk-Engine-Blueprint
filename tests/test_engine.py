@@ -7198,6 +7198,211 @@ def test_motion_is_calm_enough_to_read_while_scrolling():
     assert "addEventListener('transitioncancel', end)" in js, "an interrupted arrival lands, never hangs"
 
 
+# ---- Mutation tests (John, 2026-11-10): "break it on purpose". 36 bugs were
+# planted in copies of the code; 15 left every check green. Each test below
+# kills one of them, and checks both ways: the real code passes, the planted
+# bug fails. tools/mutation_check.py replays all 36.
+
+
+def test_var_reads_the_loss_tail_and_cvar_averages_the_days_at_or_past_it():
+    """M16/M18: VaR read at the 95th percentile (the gains) and a CVaR tail
+    that skipped the VaR day both stayed green: CVaR >= VaR still held."""
+    from src.risk import cvar, var
+
+    r = pd.Series(np.arange(-10, 11) / 100)        # -10% .. +10%, 21 days
+    assert abs(var(r, 0.95) - 0.09) < 1e-12        # 5th percentile is -9%
+    assert abs(cvar(r, 0.95) - 0.095) < 1e-12      # mean of -10% and -9%
+    assert var(-r.abs(), 0.95) > 0 and cvar(r, 0.95) >= var(r, 0.95)
+
+
+def test_var_backtest_judges_each_day_only_by_the_days_before_it():
+    """M19: with the shift(1) gone the VaR line saw the very day it judged,
+    and every check stayed green."""
+    from src.risk import var_backtest
+
+    r = pd.Series(np.random.default_rng(3).normal(0, 0.01, 300))
+    r.iloc[-61] = 0.0                       # the day that leaves the window: not a low one
+    low = np.sort(r.iloc[-61:-1].to_numpy())
+    line = r.iloc[-61:-1].quantile(0.05)    # the VaR line from the 60 days before
+    r.iloc[-1] = (low[2] + low[3]) / 2      # just past that line
+    assert r.iloc[-1] < line
+    assert bool(var_backtest(r, window=60)["breach_flags"].iloc[-1])   # a breach, judged fairly
+    r.iloc[-1] = line + 0.001               # just inside it
+    assert not bool(var_backtest(r, window=60)["breach_flags"].iloc[-1])
+
+
+def test_kupiec_passes_only_inside_the_95pct_chi_square_bound():
+    """M20: a critical value loosened to 99% (6.635) kept every check green."""
+    from src.risk import var_backtest
+
+    g = np.random.default_rng(6)            # vol up 14% for the last 300 days
+    shifted = var_backtest(pd.Series(np.r_[g.normal(0, .01, 700), g.normal(0, .0114, 300)]))
+    assert 3.841 < shifted["kupiec_lr"] < 6.635 and shifted["passed"] is False
+    calm = var_backtest(pd.Series(np.random.default_rng(0).normal(0, .01, 1000)))
+    assert calm["kupiec_lr"] < 3.841 and calm["passed"] is True
+
+
+def test_christoffersen_fails_clustered_breaches_and_passes_independent_ones():
+    """M21: an independence bound of 38.41 instead of 3.841 never failed."""
+    from src.risk import christoffersen_test
+
+    def flags(pairs, singles):              # breaches 20 days apart, some in back-to-back pairs
+        f, pos = np.zeros(1000, bool), 5
+        for _ in range(pairs):
+            f[pos] = f[pos + 1] = True
+            pos += 20
+        for _ in range(singles):
+            f[pos] = True
+            pos += 20
+        return f
+
+    clustered = christoffersen_test(flags(8, 34))
+    assert 3.841 < clustered["lr_ind"] < 38.41 and clustered["passed_ind"] is False
+    assert christoffersen_test(flags(2, 46))["passed_ind"] is True
+
+
+def test_the_bootstrap_block_is_never_shorter_than_two_days():
+    """M22: a floor of 1 day silently turned the block bootstrap back into the
+    i.i.d. one it replaces, on every book with little clustering."""
+    from src.risk import mean_block_length
+
+    for seed in range(5):                   # white noise: nothing to hold, so the floor
+        assert mean_block_length(np.random.default_rng(seed).normal(0, .01, 500)) == 2
+    g = np.random.default_rng(1)            # calm and wild months: real clustering
+    vol = np.repeat(g.choice([0.005, 0.03], 40), 25)
+    assert mean_block_length(g.normal(0, 1, 1000) * vol) > 2
+
+
+def test_the_dispersion_fix_only_widens_and_stops_at_three():
+    """M25: a lower clamp of 0.5 let k NARROW the map's rings and no check
+    noticed; the footnote promises it only ever widens."""
+    from scipy import stats
+
+    from src import state_calibration as sc
+
+    real = sc.state_distances
+    ring = float(np.sqrt(stats.chi2.ppf(sc.COVERAGE_P, 2)))
+    try:
+        for d, k in ((0.2, 1.0), (2.0, 2.0 / ring), (50.0, 3.0)):   # too wide / in between / too narrow
+            sc.state_distances = lambda *a, d=d, **kw: np.full(40, d)
+            out = sc.dispersion_correction(pd.DataFrame({"beta": [1.0], "vol": [0.2]}))
+            assert abs(out["k"] - k) < 1e-9, (d, out["k"])
+    finally:
+        sc.state_distances = real
+
+
+def test_full_exit_waits_for_the_slowest_position():
+    """M27: the average leg read as the full exit time and no check noticed."""
+    dtl = pd.DataFrame({"weight": [0.5, 0.5], "days": [1.0, 10.0]}, index=["FAST", "SLOW"])
+    prof = liquidity_profile(dtl)
+    assert prof["full_exit_days"] == 10.0 and prof["least_liquid"] == "SLOW"
+    assert prof["weighted_avg_days"] == 5.5 and prof["pct_exitable_1day"] == 0.5
+
+
+def test_a_zero_price_fails_the_data_gate_and_positive_prices_pass():
+    """M31: a 0 price (a feed glitch, not a market move) passed the gate."""
+    days = pd.bdate_range(end=pd.Timestamp.now().normalize(), periods=80)
+    good = pd.DataFrame({"A": np.linspace(10, 12, 80)}, index=days)
+    check = lambda p: {c["check"]: c["status"] for c in validate_prices(p)["checks"]}
+    assert check(good)["positivity.non_positive_prices"] == "PASS"
+    bad = good.copy()
+    bad.iloc[40, 0] = 0.0
+    assert check(bad)["positivity.non_positive_prices"] == "FAIL" and not validate_prices(bad)["passed"]
+
+
+def test_a_stale_feed_warns_and_a_fresh_one_passes():
+    """M33: a feed 30 business days old read as fresh."""
+    today = pd.Timestamp.now().normalize()
+    status = lambda end: {c["check"]: c["status"] for c in validate_prices(pd.DataFrame(
+        {"A": np.linspace(10, 12, 80)}, index=pd.bdate_range(end=end, periods=80)))["checks"]}
+    assert status(today)["freshness.staleness"] == "PASS"
+    assert status(today - pd.offsets.BDay(30))["freshness.staleness"] == "WARN"
+
+
+def test_security_header_values_are_the_ones_we_promise():
+    """M34: the header test compared responses with serve.HEADERS, the table
+    it was checking, so emptying nosniff in that table kept it green. These
+    values are written out here, on their own."""
+    import serve
+
+    assert serve.HEADERS == {
+        "strict-transport-security": "max-age=31536000",
+        "x-frame-options": "SAMEORIGIN",
+        "content-security-policy": "frame-ancestors 'self'; object-src 'none'; "
+                                   "base-uri 'self'; form-action 'self'",
+        "x-content-type-options": "nosniff",
+        "referrer-policy": "strict-origin-when-cross-origin",
+    }
+
+
+def test_a_visitor_never_sees_the_exception_text():
+    """M36: safe_err printing str(exc) (server paths) to visitors stayed green."""
+    import ast
+
+    src = (pathlib.Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
+    fn = next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "safe_err")
+    logged, ns = [], {"SESSION_REF": "AB12CD34", "log_incident": lambda *a: logged.append(a),
+                      "BaseException": BaseException}
+    exec(compile(ast.Module([fn], []), "main.py", "exec"), ns)   # noqa: S102 - our own function
+    shown = ns["safe_err"]("load", FileNotFoundError("/srv/app/data/prices_ab12.parquet"))
+    assert "/srv/app" not in shown and "parquet" not in shown
+    assert "FileNotFoundError" in shown and "AB12CD34" in shown and logged   # the operator still gets it
+
+
+def test_the_risk_free_rate_is_read_as_a_percent():
+    """M08: ^IRX is quoted in percent; dividing by 10 made it 10x too big."""
+    from src import ingestion
+
+    real = ingestion.yf.download
+    try:
+        ingestion.yf.download = lambda *a, **k: pd.DataFrame({"Close": [5.0, 5.25]})
+        assert abs(ingestion.fetch_risk_free_rate(use_cache=False) - 0.0525) < 1e-12
+        ingestion.yf.download = lambda *a, **k: pd.DataFrame({"Close": [np.nan]})
+        assert ingestion.fetch_risk_free_rate(use_cache=False) is None   # never a made-up rate
+    finally:
+        ingestion.yf.download = real
+
+
+def test_a_redirect_off_the_allowlist_is_refused():
+    """M11: with the after-request check gone a redirect could walk off the
+    allowlist, and every check stayed green."""
+    from src import netguard
+
+    class Resp:
+        def __init__(self, url):
+            self.url = url
+
+    real = netguard._curl.Session.request
+    try:
+        netguard._curl.Session.request = lambda self, m, url, *a, **k: Resp(target)
+        target = "https://query2.finance.yahoo.com/v8/x"            # stays on the list: fine
+        assert netguard.guarded_session().get("https://query1.finance.yahoo.com/v8/x").url == target
+        target = "https://evil.example/steal"                         # walks off: refused
+        try:
+            netguard.guarded_session().get("https://query1.finance.yahoo.com/v8/x")
+        except netguard.EgressBlocked:
+            pass
+        else:
+            raise AssertionError("a redirect off the allowlist was followed")
+    finally:
+        netguard._curl.Session.request = real
+
+
+def test_map_payload_escapes_js_line_separators():
+    """M15: U+2028/U+2029 end a line inside a JS string in older engines;
+    leaving them raw broke the map's script and no check noticed."""
+    import json as _json
+
+    from src.topology import war_room_html
+
+    payload = {"footnote": "a b c", "assets": []}
+    page = war_room_html(payload)
+    begin, end = "/* __PAYLOAD_BEGIN__ */", "/* __PAYLOAD_END__ */"
+    body = page[page.index(begin) + len(begin):page.index(end)]
+    assert " " not in body and " " not in body
+    assert _json.loads(body.strip().removeprefix("const DEMO =").strip().rstrip(";")) == payload
+
+
 def test_no_test_hides_below_the_script_runner():
     """`python -m tests.test_engine` collects tests when it reaches the
     __main__ block, so a test defined below it never ran (the Grit Zone
