@@ -52,6 +52,10 @@ try {
 const { chromium, devices } = pw.chromium ? pw : pw.default;
 const [,, url] = process.argv;
 if (!url) { console.error('usage: node tools/craft_check.mjs <url>'); process.exit(2); }
+// before 1.57 Playwright's setOffline did not reach a service worker's own
+// fetches unless this flag was on (CI pins 1.56.1): the offline reload then
+// still got the live page. Read at launch.
+process.env.PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS = '1';
 const b = await chromium.launch(process.env.CHROMIUM ? { executablePath: process.env.CHROMIUM } : {});
 let fails = 0;
 const ok = (pass, what, detail = '') => {
