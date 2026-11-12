@@ -92,6 +92,20 @@ for (const [W, H] of SIZES) {
     return x.slice(Math.max(0, k - 3), k + 3).map((e, j) => ({ ...e, y: Math.round(t[Math.max(0, k - 3) + j]) }));
   })));
 
+  // edge: the pointer in the sliver between the frame's fractional bottom and
+  // its own last row - the wheel reached no listener and the browser stepped
+  // the page (Live audit 8b, 2026-11-12: the run met it at the same frame
+  // every time, 112px in one step)
+  for (const off of [0, 0.5]) {
+    await p.evaluate(([sel, y]) => { const sc = document.querySelector('[data-testid="stMain"]');
+      sc.style.scrollBehavior = 'auto'; sc.scrollTop += document.querySelector(sel).getBoundingClientRect().bottom - y; }, [MAP, H * 0.5 + off]);
+    await p.waitForTimeout(700);
+    await p.mouse.move(W * 0.4, H * 0.5); await p.waitForTimeout(250);
+    await record(1500); await p.mouse.wheel(0, 100); await p.waitForTimeout(1700);
+    const e = await trace();
+    ok(e.moved > 50 && e.maxStep <= 40, `${W}x${H} edge${off}: a notch on the map's bottom edge glides - ${Math.round(e.moved)}px, largest step ${Math.round(e.maxStep)}px`);
+  }
+
   // spill: something poking past the frame's bottom (the hover tip at the
   // plot's lower edge, a font a pixel taller) makes the map's page taller than
   // its frame, but that page is overflow: hidden on a desktop and cannot
