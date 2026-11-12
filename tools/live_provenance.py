@@ -62,9 +62,15 @@ def raw_chart(symbol: str, span: str = "3mo") -> pd.Series:
     # BST) back a day once the clocks went back (live audit run 86, 2026-10-28: EURUSD=X 0.8% "gap").
     tz = res["meta"].get("exchangeTimezoneName") or "UTC"
     days = pd.to_datetime(np.array(res["timestamp"]), unit="s", utc=True).tz_convert(tz).tz_localize(None).normalize()
-    adj = res["indicators"].get("adjclose", [{}])[0].get("adjclose") \
-        or res["indicators"]["quote"][0]["close"]
-    raw = pd.Series(adj, index=days, dtype=float).dropna()
+    close = pd.Series(res["indicators"]["quote"][0]["close"], index=days, dtype=float)
+    adj = res["indicators"].get("adjclose", [{}])[0].get("adjclose")
+    raw = pd.Series(adj, index=days, dtype=float) if adj else close.copy()
+    # Yahoo fills in a day's adjclose overnight: until then the newest bar has only
+    # its close, which IS its adjusted close - adjustments rescale older bars only
+    # (Live audit run 251, 2026-11-12: the 2026-11-11 bar read as missing at 8:25pm).
+    if len(raw) and pd.isna(raw.iloc[-1]):
+        raw.iloc[-1] = close.iloc[-1]
+    raw = raw.dropna()
     # Futures and FX can carry two bars on one calendar date (session roll).
     return raw[~raw.index.duplicated(keep="last")]
 

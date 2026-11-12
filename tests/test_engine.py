@@ -6397,6 +6397,38 @@ def test_the_map_draws_no_node_or_link_the_data_did_not_produce():
         tp.fetch_prices = orig
 
 
+def test_the_audits_raw_newest_bar_is_its_close_until_yahoo_adjusts_it():
+    """Live audit run 251 (2026-11-12, 8:25pm New York): the engine held the
+    finished 2026-11-11 close, but the audit's raw-API reader said Yahoo's
+    newest finished day was 11-10 - Yahoo fills in a day's adjclose overnight,
+    and the reader dropped the blank. The newest bar's adjusted close IS its
+    close (adjustments rescale older bars only), so a blank there reads the
+    close; a blank on an older bar is still left out, never guessed."""
+    import tools.live_provenance as lp
+
+    class R:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def json(self):
+            return self.payload
+
+    def chart(adj):
+        res = {"meta": {"exchangeTimezoneName": "America/New_York"},
+               "timestamp": [1762785000, 1762871400],            # 2025-11-10 and 11, 9:30am NY
+               "indicators": {"quote": [{"close": [100.0, 101.0]}], "adjclose": [{"adjclose": adj}]}}
+        return lambda: type("S", (), {"get": lambda self, url, timeout=30: R({"chart": {"result": [res]}})})()
+
+    real = lp.guarded_session
+    try:
+        lp.guarded_session = chart([99.5, None])
+        assert lp.raw_chart("X").to_dict() == {pd.Timestamp("2025-11-10"): 99.5, pd.Timestamp("2025-11-11"): 101.0}
+        lp.guarded_session = chart([None, 100.5])
+        assert list(lp.raw_chart("X").index) == [pd.Timestamp("2025-11-11")], "an older blank was filled"
+    finally:
+        lp.guarded_session = real
+
+
 def test_the_audits_raw_yahoo_bars_land_on_their_own_day_across_a_clock_change():
     """Live audit run 86 (2026-10-28): Yahoo stamps a London FX day at its local midnight, 23:00 UTC the
     evening before while Britain is on summer time. raw_chart added the meta's gmtoffset, which is only
