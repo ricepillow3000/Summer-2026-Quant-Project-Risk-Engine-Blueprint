@@ -1,6 +1,6 @@
 # Break it on purpose, every week (John, 2026-11-10): green checks only mean
 # something if they go red when the code is wrong. tools/mutation_check.py
-# plants 36 known bugs, one at a time, in a temp copy of the repo and fails if
+# plants 45 known bugs, one at a time, in a temp copy of the repo and fails if
 # any of them leaves every test green. Too slow for every push (~40 minutes),
 # so it runs weekly and from the Actions tab (Run workflow).
 name: Mutation check
@@ -26,5 +26,5 @@ jobs:
           python-version: "3.13"
       - name: Install
         run: python -m pip install -r requirements.txt
-      - name: Plant 36 bugs, one at a time - each must turn a test red
+      - name: Plant 45 bugs, one at a time - each must turn a test red
         run: python -m tools.mutation_check

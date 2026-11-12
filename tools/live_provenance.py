@@ -9,6 +9,9 @@ Three independent cross-checks against the LIVE feed (needs Yahoo access):
 2. Second-source check. The risk-free rate the Sharpe ratio uses (^IRX from
    Yahoo) must agree with the US Treasury 3-month bill rate published by the
    Federal Reserve Bank of St. Louis (FRED series DTB3) to within 0.25 points.
+   End of day: the newest bar the engine holds is a finished session and the
+   newest one Yahoo has (never today's live price), and US listings' newest
+   close agrees with a second vendor (Stooq) to 0.25%.
 3. Identity checks. Instruments that track the same thing must co-move the
    way they have to: SPY vs IVV (both S&P 500), GLD vs gold futures, QQQ vs
    SPY. A mislabelled or synthetic series fails these.
@@ -30,7 +33,7 @@ import pandas as pd
 import yfinance as yf
 
 from src.conviction import BENCHMARK, load_conviction
-from src.ingestion import MAX_UNIVERSE, PRESETS, fetch_prices, fetch_risk_free_rate
+from src.ingestion import ALL_DAY, MAX_UNIVERSE, PRESETS, _last_final_day, fetch_prices, fetch_risk_free_rate
 from src.netguard import guarded_session
 from src.scenarios import HISTORICAL_REGIMES
 
@@ -64,6 +67,35 @@ def raw_chart(symbol: str, span: str = "3mo") -> pd.Series:
     raw = pd.Series(adj, index=days, dtype=float).dropna()
     # Futures and FX can carry two bars on one calendar date (session roll).
     return raw[~raw.index.duplicated(keep="last")]
+
+
+STOOQ = {"AAPL": "aapl.us", "MSFT": "msft.us", "SPY": "spy.us", "IVV": "ivv.us",
+         "QQQ": "qqq.us", "GLD": "gld.us", "^GSPC": "^spx"}
+
+
+def second_source(sym: str, day: pd.Timestamp, close: float) -> None:
+    """The newest close from a vendor that is not Yahoo (Stooq's free daily CSV).
+    A newest bar's adjusted close is its actual close - adjustments only rescale
+    older bars - so vendors must agree on it. Stooq unreachable or asking for a
+    key is a SKIP, said out loud, never a pass."""
+    if sym not in STOOQ:
+        return
+    try:
+        req = urllib.request.Request(f"https://stooq.com/q/d/l/?s={STOOQ[sym]}&i=d",
+                                     headers={"User-Agent": "meliona-audit"})
+        df = pd.read_csv(urllib.request.urlopen(req, timeout=20))  # nosec B310 - fixed https URL
+        df["Date"] = pd.to_datetime(df["Date"])
+        row = df[df["Date"] == day]
+    except (OSError, ValueError, KeyError) as exc:
+        print(f"SKIP  {sym} second source: Stooq unreachable ({type(exc).__name__})", flush=True)
+        return
+    if row.empty:
+        print(f"SKIP  {sym} second source: Stooq has no bar for {day.date()}", flush=True)
+        return
+    theirs = float(row["Close"].iloc[-1])
+    gap = abs(close / theirs - 1)
+    check(f"{sym} newest close agrees with a second vendor", gap < 0.0025,
+          f"{day.date()} Yahoo {close:.4f} vs Stooq {theirs:.4f} ({gap:.3%} apart)")
 
 
 def crisis_boxes(bench: pd.Series) -> dict:
@@ -118,9 +150,24 @@ def main() -> int:
             check(f"{sym} loaded", False, "engine returned no column")
             continue
         raw = raw_chart(sym)
-        # The newest bar can still be moving (FX trades round the clock), so
-        # compare completed bars only.
-        both = pd.concat([eng[sym].dropna(), raw], axis=1, join="inner").dropna().iloc[:-1]
+        # The engine keeps finished days only, so every bar it has - the newest
+        # included - must equal Yahoo's. Round-the-clock names (FX, futures)
+        # are the exception: after 6pm the raw API can file the next session
+        # under today's date, so their newest common bar is left out.
+        both = pd.concat([eng[sym].dropna(), raw], axis=1, join="inner").dropna()
+        if sym.endswith(ALL_DAY):
+            both = both.iloc[:-1]
+        # End of day: the engine's newest bar is a finished day, and it is the
+        # newest finished day Yahoo has - never today's live price, never a day behind.
+        final = pd.Timestamp(_last_final_day(sym))
+        newest = eng[sym].dropna().index[-1]
+        done = raw[raw.index <= final]
+        on_time = newest <= final and (sym.endswith(ALL_DAY) or newest == done.index[-1])
+        check(f"{sym} newest bar is the latest finished close", on_time,
+              f"engine {newest.date()}, Yahoo's newest finished {done.index[-1].date()}, "
+              f"last day that can be final now {final.date()}")
+        if not sym.endswith(ALL_DAY):
+            second_source(sym, newest, float(eng[sym].dropna().iloc[-1]))
         if both.empty:
             check(f"{sym} engine price == raw Yahoo chart", False, "no common dates")
             continue

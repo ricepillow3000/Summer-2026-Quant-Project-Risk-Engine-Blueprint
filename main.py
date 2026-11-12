@@ -1197,7 +1197,10 @@ with st.expander("Portfolio: which names to test", expanded=False):
              "(for example BRK-B, EURUSD=X for a currency, GC=F for gold).",
     )
 
-_raw_syms = sorted({t.strip().upper() for t in chosen if t.strip()})
+# Widget state arrives from the visitor's browser, so a script can send any
+# list: cut it to 4x the cap before any per-name work (security review,
+# 2026-11-12). Past 25 the page already refuses, and says so below.
+_raw_syms = sorted({t.strip().upper() for t in list(chosen)[:4 * MAX_UNIVERSE] if t.strip()})
 # The ticker box takes free text, and ticker names get interpolated into
 # unsafe_allow_html blocks downstream (the headline verdict names excluded
 # symbols inside a <div>). Reject anything not shaped like a Yahoo symbol

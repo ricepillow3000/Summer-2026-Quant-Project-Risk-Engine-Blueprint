@@ -38,6 +38,7 @@ logged too. Pinned by test_one_address_cannot_flood_the_shared_process.
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import logging
 import secrets
 import sys
@@ -56,7 +57,11 @@ HEADERS = {
     "x-content-type-options": "nosniff",
     "referrer-policy": "strict-origin-when-cross-origin",
 }
-HIDDEN = ("/_stcore/metrics",)
+# metrics: live session counts, open to anyone by default. upload_file: the app
+# has no uploader, but streamlit still takes files there, held in memory until
+# the session ends, behind an xsrf check a script passes by sending the same
+# made-up token as cookie and header (security review, 2026-11-12).
+HIDDEN = ("/_stcore/metrics", "/_stcore/upload_file")
 
 
 class SecurityHeaders:
@@ -92,9 +97,10 @@ NEW_SESSIONS_PER_MINUTE = 60
 OPEN_SESSIONS = 30
 REQUESTS_PER_MINUTE = 3000
 MESSAGES_PER_MINUTE = 600      # one address's websocket messages; a person sends a few
-NEVER_LIMITED = ("/_stcore/health",)
+MAX_MESSAGE_BYTES = 256 * 1024  # one inbound message; a click's widget state is a few KB
+NEVER_LIMITED = ("/_stcore/health",)   # exact paths
 WINDOW = 60.0
-MAX_TRACKED = 20_000            # addresses held at once; the oldest go first
+MAX_TRACKED = 20_000            # addresses held at once; the quietest go first
 
 log = logging.getLogger("meliona.ratelimit")
 if not log.handlers:            # serve.py runs before main.py's setup_logging
@@ -113,13 +119,18 @@ def scrambled(addr: str) -> str:
 
 
 def client_address(scope) -> str:
-    for name, value in scope.get("headers", []):
-        if name == b"x-forwarded-for":
-            hops = [h.strip() for h in value.decode("latin-1").split(",") if h.strip()]
-            if hops:
-                return hops[-1]
+    """the last hop the proxy appended - read across every x-forwarded-for line,
+    so a second line the client sent can't pick the address. an ipv6 /64 is one
+    customer's block, so it counts as one address (else 2^64 fresh ones)."""
+    hops = [h.strip() for name, value in scope.get("headers", []) if name == b"x-forwarded-for"
+            for h in value.decode("latin-1").split(",") if h.strip()]
     client = scope.get("client")
-    return client[0] if client else "unknown"
+    addr = hops[-1] if hops else (client[0] if client else "unknown")
+    try:
+        ip = ipaddress.ip_address(addr)
+    except ValueError:
+        return addr
+    return str(ipaddress.ip_network(f"{ip}/64", strict=False)) if ip.version == 6 else addr
 
 
 class RateLimit:
@@ -133,6 +144,7 @@ class RateLimit:
         self.messages = defaultdict(deque)   # address -> times of websocket messages
         self.open = defaultdict(int)          # address -> sessions open now
         self.warned = {}                      # address -> last refusal logged
+        self.tidied = float("-inf")           # last time the tables were trimmed
 
     def _within(self, seen: deque, now: float, cap: int) -> bool:
         while seen and now - seen[0] > WINDOW:
@@ -148,16 +160,28 @@ class RateLimit:
             log.warning("refused %s from client=%s", what, scrambled(addr))
 
     def _tidy(self) -> None:
-        if len(self.requests) + len(self.sessions) + len(self.messages) > MAX_TRACKED:
-            now = self.clock()
-            for table in (self.requests, self.sessions, self.messages):
-                for addr in [a for a, q in table.items() if not q or now - q[-1] > WINDOW]:
+        """keep the tables bounded: drop addresses idle a minute, then, if a
+        flood of fresh addresses still overfills them, the quietest. at most
+        once a second, so a big table isn't scanned on every request."""
+        now = self.clock()
+        tracked = len(self.requests) + len(self.sessions) + len(self.messages)
+        if tracked <= MAX_TRACKED or now - self.tidied < 1.0:
+            return
+        self.tidied = now
+        for table in (self.requests, self.sessions, self.messages):
+            for addr in [a for a, q in table.items() if not q or now - q[-1] > WINDOW]:
+                del table[addr]
+            extra = len(table) - MAX_TRACKED // 3
+            if extra > 0:
+                for addr in sorted(table, key=lambda a: table[a][-1])[:extra]:
                     del table[addr]
-            for addr in [a for a, n in self.open.items() if n <= 0]:
-                del self.open[addr]
+        for addr in [a for a, n in self.open.items() if n <= 0]:
+            del self.open[addr]
+        for addr in [a for a, t in self.warned.items() if now - t > WINDOW]:
+            del self.warned[addr]
 
     async def __call__(self, scope, receive, send):
-        if scope["type"] not in ("http", "websocket") or scope["path"].startswith(NEVER_LIMITED):
+        if scope["type"] not in ("http", "websocket") or scope["path"] in NEVER_LIMITED:
             await self.app(scope, receive, send)
             return
         addr, now = client_address(scope), self.clock()
@@ -188,14 +212,19 @@ class RateLimit:
         async def counted():
             # past the cap: hang up (1013 "try again later") and hand the app a
             # disconnect, so the session ends the normal way
+            # one too big gets 1009 ("too big"); compression means a small wire
+            # frame can unpack to megabytes of widget state to chew through
             message = await receive()
-            if message["type"] == "websocket.receive" and not self._within(
-                    self.messages[addr], self.clock(), MESSAGES_PER_MINUTE):
+            if message["type"] != "websocket.receive":
+                return message
+            size = len(message.get("bytes") or b"") + len(message.get("text") or "")
+            code = 1009 if size > MAX_MESSAGE_BYTES else 1013
+            if code == 1009 or not self._within(self.messages[addr], self.clock(), MESSAGES_PER_MINUTE):
                 self._refused(addr, "messages", self.clock())
                 if not closed:
                     closed.append(True)
-                    await send({"type": "websocket.close", "code": 1013})
-                return {"type": "websocket.disconnect", "code": 1013}
+                    await send({"type": "websocket.close", "code": code})
+                return {"type": "websocket.disconnect", "code": code}
             return message
 
         async def quiet(message):                   # nothing goes out after the close
