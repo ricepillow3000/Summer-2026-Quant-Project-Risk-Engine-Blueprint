@@ -105,7 +105,7 @@ jobs:
           # a first visit's click, keys and wheel never paint a gold block (John, 2026-11-06)
           node tools/key_wheel_check.mjs http://127.0.0.1:8501 site-shots/keys
           # the wheel glides over the Risk Topology map too, not the browser's step (John, 2026-11-06)
-          node tools/map_wheel_check.mjs http://127.0.0.1:8501
+          node tools/map_wheel_check.mjs http://127.0.0.1:8501 2>&1 | tee map_wheel.log; test "${PIPESTATUS[0]}" -eq 0
           # the page's craft: type, figures, measure, widows, touch, safe area, motion (John, 2026-11-09)
           node tools/craft_check.mjs http://127.0.0.1:8501
       # Every button glide lands (tools/glide_load_check.mjs): on the settled
@@ -183,7 +183,10 @@ jobs:
       # read). Repeat them where the log ends.
       - name: 12. Provenance verdicts, repeated at the end of the log
         if: always()
-        run: grep -E "^FAIL|provenance checks pass" provenance.log || echo "provenance did not run"
+        run: |
+          grep -E "^FAIL|provenance checks pass" provenance.log || echo "provenance did not run"
+          # 8b's map wheel FAIL lines and the frames around a big step, where the log can be read
+          grep -E -A1 "^FAIL|big step" map_wheel.log 2>/dev/null || true
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         if: always()
