@@ -461,6 +461,9 @@ def _fake_history(t, years=2.0):
     return pd.DataFrame({"Open": c, "High": c, "Low": c, "Close": c, "Volume": vol}, index=idx)
 
 
+PINNED_NOW = __import__("datetime").datetime(2026, 10, 21, 16, 0, tzinfo=__import__("datetime").timezone.utc)
+
+
 class _FakeYahoo:
     """Runs yfinance's REAL yf.download (its threading, timezone strip, union
     and column sort) on fake per-name histories, records every download's
@@ -491,7 +494,11 @@ class _FakeYahoo:
         self._tmp = tempfile.TemporaryDirectory()
         self._real = (multi.Ticker, yu.get_ticker_by_isin, ing.yf.download,
                       ing.check_budget, ing.guarded_session, ing.DATA_DIR,
-                      getattr(ing, "RETRY_PAUSE", None))
+                      getattr(ing, "RETRY_PAUSE", None), ing._now)
+        # a fixed Wednesday noon in New York: no close falls in the hours a
+        # test ages a stamp by, whatever time the suite really runs
+        ing._now = lambda: PINNED_NOW
+        ing._NO_DATA.clear()                    # no empty name remembered from another test
         ing.RETRY_PAUSE = 0.0                   # no real waiting in a unit test
         real_download = ing.yf.download
 
@@ -516,7 +523,7 @@ class _FakeYahoo:
         import yfinance.utils as yu
         import src.ingestion as ing
         (multi.Ticker, yu.get_ticker_by_isin, ing.yf.download,
-         ing.check_budget, ing.guarded_session, ing.DATA_DIR, pause) = self._real
+         ing.check_budget, ing.guarded_session, ing.DATA_DIR, pause, ing._now) = self._real
         if pause is None:
             del ing.RETRY_PAUSE
         else:
@@ -582,7 +589,7 @@ def test_adding_names_to_a_known_basket_downloads_only_the_new_names():
         def stamp(t, hours_ago):
             path = ing._raw_path(t, "2y")
             f = pd.read_parquet(path)
-            when = _dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(hours=hours_ago)
+            when = ing._now() - _dt.timedelta(hours=hours_ago)
             f.attrs["fetched_at_utc"] = when.isoformat(timespec="seconds")
             f.to_parquet(path)
             return f.attrs["fetched_at_utc"]
@@ -596,6 +603,85 @@ def test_adding_names_to_a_known_basket_downloads_only_the_new_names():
             ing._cache_path(["AAA", "DDD"], "2y"))).read_text())
         assert meta["fetched_at_utc"] == held, meta
         assert meta["fetched_newest_utc"] > held, meta
+
+
+def test_a_bar_counts_only_once_its_trading_day_is_over():
+    """John, 2026-11-12: data pulled accurately by end of day. In market hours
+    Yahoo's daily download carries TODAY's row at the live price, and the
+    cache kept it for hours - a half-finished day read as a close. A bar is
+    kept only once its day is over on New York's clock: 4:30pm for a US
+    listing (the closing auction has printed), 8pm for markets that trade
+    round the clock. Both ways, on the real fetch path."""
+    import datetime as _dt
+    import src.ingestion as ing
+
+    def at(day, hh, mm=0):
+        ny = _dt.datetime(2026, 10, day, hh, mm, tzinfo=ing.NEW_YORK)
+        return lambda: ny.astimezone(_dt.timezone.utc)
+
+    days = pd.DatetimeIndex(["2026-10-19", "2026-10-20", "2026-10-21", "2026-10-22"])
+    frame = pd.DataFrame({"Close": [1.0, 2.0, 3.0, 4.0]}, index=days)
+    real = ing._now
+    try:
+        for clock, name, last in ((at(21, 11), "AAPL", "2026-10-20"),      # still trading
+                                  (at(21, 16, 29), "AAPL", "2026-10-20"),  # auction printing
+                                  (at(21, 16, 30), "AAPL", "2026-10-21"),  # a real close
+                                  (at(21, 17), "EURUSD=X", "2026-10-20"),  # fx day not over
+                                  (at(21, 20), "EURUSD=X", "2026-10-21"),
+                                  (at(21, 20), "ES=F", "2026-10-21"),      # tomorrow's session
+                                  (at(21, 20), "BTC-USD", "2026-10-21"),
+                                  (at(24, 12), "AAPL", "2026-10-22")):     # a saturday
+            ing._now = clock
+            kept = ing._finished_rows(frame, name)
+            assert str(kept.index[-1].date()) == last, (name, clock(), kept.index[-1])
+            aware = frame.tz_localize("America/New_York")      # tz-aware frames too
+            assert str(ing._finished_rows(aware, name).index[-1].date()) == last
+    finally:
+        ing._now = real
+
+    # the real fetch path: the fake history's last bar is Friday 2026-10-16
+    with _FakeYahoo():
+        ing._now = at(16, 11)
+        assert str(ing.fetch_prices(["AAA", "BBB"], use_cache=False).index[-1].date()) == "2026-10-15", \
+            "a Friday-morning pull kept Friday's unfinished bar"
+        ing._now = at(16, 16, 45)
+        assert str(ing.fetch_prices(["AAA", "BBB"], use_cache=False).index[-1].date()) == "2026-10-16", \
+            "after the close Friday's bar is final and must be there"
+
+
+def test_a_pull_from_before_the_close_goes_stale_at_the_close():
+    """The other half of end-of-day: a pull made at 3pm used to stay 'fresh'
+    for 6 hours, so the day's close reached the page at 9pm. A cache now goes
+    stale the moment a close comes in (4:30pm, and 8pm for round-the-clock
+    markets, weekdays), and the warm loop wakes just after it. Both ways."""
+    import datetime as _dt
+    import src.ingestion as ing
+    import tools.warm_cache as wc
+
+    def ny(day, hh, mm=0):
+        return _dt.datetime(2026, 10, day, hh, mm, tzinfo=ing.NEW_YORK)
+
+    real = ing._now
+    try:
+        def fresh(pulled, now, max_age=6):
+            ing._now = lambda: now.astimezone(_dt.timezone.utc)
+            return ing._is_fresh(pulled.astimezone(_dt.timezone.utc).isoformat(), max_age)
+
+        assert fresh(ny(21, 15), ny(21, 16)), "an hour-old pull with no close since is fresh"
+        assert not fresh(ny(21, 15), ny(21, 16, 31)), "a 3pm pull hid the 4:30pm close"
+        assert fresh(ny(21, 16, 35), ny(21, 19)), "a pull after the close stays fresh"
+        assert not fresh(ny(21, 16, 35), ny(21, 20, 5)), "the 8pm close for fx and futures"
+        assert not fresh(ny(21, 9), ny(21, 15, 30)), "past max age is still stale"
+        assert fresh(ny(23, 20, 30), ny(24, 2)), "no close on a saturday"
+        ing._now = lambda: ny(23, 21).astimezone(_dt.timezone.utc)      # friday night
+        assert ing.next_close_boundary() == ny(26, 16, 30), ing.next_close_boundary()
+        assert ing.last_close_boundary() == ny(23, 20), ing.last_close_boundary()
+        ing._now = lambda: ny(21, 15).astimezone(_dt.timezone.utc)
+        assert wc.sleep_seconds(5) == 90 * 60 + wc.AFTER_CLOSE, wc.sleep_seconds(5)
+        ing._now = lambda: ny(21, 21).astimezone(_dt.timezone.utc)
+        assert wc.sleep_seconds(5) == 5 * 3600, "no close within 5 hours: the usual pass"
+    finally:
+        ing._now = real
 
 
 def test_use_cache_false_never_reads_or_writes_a_name_file():
@@ -2326,6 +2412,99 @@ def test_one_address_cannot_flood_the_shared_process():
     finally:
         serve.NEW_SESSIONS_PER_MINUTE, serve.OPEN_SESSIONS, serve.REQUESTS_PER_MINUTE = old
         serve.log.removeHandler(handler)
+
+
+def test_the_security_review_holes_in_serve_stay_closed():
+    """2026-11-12 independent security review of serve.py, each hole both ways:
+    - streamlit's upload route took files into memory (no uploader here) behind
+      an xsrf check a script passes with a made-up cookie/header pair: 404 now;
+    - the health exemption matched any path starting /_stcore/health;
+    - only the first X-Forwarded-For line was read, so a client's own extra
+      line could choose its address;
+    - one ipv6 customer holds a /64 = 2^64 fresh addresses past every cap;
+    - the per-address tables only dropped idle rows, so a flood of fresh
+      addresses grew them without end (and `warned` never shrank);
+    - one websocket message could unpack to 16 MB of widget state."""
+    import asyncio
+
+    import serve
+
+    async def inner(scope, receive, send):
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b""})
+
+    def http(app, path, method="GET", xff=None):
+        sent = []
+
+        async def send(m):
+            sent.append(m)
+
+        async def receive():
+            return {"type": "http.request"}
+
+        headers = [(b"x-forwarded-for", h) for h in (xff or [])]
+        asyncio.run(app({"type": "http", "path": path, "method": method, "headers": headers,
+                         "client": ("10.0.0.2", 1)}, receive, send))
+        return sent[0]["status"]
+
+    hdr = serve.SecurityHeaders(inner)
+    for method in ("PUT", "DELETE", "OPTIONS"):
+        assert http(hdr, "/_stcore/upload_file/sess/file", method) == 404, method
+    assert http(hdr, "/_stcore/stream") == 200 and http(hdr, "/") == 200, "only the hidden paths go"
+
+    xff = lambda *lines: {"headers": [(b"x-forwarded-for", x) for x in lines]}   # noqa: E731
+    assert serve.client_address(xff(b"6.6.6.6", b"1.1.1.1, 2.2.2.2")) == "2.2.2.2"
+    assert serve.client_address(xff(b"9.9.9.9, 2.2.2.2", b"7.7.7.7")) == "7.7.7.7"
+    a = serve.client_address(xff(b"2001:db8:1:2:aaaa::1"))
+    assert a == serve.client_address(xff(b"2001:db8:1:2:ffff::9")) == "2001:db8:1:2::/64", a
+    assert serve.client_address(xff(b"2001:db8:1:3::1")) != a, "another /64 is another address"
+    assert serve.client_address(xff(b"not-an-ip")) == "not-an-ip"
+
+    now = [1000.0]
+    old = (serve.REQUESTS_PER_MINUTE, serve.MAX_TRACKED)
+    try:
+        serve.REQUESTS_PER_MINUTE, serve.MAX_TRACKED = 2, 30
+        lim = serve.RateLimit(inner, clock=lambda: now[0])
+        assert [http(lim, "/_stcore/healthX") for _ in range(3)] == [200, 200, 429], \
+            "a path that only starts like the health check escaped the cap"
+        assert all(http(lim, "/_stcore/health") == 200 for _ in range(5)), "health probe limited"
+        for i in range(500):                         # fresh addresses inside one minute
+            now[0] += 0.01
+            http(lim, "/", xff=[f"198.51.{i // 250}.{i % 250}".encode()])
+            lim.warned[f"w{i}"] = now[0] - 61        # refusals logged long ago
+        # trimmed once a second: never more than the cap plus one second of arrivals
+        assert len(lim.requests) <= 30 + 100, f"tables grew to {len(lim.requests)} under a flood"
+        now[0] += 1.0
+        http(lim, "/", xff=[b"203.0.113.77"])
+        assert len(lim.requests) <= 30 // 3 + 1, f"{len(lim.requests)} rows after a trim"
+        assert len(lim.warned) < 500, "the refusal log table never shrinks"
+        assert "203.0.113.77" in lim.requests and "198.51.1.249" in lim.requests, "the newest are kept"
+    finally:
+        serve.REQUESTS_PER_MINUTE, serve.MAX_TRACKED = old
+
+    async def chat(messages):
+        sent, queue = [], list(messages)
+
+        async def app(scope, receive, send):
+            await send({"type": "websocket.accept"})
+            while (await receive())["type"] == "websocket.receive":
+                pass
+
+        async def send(m):
+            sent.append(m)
+
+        async def receive():
+            return queue.pop(0) if queue else {"type": "websocket.disconnect", "code": 1000}
+
+        await serve.RateLimit(app)({"type": "websocket", "path": "/_stcore/stream",
+                                    "headers": [], "client": ("10.0.0.3", 1)}, receive, send)
+        return sent
+
+    fine = {"type": "websocket.receive", "bytes": b"x" * 4096}
+    huge = {"type": "websocket.receive", "bytes": b"x" * (serve.MAX_MESSAGE_BYTES + 1)}
+    assert {"type": "websocket.close", "code": 1009} not in asyncio.run(chat([fine, fine]))
+    assert {"type": "websocket.close", "code": 1009} in asyncio.run(chat([fine, huge, fine])), \
+        "an oversized message was passed to the app"
 
 
 def test_every_link_on_the_page_goes_somewhere_and_no_placeholder_is_left():
@@ -6092,6 +6271,51 @@ def test_the_download_asks_again_only_for_a_dropped_name_and_only_with_budget():
         assert close["BBB"].isna().all()
 
 
+def test_made_up_symbols_cannot_spend_the_days_yahoo_budget():
+    """2026-11-12 security review: a made-up but ticker-shaped symbol was
+    never cached and asked for three times, so a script re-sending a basket of
+    them spent the day's 5,000-request budget in minutes and typed baskets
+    went dark for everyone. A download that brings back NOTHING is not asked
+    again (an outage or all made-up - asking again cannot help), and a name
+    that came back empty is not asked for again for 15 minutes. A suggested
+    name is never remembered as empty, so an outage cannot lock out a real
+    one. Both ways."""
+    import src.ingestion as ing
+
+    fake = ["ZZZZ1", "ZZZZ2"]
+    with _FakeYahoo() as fy:
+        real_hist = globals()["_fake_history"]
+        globals()["_fake_history"] = lambda t, years=2.0: (
+            __import__("yfinance.utils", fromlist=["x"]).empty_df() if t.startswith(("ZZZZ", "AAPL"))
+            else real_hist(t, years))
+        try:
+            for _ in range(3):
+                try:
+                    ing._download_close_volume(fake, "2y")
+                except ing.NoDataError:
+                    pass
+            assert fy.downloads == [fake], f"made-up names were asked for again: {fy.downloads}"
+            clock = ing.time.monotonic
+            ing.time.monotonic = lambda: clock() + ing.NO_DATA_TTL + 1
+            try:
+                try:
+                    ing._download_close_volume(fake, "2y")
+                except ing.NoDataError:
+                    pass
+            finally:
+                ing.time.monotonic = clock
+            assert fy.downloads == [fake, fake], "15 minutes on they must be asked again"
+            assert "AAPL" in ing.SUGGESTIONS
+            for _ in range(2):                              # a real name in an outage
+                try:
+                    ing._download_close_volume(["AAPL"], "2y")
+                except ing.NoDataError:
+                    pass
+            assert fy.downloads[-2:] == [["AAPL"], ["AAPL"]], "a suggested name was locked out"
+        finally:
+            globals()["_fake_history"] = real_hist
+
+
 def test_the_app_calls_nothing_streamlit_has_deprecated():
     """Pillar 4, zero warnings: components.html printed "Please replace
     st.components.v1.html with st.iframe" on every run of every session. The
@@ -6171,6 +6395,38 @@ def test_the_map_draws_no_node_or_link_the_data_did_not_produce():
             assert pl["live"] and "Yahoo daily closes" in pl["provenance"]
     finally:
         tp.fetch_prices = orig
+
+
+def test_the_audits_raw_newest_bar_is_its_close_until_yahoo_adjusts_it():
+    """Live audit run 251 (2026-11-12, 8:25pm New York): the engine held the
+    finished 2026-11-11 close, but the audit's raw-API reader said Yahoo's
+    newest finished day was 11-10 - Yahoo fills in a day's adjclose overnight,
+    and the reader dropped the blank. The newest bar's adjusted close IS its
+    close (adjustments rescale older bars only), so a blank there reads the
+    close; a blank on an older bar is still left out, never guessed."""
+    import tools.live_provenance as lp
+
+    class R:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def json(self):
+            return self.payload
+
+    def chart(adj):
+        res = {"meta": {"exchangeTimezoneName": "America/New_York"},
+               "timestamp": [1762785000, 1762871400],            # 2025-11-10 and 11, 9:30am NY
+               "indicators": {"quote": [{"close": [100.0, 101.0]}], "adjclose": [{"adjclose": adj}]}}
+        return lambda: type("S", (), {"get": lambda self, url, timeout=30: R({"chart": {"result": [res]}})})()
+
+    real = lp.guarded_session
+    try:
+        lp.guarded_session = chart([99.5, None])
+        assert lp.raw_chart("X").to_dict() == {pd.Timestamp("2025-11-10"): 99.5, pd.Timestamp("2025-11-11"): 101.0}
+        lp.guarded_session = chart([None, 100.5])
+        assert list(lp.raw_chart("X").index) == [pd.Timestamp("2025-11-11")], "an older blank was filled"
+    finally:
+        lp.guarded_session = real
 
 
 def test_the_audits_raw_yahoo_bars_land_on_their_own_day_across_a_clock_change():
@@ -7472,25 +7728,56 @@ def test_the_risk_free_rate_is_read_as_a_percent():
 
 def test_a_redirect_off_the_allowlist_is_refused():
     """M11: with the after-request check gone a redirect could walk off the
-    allowlist, and every check stayed green."""
+    allowlist, and every check stayed green. 2026-11-12 security review: and
+    checking the FINAL url was too late - curl had already followed the hops,
+    so an off-list or plain-http host was contacted before the refusal. Hops
+    are now followed here, each checked BEFORE it is contacted. Both ways."""
     from src import netguard
 
     class Resp:
-        def __init__(self, url):
-            self.url = url
+        def __init__(self, status, location=None):
+            self.status_code, self.headers = status, ({"location": location} if location else {})
+
+    asked = []
+    routes = {}
+
+    def fake(self, method, url, *a, **k):
+        assert k.get("allow_redirects") is False, "curl must not follow redirects itself"
+        asked.append((method, url))
+        return routes.get(url, Resp(200))
 
     real = netguard._curl.Session.request
     try:
-        netguard._curl.Session.request = lambda self, m, url, *a, **k: Resp(target)
-        target = "https://query2.finance.yahoo.com/v8/x"            # stays on the list: fine
-        assert netguard.guarded_session().get("https://query1.finance.yahoo.com/v8/x").url == target
-        target = "https://evil.example/steal"                         # walks off: refused
+        netguard._curl.Session.request = fake
+        s = netguard.guarded_session()
+        # on the list, relative hop and all: followed, POST becomes GET after a 302
+        routes = {"https://query1.finance.yahoo.com/a": Resp(302, "https://query2.finance.yahoo.com/b"),
+                  "https://query2.finance.yahoo.com/b": Resp(307, "/c")}
+        assert s.post("https://query1.finance.yahoo.com/a", data="x").status_code == 200
+        assert asked == [("POST", "https://query1.finance.yahoo.com/a"),
+                         ("GET", "https://query2.finance.yahoo.com/b"),
+                         ("GET", "https://query2.finance.yahoo.com/c")], asked
+        for bad in ("https://evil.example/steal", "http://query2.finance.yahoo.com/plain",
+                    "https://169.254.169.254/latest/meta-data/"):
+            asked.clear()
+            routes = {"https://query1.finance.yahoo.com/a": Resp(302, bad)}
+            try:
+                s.get("https://query1.finance.yahoo.com/a")
+            except netguard.EgressBlocked:
+                pass
+            else:
+                raise AssertionError(f"a redirect to {bad} was followed")
+            assert asked == [("GET", "https://query1.finance.yahoo.com/a")], f"{bad} was contacted"
+        routes = {"https://query1.finance.yahoo.com/a": Resp(302, "https://query1.finance.yahoo.com/a")}
         try:
-            netguard.guarded_session().get("https://query1.finance.yahoo.com/v8/x")
+            s.get("https://query1.finance.yahoo.com/a")
+            raise AssertionError("a redirect loop never ended")
         except netguard.EgressBlocked:
             pass
-        else:
-            raise AssertionError("a redirect off the allowlist was followed")
+        asked.clear()                                   # a caller that wants the 302 itself
+        routes = {"https://query1.finance.yahoo.com/a": Resp(302, "https://evil.example/")}
+        assert s.get("https://query1.finance.yahoo.com/a", allow_redirects=False).status_code == 302
+        assert len(asked) == 1
     finally:
         netguard._curl.Session.request = real
 
