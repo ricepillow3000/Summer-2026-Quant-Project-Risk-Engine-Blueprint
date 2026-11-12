@@ -369,6 +369,22 @@ for (let i = 0; i < rN && !optim; i++) {
 }
 ok(optim && optim.ms !== null && optim.ms <= 150, 'optimistic: a changed setting shows its updating line inside 150ms', optim ? `${optim.ms}ms` : 'no radio');
 ok(optim && optim.minStale >= 0.5, 'optimistic: the old numbers stay readable while the new ones are worked out', optim ? `stale opacity >= ${optim.minStale}` : '');
+
+// bloat (John, 2026-11-12, reading as a new visitor: "anything boring, irrelevant,
+// bloat description, remove it"): a caption, a list item or a note says its one
+// thing in 45 words or fewer - in every tab and drawer, open or not. John's own
+// story, the answers and the Book's cards are prose, held by their own tests.
+const bloat = await p.evaluate(() => {
+  const main = document.querySelector('[data-testid="stMain"]'), out = [];
+  main.querySelectorAll('[data-testid="stCaptionContainer"], li, [data-testid="stMarkdownContainer"] > p').forEach(e => {
+    if (e.closest('.story-section, .faq-section, .about-band, .book-text, .book-lede, .contact-note, .contact-sub')) return;
+    if (e.parentElement && e.parentElement.closest('li, [data-testid="stCaptionContainer"]')) return;
+    const n = (e.textContent || '').trim().split(/\s+/).filter(Boolean).length;
+    if (n > 45) out.push(`${n}w: ${(e.textContent || '').trim().slice(0, 60)}`);
+  });
+  return out;
+});
+ok(!bloat.length, 'bloat: every caption, list item and note says its one thing in 45 words or fewer', bloat.join(' | '));
 await desk.close();
 
 // ---------------------------------------------------------------- phone

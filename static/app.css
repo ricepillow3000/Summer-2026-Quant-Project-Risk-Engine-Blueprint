@@ -443,6 +443,12 @@ div:has(> .st-key-glide), .st-key-glide, .st-key-glide div.stElementContainer, .
   [data-testid="stIFrame"] { width: calc(100% + 24px) !important; max-width: none !important;
                              margin-left: -12px !important; }
 }
+/* The map's last pixel row belongs to the page: when the frame's bottom lands
+   on a fractional pixel, a pointer in that sliver is inside the frame for the
+   page but past the frame's own last row - the wheel reached neither page's
+   listeners and the browser stepped the page 100px in one frame (Live audit
+   8b, 2026-11-12). Clipped, the sliver is the page's, and the glide takes it. */
+.st-key-risk-map iframe { clip-path: inset(0 0 1px 0); }
 
 /* Metric tiles: ruled columns like the slabs - a 3px charcoal rule, no box. */
 [data-testid="stMetric"] { background: transparent; border: none;

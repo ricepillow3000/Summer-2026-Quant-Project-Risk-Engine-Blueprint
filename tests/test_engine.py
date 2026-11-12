@@ -7859,6 +7859,42 @@ def test_one_address_cannot_flood_an_open_session_with_messages():
         serve.MESSAGES_PER_MINUTE = old
 
 
+def test_the_story_and_the_answers_read_aloud_in_one_breath():
+    """John, 2026-11-12: reading the story beside his out-of-suit photo and the
+    five answers out loud, "I already got bored". The old story ran a 35-word
+    sentence (the answers a 49-word one) and averaged 16.5 words a sentence. Every sentence now fits one
+    breath, and the set averages a short, spoken length."""
+    import re
+    import hero
+    texts = list(hero.STORY) + [a for _, a in hero.FAQS]
+    sentences = [x for t in texts for x in re.split(r"(?<=[.?!])\s+", t) if x]
+    words = [len(x.split()) for x in sentences]
+    long = [x for x, n in zip(sentences, words) if n > 24]
+    assert not long, f"too long to read in one breath: {long}"
+    assert sum(words) / len(words) <= 13, f"average sentence {sum(words) / len(words):.1f} words"
+    # deep_scan reads a bare "None" on the page as Python's None leaking out
+    # (Live audit 10, 2026-11-12: "None of it is about you.")
+    assert not re.search(r"\bNone\b", " ".join(texts)), "say 'nothing', not 'None'"
+
+
+def test_ewma_is_spelled_out_in_plain_words_wherever_it_shows():
+    """John, 2026-11-12: "explain EWMA in plain words too". The risk-matrix
+    choice "Quick to react (EWMA)", its help tip and the panic-view warning all
+    named EWMA without saying what it is. Each now says it in everyday words:
+    recent days count most, older days fade out."""
+    import re
+    src = (pathlib.Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
+    plain = "recent days count most"
+    help_txt = src[src.index('"How the names move together", ["Ledoit-Wolf"'):]
+    help_txt = help_txt[:help_txt.index("estimate_covariance(")]
+    assert "EWMA means" in help_txt and "exponentially weighted moving average" in help_txt
+    assert plain in help_txt.lower(), "the help tip must say what EWMA does"
+    cov_plain = re.search(r'"EWMA": ("Recent[^)]*?),\n\s*}', src, re.S)
+    assert cov_plain and plain in cov_plain.group(1).lower(), "the line under the choice"
+    panic = src[src.index("Panic view: "):][:300]
+    assert panic.startswith("Panic view: EWMA means ") and plain in panic.lower()
+
+
 def test_no_test_hides_below_the_script_runner():
     """`python -m tests.test_engine` collects tests when it reaches the
     __main__ block, so a test defined below it never ran (the Grit Zone

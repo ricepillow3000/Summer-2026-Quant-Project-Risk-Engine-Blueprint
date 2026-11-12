@@ -42,7 +42,10 @@ def collect_text(at) -> list[str]:
     out = []
     for block in (at.markdown, at.caption, at.title, at.header, at.subheader,
                   at.warning, at.error, at.info, at.success):
-        out += [el.value for el in block if isinstance(el.value, str)]
+        # a <style> or <script> block is markup no visitor reads: the
+        # stylesheet's comment "the EWMA warning" was flagged as jargon
+        out += [re.sub(r"<(style|script)\b.*?</\1>", " ", el.value, flags=re.S | re.I)
+                for el in block if isinstance(el.value, str)]
     out += [f"{m.label}: {m.value}" for m in at.metric]
     return out
 
@@ -138,7 +141,9 @@ def report(findings) -> int:
         return 0
     for kind, detail in findings:
         print(f"{kind:9} {detail}")
-    blocking = sum(1 for kind, _ in findings if kind in ("BLOCKER", "NUMBER"))
+    # John, 2026-11-12: "explain EWMA in plain words too" - an unexplained
+    # term now blocks like a broken number does
+    blocking = sum(1 for kind, _ in findings if kind in ("BLOCKER", "NUMBER", "CLARITY"))
     print(f"\n{len(findings)} findings, {blocking} blocking.")
     return 1 if blocking else 0
 

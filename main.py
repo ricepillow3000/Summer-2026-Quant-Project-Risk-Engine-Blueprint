@@ -39,7 +39,8 @@ from src.observability import (count_preset, count_session, host_setting, log_in
 from src.scenarios import HISTORICAL_REGIMES, replay_returns
 from hero import (N_PATHS, CONTACT_MAX, CONTACT_NAME_MAX, CONTACT_TOPICS, RESPONSE_TIME,
                   RESPONSE_WINDOW, about_html, contact_mailto, crest_engraving, faq_html, story_html,
-                  hero_html, profile_marks, LINKEDIN_URL, CONTACT_EMAIL as _CONTACT_DEFAULT)
+                  hero_html, profile_marks, LINKEDIN_URL, PRIVACY_URL,
+                  CONTACT_EMAIL as _CONTACT_DEFAULT)
 from src.liquidity import (days_to_liquidate, liquidity_profile,
                            liquidity_adjusted_cvar)
 from src.grit import grit_scores, MIN_HISTORY_DAYS
@@ -1144,9 +1145,8 @@ st.markdown(
     'Yahoo Finance carries.</li>'
     '<li>Replay a real crisis or move the sliders, and watch the big number '
     'move.</li>'
-    '<li>Read the big number. It answers one question: in a bad year, the '
-    'worst 5 of every 100 simulated years, how much does this portfolio lose '
-    'on average? Everything below it shows the working.</li>'
+    '<li>Read the big number: the average loss in the worst 5 of every 100 '
+    'simulated years. Everything below it shows the working.</li>'
     '</ol>'
     '<div class="orient-f">Nothing here is advice. Every number is computed '
     'from live end-of-day prices, and every tab shows its method.</div>'
@@ -1462,7 +1462,8 @@ with deck_alloc, st.expander("Weights: how the money is split",
     COV_PLAIN = {
         "Ledoit-Wolf": "Smooths out the noise in the price history",
         "Sample": "Uses the price history exactly as it is",
-        "EWMA": "Weighs the last few weeks most, so one bad day moves it a lot",
+        "EWMA": "Recent days count most and older days fade out, so one bad day "
+                "moves it a lot",
     }
     cov_method = st.selectbox(
         "How the names move together", ["Ledoit-Wolf", "Sample", "EWMA"],
@@ -1470,9 +1471,10 @@ with deck_alloc, st.expander("Weights: how the money is split",
         help="How the engine measures the way these names move together (their "
              "covariance), which sets the weights. Ledoit-Wolf (default) pulls "
              "noisy history toward a steadier estimate. Sample uses history as it "
-             "is. EWMA (RiskMetrics, λ=0.94) leans hard on the last few weeks, so "
-             "one bad day moves it a lot: use it to see the panic view, not as a "
-             "default.")
+             "is. EWMA means a weighted average where recent days count most and "
+             "older days fade out (exponentially weighted moving average; "
+             "RiskMetrics, λ=0.94), so one bad day moves it a lot: use it to see "
+             "the panic view, not as a default.")
     cov, cov_info = estimate_covariance(returns, cov_method)  # annualized risk matrix
     st.caption(f"{COV_PLAIN[cov_method]}. Method: {cov_info}.")
     if cov_method == "EWMA":
@@ -1481,7 +1483,8 @@ with deck_alloc, st.expander("Weights: how the money is split",
             # emoji in a 60%-opacity caption (2.63:1, Council B)
             '<div class="dq-row"><span class="dq-mark" role="img" aria-label="Warning" '
             'style="color:#6A5030;font-weight:700;">!</span> '
-            "Panic view: EWMA jumps on one bad day. Half its weight sits in the "
+            "Panic view: EWMA means recent days count most and older ones fade "
+            "out, so it jumps on one bad day. Half its weight sits in the "
             "last ≈11 trading days, about 73% in the last month, and 90% in the "
             "last ~37 (λ=0.94). It is shown so you can see how jumpy risk can "
             "look; the Crisis Conviction tab shows what followed past panics, and "
@@ -1807,8 +1810,8 @@ with f_col:
                if np.isfinite(mc.get("cvar_se", float("nan"))) else "")
     # John, 2026-11-09: long explanations in plain, short words
     st.caption(
-        "Each simulated year is stitched together from real days, so this "
-        "shows what could happen, not a forecast. Lines are smoothed." + _se_txt
+        "Each simulated year is stitched from real days: what could happen, "
+        "not a forecast. Lines are smoothed." + _se_txt
     )
 
 # ---- The Book: the guided arc, deliberately AHEAD of the tab strip ----
@@ -1967,12 +1970,10 @@ with tab_3d:
         with st.container(key="risk-map"):
             st.iframe(war_room_html(_wr_payload), width="stretch", height=820)
         st.caption(
-            "Where your book could drift in the next 30 days. Left to right: how "
-            "much it moves with the market (beta). Bottom to top: how much it "
-            "swings (volatility). The bright ground holds 68 in 100 of the likely "
-            "spots and goes dark past 99.7 in 100. The outer line is a set danger "
-            "limit. Fitted to this book's own past: estimates, not forecasts. "
-            "Explain the map names every term."
+            "Where your book could drift in 30 days. Across: how much it "
+            "moves with the market (beta). Up: how much it swings (volatility). "
+            "Bright ground: 68 in 100 likely spots; dark past 99.7. The outer line "
+            "is a set danger limit. Estimates, not forecasts."
         )
     except Exception as _wr_exc:  # noqa: BLE001 - never fake the map
         st.info(
@@ -1988,6 +1989,10 @@ with tab_breakdown:
     c1.metric("Median 1-year return", f"{mc['median_return']:+.1%}")
     c2.metric("Chance of a losing year", f"{mc['prob_loss']:.1%}")
     c3.metric("Worst simulated year", f"{mc['worst_case']:+.1%}")
+    # two return figures on one tab read as a contradiction unless each says
+    # where it comes from (John, 2026-11-12: nothing contradictory)
+    st.caption(f"These three come from the {mc['n_simulations']:,} simulated years. "
+               "The Sharpe row below reads the real past days.")
 
     # --- Risk-contribution decomposition (where the risk actually lives) ---
     panel_head("Risk by name", "How much of the book's swings each name causes")
@@ -2075,9 +2080,9 @@ st.caption(
 
 with tab_grit:
     st.caption(
-        "Grit ranks your names on three things: how fast and how fully each "
-        "won back its own falls of 5% or more, how often a year of holding it "
-        "ended in a gain, and how it held up in the real crises we replay."
+        "Grit ranks your names on three things: how they won back their own "
+        "falls of 5% or more, how often a year of holding ended in a gain, and "
+        "the real crises."
     )
     try:
         grit = load_grit(tuple(loaded))
@@ -2120,10 +2125,9 @@ with tab_grit:
             panel_head("Grit, part by part", "Recovery · consistency · resilience")
             st.plotly_chart(grit_breakdown_fig(gscores), width="stretch", config=PLOTLY_CFG)
             st.caption(
-                "Each bar ranks a name against the others in this basket, not on "
-                "a fixed scale, so a different basket moves every number. Recovery "
-                "counts falls of 5% or more; resilience uses only the crises the "
-                "name traded through."
+                "Each bar ranks a name against the others in this basket, so a "
+                "different basket moves every number. Resilience counts only the "
+                "crises a name traded through."
             )
 
             if grit["excluded"]:
@@ -2241,12 +2245,11 @@ with tab_conviction:
             _p3y = pd.to_numeric(show["Peak buy, 3y later"], errors="coerce")
             _behind = show.loc[_p3y < 0, "Crisis"].tolist()
             st.caption(
-                "No one can buy at the exact bottom, so the bottom columns only show "
-                "which way history leans, not a plan to follow. The peak columns show "
-                "the unluckiest buyer, who bought at the top: they were ahead three "
-                f"years later in {int((_p3y > 0).sum())} of "
-                f"{int(_p3y.notna().sum())} crises with three years of data"
-                + (f". Three years was not enough after {', '.join(_behind)}."
+                "Nobody buys the exact bottom; those columns show how history "
+                "leans. The peak columns follow a buyer at the top: ahead three "
+                f"years on in {int((_p3y > 0).sum())} of {int(_p3y.notna().sum())} "
+                "crises old enough to tell"
+                + (f". Still behind after {', '.join(_behind)}."
                    if _behind else ".")
             )
     except Exception as exc:  # noqa: BLE001
@@ -2308,49 +2311,31 @@ with tab_lineage:
             f"- Library: yfinance {prov['yfinance_version']}"
         )
         st.caption(
-            "Prices are live end-of-day adjusted closes, pulled on demand from "
-            "Yahoo Finance. Every figure above is computed from this source by "
-            "the engine's own code; no value originates from a language model. "
-            f"A copy older than {CACHE_MAX_AGE_HOURS:g} hours is re-pulled "
-            "automatically on the next interaction, and the starter baskets are "
-            "also refreshed in the background every 5 hours."
+            "Prices are live end-of-day adjusted closes from Yahoo Finance. Every "
+            "figure above is computed from them by the engine's own code; no value "
+            "comes from a language model. A copy is pulled again after each market "
+            f"close or once it is {CACHE_MAX_AGE_HOURS:g} hours old."
         )
     else:
         st.caption("Provenance record appears after the first live fetch.")
 
     panel_head("This run's audit trail", "Every step this session took, in order")
     st.caption(
-        "Kept for this visit only: rebuilt on every change, never stored. A "
-        "full compliance system would write it to permanent storage; this is "
-        "the same idea at this engine's scale."
+        "Kept for this visit only: rebuilt on every change, never stored."
     )
     st.dataframe(pd.DataFrame(audit_log), width="stretch", hide_index=True)
 
     # ---- Your data: what stands in for a "delete my account" control ----
     panel_head("Your data", "What this app holds about you, and how to clear it")
     st.markdown(
-        "There is no account to delete: Meliona has no sign-up, login or "
-        "password, and no analytics or advertising SDK. It stores at most three "
-        "things in your browser: Streamlit's anti-forgery cookie and your light "
-        "or dark theme, and, once you press OK on the cookie notice, a note that "
-        "you have seen it (details in the privacy note).\n\n"
-        f"- This session, in memory only and gone when you close the tab: the "
-        f"tickers you chose, the settings above, the preset in the address bar, "
-        f"and the random reference {SESSION_REF}, which is not linked to you.\n"
-        "- The server: cached Yahoo Finance price files, named by a hash of the "
-        "ticker set. They are public market data, shared by every visitor who "
-        "picks the same basket, and hold nothing about you.\n"
-        "- Logs: errors and a session-start line, tagged with the reference "
-        "above so a support email can be matched to a stack trace. They rotate "
-        "away on size and hold no personal data. Once an hour the server also "
-        "writes one line of anonymous totals: how many sessions started today "
-        "and how many opened each preset basket, with no reference in it.\n"
-        "- Third parties: nothing about you. The server fetches prices from "
-        "Yahoo Finance only, and your browser talks only to this app.\n\n"
-        f"To have the logs for your reference purged early, email "
-        f"[{SUPPORT_EMAIL}](mailto:{SUPPORT_EMAIL}) and quote {SESSION_REF}, "
-        f"or [report this session]({FEEDBACK_LINK}) with the reference already "
-        f"filled in."
+        "No account to delete: no sign-up, no analytics, no ads. Your tickers and "
+        "settings live in this session's memory and are gone when you close the "
+        f"tab.\n\nThis session's random reference, {SESSION_REF}, tags the server's short error "
+        "logs and is not linked to you; the server's price files are public market "
+        f"data ([privacy note]({PRIVACY_URL})).\n\n"
+        f"To have those log lines purged early, email [{SUPPORT_EMAIL}](mailto:"
+        f"{SUPPORT_EMAIL}) and quote {SESSION_REF}, or [report this session]"
+        f"({FEEDBACK_LINK}) with the reference filled in."
     )
     if st.button("Clear this session's data", key="wipe_session"):
         # Deliberately session-scoped: it clears what THIS browser holds. It

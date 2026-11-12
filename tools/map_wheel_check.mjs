@@ -54,10 +54,18 @@ for (const [W, H] of SIZES) {
     const m = document.querySelector(sel), sc = document.querySelector('[data-testid="stMain"]');
     sc.style.scrollBehavior = 'auto'; sc.scrollTop += m.getBoundingClientRect().top - off;
   }, [MAP, offset]);
-  const record = (ms) => p.evaluate((ms) => {
-    const sc = document.querySelector('[data-testid="stMain"]'); window.__tr = []; const t0 = performance.now();
-    (function f() { window.__tr.push(sc.scrollTop); if (performance.now() - t0 < ms) requestAnimationFrame(f); })();
-  }, ms);
+  const record = (ms) => p.evaluate(([ms, sel]) => {
+    const sc = document.querySelector('[data-testid="stMain"]'); window.__tr = []; window.__tx = []; const t0 = performance.now();
+    (function f(now) {
+      window.__tr.push(sc.scrollTop);
+      // what else changed on the frame of a big step: the page's height, the
+      // map frame's window (a rerun rewrites its srcdoc) and whether it still has the tow
+      const m = document.querySelector(sel), fw = m && m.contentWindow;
+      window.__tx.push({ t: Math.round(now - t0), h: sc.scrollHeight, top: m ? Math.round(m.getBoundingClientRect().top) : null,
+        tow: !!(fw && fw.__melionaTow), busy: document.documentElement.classList.contains('m-busy') });
+      if (performance.now() - t0 < ms) requestAnimationFrame(f);
+    })(performance.now());
+  }, [ms, MAP]);
   const trace = () => p.evaluate(() => { const t = window.__tr, d = t.slice(1).map((y, i) => y - t[i]);
     return { moved: t.at(-1) - t[0], frames: d.filter(x => Math.abs(x) > 0.5).length, maxStep: Math.max(...d.map(Math.abs)) }; });
 
@@ -78,6 +86,71 @@ for (const [W, H] of SIZES) {
   const r = await trace();
   const crossed = await p.evaluate(([sel, y]) => document.querySelector(sel).getBoundingClientRect().top < y, [MAP, H * 0.5]);
   ok(crossed && r.maxStep <= 40, `${W}x${H} run: the map passed under the pointer, largest single-frame step ${Math.round(r.maxStep)}px over ${r.frames} frames`);
+  if (r.maxStep > 40) console.log(`::error title=map wheel ${W}x${H}::big step `, JSON.stringify(await p.evaluate(() => {
+    const t = window.__tr, x = window.__tx; let k = 1;
+    for (let i = 1; i < t.length; i++) if (Math.abs(t[i] - t[i - 1]) > Math.abs(t[k] - t[k - 1])) k = i;
+    return x.slice(Math.max(0, k - 3), k + 3).map((e, j) => ({ ...e, y: Math.round(t[Math.max(0, k - 3) + j]) }));
+  })));
+
+  // edge: the pointer in the sliver between the frame's fractional bottom and
+  // its own last row - the wheel reached no listener and the browser stepped
+  // the page (Live audit 8b, 2026-11-12: the run met it at the same frame
+  // every time, 112px in one step)
+  for (const off of [0, 0.5]) {
+    await p.evaluate(([sel, y]) => { const sc = document.querySelector('[data-testid="stMain"]');
+      sc.style.scrollBehavior = 'auto'; sc.scrollTop += document.querySelector(sel).getBoundingClientRect().bottom - y; }, [MAP, H * 0.5 + off]);
+    await p.waitForTimeout(700);
+    await p.mouse.move(W * 0.4, H * 0.5); await p.waitForTimeout(250);
+    await record(1500); await p.mouse.wheel(0, 100); await p.waitForTimeout(1700);
+    const e = await trace();
+    ok(e.moved > 50 && e.maxStep <= 40, `${W}x${H} edge${off}: a notch on the map's bottom edge glides - ${Math.round(e.moved)}px, largest step ${Math.round(e.maxStep)}px`);
+  }
+
+  // spill: something poking past the frame's bottom (the hover tip at the
+  // plot's lower edge, a font a pixel taller) makes the map's page taller than
+  // its frame, but that page is overflow: hidden on a desktop and cannot
+  // scroll: the wheel must still be the page's glide, never the browser's
+  // 100px step (Live audit 8b, 2026-11-12: 112px in one frame at 1280x720)
+  await place(40); await p.waitForTimeout(800);
+  await p.evaluate((sel) => { const d = document.querySelector(sel).contentDocument, s = d.createElement('div');
+    s.dataset.spill = '1'; s.style.cssText = 'position:absolute;left:0;top:100%;width:10px;height:40px'; d.body.appendChild(s); }, MAP);
+  const sp = await p.evaluate((sel) => { const r = document.querySelector(sel).getBoundingClientRect(); return [r.left + r.width * 0.35, Math.min(r.top + r.height * 0.45, innerHeight - 60)]; }, MAP);
+  await p.mouse.move(sp[0], sp[1]); await p.waitForTimeout(300);
+  await record(1500); await p.mouse.wheel(0, 100); await p.waitForTimeout(1700);
+  const s = await trace();
+  ok(s.moved > 50 && s.maxStep <= 40, `${W}x${H} spill: the map's page a little taller than its frame still glides - ${Math.round(s.moved)}px, largest step ${Math.round(s.maxStep)}px`);
+  await p.evaluate((sel) => document.querySelector(sel).contentDocument.querySelectorAll('[data-spill]').forEach(n => n.remove()), MAP);
+
+  // brim: a map panel with only a few px left to scroll (live data can
+  // lengthen the sidebar's notes by a line) takes the notch itself - the
+  // browser must not pass the rest of it to the page, which jumped ~100px in
+  // one frame and dropped the glide (Live audit 8b, 2026-11-12: 112px at 1280x720)
+  const brim = await p.evaluate((sel) => {
+    const f = document.querySelector(sel), d = f.contentDocument, el = d && d.querySelector('.side');
+    if (!el) return null;
+    const sp = d.createElement('div');
+    sp.dataset.brim = '1'; sp.style.flex = '0 0 auto'; el.appendChild(sp);
+    // grow a spacer until the panel overflows, then trim it to 3px of room
+    let h = 0;
+    while (el.scrollHeight - el.clientHeight < 3 && h < 4000) { h += 20; sp.style.height = h + 'px'; }
+    while (el.scrollHeight - el.clientHeight > 3 && h > 0) { h -= 1; sp.style.height = h + 'px'; }
+    el.scrollTop = 0;
+    const sc = document.querySelector('[data-testid="stMain"]');
+    sc.style.scrollBehavior = 'auto';
+    sc.scrollTop += f.getBoundingClientRect().top - 40;
+    const r = el.getBoundingClientRect(), fr = f.getBoundingClientRect();
+    return { room: el.scrollHeight - el.clientHeight, x: fr.left + r.left + r.width / 2, y: fr.top + r.top + r.height / 2 };
+  }, MAP);
+  if (brim) {
+    await p.waitForTimeout(800);
+    await p.mouse.move(brim.x, brim.y); await p.waitForTimeout(200);
+    const y0 = await p.evaluate(() => document.querySelector('[data-testid="stMain"]').scrollTop);
+    await p.mouse.wheel(0, 100); await p.waitForTimeout(900);
+    const y1 = await p.evaluate(() => document.querySelector('[data-testid="stMain"]').scrollTop);
+    ok(brim.room >= 1 && brim.room <= 6 && Math.abs(y1 - y0) < 2,
+      `${W}x${H} brim: a panel ${brim.room}px from its end keeps the notch; the page moved ${Math.round(y1 - y0)}px`);
+    await p.evaluate((sel) => { const d = document.querySelector(sel).contentDocument; d.querySelectorAll('[data-brim]').forEach(n => n.remove()); }, MAP);
+  }
 
   // panel: a map panel that can scroll takes the wheel before the page
   const at = await p.evaluate((sel) => {
