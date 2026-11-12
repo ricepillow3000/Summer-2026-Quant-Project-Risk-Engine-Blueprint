@@ -54,10 +54,18 @@ for (const [W, H] of SIZES) {
     const m = document.querySelector(sel), sc = document.querySelector('[data-testid="stMain"]');
     sc.style.scrollBehavior = 'auto'; sc.scrollTop += m.getBoundingClientRect().top - off;
   }, [MAP, offset]);
-  const record = (ms) => p.evaluate((ms) => {
-    const sc = document.querySelector('[data-testid="stMain"]'); window.__tr = []; const t0 = performance.now();
-    (function f() { window.__tr.push(sc.scrollTop); if (performance.now() - t0 < ms) requestAnimationFrame(f); })();
-  }, ms);
+  const record = (ms) => p.evaluate(([ms, sel]) => {
+    const sc = document.querySelector('[data-testid="stMain"]'); window.__tr = []; window.__tx = []; const t0 = performance.now();
+    (function f(now) {
+      window.__tr.push(sc.scrollTop);
+      // what else changed on the frame of a big step: the page's height, the
+      // map frame's window (a rerun rewrites its srcdoc) and whether it still has the tow
+      const m = document.querySelector(sel), fw = m && m.contentWindow;
+      window.__tx.push({ t: Math.round(now - t0), h: sc.scrollHeight, top: m ? Math.round(m.getBoundingClientRect().top) : null,
+        tow: !!(fw && fw.__melionaTow), busy: document.documentElement.classList.contains('m-busy') });
+      if (performance.now() - t0 < ms) requestAnimationFrame(f);
+    })(performance.now());
+  }, [ms, MAP]);
   const trace = () => p.evaluate(() => { const t = window.__tr, d = t.slice(1).map((y, i) => y - t[i]);
     return { moved: t.at(-1) - t[0], frames: d.filter(x => Math.abs(x) > 0.5).length, maxStep: Math.max(...d.map(Math.abs)) }; });
 
@@ -78,6 +86,11 @@ for (const [W, H] of SIZES) {
   const r = await trace();
   const crossed = await p.evaluate(([sel, y]) => document.querySelector(sel).getBoundingClientRect().top < y, [MAP, H * 0.5]);
   ok(crossed && r.maxStep <= 40, `${W}x${H} run: the map passed under the pointer, largest single-frame step ${Math.round(r.maxStep)}px over ${r.frames} frames`);
+  if (r.maxStep > 40) console.log('      at the big step:', JSON.stringify(await p.evaluate(() => {
+    const t = window.__tr, x = window.__tx; let k = 1;
+    for (let i = 1; i < t.length; i++) if (Math.abs(t[i] - t[i - 1]) > Math.abs(t[k] - t[k - 1])) k = i;
+    return x.slice(Math.max(0, k - 3), k + 3).map((e, j) => ({ ...e, y: Math.round(t[Math.max(0, k - 3) + j]) }));
+  })));
 
   // panel: a map panel that can scroll takes the wheel before the page
   const at = await p.evaluate((sel) => {
