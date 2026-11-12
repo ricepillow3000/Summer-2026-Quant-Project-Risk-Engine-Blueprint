@@ -2311,12 +2311,10 @@ with tab_lineage:
             f"- Library: yfinance {prov['yfinance_version']}"
         )
         st.caption(
-            "Prices are live end-of-day adjusted closes, pulled on demand from "
-            "Yahoo Finance. Every figure above is computed from this source by "
-            "the engine's own code; no value originates from a language model. "
-            f"A copy older than {CACHE_MAX_AGE_HOURS:g} hours is re-pulled "
-            "automatically on the next interaction, and the starter baskets are "
-            "also refreshed in the background every 5 hours."
+            "Prices are live end-of-day adjusted closes from Yahoo Finance. Every "
+            "figure above is computed from them by the engine's own code; no value "
+            "comes from a language model. A copy is pulled again after each market "
+            f"close or once it is {CACHE_MAX_AGE_HOURS:g} hours old."
         )
     else:
         st.caption("Provenance record appears after the first live fetch.")
