@@ -86,7 +86,7 @@ for (const [W, H] of SIZES) {
   const r = await trace();
   const crossed = await p.evaluate(([sel, y]) => document.querySelector(sel).getBoundingClientRect().top < y, [MAP, H * 0.5]);
   ok(crossed && r.maxStep <= 40, `${W}x${H} run: the map passed under the pointer, largest single-frame step ${Math.round(r.maxStep)}px over ${r.frames} frames`);
-  if (r.maxStep > 40) console.log('      at the big step:', JSON.stringify(await p.evaluate(() => {
+  if (r.maxStep > 40) console.log(`::error title=map wheel ${W}x${H}::big step `, JSON.stringify(await p.evaluate(() => {
     const t = window.__tr, x = window.__tx; let k = 1;
     for (let i = 1; i < t.length; i++) if (Math.abs(t[i] - t[i - 1]) > Math.abs(t[k] - t[k - 1])) k = i;
     return x.slice(Math.max(0, k - 3), k + 3).map((e, j) => ({ ...e, y: Math.round(t[Math.max(0, k - 3) + j]) }));
