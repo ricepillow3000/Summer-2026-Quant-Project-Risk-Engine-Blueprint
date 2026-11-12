@@ -1459,7 +1459,8 @@ with deck_alloc, st.expander("Weights: how the money is split",
     COV_PLAIN = {
         "Ledoit-Wolf": "Smooths out the noise in the price history",
         "Sample": "Uses the price history exactly as it is",
-        "EWMA": "Weighs the last few weeks most, so one bad day moves it a lot",
+        "EWMA": "Recent days count most and older days fade out, so one bad day "
+                "moves it a lot",
     }
     cov_method = st.selectbox(
         "How the names move together", ["Ledoit-Wolf", "Sample", "EWMA"],
@@ -1467,9 +1468,10 @@ with deck_alloc, st.expander("Weights: how the money is split",
         help="How the engine measures the way these names move together (their "
              "covariance), which sets the weights. Ledoit-Wolf (default) pulls "
              "noisy history toward a steadier estimate. Sample uses history as it "
-             "is. EWMA (RiskMetrics, λ=0.94) leans hard on the last few weeks, so "
-             "one bad day moves it a lot: use it to see the panic view, not as a "
-             "default.")
+             "is. EWMA means a weighted average where recent days count most and "
+             "older days fade out (exponentially weighted moving average; "
+             "RiskMetrics, λ=0.94), so one bad day moves it a lot: use it to see "
+             "the panic view, not as a default.")
     cov, cov_info = estimate_covariance(returns, cov_method)  # annualized risk matrix
     st.caption(f"{COV_PLAIN[cov_method]}. Method: {cov_info}.")
     if cov_method == "EWMA":
@@ -1478,7 +1480,8 @@ with deck_alloc, st.expander("Weights: how the money is split",
             # emoji in a 60%-opacity caption (2.63:1, Council B)
             '<div class="dq-row"><span class="dq-mark" role="img" aria-label="Warning" '
             'style="color:#6A5030;font-weight:700;">!</span> '
-            "Panic view: EWMA jumps on one bad day. Half its weight sits in the "
+            "Panic view: EWMA means recent days count most and older ones fade "
+            "out, so it jumps on one bad day. Half its weight sits in the "
             "last ≈11 trading days, about 73% in the last month, and 90% in the "
             "last ~37 (λ=0.94). It is shown so you can see how jumpy risk can "
             "look; the Crisis Conviction tab shows what followed past panics, and "

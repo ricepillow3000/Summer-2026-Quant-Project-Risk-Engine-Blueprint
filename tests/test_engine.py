@@ -7590,6 +7590,24 @@ def test_the_story_and_the_answers_read_aloud_in_one_breath():
     assert not re.search(r"\bNone\b", " ".join(texts)), "say 'nothing', not 'None'"
 
 
+def test_ewma_is_spelled_out_in_plain_words_wherever_it_shows():
+    """John, 2026-11-12: "explain EWMA in plain words too". The risk-matrix
+    choice "Quick to react (EWMA)", its help tip and the panic-view warning all
+    named EWMA without saying what it is. Each now says it in everyday words:
+    recent days count most, older days fade out."""
+    import re
+    src = (pathlib.Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
+    plain = "recent days count most"
+    help_txt = src[src.index('"How the names move together", ["Ledoit-Wolf"'):]
+    help_txt = help_txt[:help_txt.index("estimate_covariance(")]
+    assert "EWMA means" in help_txt and "exponentially weighted moving average" in help_txt
+    assert plain in help_txt.lower(), "the help tip must say what EWMA does"
+    cov_plain = re.search(r'"EWMA": ("Recent[^)]*?),\n\s*}', src, re.S)
+    assert cov_plain and plain in cov_plain.group(1).lower(), "the line under the choice"
+    panic = src[src.index("Panic view: "):][:300]
+    assert panic.startswith("Panic view: EWMA means ") and plain in panic.lower()
+
+
 def test_no_test_hides_below_the_script_runner():
     """`python -m tests.test_engine` collects tests when it reaches the
     __main__ block, so a test defined below it never ran (the Grit Zone
