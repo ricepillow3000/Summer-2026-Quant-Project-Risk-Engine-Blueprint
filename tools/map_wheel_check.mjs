@@ -92,6 +92,52 @@ for (const [W, H] of SIZES) {
     return x.slice(Math.max(0, k - 3), k + 3).map((e, j) => ({ ...e, y: Math.round(t[Math.max(0, k - 3) + j]) }));
   })));
 
+  // spill: something poking past the frame's bottom (the hover tip at the
+  // plot's lower edge, a font a pixel taller) makes the map's page taller than
+  // its frame, but that page is overflow: hidden on a desktop and cannot
+  // scroll: the wheel must still be the page's glide, never the browser's
+  // 100px step (Live audit 8b, 2026-11-12: 112px in one frame at 1280x720)
+  await place(40); await p.waitForTimeout(800);
+  await p.evaluate((sel) => { const d = document.querySelector(sel).contentDocument, s = d.createElement('div');
+    s.dataset.spill = '1'; s.style.cssText = 'position:absolute;left:0;top:100%;width:10px;height:40px'; d.body.appendChild(s); }, MAP);
+  const sp = await p.evaluate((sel) => { const r = document.querySelector(sel).getBoundingClientRect(); return [r.left + r.width * 0.35, Math.min(r.top + r.height * 0.45, innerHeight - 60)]; }, MAP);
+  await p.mouse.move(sp[0], sp[1]); await p.waitForTimeout(300);
+  await record(1500); await p.mouse.wheel(0, 100); await p.waitForTimeout(1700);
+  const s = await trace();
+  ok(s.moved > 50 && s.maxStep <= 40, `${W}x${H} spill: the map's page a little taller than its frame still glides - ${Math.round(s.moved)}px, largest step ${Math.round(s.maxStep)}px`);
+  await p.evaluate((sel) => document.querySelector(sel).contentDocument.querySelectorAll('[data-spill]').forEach(n => n.remove()), MAP);
+
+  // brim: a map panel with only a few px left to scroll (live data can
+  // lengthen the sidebar's notes by a line) takes the notch itself - the
+  // browser must not pass the rest of it to the page, which jumped ~100px in
+  // one frame and dropped the glide (Live audit 8b, 2026-11-12: 112px at 1280x720)
+  const brim = await p.evaluate((sel) => {
+    const f = document.querySelector(sel), d = f.contentDocument, el = d && d.querySelector('.side');
+    if (!el) return null;
+    const sp = d.createElement('div');
+    sp.dataset.brim = '1'; sp.style.flex = '0 0 auto'; el.appendChild(sp);
+    // grow a spacer until the panel overflows, then trim it to 3px of room
+    let h = 0;
+    while (el.scrollHeight - el.clientHeight < 3 && h < 4000) { h += 20; sp.style.height = h + 'px'; }
+    while (el.scrollHeight - el.clientHeight > 3 && h > 0) { h -= 1; sp.style.height = h + 'px'; }
+    el.scrollTop = 0;
+    const sc = document.querySelector('[data-testid="stMain"]');
+    sc.style.scrollBehavior = 'auto';
+    sc.scrollTop += f.getBoundingClientRect().top - 40;
+    const r = el.getBoundingClientRect(), fr = f.getBoundingClientRect();
+    return { room: el.scrollHeight - el.clientHeight, x: fr.left + r.left + r.width / 2, y: fr.top + r.top + r.height / 2 };
+  }, MAP);
+  if (brim) {
+    await p.waitForTimeout(800);
+    await p.mouse.move(brim.x, brim.y); await p.waitForTimeout(200);
+    const y0 = await p.evaluate(() => document.querySelector('[data-testid="stMain"]').scrollTop);
+    await p.mouse.wheel(0, 100); await p.waitForTimeout(900);
+    const y1 = await p.evaluate(() => document.querySelector('[data-testid="stMain"]').scrollTop);
+    ok(brim.room >= 1 && brim.room <= 6 && Math.abs(y1 - y0) < 2,
+      `${W}x${H} brim: a panel ${brim.room}px from its end keeps the notch; the page moved ${Math.round(y1 - y0)}px`);
+    await p.evaluate((sel) => { const d = document.querySelector(sel).contentDocument; d.querySelectorAll('[data-brim]').forEach(n => n.remove()); }, MAP);
+  }
+
   // panel: a map panel that can scroll takes the wheel before the page
   const at = await p.evaluate((sel) => {
     const f = document.querySelector(sel), d = f.contentDocument;

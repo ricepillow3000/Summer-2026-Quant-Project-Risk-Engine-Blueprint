@@ -372,8 +372,13 @@
     if (!sc || !at || !sc.contains(at)) return;
     if (doc !== D) {
       for (var m = e.target; m && m.nodeType === 1; m = m.parentElement) if (scrolls(m, e.deltaY)) return;
-      var se = doc.scrollingElement;
-      if (se && (e.deltaY > 0 ? se.scrollTop + se.clientHeight < se.scrollHeight - 1 : se.scrollTop > 0)) return;
+      // the frame's own page takes the wheel only if it can scroll: on a
+      // desktop the map's body is overflow: hidden, and a hover tip past its
+      // bottom made it look taller - the browser then stepped the whole page
+      // 100px in one frame (Live audit 8b, 2026-11-12)
+      var se = doc.scrollingElement, fv = doc.defaultView;
+      var held = fv && doc.body && /hidden|clip/.test(fv.getComputedStyle(doc.body).overflowY + fv.getComputedStyle(doc.documentElement).overflowY);
+      if (se && !held && (e.deltaY > 0 ? se.scrollTop + se.clientHeight < se.scrollHeight - 1 : se.scrollTop > 0)) return;
     }
     for (var n = at; n && n !== sc; n = n.parentElement) if (scrolls(n, e.deltaY)) return;
     e.preventDefault();
