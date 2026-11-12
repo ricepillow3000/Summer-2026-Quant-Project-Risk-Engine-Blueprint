@@ -62,7 +62,8 @@ def raw_chart(symbol: str, span: str = "3mo") -> pd.Series:
     # BST) back a day once the clocks went back (live audit run 86, 2026-10-28: EURUSD=X 0.8% "gap").
     tz = res["meta"].get("exchangeTimezoneName") or "UTC"
     days = pd.to_datetime(np.array(res["timestamp"]), unit="s", utc=True).tz_convert(tz).tz_localize(None).normalize()
-    close = pd.Series(res["indicators"]["quote"][0]["close"], index=days, dtype=float)
+    quote = res["indicators"].get("quote", [{}])[0].get("close")
+    close = pd.Series(quote if quote else np.nan, index=days, dtype=float)
     adj = res["indicators"].get("adjclose", [{}])[0].get("adjclose")
     raw = pd.Series(adj, index=days, dtype=float) if adj else close.copy()
     # Yahoo fills in a day's adjclose overnight: until then the newest bar has only
