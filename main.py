@@ -1810,8 +1810,8 @@ with f_col:
                if np.isfinite(mc.get("cvar_se", float("nan"))) else "")
     # John, 2026-11-09: long explanations in plain, short words
     st.caption(
-        "Each simulated year is stitched together from real days, so this "
-        "shows what could happen, not a forecast. Lines are smoothed." + _se_txt
+        "Each simulated year is stitched from real days: what could happen, "
+        "not a forecast. Lines are smoothed." + _se_txt
     )
 
 # ---- The Book: the guided arc, deliberately AHEAD of the tab strip ----

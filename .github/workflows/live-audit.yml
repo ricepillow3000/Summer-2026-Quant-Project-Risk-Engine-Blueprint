@@ -101,13 +101,13 @@ jobs:
         if: always()
         run: |
           mkdir -p site-shots/devices
-          node tools/device_check.mjs http://127.0.0.1:8501 site-shots/devices
+          node tools/device_check.mjs http://127.0.0.1:8501 site-shots/devices 2>&1 | tee 8b.log; test "${PIPESTATUS[0]}" -eq 0
           # a first visit's click, keys and wheel never paint a gold block (John, 2026-11-06)
-          node tools/key_wheel_check.mjs http://127.0.0.1:8501 site-shots/keys
+          node tools/key_wheel_check.mjs http://127.0.0.1:8501 site-shots/keys 2>&1 | tee -a 8b.log; test "${PIPESTATUS[0]}" -eq 0
           # the wheel glides over the Risk Topology map too, not the browser's step (John, 2026-11-06)
-          node tools/map_wheel_check.mjs http://127.0.0.1:8501 2>&1 | tee map_wheel.log; test "${PIPESTATUS[0]}" -eq 0
+          node tools/map_wheel_check.mjs http://127.0.0.1:8501 2>&1 | tee -a 8b.log; test "${PIPESTATUS[0]}" -eq 0
           # the page's craft: type, figures, measure, widows, touch, safe area, motion (John, 2026-11-09)
-          node tools/craft_check.mjs http://127.0.0.1:8501
+          node tools/craft_check.mjs http://127.0.0.1:8501 2>&1 | tee -a 8b.log; test "${PIPESTATUS[0]}" -eq 0
       # Every button glide lands (tools/glide_load_check.mjs): on the settled
       # page, through a trackpad flick, under a reader's swipe back and a
       # steady mouse wheel - and pressed while the page is still loading. Each
@@ -185,8 +185,8 @@ jobs:
         if: always()
         run: |
           grep -E "^FAIL|provenance checks pass" provenance.log || echo "provenance did not run"
-          # 8b's map wheel FAIL lines and the frames around a big step, where the log can be read
-          grep -E -A1 "^FAIL|big step" map_wheel.log 2>/dev/null || true
+          # 8b's FAIL lines (every device, keys, map wheel, craft) where the log can be read
+          grep -E -A1 "FAIL|big step|Error" 8b.log 2>/dev/null | head -60 || true
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         if: always()
