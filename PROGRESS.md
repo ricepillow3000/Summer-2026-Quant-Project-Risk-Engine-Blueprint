@@ -4,11 +4,38 @@ Paste this into a new chat session to bring it up to speed instantly.
 
 ---
 
-## Start here: where things stand (updated 2026-11-10)
+## Start here: where things stand (updated 2026-11-12)
 
 - **Live:** https://summer-2026-quant-project-risk-engine-blueprint-production.up.railway.app
   (Railway deploys `main`; the Live audit on `main` proves the deployed
   build stamp, step 5).
+- **2026-11-12, end of day means end of day, and a cold security review
+  (back-end session, PR #64, live at cced9d4):** in market hours Yahoo's
+  daily download carries today's row at the live price, and the cache kept
+  it for up to 6 hours. A bar now counts only once its day is over on New
+  York's clock (4:30pm; 8pm for FX, futures, crypto), a cache pulled before
+  a close goes stale at that close, and the warm loop wakes 3 minutes after
+  each close. Live audit step 1 checks every name's newest bar is Yahoo's
+  latest finished close (and, for US listings, a second vendor when
+  reachable). An independent read-only review found seven holes, each fixed
+  test-first and planted as a bug (M41-M45): Streamlit's upload route
+  (hidden, 404), redirects followed before being checked (netguard now
+  checks each hop first), client-chosen X-Forwarded-For, IPv6 /64s,
+  unbounded limiter tables, 16 MB widget-state messages (256 KB cap), and
+  made-up symbols spending the Yahoo budget. One risk is accepted and
+  written down (`docs/security/SECURITY-LESSONS.md`). Three audit-tool bugs
+  surfaced on the way (the raw reader's blank newest adjclose, and the
+  audit's own forward-fill dating a stock's old close to an FX-only day).
+- **2026-11-10, break it on purpose, and hardening for real traffic
+  (back-end session, PRs #61 and #62):** `tools/mutation_check.py` plants
+  known bugs one at a time (now 45; `.github/workflows/mutation.yml` weekly)
+  and names the first red test; the first run caught 21 of 36, the tests
+  added since catch every one. `serve.py` caps an address's websocket
+  messages (600 a minute, then 1013); Live audit 8e floods from one address
+  while ten visitors load (`tools/flood_check.py`, which reads the server's
+  replies like a browser - unread, they hid the hang-up under load); the
+  credential test reads every tracked file; LAUNCH_CHECKLIST #187-192 maps
+  auth, RLS, Redis and queues onto an app with no accounts or database.
 - **Done on 2026-11-05 (all merged):** the story cut (ME-28), the close
   (About, questions, contact), nothing freezing when a drawer opens on an
   iPhone, clean hairline drawers, John's bio and contact (his Gmail plus
