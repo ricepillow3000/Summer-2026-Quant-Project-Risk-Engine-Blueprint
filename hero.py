@@ -208,7 +208,7 @@ def about_html() -> str:
 # promise stays honest - the page describes and simulates, it advises no one.
 STORY_PHOTO = "john-nguyen-story"     # static/john-nguyen-story.{avif,webp,jpg}, 480x600
 STORY_PHOTO_ALT = "John Nguyen out of the suit, smiling, in a maroon quarter-zip sweater"
-STORY_TITLE = "Built for a question too many investors share"
+STORY_TITLE = "My dad asked one question. I built an engine around it."
 STORY_QUOTE = "Not the best every year. The one that keeps getting back up."
 # John, 2026-11-05: his dad starts the story, but the story is not about him:
 # it ends on everyone who faces the same problem. John, 2026-11-06: the story
@@ -220,25 +220,28 @@ STORY_QUOTE = "Not the best every year. The one that keeps getting back up."
 # sentence below is what the engine does: narrative.py re-ranks the flyers on
 # every run (momentum per unit of risk, MIN_FLYER_MOMENTUM), gives each a
 # partner from the grittiest half, and sizes the book by risk parity.
+# John, 2026-11-12: read out loud it was boring - shorter, punchier, more
+# ambitious, same facts (test_the_story_and_the_answers_read_aloud_in_one_breath).
 STORY = (
-    "It started at home. My dad talks about stocks a lot, and one question kept "
-    "coming back: which stock can I actually rely on, and hold for years? He never "
-    "found a good answer, and I came to see that he was far from alone.",
-    "No one can promise that answer, but the past can be measured. When a stock falls, "
-    "how fully does it win the ground back, and does it do that crisis after crisis? "
-    "The names that keep getting back up are not always the year's best performers. "
-    "I call that grit, and the Grit Zone scores it for each name from its own price history.",
-    "Grit was only half of it. Long-term investors also want a part in what is growing "
-    "fastest, like today's AI stocks. So Meliona links the two. For each high-flyer, the "
-    "engine looks for a gritty anchor: a name that moves less with the market and falls "
-    "less on its worst days. It sizes them so each carries about the same share of the "
-    "risk, and if a flyer stops flying, the next-strongest name is ranked in to take its "
-    "place, with an anchor of its own. Then the whole portfolio is tested against real crashes and "
-    "simulated bad years.",
-    "I saw a problem, so I put my effort into solving that one problem. Meliona does not "
-    "tell anyone what to buy, and it cannot say how a stock will do. It is built for people "
-    "like my dad: anyone asking which stock they can rely on gets the evidence to weigh "
-    "that question for themselves.",
+    "My dad loves talking stocks. One question kept coming back: which stock can I "
+    "actually rely on, and hold for years? He never got a good answer. Turns out, "
+    "a lot of people ask the same thing.",
+    "Nobody can promise that answer. But the past can be measured. When a stock falls, "
+    "does it win the ground back? Does it do it again in the next crash, and the one "
+    "after that? I call that grit. The Grit Zone scores it for each name, straight from "
+    "its own price history.",
+    "Grit was only half the plan. Investors also want a piece of what is growing "
+    "fastest, like today's AI stocks. So Meliona pairs them up. Each high-flyer gets a "
+    "gritty anchor: a name that moves less with the market and falls less on its worst "
+    "days. Every name is sized to carry about the same share of the risk. If a flyer "
+    "stops flying, the next-strongest name is ranked in to take its place, with an "
+    "anchor of its own. Then the whole portfolio faces real crashes and "
+    f"{N_PATHS:,} simulated years.",
+    "I am a student, and I hold this to a trading desk's bar. The prices are live, the "
+    "code is public, and the numbers are checked a second way on every change. Meliona "
+    "does not tell anyone what to buy, and it cannot say how a stock will do. It is "
+    "built for people like my dad. Ask which stock you can rely on, and you get the "
+    "evidence to weigh it yourself.",
 )
 
 
@@ -271,29 +274,30 @@ def story_html() -> str:
 # the code: PRIVACY.md for storage, CLAUDE.md constraint #1 for the numbers.
 FAQS = (
     ("What does Meliona tell me?",
-     "How much a portfolio you pick could lose in a bad year, what real crashes did to it, "
-     "and which of its names have got back up after their falls. The big number is the "
-     "average loss in the worst 5 of every 100 simulated years."),
+     "Three things about any portfolio you pick. How much it could lose in a bad year. "
+     "What real crashes did to it. Which of its names got back up after a fall. "
+     "The big number is the average loss in the worst 5 of every 100 simulated years."),
     ("Where do the numbers come from?",
-     "From end-of-day prices pulled live from Yahoo Finance and worked out by the engine's "
-     "own code, which is public. No market figure is typed in by hand or written by an AI "
-     "model; the few fixed settings, like the crisis dates, are stated on the page. "
-     "The drawer at the end of the analysis shows the source and when each price was pulled."),
+     "Live end-of-day prices from Yahoo Finance, run through the engine's own public code. "
+     "No market figure is typed in by hand or written by an AI model. The few fixed "
+     "settings, like the crisis dates, are printed on the page. The drawer at the end of "
+     "the analysis shows the source and when each price was pulled."),
     ("Is this investment advice?",
-     "No. Meliona is an educational student project. It describes what happened and "
-     "simulates years that could happen; it does not tell anyone what to buy or sell, "
+     "No. Meliona is a student project built for learning. It shows what happened and "
+     "simulates years that could happen. It does not tell anyone what to buy or sell, "
      "and nothing on it is a forecast."),
     ("What is grit?",
-     "Our name for how a stock gets back up after a fall: how fast and how fully it won "
-     "back its own falls of 5% or more, how often a year of holding it ended in a gain, "
-     "and how it held up in the real crises we replay. Scores rank the names in your "
-     "basket against each other."),
+     "Our word for getting back up after a fall. It scores how fast and how fully a stock "
+     "won back its own drops of 5% or more. It counts how often a year of holding it "
+     "ended in a gain. It checks how it held up in the real crises we replay. Scores rank the "
+     "names in your basket against each other."),
     ("Does the site store my data?",
-     "No. There is no account and no tracking. Your choices are held in memory for "
-     "this visit only and go when you close the tab. The contact form stores nothing: it only prepares "
-     "an email in your own email app. The server keeps public price files, short "
-     "error logs tagged with a random session reference, a line when each visit starts, "
-     "and a daily count of visits and starter baskets opened, with nothing about you."),
+     "No. No account, no tracking. Your choices live in memory for this visit and are "
+     "gone when you close the tab. The contact form stores nothing: it only prepares an "
+     "email in your own email app. The server keeps public price files and short error "
+     "logs tagged with a random session reference. It also writes a line when each visit "
+     "starts, and a daily count of visits and starter baskets opened. None of it is "
+     "about you."),
 )
 
 
