@@ -297,7 +297,7 @@ FAQS = (
      "gone when you close the tab. The contact form stores nothing: it only prepares an "
      "email in your own email app. The server keeps public price files and short error "
      "logs tagged with a random session reference. It also writes a line when each visit "
-     "starts, and a daily count of visits and starter baskets opened. None of it is "
+     "starts, and a daily count of visits and starter baskets opened. Nothing in it is "
      "about you."),
 )
 

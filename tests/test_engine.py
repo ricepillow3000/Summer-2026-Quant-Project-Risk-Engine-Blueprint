@@ -7585,6 +7585,9 @@ def test_the_story_and_the_answers_read_aloud_in_one_breath():
     long = [x for x, n in zip(sentences, words) if n > 24]
     assert not long, f"too long to read in one breath: {long}"
     assert sum(words) / len(words) <= 13, f"average sentence {sum(words) / len(words):.1f} words"
+    # deep_scan reads a bare "None" on the page as Python's None leaking out
+    # (Live audit 10, 2026-11-12: "None of it is about you.")
+    assert not re.search(r"\bNone\b", " ".join(texts)), "say 'nothing', not 'None'"
 
 
 def test_no_test_hides_below_the_script_runner():
