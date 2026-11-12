@@ -119,3 +119,23 @@ is 16 MB (`test_deploy_config_keeps_the_visitor_out_of_the_operator_seat`); the 
 about 0.1 MB with the full 25 names (measured 2026-11-04, LAUNCH_CHECKLIST #110). **Real HTTP headers** (HSTS, frame-ancestors, nosniff) come from
 `serve.py`, and `/_stcore/metrics` is hidden (`test_every_response_carries_the_security_headers`). Lesson for future sweeps: **a hidden button is not a locked
 door** - Streamlit's protocol still answered messages the UI no longer showed.
+
+### 2026-11-12: independent review of serve.py, netguard and the feed
+A second reviewer read the code cold (not the checks). Each finding was traced, reproduced where it could be,
+fixed test-first and planted as a bug in `tools/mutation_check.py` (M11, M41-M45) so a later edit cannot undo it
+quietly:
+
+| Finding | Attack | Fix | Test |
+|---|---|---|---|
+| Upload route still open | `maxUploadSize = 1` capped each file, not their number. Streamlit's XSRF check there compares cookie with header and nothing else, so a made-up pair passes (reproduced: forged pair reached the route, 400 "invalid session" instead of 403) and a script parks files in RAM until the session ends | `/_stcore/upload_file` is hidden (404) in `serve.py`; the outside-in probe PUTs a forged upload | `test_the_security_review_holes_in_serve_stay_closed`, `security_probe` |
+| Redirects contacted before checked | curl followed hops itself; netguard refused an off-list or `http` host only after it was contacted | netguard follows redirects one hop at a time and checks each BEFORE contacting it (5 hops max); budget counter locked | `test_a_redirect_off_the_allowlist_is_refused` |
+| Client picks its own address | only the first `X-Forwarded-For` line was read | every line is read, the proxy's last hop wins; an IPv6 /64 counts as one address | same as row 1 |
+| Rate-limit tables unbounded | a flood of fresh addresses kept every row and was rescanned on each request; `warned` never shrank | trimmed at most once a second, quietest addresses first, `warned` pruned | same as row 1 |
+| 16 MB widget state per message | compression lets a tiny frame unpack to a 16 MB list the ticker box processes name by name | messages over 256 KB are closed (1009); the box cuts its list to 100 before any work | same as row 1 |
+| Health exemption by prefix | `/_stcore/healthX...` skipped the HTTP cap | exact path | same as row 1 |
+| Made-up symbols spend the day's Yahoo budget | never cached, asked for 3 times each | an all-empty download is not retried; a name that came back empty is not asked again for 15 minutes (suggested names exempt, so an outage cannot lock out a real one) | `test_made_up_symbols_cannot_spend_the_days_yahoo_budget` |
+
+**Accepted, said plainly:** a script inventing NEW made-up symbols on every rerun can still spend the web process's
+5,000-request day. Presets and cached baskets keep working (the warmer has its own budget and the cache serves
+them); only newly typed names wait until UTC midnight. Closing it needs a per-visitor outbound budget, which
+yfinance's download threads make hard to attribute - left until there is evidence of abuse.

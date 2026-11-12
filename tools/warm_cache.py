@@ -16,6 +16,8 @@ Two uses:
     python -m tools.warm_cache --drill    # force real fetches, time a cold refill
     python -m tools.warm_cache --every 5  # keep warming, every 5 hours (Procfile)
 
+--every also wakes a few minutes after each close (4:30pm and 8pm New York),
+so the day's real close reaches the cache then, not hours later.
 --every runs inside the web process's container on purpose: the cache is that
 container's own disk, so a separate cron service would warm a disk no visitor
 reads. Each pass refetches anything older than (max age - interval), so no
@@ -46,12 +48,14 @@ import argparse
 import time
 
 from src.conviction import BENCHMARK
+from src import ingestion
 from src.ingestion import (CACHE_MAX_AGE_HOURS, PRESETS, fetch_dollar_volume,
                            fetch_prices, fetch_risk_free_rate)
 from src.netguard import BudgetExhausted, budget_status
 from src.pairing import DEFENSIVE_ANCHOR_TICKERS
 
 PAUSE_SECONDS = 1.0     # between pulls, so a pass never bursts at Yahoo
+AFTER_CLOSE = 180       # seconds after a close before warming, so yahoo has it
 
 
 def preset_pulls(tickers: list[str]) -> list[tuple[str, object]]:
@@ -131,6 +135,13 @@ def pass_max_age(every_hours: float) -> float:
     return max(0.0, CACHE_MAX_AGE_HOURS - every_hours)
 
 
+def sleep_seconds(every_hours: float) -> float:
+    """until the next pass: every_hours, or just after the next close if that
+    comes first - so the day's close is on the page minutes after it's final."""
+    to_close = (ingestion.next_close_boundary() - ingestion._now()).total_seconds() + AFTER_CLOSE
+    return max(60.0, min(every_hours * 3600, to_close))
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--drill", action="store_true",
@@ -141,7 +152,7 @@ def main() -> int:
     if args.every:
         while True:
             run_pass(max_age=pass_max_age(args.every))
-            time.sleep(args.every * 3600)
+            time.sleep(sleep_seconds(args.every))
     return run_pass(drill=args.drill)
 
 

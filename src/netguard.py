@@ -12,12 +12,15 @@ notes:
 - we subclass curl_cffi's Session because that's what yfinance uses. a plain
   requests.Session works but yahoo rate-limits it instantly (wrong tls
   fingerprint), so "safer" transport = broken data.
-- both the asked url AND the final url get checked, so redirects can't escape.
+- redirects are followed here, one hop at a time, and each hop is checked
+  BEFORE it's contacted - curl following them itself would reach a host first
+  and only get refused after.
 - https only. no http, file://, gopher://.
 """
 
+import threading
 import time
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 from curl_cffi import requests as _curl
 
@@ -37,6 +40,8 @@ ALLOWED_HOSTS = frozenset({
 IMPERSONATE = "chrome"   # same browser fingerprint yfinance uses on its own
 # yfinance's handshake sets no timeout, so a dead connect would hang a page forever
 TIMEOUT_S = 30
+MAX_HOPS = 5             # redirects followed per request
+REDIRECTS = (301, 302, 303, 307, 308)
 
 
 # --- outbound budget --------------------------------------------------------
@@ -46,6 +51,7 @@ TIMEOUT_S = 30
 # running out falls back to cached data instead of hammering the feed.
 MAX_REQUESTS_PER_DAY = 5000
 _SPENT: dict[str, float] = {"day": 0.0, "count": 0.0}
+_LOCK = threading.Lock()   # page scripts run on threads; the count must not drift
 
 
 class EgressBlocked(RuntimeError):
@@ -87,14 +93,15 @@ def check_budget(needed: int = 1) -> None:
 
 def _charge_budget() -> None:
     """count one outbound request, resets at utc midnight."""
-    today = _day_number()
-    if _SPENT["day"] != today:
-        _SPENT["day"], _SPENT["count"] = today, 0.0
-    if _SPENT["count"] >= MAX_REQUESTS_PER_DAY:
-        raise BudgetExhausted(
-            f"daily outbound budget of {MAX_REQUESTS_PER_DAY} market-data "
-            "requests is spent; serving cached data until it resets")
-    _SPENT["count"] += 1.0
+    with _LOCK:
+        today = _day_number()
+        if _SPENT["day"] != today:
+            _SPENT["day"], _SPENT["count"] = today, 0.0
+        if _SPENT["count"] >= MAX_REQUESTS_PER_DAY:
+            raise BudgetExhausted(
+                f"daily outbound budget of {MAX_REQUESTS_PER_DAY} market-data "
+                "requests is spent; serving cached data until it resets")
+        _SPENT["count"] += 1.0
 
 
 def host_allowed(url: str) -> bool:
@@ -107,18 +114,23 @@ class _GuardedSession(_curl.Session):
     """a curl_cffi session that won't leave the allowlist."""
 
     def request(self, method, url, *args, **kwargs):
-        if not host_allowed(url):           # stops ssrf to any host off the list
-            raise EgressBlocked(
-                f"blocked outbound {method} to {urlparse(url).hostname!r} - "
-                "not on the market-data allowlist")
-        _charge_budget()                    # stops us getting ip-banned by yahoo
-        response = super().request(method, url, *args, **kwargs)
-        final = getattr(response, "url", url)
-        if not host_allowed(str(final)):    # stops a redirect walking out
-            raise EgressBlocked(
-                f"request to {urlparse(url).hostname!r} redirected to "
-                f"{urlparse(str(final)).hostname!r}, outside the allowlist")
-        return response
+        follow = kwargs.pop("allow_redirects", True)
+        for _ in range(MAX_HOPS + 1):
+            if not host_allowed(url):       # stops ssrf, and a redirect walking out
+                raise EgressBlocked(
+                    f"blocked outbound {method} to {urlparse(url).hostname!r} - "
+                    "not on the market-data allowlist")
+            _charge_budget()                # stops us getting ip-banned by yahoo
+            response = super().request(method, url, *args, allow_redirects=False, **kwargs)
+            location = response.headers.get("location")
+            if not follow or response.status_code not in REDIRECTS or not location:
+                return response
+            url = urljoin(url, location)
+            if response.status_code in (301, 302, 303) and method.upper() != "HEAD":
+                method = "GET"              # what browsers (and curl) do
+                kwargs.pop("data", None)
+                kwargs.pop("json", None)
+        raise EgressBlocked(f"more than {MAX_HOPS} redirects")
 
 
 def guarded_session() -> _GuardedSession:

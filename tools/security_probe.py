@@ -16,7 +16,8 @@ have no surface here. This checks the surfaces that DO exist, from outside:
 - the server banner and security headers are reported for the record;
 - with --require-headers, the headers serve.py adds (HSTS, frame-ancestors,
   X-Frame-Options, nosniff and the referrer policy) must be on the
-  page and the health check, and /_stcore/metrics must answer 404. The Live
+  page and the health check, and /_stcore/metrics and /_stcore/upload_file
+  must answer 404. The Live
   audit requires them of this commit's own app always, and of the deployed
   site on main - a branch push still probes the old deployment.
 
@@ -44,6 +45,21 @@ def get(url: str, headers: dict | None = None) -> tuple[int, dict, bytes]:
             return r.status, dict(r.headers), r.read(200_000)
     except urllib.error.HTTPError as e:
         return e.code, dict(e.headers), e.read(20_000)
+
+
+def put(url: str) -> int:
+    """PUT a tiny file the way an uploader would, with a made-up xsrf pair."""
+    token = "2|00000000|" + "00" * 16 + "|0"
+    body = (b"--b\r\nContent-Disposition: form-data; name=\"file\"; filename=\"p.txt\"\r\n\r\n"
+            b"probe\r\n--b--\r\n")
+    req = urllib.request.Request(url, data=body, method="PUT", headers={
+        "User-Agent": "meliona-security-probe", "Cookie": f"_streamlit_xsrf={token}",
+        "X-Xsrftoken": token, "Content-Type": "multipart/form-data; boundary=b"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:  # nosec B310 - probe target
+            return r.status
+    except urllib.error.HTTPError as e:
+        return e.code
 
 
 REQUIRED = {           # serve.py's HEADERS, as an attacker sees them
@@ -111,6 +127,10 @@ def main() -> int:
                       low.get(name, "(not set)"))
         status, _, _ = get(base + "/_stcore/metrics")
         check("/_stcore/metrics is not served", status == 404, f"HTTP {status}")
+        # the upload route, with a made-up xsrf cookie/header pair that streamlit's
+        # own check accepts: it must not exist at all (security review, 2026-11-12)
+        status = put(base + "/_stcore/upload_file/probe/probe")
+        check("/_stcore/upload_file is not served", status == 404, f"HTTP {status}")
 
     print(f"\n{'all security checks pass' if not fails else str(len(fails)) + ' FAILED'}")
     return 1 if fails else 0
