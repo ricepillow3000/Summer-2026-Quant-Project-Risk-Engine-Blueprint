@@ -60,7 +60,7 @@ BUGS = [
     ("M32", "src/data_quality.py", "EXTREME_MOVE_THRESHOLD = 0.50", "EXTREME_MOVE_THRESHOLD = 5.0", "extreme moves never flagged"),
     ("M33", "src/data_quality.py", '"PASS" if staleness_days <= 1 else "WARN"', '"PASS" if staleness_days <= 100 else "WARN"', "stale feed reads fresh"),
     ("M34", "serve.py", '    "x-content-type-options": "nosniff",', '    "x-content-type-options": "",', "nosniff dropped"),
-    ("M35", "serve.py", 'HIDDEN = ("/_stcore/metrics",)', "HIDDEN = ()", "metrics endpoint exposed"),
+    ("M35", "serve.py", 'HIDDEN = ("/_stcore/metrics", "/_stcore/upload_file")', 'HIDDEN = ("/_stcore/upload_file",)', "metrics endpoint exposed"),
     ("M36", "main.py", 'return f"{type(exc).__name__}; quote', 'return f"{exc}; quote', "server paths shown to visitors"),
     ("M37", "src/ingestion.py", "else _finished_rows(_own_rows(raw, t, alone=len(missing) == 1), t))", "else _own_rows(raw, t, alone=len(missing) == 1))", "today's live price kept as a close"),
     ("M38", "src/ingestion.py", "    if fetched < last_close_boundary():", "    if False:", "a pre-close pull hides the close"),
