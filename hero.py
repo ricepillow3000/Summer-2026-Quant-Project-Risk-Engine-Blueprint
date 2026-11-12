@@ -136,6 +136,7 @@ LINKEDIN_URL = "https://www.linkedin.com/in/johnnguyen3000/"
 PORTRAIT = "john-nguyen"              # static/john-nguyen.{avif,webp,jpg}, 480x600
 PORTRAIT_ALT = "John Nguyen, the builder of Meliona, in a navy blazer"
 REPO_URL = "https://github.com/ricepillow3000/Summer-2026-Quant-Project-Risk-Engine-Blueprint"
+PRIVACY_URL = f"{REPO_URL}/blob/main/PRIVACY.md"
 # Monochrome marks on a 24-unit grid, drawn in currentColor so they take the
 # ink or the gold of the ground they sit on - never a brand colour. GitHub's
 # mark and Handshake's are Simple Icons' paths (CC0, simple-icons 16.36.0);
