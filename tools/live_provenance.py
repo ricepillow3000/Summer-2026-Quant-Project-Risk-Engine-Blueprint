@@ -33,7 +33,8 @@ import pandas as pd
 import yfinance as yf
 
 from src.conviction import BENCHMARK, load_conviction
-from src.ingestion import ALL_DAY, MAX_UNIVERSE, PRESETS, _last_final_day, fetch_prices, fetch_risk_free_rate
+from src.ingestion import (ALL_DAY, MAX_UNIVERSE, PRESETS, _download_close_volume, _last_final_day,
+                           fetch_prices, fetch_risk_free_rate)
 from src.netguard import guarded_session
 from src.scenarios import HISTORICAL_REGIMES
 
@@ -152,6 +153,12 @@ def main() -> int:
     eng = fetch_prices(SYMBOLS, period="3mo", use_cache=False, align=False)
     eng.index = pd.to_datetime(eng.index).tz_localize(None).normalize()
     eng = eng[~eng.index.duplicated(keep="last")]
+    # The end-of-day check reads each name's OWN download: the frame above
+    # forward-fills a day other names traded, so a stock can show an FX day's
+    # date carrying its previous close (runs 251-257, 2026-11-12: six US names
+    # "newer" than Yahoo by exactly one day, every run).
+    own, _ = _download_close_volume(SYMBOLS, "3mo", use_cache=False)
+    own.index = pd.to_datetime(own.index).tz_localize(None).normalize()
     for sym in SYMBOLS:
         if sym not in eng.columns:
             check(f"{sym} loaded", False, "engine returned no column")
@@ -167,14 +174,17 @@ def main() -> int:
         # End of day: the engine's newest bar is a finished day, and it is the
         # newest finished day Yahoo has - never today's live price, never a day behind.
         final = pd.Timestamp(_last_final_day(sym))
-        newest = eng[sym].dropna().index[-1]
-        done = raw[raw.index <= final]
+        mine = own[sym].dropna() if sym in own.columns else pd.Series(dtype=float)
+        if mine.empty:
+            check(f"{sym} newest bar is the latest finished close", False, "no download of its own")
+            continue
+        newest, done = mine.index[-1], raw[raw.index <= final]
         on_time = newest <= final and (sym.endswith(ALL_DAY) or newest == done.index[-1])
         check(f"{sym} newest bar is the latest finished close", on_time,
-              f"engine {newest.date()}, Yahoo's newest finished {done.index[-1].date()}, "
-              f"last day that can be final now {final.date()}")
+              f"engine {newest.date()} {mine.iloc[-1]:.4f}, Yahoo's newest finished "
+              f"{done.index[-1].date()} {done.iloc[-1]:.4f}, last day that can be final now {final.date()}")
         if not sym.endswith(ALL_DAY):
-            second_source(sym, newest, float(eng[sym].dropna().iloc[-1]))
+            second_source(sym, newest, float(mine.iloc[-1]))
         if both.empty:
             check(f"{sym} engine price == raw Yahoo chart", False, "no common dates")
             continue
