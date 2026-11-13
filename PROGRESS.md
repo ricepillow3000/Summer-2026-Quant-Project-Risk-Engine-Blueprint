@@ -4,11 +4,30 @@ Paste this into a new chat session to bring it up to speed instantly.
 
 ---
 
-## Start here: where things stand (updated 2026-11-12)
+## Start here: where things stand (updated 2026-11-13)
 
 - **Live:** https://summer-2026-quant-project-risk-engine-blueprint-production.up.railway.app
   (Railway deploys `main`; the Live audit on `main` proves the deployed
   build stamp, step 5).
+- **Resuming in a new session:** read this section, then `CLAUDE.md` and
+  `docs/security/SECURITY-LESSONS.md`. Two sessions have been working side
+  by side: the back end (`src/`, `serve.py`, `tools/` checks, workflows,
+  tests) and the front end (`main.py`, `hero.py`, `static/`, `public/`).
+  Before touching a file the other side owns, say so in the PR. Start every
+  branch from the latest `main`; nothing is waiting on any branch.
+- **2026-11-12/13, front-end session (PRs #63, #69, #70):** John's story
+  and the five answers rewritten to read aloud (shorter sentences, no
+  advice, no forecast); bloated captions cut to 45 words or fewer
+  (craft_check enforces it); EWMA explained in plain words wherever it
+  shows; the mouse wheel glides over the Risk Topology map's bottom edge
+  too; blocks arrive as the reader scrolls, headings from the left and
+  side columns from their own side (`tools/arrival_check.mjs`); and every
+  word a visitor reads says "anchor", never "cushion" (the code's own
+  names, `Role.CUSHION` and the payload's `cushion` field, stay).
+- **Accepted risk, still open by choice:** a script inventing new made-up
+  symbols on every rerun can spend the web process's 5,000-request Yahoo
+  day; presets and cached baskets keep working. Fix only on evidence of
+  abuse (SECURITY-LESSONS.md, 2026-11-12).
 - **2026-11-12, end of day means end of day, and a cold security review
   (back-end session, PR #64, live at cced9d4):** in market hours Yahoo's
   daily download carries today's row at the live price, and the cache kept
