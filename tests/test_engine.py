@@ -4237,8 +4237,8 @@ def test_gungnir_plaque_matches_its_sketch_and_its_math():
         assert abs(w[0] * s1 - w[1] * s2) < 1e-9, (rho, w)
         assert abs(w[0] - 0.25) < 1e-9 and abs(w[1] - 0.75) < 1e-9, (rho, w)
     src = (pathlib.Path(__file__).resolve().parent.parent / "main.py").read_text(encoding="utf-8")
-    assert 'class="c">flyer<' in src and 'class="c">cushion<' in src, \
-        "the plaque must name the sketch's two blocks, the flyer and the cushion"
+    assert 'class="c">flyer<' in src and 'class="c">anchor<' in src, \
+        "the plaque must name the sketch's two blocks, the flyer and the anchor"
     assert 'class="c">circle' not in src and "Circle A" not in src
 
 
@@ -5871,7 +5871,7 @@ def test_every_short_form_on_the_map_is_in_its_glossary():
     terms = ["expected shortfall", "var 95", "t+30", "ornstein-uhlenbeck", "ar(1)", "long-run vol",
              "calm", "baseline", "stressed", "beta", "vol", "daily closes", "days fitted",
              "perimeter", "breach", "rings", "shock correlation", "leverage", "shocks widened",
-             "drawdown cushion", "flyer", "anchor"]
+             "anchor effect", "flyer", "anchor"]
     missing = [t for t in terms if t not in gloss]
     assert not missing, f"short forms the glossary does not define: {missing}"
     btn = re.search(r'<button[^>]*id="btnExplain"[^>]*>', html).group(0)
@@ -5895,7 +5895,7 @@ def test_the_pairing_never_shows_pp_or_percent_for_a_points_gap():
     html = (root / "prototypes" / "war_room.html").read_text(encoding="utf-8")
     assert not re.findall(r"[^A-Za-z]pp[^A-Za-z]", html), "the map still prints a 'pp' unit"
     assert "shallower" in html and "deeper" in html, \
-        "the map must say which way the cushion points, in words"
+        "the map must say which way the anchor effect points, in words"
     src = (root / "main.py").read_text(encoding="utf-8")
     assert 'bt["cushion"]:+.0%' not in src, "the page prints a points gap as %"
     assert '"cushion": "{:+.1%}"' not in src, "the page prints a points gap as %"
@@ -7914,6 +7914,36 @@ def test_ewma_is_spelled_out_in_plain_words_wherever_it_shows():
     assert cov_plain and plain in cov_plain.group(1).lower(), "the line under the choice"
     panic = src[src.index("Panic view: "):][:300]
     assert panic.startswith("Panic view: EWMA means ") and plain in panic.lower()
+
+
+def test_the_steady_name_is_called_the_anchor_never_the_cushion():
+    """John, 2026-11-13: "anywhere it says cushion, replace it with anchor ...
+    anchor sounds cooler." The steady name paired with a high-flyer is the
+    anchor in every word a visitor reads: the From evidence to allocation
+    sketch, its plaque and caption, the Book, and the map's labels and
+    glossary. (The code's own names - Role.CUSHION, the payload's "cushion"
+    field - are never shown and stay, so the audits keep their keys.)"""
+    import re
+    from src.narrative import SENTENCES
+    root = pathlib.Path(__file__).resolve().parent.parent
+    main = (root / "main.py").read_text(encoding="utf-8")
+    # every string a visitor can read in main.py: comments and the Role /
+    # CSS-class names (never rendered as words) taken out first
+    shown = re.sub(r"#[^\n]*", "", main)
+    shown = shown.replace("Role.CUSHION", "").replace("is-cushion", "")
+    assert "cushion" not in shown.lower(), \
+        [l.strip()[:90] for l in shown.splitlines() if "cushion" in l.lower()]
+    assert "the steady anchor" in main and 'class="c">anchor<' in main
+    assert not [k for k, t in SENTENCES.items() if "cushion" in t.lower()]
+    html = (root / "prototypes" / "war_room.html").read_text(encoding="utf-8")
+    html = re.sub(r"/\*.*?\*/", "", html, flags=re.S)
+    markup = re.sub(r"<script[^>]*>.*?</script>", "", html, flags=re.S)
+    assert "cushion" not in markup.lower(), "the map's markup still says cushion"
+    script = "".join(re.findall(r"<script[^>]*>(.*?)</script>", html, flags=re.S))
+    said = [q for q in re.findall(r"'([^'\n]*)'", script) if "cushion" in q.lower()]
+    assert not said, f"the map still prints: {said}"
+    readme = (root / "README.md").read_text(encoding="utf-8")
+    assert "cushion" not in readme.lower()
 
 
 def test_no_test_hides_below_the_script_runner():
