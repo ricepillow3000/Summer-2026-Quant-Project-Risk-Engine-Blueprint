@@ -4272,11 +4272,23 @@ def test_blocks_reveal_on_arrival_on_the_gpu_and_never_hide_without_script():
     # under a reader who stopped: John, 2026-11-06)
     assert "new IntersectionObserver" in js and "new MutationObserver" in js
     assert "addEventListener('scroll'" not in js and "animation-range" not in css
-    # an arrival starts BEFORE its slot is on screen, never inside the edge
-    # (-8% left headings, cards and the contact button missing or out of
-    # place at the screen's foot until a scroll brought them in)
-    lead = re.search(r"var LEAD = '(\d+)%';", js)
-    assert lead and int(lead.group(1)) >= 10 and "rootMargin: '0px 0px ' + LEAD" in js
+    # an arrival starts ON screen, where the reader sees it move (John,
+    # 2026-11-13: starting 15% below the edge, 92% had landed unseen), and
+    # one the reader stopped short of starts after a short dwell, so nothing
+    # waits at the screen's foot (2026-11-06). Measured in a browser by
+    # tools/arrival_check.mjs (Live audit 8b).
+    foot = re.search(r"var FOOT = '-(\d+)%';", js)
+    dwell = re.search(r"var DWELL_MS = (\d+);", js)
+    assert foot and 5 <= int(foot.group(1)) <= 20 and "rootMargin: '0px 0px ' + FOOT" in js
+    assert dwell and int(dwell.group(1)) <= 400 and "new IntersectionObserver(linger" in js
+    # ...measured from its place, not its waiting box (28px low): a block
+    # whose place was the screen's last 28px waited there as a gap
+    slack = re.search(r"var SLACK = '(\d+)px';", js)
+    rise_y = re.search(r"--reveal-y: (\d+)px", css)
+    assert slack and rise_y and int(slack.group(1)) >= int(rise_y.group(1)) and "rootMargin: '0px 0px ' + SLACK" in js
+    # no arrival plays during the first load, when Streamlit has the blocks
+    # on a short first screen before the hero's slot pushes them down
+    assert "if (!ready) return;" in js and "'data-test-script-state') === 'notRunning') release()" in js
     # ...measured on the page's own scroller: on the window, stMain clipped
     # every block below it first and the lead counted for nothing
     assert "new IntersectionObserver(arrive, { root: sc," in js
@@ -7453,19 +7465,28 @@ def test_motion_is_calm_enough_to_read_while_scrolling():
     unfocuses my eyes", and forcing the page past its top showed a gap. A
     reader's eye tracks the page up and down; blocks swinging in from the
     sides, turning like cards (a 3D turn smears the text) and a hull still
-    drifting 1.7 s after the wheel stopped all fight it. So: every block
-    arrives the one calm way - a short rise and a fade - the wheel settles in
-    well under a second, and the page has hard ends, no stretch."""
+    drifting 1.7 s after the wheel stopped all fight it. So the wheel settles
+    in well under a second and the page has hard ends, no stretch.
+    John, 2026-11-13, asked for the blocks to be SEEN arriving, "coming in from
+    the left side or the right side": headings slide from the left, a block
+    beside another from its own side, the rest rise - each a short move with
+    one soft landing, and still nothing turns or zooms."""
     import re
     root = pathlib.Path(__file__).resolve().parent.parent
     js = (root / "static" / "reveal.js").read_text(encoding="utf-8")
     css = (root / "static" / "app.css").read_text(encoding="utf-8")
     reveal = " ".join(b for sel, b in re.findall(r"([^{}]*\.reveal-item[^{}]*)\{([^}]*)\}", css))
-    for move in ("rotate", "perspective", "scale(", "--reveal-x"):
-        assert move not in reveal, f"an arrival still moves by {move}"
+    for move in ("rotate", "perspective", "scale("):
+        assert move not in reveal, f"an arrival moves by {move}"
     rise = re.search(r"--reveal-y: (\d+)px", css)
+    side = re.search(r"--reveal-x: (\d+)px", css)
     dur = re.search(r"--reveal-dur: (\d*\.?\d+)s", css)
-    assert rise and int(rise.group(1)) <= 20 and dur and float(dur.group(1)) <= 0.7
+    assert rise and 20 <= int(rise.group(1)) <= 32, "a rise the reader can see, and no more"
+    assert side and 24 <= int(side.group(1)) <= 48, "a slide the reader can see, and no more"
+    assert dur and 0.6 <= float(dur.group(1)) <= 0.9
+    assert ".reveal-on .reveal-item.rv-l {" in css and ".reveal-on .reveal-item.rv-r {" in css
+    # a phone stacks its columns: nothing slides in from the right there
+    assert "if (!wide.matches) return '';" in js and "function way(el)" in js
     for gone in ("function side(", "reveal-item--", "reveal-flat", "function band(", "var BAND"):
         assert gone not in js + css, f"{gone} is left over"
     tow = float(re.search(r"var TOW = (\d+(?:\.\d+)?);", js).group(1))

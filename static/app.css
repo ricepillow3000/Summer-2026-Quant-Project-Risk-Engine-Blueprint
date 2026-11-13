@@ -647,19 +647,25 @@ div[data-baseweb="select"] > div:hover { border-color: #9A7B4F !important; }
    neither touches layout, so nothing below a block shifts while it arrives.
    will-change asks for the GPU layer up front (no first-frame stutter);
    reveal.js removes the class when the block lands, releasing the layer.
-   Every block arrives the one calm way, wherever it sits: a short rise and
-   a fade (John, 2026-11-09: the side swings, card turns and long settles
-   "gave me motion sickness and unfocused my eyes" - the eye tracks the page
-   up and down, so nothing moves sideways, turns or zooms while it does).
+   Each block arrives where the reader can see it (John, 2026-11-13: "I do
+   not see ... headers and body of line text coming in from the left side or
+   the right side"): headings slide in from the left, a block beside another
+   from its own side (rv-l / rv-r, chosen in reveal.js), the rest rise - each
+   with a fade. Short travel, one soft landing and nothing that turns or
+   zooms keep it readable mid-scroll (John, 2026-11-09: card turns and long
+   settles made him motion sick).
    Tune here:
      --reveal-y    how far a block rises into place
+     --reveal-x    how far a block slides in from its side
      --reveal-dur  how long the settle takes
      --ease-out    fast start, soft landing (an expo-out curve)
    The stagger between blocks is STAGGER_MS in reveal.js.
    ============================================================ */
-:root { --reveal-y: 16px; --reveal-dur: .6s; --ease-out: cubic-bezier(0.16, 1, 0.3, 1); }
+:root { --reveal-y: 28px; --reveal-x: 40px; --reveal-dur: .8s; --ease-out: cubic-bezier(0.16, 1, 0.3, 1); }
 .reveal-on .reveal-item {
     opacity: 0; transform: translate3d(0, var(--reveal-y), 0); }
+.reveal-on .reveal-item.rv-l { transform: translate3d(calc(var(--reveal-x) * -1), 0, 0); }
+.reveal-on .reveal-item.rv-r { transform: translate3d(var(--reveal-x), 0, 0); }
 .reveal-on .reveal-item.is-visible {
     opacity: 1; transform: translate3d(0, 0, 0);
     will-change: transform, opacity;

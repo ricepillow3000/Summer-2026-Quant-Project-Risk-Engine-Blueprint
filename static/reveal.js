@@ -1,8 +1,11 @@
 /* Meliona motion: how the page arrives as you scroll.
  *
- *   1. Reveals - every block on the page arrives the first time it enters the
- *      screen, one calm way: a short rise and a fade (John, 2026-11-09: the
- *      side swings and card turns made him motion sick). An
+ *   1. Reveals - every block on the page arrives the first time it comes on
+ *      screen, where the reader can see it (John, 2026-11-13: scrolling down
+ *      he saw no arrivals at all - they played during the load and below the
+ *      screen's edge). Headings slide in from the left; on a wide screen a
+ *      block beside another comes in from its own side; the rest rise. A
+ *      fade carries each one; nothing turns or zooms. An
  *      IntersectionObserver reports the moment it arrives; nothing listens to
  *      every scrolled pixel. Blocks that arrive together are staggered top to
  *      bottom, left to right.
@@ -42,6 +45,7 @@
   // line of the Book - as Streamlit's own leaf container. Tagged as each one
   // is added to the page, before it is painted.
   var NAMED = ['.reveal-item', '.showcase-title', '.showcase-body',
+    '.about-text', '.about-find', '.story-text', '.faq-section > .kicker', '.faq-row',
     '.gungnir-sub', '.pillar-card', '.slab', '.cta-btn', '.cta-link',
     '.panel-head', '.verdict-box', '.gungnir-plaque', '.orient', '.read-me', '.f-box',
     '[data-testid="stMetric"]', '[data-testid="stPlotlyChart"]',
@@ -60,7 +64,34 @@
   // and it is where iPhones froze blocks mid-turn (John's screenshots,
   // 2026-11-05: the Weights and Stress test drawers, the Book's drawer).
   var OPENED = '[data-testid="stExpanderDetails"], [data-testid="stTabPanel"]';
-  var LEAD = '15%';       // an arrival starts this far below the screen's bottom edge
+  // An arrival starts once its block is FOOT inside the screen's bottom edge,
+  // so the reader sees it move; one that sits on screen DWELL_MS without
+  // getting there (a reader who stopped with it low) starts then, so nothing
+  // waits on screen. It used to start 15% BELOW the edge: 0.6s later it had
+  // landed, before the reader saw it (92% of blocks, John 2026-11-13).
+  var FOOT = '-10%';
+  var DWELL_MS = 250;
+  var SLACK = '32px';     // at least app.css --reveal-y
+  // Where each block comes from. Headings from the left. On a screen wide
+  // enough to set things side by side, a block in the first of a row of
+  // columns from the left, in the last from the right, the text beside
+  // John's photographs from the right; everything else rises. A phone
+  // stacks its columns, so there it only rises (and its headings still
+  // come from the left, which can never open a sideways scroll).
+  var HEAD = '.panel-head, .showcase-title, .faq-section > .kicker, [data-testid="stHeading"]';
+  var BESIDE = '.about-text, .story-text';
+  var wide = W.matchMedia ? W.matchMedia('(min-width: 761px)') : { matches: true };
+  function way(el) {
+    if (el.matches(HEAD) || el.querySelector(HEAD + ', h1, h2, h3')) return 'rv-l';
+    if (!wide.matches) return '';
+    if (el.matches(BESIDE)) return 'rv-r';
+    var col = el.closest('[data-testid="stColumn"]');
+    var row = col && col.parentElement && [].filter.call(col.parentElement.children, function (c) {
+      return c.matches('[data-testid="stColumn"]');
+    });
+    if (!row || row.length < 2) return '';
+    return col === row[0] ? 'rv-l' : col === row[row.length - 1] ? 'rv-r' : '';
+  }
 
   var calm = !('IntersectionObserver' in W) ||
     (W.matchMedia && W.matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -145,8 +176,38 @@
   if (calm) { H.classList.remove('reveal-on'); return; }   // everything as drawn
 
   // ---- 1. reveals ----------------------------------------------------------
+  // The first load: Streamlit writes the blocks below the hero BEFORE the
+  // hero's slot is filled, so for a moment they sit on a short first screen
+  // (under the boot skeleton) and their arrival played there; the hero then
+  // pushed them far down, already landed (15 of 22, John 2026-11-13). So no
+  // arrival plays until the first run has ended - or the reader moves, or
+  // 12s pass - and then whatever is on screen arrives.
+  var ready = false;
+  function release() {
+    if (ready) return;
+    ready = true;
+    W.requestAnimationFrame(function () { W.requestAnimationFrame(sweep); });
+  }
+  function sweep() {
+    var sc = D.querySelector(SCROLLER), bottom = sc ? sc.getBoundingClientRect().bottom : W.innerHeight;
+    var on = [].filter.call(D.querySelectorAll('.reveal-item:not(.is-visible)'), function (el) {
+      var r = el.getBoundingClientRect();
+      return r.height > 0 && r.top < bottom && r.bottom > 0;
+    });
+    on.forEach(function (el, i) { show(el, Math.min(i, MAX_STEPS) * STAGGER_MS); });
+  }
+  new MutationObserver(function () {
+    var app = D.querySelector('.stApp');
+    if (app && app.getAttribute('data-test-script-state') === 'notRunning') release();
+  }).observe(D.documentElement, { attributes: true, subtree: true, attributeFilter: ['data-test-script-state'] });
+  ['wheel', 'touchstart', 'keydown', 'pointerdown'].forEach(function (t) {
+    D.addEventListener(t, release, { capture: true, passive: true });
+  });
+  setTimeout(release, 12000);
+
   function arrive(entries) {
-    entries.filter(function (e) { return e.isIntersecting; })
+    if (!ready) return;
+    entries.filter(function (e) { return e.isIntersecting && !e.target.classList.contains('is-visible'); })
       // reading order = document order: a row of metrics left to right, a
       // heading before its line. (Their boxes are still mid-transform, so
       // on-screen positions would mis-sort them.)
@@ -155,33 +216,44 @@
       })
       .forEach(function (e, i) { show(e.target, Math.min(i, MAX_STEPS) * STAGGER_MS); });
   }
-  // Fires as a block's slot comes within LEAD of the bottom edge, so it is
-  // already arriving when the reader first sees it. It used to wait until it
-  // was 8% INSIDE the edge (and its waiting state sits 46px low): a slow
-  // scroll stopped with a heading, a card or the contact form's button
-  // missing or out of place at the bottom of the screen for up to 3s,
-  // until a scroll brought it "into full view" (John, 2026-11-06).
+  // A block on screen that has not reached FOOT (the reader stopped with it
+  // low) starts after DWELL_MS: John, 2026-11-06, saw a heading, a card and
+  // the contact form's button missing at the screen's foot for up to 3s.
+  function linger(entries) {
+    entries.forEach(function (e) {
+      var el = e.target;
+      clearTimeout(el.__dw);
+      if (e.isIntersecting) el.__dw = setTimeout(function () {
+        if (ready && el.classList.contains('reveal-item') && !el.classList.contains('is-visible')) show(el, 0);
+      }, DWELL_MS);
+    });
+  }
   // The root is the page's own scroller (stMain), not the window: a margin
-  // only widens the root, and stMain clips everything below it first, so on
-  // the window the lead counted for nothing. Streamlit draws stMain after
-  // this file runs: until then the window stands in, and when stMain comes
-  // (or is ever redrawn) the blocks still waiting move to a fresh observer.
-  var seen = null, seenRoot;
+  // only changes the root's box, and stMain clips everything below it first.
+  // Streamlit draws stMain after this file runs: until then the window
+  // stands in, and when stMain comes (or is ever redrawn) the blocks still
+  // waiting move to fresh observers.
+  var seen = null, edge = null, seenRoot;
   function observer() {
     var sc = D.querySelector(SCROLLER);
     if (seen && seenRoot === sc) return seen;
-    var old = seen;
+    var old = seen, oldEdge = edge;
     seenRoot = sc;
-    seen = new IntersectionObserver(arrive, { root: sc, rootMargin: '0px 0px ' + LEAD + ' 0px', threshold: 0 });
+    seen = new IntersectionObserver(arrive, { root: sc, rootMargin: '0px 0px ' + FOOT + ' 0px', threshold: 0 });
+    // a rising block waits --reveal-y (28px) below its place, and an observer
+    // reads that shifted box: the margin lets its place count, not its box
+    edge = new IntersectionObserver(linger, { root: sc, rootMargin: '0px 0px ' + SLACK + ' 0px', threshold: 0 });
     if (old) {
-      old.disconnect();
-      [].forEach.call(D.querySelectorAll('.reveal-item:not(.is-visible)'), function (el) { seen.observe(el); });
+      old.disconnect(); oldEdge.disconnect();
+      [].forEach.call(D.querySelectorAll('.reveal-item:not(.is-visible)'), watch);
     }
     return seen;
   }
+  function watch(el) { observer().observe(el); edge.observe(el); }
+  function unwatch(el) { observer().unobserve(el); edge.unobserve(el); clearTimeout(el.__dw); }
 
   function show(el, delay) {
-    observer().unobserve(el);
+    unwatch(el);
     void el.offsetWidth;                               // starts from its waiting state
     el.style.setProperty('--reveal-delay', delay + 'ms');
     el.classList.add('is-visible');
@@ -198,12 +270,12 @@
   // and drop will-change, so the GPU layer it held is released.
   function done(el) {
     clearTimeout(el.__rvTimer);
-    el.classList.remove('reveal-item', 'is-visible');
+    el.classList.remove('reveal-item', 'is-visible', 'rv-l', 'rv-r');
     el.style.removeProperty('--reveal-delay');
   }
   api.revealAll = function () {                       // the end state, at once (layout probes)
     landCounts();
-    [].forEach.call(D.querySelectorAll('.reveal-item'), function (el) { observer().unobserve(el); done(el); });
+    [].forEach.call(D.querySelectorAll('.reveal-item'), function (el) { unwatch(el); done(el); });
     [].forEach.call(D.querySelectorAll('.mask-reveal'), function (el) { veiled.unobserve(el.parentElement); unveil(el); });
   };
 
@@ -449,8 +521,10 @@
       if (!el.matches(NAMED) && (el.querySelector(LEAF) || el.querySelector(NAMED))) return;
       var parent = el.parentElement && el.parentElement.closest('.reveal-item');
       if (parent || (late && inView(el))) return;     // never animate inside an animating block
+      var from = way(el);
+      if (from) el.classList.add(from);
       el.classList.add('reveal-item');
-      observer().observe(el);
+      watch(el);
     });
   }
   scan(D.body);
