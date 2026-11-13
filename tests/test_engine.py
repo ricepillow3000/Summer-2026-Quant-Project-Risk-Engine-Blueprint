@@ -7937,9 +7937,10 @@ def test_the_steady_name_is_called_the_anchor_never_the_cushion():
     assert not [k for k, t in SENTENCES.items() if "cushion" in t.lower()]
     html = (root / "prototypes" / "war_room.html").read_text(encoding="utf-8")
     html = re.sub(r"/\*.*?\*/", "", html, flags=re.S)
-    # any case, any spacing in the closing tag (CodeQL: a <SCRIPT> block
-    # would otherwise be read as markup and slip past the second check)
-    block = r"<script\b[^>]*>(.*?)</script\s*>"
+    # any case, anything a browser accepts in the closing tag (CodeQL: a
+    # <SCRIPT> block or "</script bar>" would otherwise be read as markup and
+    # slip past the second check)
+    block = r"<script\b[^>]*>(.*?)</script\b[^>]*>"
     markup = re.sub(block, "", html, flags=re.S | re.I)
     assert "cushion" not in markup.lower(), "the map's markup still says cushion"
     script = "".join(re.findall(block, html, flags=re.S | re.I))
