@@ -6661,7 +6661,7 @@ def test_the_contact_form_writes_to_john_and_linkedin_is_the_second_way():
     # John, 2026-11-09: his own words, first person, passionate about building
     # tools with AI and still corporate - no promise, no advice
     assert hero.ABOUT_BIO.startswith("Hello! I am John") and "Building tools with AI" in hero.ABOUT_BIO
-    assert "check the numbers and tell me what I got wrong" in hero.ABOUT_BIO
+    assert "check every number" in hero.ABOUT_BIO and "what I got wrong" in hero.ABOUT_BIO
     assert not any(w in hero.ABOUT_BIO.lower() for w in ("guarantee", "should buy", "will make", "!!"))
     assert "&amp; Analytics" in hero.about_html(), "the bio's ampersand is escaped in the page"
 
@@ -7305,30 +7305,38 @@ def test_the_story_and_the_faq_say_the_same_thing():
     assert "cannot say how a stock will do" in story, "the story must say it forecasts nothing"
 
 
-def test_the_page_promises_nothing_and_says_it_can_be_wrong():
-    """John, 2026-11-13: "no elements of us guaranteeing anything ... be humble",
-    so a visitor knows we understand this is imperfect and are willing to fix
-    and learn. The words a visitor reads hold no promise of perfection or of a
-    reply time, and the places that explain the numbers say they can be wrong
-    and ask to hear about mistakes."""
+def test_the_page_is_confident_and_says_it_can_be_wrong():
+    """John, 2026-11-13: "have confidence but have humbleness". The page keeps
+    its confident, true claims (every number computed from live prices and
+    checked a second way, a trading desk's bar, John replies within 2 business
+    days) and promises no outcome. Where it explains the numbers it also says,
+    as a fact of every model, that they can be wrong, and asks to hear about a
+    mistake so it can be fixed and learned from."""
     import re
     import hero
+    import tools.public_files as pf
     root = pathlib.Path(__file__).resolve().parent.parent
     main = (root / "main.py").read_text(encoding="utf-8")
     thanks = re.sub(r"<[^>]+>", " ", (root / "public" / "thanks.html").read_text(encoding="utf-8"))
     orient = main[main.index('<div class="orient-f">'):main.index("# ---- The cockpit")]
     faq = " ".join(a for _, a in hero.FAQS)
-    words = " ".join([hero.HERO_SUB, hero.ABOUT_BIO, *hero.STORY, faq, hero.RESPONSE_TIME,
-                      hero.RESPONSE_WINDOW, thanks, orient, main]).lower()
-    for promise in ("guarantee", "every detail holds", "trading desk's bar", "replies within",
-                    "cannot say anything", "is fixed as a defect", "check every number"):
-        assert promise not in words, f"the page promises too much: {promise!r}"
-    for name, text in (("the FAQ", faq), ("the story", " ".join(hero.STORY)),
-                       ("How to use this page", orient)):
+    story = " ".join(hero.STORY)
+    words = " ".join([hero.HERO_SUB, hero.ABOUT_BIO, story, faq, thanks, orient, pf.DESCRIPTION]).lower()
+    for promise in ("guarantee", "risk-free", "can't lose", "cannot lose", "will make you",
+                    "no risk", "always right", "never wrong"):
+        assert promise not in words, f"the page promises an outcome: {promise!r}"
+    # confident: John's own lines stay (2026-11-13)
+    assert "every number is computed" in orient.lower() and "check every number" in hero.ABOUT_BIO
+    assert hero.RESPONSE_TIME == "John replies within 2 business days."
+    assert "a barrier is fixed as a defect" in main
+    # humble: the cons are said out loud
+    for name, text in (("the FAQ", faq), ("the story", story)):
         assert "wrong" in text.lower(), f"{name} must say the numbers can be wrong"
-    assert re.search(r"tell (john|me|us)", (faq + " ".join(hero.STORY) + hero.ABOUT_BIO).lower()), \
+    assert "estimate" in orient.lower(), "How to use this page must call each number an estimate"
+    assert re.search(r"tell (john|me)", (faq + story + hero.ABOUT_BIO).lower()), \
         "invite the visitor to point out a mistake"
-    assert re.search(r"\b(fix|learn)", " ".join(hero.STORY).lower()), "say mistakes get fixed and learned from"
+    assert re.search(r"\bfix", story.lower()) and re.search(r"\blearn", story.lower()), \
+        "say mistakes get fixed and learned from"
 
 
 def test_a_waiting_press_yields_only_to_the_readers_own_hand():

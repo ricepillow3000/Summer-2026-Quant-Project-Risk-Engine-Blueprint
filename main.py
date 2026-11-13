@@ -1148,9 +1148,9 @@ st.markdown(
     '<li>Read the big number: the average loss in the worst 5 of every 100 '
     'simulated years. Everything below it shows the working.</li>'
     '</ol>'
-    '<div class="orient-f">Nothing here is advice. Each number is worked out '
-    'from live end-of-day prices, and every tab shows its method. Models '
-    'simplify, so treat each number as an estimate that can be wrong.</div>'
+    '<div class="orient-f">Nothing here is advice. Every number is computed '
+    'from live end-of-day prices, and every tab shows its method. Like any '
+    'model, it simplifies, so read each number as an estimate.</div>'
     '</div>',
     unsafe_allow_html=True)
 
@@ -1927,7 +1927,7 @@ with _bk_more:
         read_me(
             "Read it top to bottom. Each sentence is a fixed template filled in "
             "with the engine's own numbers; the text never sees the prices, so it "
-            "only repeats what the engine computed. Names marked No role "
+            "cannot say anything the engine did not compute. Names marked No role "
             "are still held, at the size equal-risk weighting and trading volume "
             "allow, but neither lead nor anchor; names marked Left out hold nothing. Raise "
             "the book size and names drop out once they can no longer be sold "
@@ -2475,7 +2475,7 @@ st.markdown("""
       text description; charts are accompanied by their numbers in text. Known gaps are
       listed in the accessibility statement.</div>
     <div>Hit a barrier? Email <a href="mailto:__SUPPORT__?subject=Meliona%20accessibility%20%E2%80%93%20session%20__REF__">__SUPPORT__</a>
-      with the reference above; we treat a barrier as a bug and work to fix it.</div>
+      with the reference above; a barrier is fixed as a defect.</div>
   </div>
 </div>
 """.replace("__MARKS__", profile_marks("f-mark")).replace("__SUPPORT__", SUPPORT_EMAIL)
