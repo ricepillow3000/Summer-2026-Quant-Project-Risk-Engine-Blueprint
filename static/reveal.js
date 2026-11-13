@@ -71,6 +71,7 @@
   // landed, before the reader saw it (92% of blocks, John 2026-11-13).
   var FOOT = '-10%';
   var DWELL_MS = 250;
+  var SLACK = '32px';     // at least app.css --reveal-y
   // Where each block comes from. Headings from the left. On a screen wide
   // enough to set things side by side, a block in the first of a row of
   // columns from the left, in the last from the right, the text beside
@@ -239,7 +240,9 @@
     var old = seen, oldEdge = edge;
     seenRoot = sc;
     seen = new IntersectionObserver(arrive, { root: sc, rootMargin: '0px 0px ' + FOOT + ' 0px', threshold: 0 });
-    edge = new IntersectionObserver(linger, { root: sc, threshold: 0 });
+    // a rising block waits --reveal-y (28px) below its place, and an observer
+    // reads that shifted box: the margin lets its place count, not its box
+    edge = new IntersectionObserver(linger, { root: sc, rootMargin: '0px 0px ' + SLACK + ' 0px', threshold: 0 });
     if (old) {
       old.disconnect(); oldEdge.disconnect();
       [].forEach.call(D.querySelectorAll('.reveal-item:not(.is-visible)'), watch);

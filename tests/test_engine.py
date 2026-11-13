@@ -4281,6 +4281,11 @@ def test_blocks_reveal_on_arrival_on_the_gpu_and_never_hide_without_script():
     dwell = re.search(r"var DWELL_MS = (\d+);", js)
     assert foot and 5 <= int(foot.group(1)) <= 20 and "rootMargin: '0px 0px ' + FOOT" in js
     assert dwell and int(dwell.group(1)) <= 400 and "new IntersectionObserver(linger" in js
+    # ...measured from its place, not its waiting box (28px low): a block
+    # whose place was the screen's last 28px waited there as a gap
+    slack = re.search(r"var SLACK = '(\d+)px';", js)
+    rise_y = re.search(r"--reveal-y: (\d+)px", css)
+    assert slack and rise_y and int(slack.group(1)) >= int(rise_y.group(1)) and "rootMargin: '0px 0px ' + SLACK" in js
     # no arrival plays during the first load, when Streamlit has the blocks
     # on a short first screen before the hero's slot pushes them down
     assert "if (!ready) return;" in js and "'data-test-script-state') === 'notRunning') release()" in js

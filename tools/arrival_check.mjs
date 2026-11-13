@@ -18,8 +18,9 @@
 //   sides    desktop: blocks arrive from the left AND from the right as well
 //            as rising (a phone, its columns stacked, only rises and slides
 //            from the left)
-//   rest     a reader who stops is never left looking at a hidden block:
-//            1.2s after the wheel stops, nothing on screen is still waiting
+//   rest     a reader who stops is never left looking at a gap: 1.2s after
+//            the wheel stops, no block whose place is on screen still waits
+//            (a rising block waits 28px low, so its place, not its box)
 // Exit code 1 on any failure.
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
@@ -125,13 +126,22 @@ for (const [w, h] of [[1440, 900], [390, 844]]) {
   for (let i = 0; i < 500; i++) {
     await p.mouse.wheel(0, 100);
     await p.waitForTimeout(140);
-    // every 12 notches the reader stops to read
-    if (i % 12 === 11) {
+    // the reader stops to read every few notches
+    if (i % 5 === 4) {
       stops++;
       await p.waitForTimeout(1200);
+      // where each waiting block sits in the layout, its waiting offset taken
+      // off for the read: one whose home is on screen leaves a gap there
       const waiting = await p.evaluate(() => [...document.querySelectorAll('.reveal-item:not(.is-visible)')]
-        .filter(el => { const r = el.getBoundingClientRect(); return r.height > 0 && r.top < innerHeight - 1 && r.bottom > 0; })
-        .map(el => `"${(el.textContent || '').trim().slice(0, 30)}" at ${el.getBoundingClientRect().top | 0}px`));
+        .map(el => {
+          const tf = el.style.transform, tr = el.style.transition;
+          el.style.transition = 'none'; el.style.transform = 'none';
+          const r = el.getBoundingClientRect();
+          el.style.transform = tf; el.style.transition = tr;
+          return { r, txt: (el.textContent || '').trim().slice(0, 30) };
+        })
+        .filter(({ r }) => r.height > 0 && r.top < innerHeight - 2 && r.bottom > 0)
+        .map(({ r, txt }) => `"${txt}" at ${r.top | 0}px`));
       stuck.push(...waiting);
     }
     const end = await p.evaluate(() => { const s = document.querySelector('[data-testid="stMain"]'); return s.scrollTop + s.clientHeight >= s.scrollHeight - 2; });
