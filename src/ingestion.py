@@ -351,8 +351,9 @@ def _own_rows(raw: pd.DataFrame, ticker: str, alone: bool) -> pd.DataFrame:
 
 
 # yahoo sometimes drops a name (yfinance's tz cache hits "database is locked"),
-# so an empty name is asked for again, alone, up to 2 more times. nothing else
-# is retried, and a name still empty after that is just left out.
+# so an empty name we know is real (suggested, or an anchor) is asked for again,
+# alone, up to 2 more times. nothing else is retried; a name still empty after
+# that is just left out.
 RETRIES = 2
 RETRY_PAUSE = 0.5
 
@@ -400,6 +401,9 @@ def _download_close_volume(tickers: list[str], period: str,
         # yfinance's confusing "possibly delisted". every call below goes
         # through the egress allowlist (guarded_session).
         check_budget()
+        from src.pairing import DEFENSIVE_ANCHOR_TICKERS   # here: pairing -> risk -> ingestion
+        known = set(SUGGESTIONS) | set(DEFENSIVE_ANCHOR_TICKERS)
+        ask = missing
         # no retry next to an isin: the name may be "empty" because yfinance
         # filed it under the isin, and asking again would add it twice
         for attempt in range(1 + (0 if has_isin else RETRIES)):
@@ -410,22 +414,26 @@ def _download_close_volume(tickers: list[str], period: str,
                 except BudgetExhausted:
                     break
                 time.sleep(RETRY_PAUSE * attempt)
-            raw = yf.download(missing, period=period, auto_adjust=True, progress=False,
+            raw = yf.download(ask, period=period, auto_adjust=True, progress=False,
                               repair=True, timeout=30, session=guarded_session())
             now = _now().isoformat(timespec="seconds")
-            for t in missing:
+            for t in ask:
                 own = (pd.DataFrame() if raw is None or raw.empty
-                       else _finished_rows(_own_rows(raw, t, alone=len(missing) == 1), t))
+                       else _finished_rows(_own_rows(raw, t, alone=len(ask) == 1), t))
                 if own.empty:
-                    continue        # never cached; retried only beside names that came back
+                    continue        # never cached
                 own.attrs["fetched_at_utc"] = now
                 if use_cache:
                     os.makedirs(DATA_DIR, exist_ok=True)
                     _write_parquet(own, _raw_path(t, period))
                 frames[t] = own
-            asked, missing = missing, [t for t in missing if t not in frames]
+            came_back = any(t in frames for t in ask)
+            missing = [t for t in missing if t not in frames]
+            # only a name we know is real is asked again: a made-up one beside a
+            # real one was asked three times, tripling its cost to the budget
+            ask = [t for t in missing if t in known]
             # nothing at all came back: an outage or all made-up - retrying won't help
-            if not missing or len(missing) == len(asked) and not attempt:
+            if not ask or not came_back and not attempt:
                 break
         if use_cache:
             if len(_NO_DATA) > 10_000:

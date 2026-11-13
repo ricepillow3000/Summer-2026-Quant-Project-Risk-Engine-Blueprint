@@ -144,7 +144,7 @@ yfinance's download threads make hard to attribute - left until there is evidenc
 No way in: no visitor text reaches HTML, a file path, a URL or a log line unchecked; the map's `esc()` held against
 `</script>`, quotes and U+2028 in every name, clicked and hovered in Chromium; every path trick on the hidden routes
 (`//_stcore/metrics`, `/_STCORE/...`, encoded dots) fell through to the page; netguard covers every Yahoo call and
-pip-audit is clean. Fixed, each test-first and planted (M46-M48):
+pip-audit is clean. Fixed, each test-first and planted (M46-M49):
 
 | Finding | Attack | Fix | Test |
 |---|---|---|---|
@@ -154,9 +154,9 @@ pip-audit is clean. Fixed, each test-first and planted (M46-M48):
 | serve.py's server floated | starlette, uvicorn and websockets carry the headers, rate limits and the 256 KB cap, but only streamlit's ranges bound them | pinned exactly (Dependabot bumps them) | `test_every_dependency_is_pinned_to_an_exact_version` |
 | Secrets could enter a local image | the image's ignore file lacked `.gitignore`'s secret patterns | copied in | `test_a_local_image_build_leaves_secrets_out` |
 | A typo logged like a crash | a typed basket with no data wrote an ERROR and a full traceback; past the cooldown a made-up name costs no Yahoo request, so 600 reruns a minute buried real incidents | one INFO line (`log_no_data`); a preset with no data, the feed being down, is still an incident | `test_a_typo_is_one_quiet_log_line_not_an_incident` |
+| Made-up names retried beside a real one | the 11-12 fix skipped a retry only when NOTHING came back, so one real name in the basket had every made-up name beside it asked three times (73 requests for 1 real + 24 made-up, not 25) | only a symbol we know is real (suggested or an anchor) is asked again; Yahoo dropping one for a moment still heals | `test_a_real_name_beside_made_up_ones_does_not_triple_their_cost` |
 
-**Left open, said plainly:** a basket of one real name plus made-up ones retries the made-up ones twice (about 3x the
-accepted budget risk; the retry exists for names Yahoo drops for a moment). Hardening only, no attack traced: the
+**Left open, said plainly** (hardening only, no attack traced): the
 Docker base image is a tag, not a digest; `packages: write` is granted on every branch though used only on main;
 host settings (support e-mails, site URL) go into HTML unescaped, but only John's Railway account sets them; one
 compressed websocket message can still unpack to 16 MB before serve.py refuses it.
