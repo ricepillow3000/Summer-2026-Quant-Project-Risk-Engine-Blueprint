@@ -9,7 +9,8 @@ bug below is copied into a temp copy of the repo (never this checkout), the
 engine and narrative tests run against it, and the first red test is named. a
 bug no test catches is a hole: write the test that kills it (John, 2026-11-10;
 the first run caught 21 of 36, the tests added after it catch all 36; 37-40
-guard end-of-day, 41-45 the 2026-11-12 security review).
+guard end-of-day, 41-45 the 2026-11-12 security review, 46-47 the
+2026-11-13 audit).
 takes ~40 minutes on 4 cores: run it after touching src/, serve.py or safe_err.
 exit code 1 if any planted bug survives.
 """
@@ -71,6 +72,8 @@ BUGS = [
     ("M43", "serve.py", '    addr = hops[-1] if hops else', '    addr = hops[0] if hops else', "client picks its own address"),
     ("M44", "src/ingestion.py", "                   if clock - _NO_DATA.get(", "                   if True or clock - _NO_DATA.get(", "made-up names spend the budget"),
     ("M45", "serve.py", '    return str(ipaddress.ip_network(f"{ip}/64", strict=False)) if ip.version == 6 else addr', "    return addr", "one ipv6 block = 2^64 addresses"),
+    ("M46", "src/ingestion.py", "    return hashlib.sha256(text.encode()).hexdigest()", "    return hashlib.sha256(text.encode()).hexdigest()[:12]", "a stranger's basket takes a preset's cache slot"),
+    ("M47", "src/ingestion.py", "             | set(DEFENSIVE_ANCHOR_TICKERS))", "             | set())", "the anchor shelf pruned out of the cache"),
 ]
 SKIP = shutil.ignore_patterns(".git", "data", "logs", "audit", ".claude", "__pycache__", "node_modules")
 

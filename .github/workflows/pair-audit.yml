@@ -7,7 +7,7 @@ name: Pair audit
 on:
   workflow_dispatch:
   push:
-    branches: ["claude/**"]
+    branches: ["claude/**", "dependabot/**"]
 
 permissions:
   contents: read

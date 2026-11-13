@@ -765,6 +765,11 @@ def test_every_dependency_is_pinned_to_an_exact_version():
     assert len(reqs) >= 10, reqs
     loose = [r for r in reqs if not re.fullmatch(r"[A-Za-z0-9_.\-]+==[0-9][0-9A-Za-z.]*", r)]
     assert not loose, f"not pinned to one exact version: {loose}"
+    # serve.py's headers, rate limits and websocket cap run on these; streamlit
+    # only bounds them (starlette<2), so unpinned they floated with every build
+    # (2026-11-13 audit)
+    named = {r.split("==")[0].lower() for r in reqs}
+    assert {"starlette", "uvicorn", "websockets"} <= named, named
     audit = (root / ".github" / "workflows" / "live-audit.yml").read_text(encoding="utf-8")
     tools = re.search(r"pip install -r requirements\.txt (.+)", audit).group(1).split()
     assert tools and all("==" in t for t in tools), tools
@@ -2261,6 +2266,53 @@ def test_the_cache_budget_drops_typed_baskets_before_the_presets():
         assert dropped == 2
         assert sorted(os.listdir(tmp)) == sorted([os.path.basename(kept),
                                                   os.path.basename(typed[-1])])
+
+
+def test_the_cache_budget_keeps_the_anchor_shelf():
+    """2026-11-13 audit: every page pulls the anchor shelf, but USMV is in no
+    preset, so a script cycling baskets of cached names (no Yahoo request, four
+    files a rerun) pushed its download out - and with the day's budget spent,
+    the Book and the map lost their anchors for every visitor."""
+    import os
+    import tempfile
+
+    import src.ingestion as ingestion
+    from src.pairing import DEFENSIVE_ANCHOR_TICKERS
+
+    with tempfile.TemporaryDirectory() as tmp:
+        original = ingestion.DATA_DIR
+        ingestion.DATA_DIR = tmp
+        try:
+            anchors = [ingestion._raw_path(t, "2y") for t in DEFENSIVE_ANCHOR_TICKERS]
+            typed = [os.path.join(tmp, f"prices_typed_{i}.parquet") for i in range(3)]
+            for age, path in enumerate([*anchors, *typed]):      # anchors oldest
+                with open(path, "wb") as fh:
+                    fh.write(b"x" * 1024)
+                os.utime(path, (1_700_000_000 + age, 1_700_000_000 + age))
+            ingestion._prune_cache(max_files=len(anchors), max_mb=1000)
+        finally:
+            ingestion.DATA_DIR = original
+        assert sorted(os.listdir(tmp)) == sorted(os.path.basename(p) for p in anchors)
+
+
+def test_a_crafted_basket_cannot_take_over_a_presets_cache_slot():
+    """2026-11-13 audit: cache files were named by 12 hex characters of md5
+    (48 bits). Made-up names drop out of the data but stay in the key, so a
+    basket of one real name plus made-up ones could be searched offline (about
+    half an hour on one GPU) until its name matched a preset's, then typed while
+    the preset's slot was stale: that preset's visitors got the stranger's
+    basket until it went stale again. A full sha256 name cannot be searched for."""
+    import os
+    import re
+
+    import src.ingestion as ingestion
+
+    for path in (ingestion._cache_path(["SPY", "TLT"], "2y"),
+                 ingestion._cache_path(["SPY", "TLT"], "max", align=False),
+                 ingestion._dv_cache_path(["SPY", "TLT"], "2y"),
+                 ingestion._raw_path("SPY", "2y")):
+        key = os.path.basename(path).split("_", 1)[1].split(".")[0]
+        assert re.fullmatch(r"[0-9a-f]{64}", key), f"guessable cache name: {path}"
 
 
 def test_deploy_config_keeps_the_visitor_out_of_the_operator_seat():
@@ -3921,6 +3973,28 @@ def test_the_served_page_carries_the_security_meta_streamlit_cannot_send():
     assert head.index("Content-Security-Policy") < head.index("<script"), \
         "a policy only governs what comes after it"
     assert '<meta name="referrer" content="strict-origin-when-cross-origin">' in head
+
+
+def test_dependabot_prs_run_every_audit():
+    """2026-11-13 audit: dependabot.yml and RUNBOOK promise every Dependabot PR
+    runs the Live, Pair and Options audits and the container build, but each
+    ran only on claude/** - a bump, even a CVE fix, went unchecked or waited on
+    a gate that never came."""
+    import re
+    flows = pathlib.Path(__file__).resolve().parents[1] / ".github" / "workflows"
+    for name in ("live-audit.yml", "pair-audit.yml", "options-audit.yml", "container.yml"):
+        push = re.search(r"\n  push:\n    branches: \[(.*)\]", (flows / name).read_text(encoding="utf-8"))
+        assert push and '"dependabot/**"' in push.group(1), f"{name} skips Dependabot's PRs"
+
+
+def test_a_local_image_build_leaves_secrets_out():
+    """2026-11-13 audit: .gitignore kept secret files out of git but the image's
+    ignore file did not, so `docker build` on a machine holding a .env baked it
+    into a layer. Every secret pattern git ignores, the image ignores too."""
+    root = pathlib.Path(__file__).resolve().parents[1]
+    image = (root / "docker" / "Dockerfile.dockerignore").read_text(encoding="utf-8").split()
+    for secret in (".env", ".env.*", "*.pem", "*.key", "**/secrets.toml", "**/credentials.json"):
+        assert secret in image, f"{secret} would be baked into the image"
 
 
 def test_the_container_runs_what_the_procfile_runs():

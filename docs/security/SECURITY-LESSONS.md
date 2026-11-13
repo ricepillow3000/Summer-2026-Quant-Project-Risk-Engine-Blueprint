@@ -139,3 +139,24 @@ quietly:
 5,000-request day. Presets and cached baskets keep working (the warmer has its own budget and the cache serves
 them); only newly typed names wait until UTC midnight. Closing it needs a per-visitor outbound budget, which
 yfinance's download threads make hard to attribute - left until there is evidence of abuse.
+
+### 2026-11-13: full back-end audit (four cold readers: CI and supply chain, the data path, HTML/JS sinks, serve.py and netguard)
+No way in: no visitor text reaches HTML, a file path, a URL or a log line unchecked; the map's `esc()` held against
+`</script>`, quotes and U+2028 in every name, clicked and hovered in Chromium; every path trick on the hidden routes
+(`//_stcore/metrics`, `/_STCORE/...`, encoded dots) fell through to the page; netguard covers every Yahoo call and
+pip-audit is clean. Fixed, each test-first and planted (M46, M47):
+
+| Finding | Attack | Fix | Test |
+|---|---|---|---|
+| Cache names were 48 bits | made-up names drop out of the data but stay in the key, so a basket of one real name plus made-up ones can be searched offline (about half an hour on one GPU) until its file name equals a preset's, then typed while that slot is stale (after a deploy or a close): the preset's visitors get the stranger's basket | full sha256 file names | `test_a_crafted_basket_cannot_take_over_a_presets_cache_slot` |
+| Anchor shelf not protected from pruning | USMV is pulled by every page but is in no preset; baskets of cached names write four files a rerun with no Yahoo request, so ~375 reruns pushed it out, and with the day's budget spent the anchors failed for everyone | the anchor list joins the presets in the prune's keep set | `test_the_cache_budget_keeps_the_anchor_shelf` |
+| Dependabot PRs ran no audit | the audits ran only on `claude/**`, so the "every bump runs every check" promise was paper | `dependabot/**` added to the Live, Pair, Options and Container triggers | `test_dependabot_prs_run_every_audit` |
+| serve.py's server floated | starlette, uvicorn and websockets carry the headers, rate limits and the 256 KB cap, but only streamlit's ranges bound them | pinned exactly (Dependabot bumps them) | `test_every_dependency_is_pinned_to_an_exact_version` |
+| Secrets could enter a local image | the image's ignore file lacked `.gitignore`'s secret patterns | copied in | `test_a_local_image_build_leaves_secrets_out` |
+
+**Left open, said plainly:** a basket of one real name plus made-up ones retries the made-up ones twice (about 3x the
+accepted budget risk; the retry exists for names Yahoo drops for a moment). A made-up basket logs a full ERROR
+traceback each rerun (`main.py`, front-end owned: a typo is not an incident). Hardening only, no attack traced: the
+Docker base image is a tag, not a digest; `packages: write` is granted on every branch though used only on main;
+host settings (support e-mails, site URL) go into HTML unescaped, but only John's Railway account sets them; one
+compressed websocket message can still unpack to 16 MB before serve.py refuses it.

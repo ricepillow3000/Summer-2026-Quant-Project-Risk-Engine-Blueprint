@@ -191,8 +191,9 @@ def _clean(tickers: list[str] | None) -> list[str]:
 
 
 def _hash(text: str) -> str:
-    # a filename, not a security control: usedforsecurity=False says so
-    return hashlib.md5(text.encode(), usedforsecurity=False).hexdigest()[:12]
+    # full sha256: a short name could be searched for offline, and a basket
+    # whose name matched a preset's would be served to that preset's visitors
+    return hashlib.sha256(text.encode()).hexdigest()
 
 
 def _cache_path(tickers: list[str], period: str, align: bool = True) -> str:
@@ -296,9 +297,12 @@ def _prune_cache(max_files: int = CACHE_MAX_FILES,
 
     typed-in baskets go before the presets' own downloads, so a stranger typing
     new baskets can't push every preset out and make the next visitor wait.
-    presets only go if they alone blow the budget.
+    presets only go if they alone blow the budget. the anchor shelf every page
+    pulls counts as a preset.
     """
-    names = {t for basket in PRESETS.values() for t in basket} | {"SPY"}
+    from src.pairing import DEFENSIVE_ANCHOR_TICKERS   # here: pairing -> risk -> ingestion
+    names = ({t for basket in PRESETS.values() for t in basket} | {"SPY"}
+             | set(DEFENSIVE_ANCHOR_TICKERS))
     keep = {_raw_path(t, p) for t in names for p in ("2y", "max")}   # periods a preset page pulls
     try:
         paths = [os.path.join(DATA_DIR, f) for f in os.listdir(DATA_DIR)

@@ -8,7 +8,7 @@ name: Container
 on:
   workflow_dispatch:
   push:
-    branches: ["main", "claude/**"]
+    branches: ["main", "claude/**", "dependabot/**"]
 
 permissions:
   contents: read

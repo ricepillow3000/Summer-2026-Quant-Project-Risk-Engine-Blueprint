@@ -12,7 +12,7 @@ on:
         description: Deployed app to check in a browser
         default: https://summer-2026-quant-project-risk-engine-blueprint-production.up.railway.app
   push:
-    branches: ["claude/**"]
+    branches: ["claude/**", "dependabot/**"]
   # Daily on main (2026-11-04 security review): nothing watched the live site
   # between pushes. On main, step 5 also proves Railway serves main's commit.
   schedule:
