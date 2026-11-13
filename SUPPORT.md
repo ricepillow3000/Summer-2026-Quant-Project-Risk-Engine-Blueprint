@@ -2,7 +2,7 @@
 
 **Email: meleona.support@gmail.com** · **Phone: [770-265-9930](tel:+17702659930)**
 
-**Response time: John replies within 2 business days.** This is a student
+**Response time: John aims to reply within 2 business days.** This is a student
 portfolio project run by one person, so that is a promise of effort, not a
 service-level guarantee.
 
