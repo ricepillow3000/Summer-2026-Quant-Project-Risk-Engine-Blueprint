@@ -35,3 +35,6 @@ pillow==13.0.0        # Streamlit's image library. 12.x carries 35 CVEs fixed
                        # no exceptions (docs/security/SECURITY-LESSONS.md).
 plotly==7.1.0
 pyarrow==26.0.1        # parquet cache read/write
+starlette==1.10.0      # serve.py's headers, rate limits and websocket cap run on
+uvicorn==0.54.0        # these three; streamlit only bounds them, so unpinned
+websockets==17.4       # they changed with every build (2026-11-13 audit)

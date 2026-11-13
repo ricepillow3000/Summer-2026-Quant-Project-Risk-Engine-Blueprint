@@ -16,3 +16,10 @@ docs
 tests
 showcase
 node_modules
+# secrets: the same patterns .gitignore keeps out of git
+.env
+.env.*
+*.pem
+*.key
+**/secrets.toml
+**/credentials.json

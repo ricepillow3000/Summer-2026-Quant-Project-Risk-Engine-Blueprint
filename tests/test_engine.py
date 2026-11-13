@@ -546,9 +546,9 @@ def test_a_basket_stitched_from_single_names_matches_one_download():
     with _FakeYahoo() as fy:
         ing._download_close_volume(["AAA", "BTC-USD"], "2y")    # two names known
         close, volume = ing._download_close_volume(basket, "2y")
-        # only the names not held, then (ME-14) only the ones that came back empty
-        assert fy.downloads[1:] == [["BBB", "DEAD", "EMPTY", "EURUSD=X"],
-                                    ["DEAD", "EMPTY"], ["DEAD", "EMPTY"]], fy.downloads
+        # only the names not held; unknown names that came back empty are not
+        # asked again (2026-11-13 audit), so one download
+        assert fy.downloads[1:] == [["BBB", "DEAD", "EMPTY", "EURUSD=X"]], fy.downloads
         ref = fy.reference(basket)
         pd.testing.assert_frame_equal(close, ref["Close"], check_exact=True, check_freq=False)
         pd.testing.assert_frame_equal(volume, ref["Volume"], check_exact=True,
@@ -570,8 +570,8 @@ def test_a_basket_stitched_from_single_names_matches_one_download():
 def test_adding_names_to_a_known_basket_downloads_only_the_new_names():
     """The point of the per-name cache: a visitor who adds three names to a
     basket the server already holds costs three downloads, not fifteen. A
-    name past its freshness is pulled again, a failed name is never
-    remembered (a typo or an outage is retried), and the basket's provenance
+    name past its freshness is pulled again, a made-up name that failed is
+    not asked again for 15 minutes (2026-11-12), and the basket's provenance
     states its OLDEST pull - the age the page shows is the honest one - and
     its newest."""
     import datetime as _dt
@@ -581,10 +581,11 @@ def test_adding_names_to_a_known_basket_downloads_only_the_new_names():
     with _FakeYahoo() as fy:
         ing.fetch_prices(["AAA", "BBB"])
         ing.fetch_prices(["AAA", "BBB", "CCC", "DDD", "DEAD"])
-        # DEAD is never served: asked again twice (ME-14), then left out
-        assert fy.downloads == [["AAA", "BBB"], ["CCC", "DDD", "DEAD"], ["DEAD"], ["DEAD"]], fy.downloads
+        # DEAD is never served and is no symbol we know, so it is asked once
+        # (2026-11-13 audit), then left out
+        assert fy.downloads == [["AAA", "BBB"], ["CCC", "DDD", "DEAD"]], fy.downloads
         ing.fetch_prices(["CCC", "DEAD"])
-        assert fy.downloads[-1] == ["DEAD"], f"a failed name was remembered: {fy.downloads}"
+        assert len(fy.downloads) == 2, f"a name that just failed was asked again: {fy.downloads}"
 
         def stamp(t, hours_ago):
             path = ing._raw_path(t, "2y")
@@ -765,6 +766,11 @@ def test_every_dependency_is_pinned_to_an_exact_version():
     assert len(reqs) >= 10, reqs
     loose = [r for r in reqs if not re.fullmatch(r"[A-Za-z0-9_.\-]+==[0-9][0-9A-Za-z.]*", r)]
     assert not loose, f"not pinned to one exact version: {loose}"
+    # serve.py's headers, rate limits and websocket cap run on these; streamlit
+    # only bounds them (starlette<2), so unpinned they floated with every build
+    # (2026-11-13 audit)
+    named = {r.split("==")[0].lower() for r in reqs}
+    assert {"starlette", "uvicorn", "websockets"} <= named, named
     audit = (root / ".github" / "workflows" / "live-audit.yml").read_text(encoding="utf-8")
     tools = re.search(r"pip install -r requirements\.txt (.+)", audit).group(1).split()
     assert tools and all("==" in t for t in tools), tools
@@ -2261,6 +2267,53 @@ def test_the_cache_budget_drops_typed_baskets_before_the_presets():
         assert dropped == 2
         assert sorted(os.listdir(tmp)) == sorted([os.path.basename(kept),
                                                   os.path.basename(typed[-1])])
+
+
+def test_the_cache_budget_keeps_the_anchor_shelf():
+    """2026-11-13 audit: every page pulls the anchor shelf, but USMV is in no
+    preset, so a script cycling baskets of cached names (no Yahoo request, four
+    files a rerun) pushed its download out - and with the day's budget spent,
+    the Book and the map lost their anchors for every visitor."""
+    import os
+    import tempfile
+
+    import src.ingestion as ingestion
+    from src.pairing import DEFENSIVE_ANCHOR_TICKERS
+
+    with tempfile.TemporaryDirectory() as tmp:
+        original = ingestion.DATA_DIR
+        ingestion.DATA_DIR = tmp
+        try:
+            anchors = [ingestion._raw_path(t, "2y") for t in DEFENSIVE_ANCHOR_TICKERS]
+            typed = [os.path.join(tmp, f"prices_typed_{i}.parquet") for i in range(3)]
+            for age, path in enumerate([*anchors, *typed]):      # anchors oldest
+                with open(path, "wb") as fh:
+                    fh.write(b"x" * 1024)
+                os.utime(path, (1_700_000_000 + age, 1_700_000_000 + age))
+            ingestion._prune_cache(max_files=len(anchors), max_mb=1000)
+        finally:
+            ingestion.DATA_DIR = original
+        assert sorted(os.listdir(tmp)) == sorted(os.path.basename(p) for p in anchors)
+
+
+def test_a_crafted_basket_cannot_take_over_a_presets_cache_slot():
+    """2026-11-13 audit: cache files were named by 12 hex characters of md5
+    (48 bits). Made-up names drop out of the data but stay in the key, so a
+    basket of one real name plus made-up ones could be searched offline (about
+    half an hour on one GPU) until its name matched a preset's, then typed while
+    the preset's slot was stale: that preset's visitors got the stranger's
+    basket until it went stale again. A full sha256 name cannot be searched for."""
+    import os
+    import re
+
+    import src.ingestion as ingestion
+
+    for path in (ingestion._cache_path(["SPY", "TLT"], "2y"),
+                 ingestion._cache_path(["SPY", "TLT"], "max", align=False),
+                 ingestion._dv_cache_path(["SPY", "TLT"], "2y"),
+                 ingestion._raw_path("SPY", "2y")):
+        key = os.path.basename(path).split("_", 1)[1].split(".")[0]
+        assert re.fullmatch(r"[0-9a-f]{64}", key), f"guessable cache name: {path}"
 
 
 def test_deploy_config_keeps_the_visitor_out_of_the_operator_seat():
@@ -3921,6 +3974,28 @@ def test_the_served_page_carries_the_security_meta_streamlit_cannot_send():
     assert head.index("Content-Security-Policy") < head.index("<script"), \
         "a policy only governs what comes after it"
     assert '<meta name="referrer" content="strict-origin-when-cross-origin">' in head
+
+
+def test_dependabot_prs_run_every_audit():
+    """2026-11-13 audit: dependabot.yml and RUNBOOK promise every Dependabot PR
+    runs the Live, Pair and Options audits and the container build, but each
+    ran only on claude/** - a bump, even a CVE fix, went unchecked or waited on
+    a gate that never came."""
+    import re
+    flows = pathlib.Path(__file__).resolve().parents[1] / ".github" / "workflows"
+    for name in ("live-audit.yml", "pair-audit.yml", "options-audit.yml", "container.yml"):
+        push = re.search(r"\n  push:\n    branches: \[(.*)\]", (flows / name).read_text(encoding="utf-8"))
+        assert push and '"dependabot/**"' in push.group(1), f"{name} skips Dependabot's PRs"
+
+
+def test_a_local_image_build_leaves_secrets_out():
+    """2026-11-13 audit: .gitignore kept secret files out of git but the image's
+    ignore file did not, so `docker build` on a machine holding a .env baked it
+    into a layer. Every secret pattern git ignores, the image ignores too."""
+    root = pathlib.Path(__file__).resolve().parents[1]
+    image = (root / "docker" / "Dockerfile.dockerignore").read_text(encoding="utf-8").split()
+    for secret in (".env", ".env.*", "*.pem", "*.key", "**/secrets.toml", "**/credentials.json"):
+        assert secret in image, f"{secret} would be baked into the image"
 
 
 def test_the_container_runs_what_the_procfile_runs():
@@ -6250,27 +6325,27 @@ def test_the_pair_audit_download_retries_a_name_the_feed_dropped_and_fails_one_i
 def test_the_download_asks_again_only_for_a_dropped_name_and_only_with_budget():
     """ME-14: the lock that dropped BA from the audit can drop a name from a
     visitor's basket in the same chokepoint. A name that comes back empty is
-    asked for again, alone, at most twice: dropped once it is served and
-    cached; never served it stays missing, uncached and left out exactly as
-    before; with nothing dropped there is no extra request at all; and with
+    asked for again, alone, at most twice if it is a symbol we know is real
+    (2026-11-13 audit): dropped once it is served and cached; never served it
+    stays missing, uncached and left out exactly as before; with nothing dropped there is no extra request at all; and with
     no budget left the retry does not spend what is not there."""
     import src.ingestion as ing
     with _FakeYahoo() as fy:                              # the normal path
-        ing._download_close_volume(["AAA", "BBB"], "2y")
-        assert fy.downloads == [["AAA", "BBB"]], f"extra requests: {fy.downloads}"
-    with _FakeYahoo(flaky={"BBB": 1}) as fy:              # dropped once
-        close, _ = ing._download_close_volume(["AAA", "BBB"], "2y")
-        assert fy.downloads == [["AAA", "BBB"], ["BBB"]], fy.downloads
-        assert close["BBB"].notna().sum() > 100, "the second request was not used"
-        assert pathlib.Path(ing._raw_path("BBB", "2y")).is_file(), "served but not cached"
-    with _FakeYahoo(flaky={"BBB": 99}) as fy:             # never served
-        close, _ = ing._download_close_volume(["AAA", "BBB"], "2y")
-        assert fy.downloads == [["AAA", "BBB"], ["BBB"], ["BBB"]], fy.downloads
-        assert close["BBB"].isna().all(), "a name never served was filled in"
-        assert not pathlib.Path(ing._raw_path("BBB", "2y")).exists(), "a failure was cached"
-        px = ing.fetch_prices(["AAA", "BBB"], use_cache=False)
-        assert "BBB" not in px.columns, "left out, as a name the feed has no data for"
-    with _FakeYahoo(flaky={"BBB": 1}) as fy:              # no budget for a retry
+        ing._download_close_volume(["AAPL", "MSFT"], "2y")
+        assert fy.downloads == [["AAPL", "MSFT"]], f"extra requests: {fy.downloads}"
+    with _FakeYahoo(flaky={"AAPL": 1}) as fy:              # dropped once
+        close, _ = ing._download_close_volume(["AAPL", "MSFT"], "2y")
+        assert fy.downloads == [["AAPL", "MSFT"], ["AAPL"]], fy.downloads
+        assert close["AAPL"].notna().sum() > 100, "the second request was not used"
+        assert pathlib.Path(ing._raw_path("AAPL", "2y")).is_file(), "served but not cached"
+    with _FakeYahoo(flaky={"AAPL": 99}) as fy:             # never served
+        close, _ = ing._download_close_volume(["AAPL", "MSFT"], "2y")
+        assert fy.downloads == [["AAPL", "MSFT"], ["AAPL"], ["AAPL"]], fy.downloads
+        assert close["AAPL"].isna().all(), "a name never served was filled in"
+        assert not pathlib.Path(ing._raw_path("AAPL", "2y")).exists(), "a failure was cached"
+        px = ing.fetch_prices(["AAPL", "MSFT"], use_cache=False)
+        assert "AAPL" not in px.columns, "left out, as a name the feed has no data for"
+    with _FakeYahoo(flaky={"AAPL": 1}) as fy:              # no budget for a retry
         spent = {"n": 0}
 
         def budget(*a, **k):
@@ -6278,9 +6353,56 @@ def test_the_download_asks_again_only_for_a_dropped_name_and_only_with_budget():
             if spent["n"] > 1:
                 raise ing.BudgetExhausted("spent")
         ing.check_budget = budget
-        close, _ = ing._download_close_volume(["AAA", "BBB"], "2y")
-        assert fy.downloads == [["AAA", "BBB"]], f"a retry spent a spent budget: {fy.downloads}"
-        assert close["BBB"].isna().all()
+        close, _ = ing._download_close_volume(["AAPL", "MSFT"], "2y")
+        assert fy.downloads == [["AAPL", "MSFT"]], f"a retry spent a spent budget: {fy.downloads}"
+        assert close["AAPL"].isna().all()
+
+
+def test_a_typo_is_one_quiet_log_line_not_an_incident():
+    """2026-11-13 audit: every typed basket with no data logged an ERROR and a
+    full traceback, and after the 15-minute cooldown a made-up name costs no
+    Yahoo request - so a script could rerun one 600 times a minute and bury
+    real incidents in the host's log. A typo gets one INFO line, no traceback;
+    a preset with no data (the feed is down) is still an incident."""
+    import ast
+    import logging
+
+    from src import observability
+
+    records = []
+
+    class Keep(logging.Handler):
+        def emit(self, record):
+            records.append(record)
+
+    logger = logging.getLogger("meliona.session")
+    keep, before = Keep(level=logging.DEBUG), logger.level
+    logger.addHandler(keep)
+    logger.setLevel(logging.DEBUG)
+    try:
+        observability.log_no_data("ref123", "load_universe")
+    finally:
+        logger.removeHandler(keep)
+        logger.setLevel(before)
+    assert [r.levelno for r in records] == [logging.INFO], records
+    assert "ref123" in records[0].getMessage() and "\n" not in records[0].getMessage()
+    assert records[0].exc_info is None
+
+    main = (pathlib.Path(__file__).resolve().parents[1] / "main.py").read_text(encoding="utf-8")
+    handler = next(h for node in ast.walk(ast.parse(main)) if isinstance(node, ast.Try)
+                   for h in node.handlers
+                   if isinstance(h.type, ast.Name) and h.type.id == "NoDataError")
+    branch = next(n for n in handler.body if isinstance(n, ast.If))
+    assert "PRESETS" in ast.unparse(branch.test), "the incident must hang on a preset basket"
+
+    def called(nodes):
+        return {n.func.id if isinstance(n.func, ast.Name) else n.func.attr
+                for node in nodes for n in ast.walk(node) if isinstance(n, ast.Call)}
+    unbranched = [n for n in handler.body if n is not branch]
+    assert "log_incident" in called(branch.body), "a preset with no data is an incident"
+    assert "log_incident" not in called(branch.orelse) | called(unbranched), \
+        "a typed basket with no data logs an incident"
+    assert "log_no_data" in called(branch.orelse)
 
 
 def test_made_up_symbols_cannot_spend_the_days_yahoo_budget():
@@ -6324,6 +6446,31 @@ def test_made_up_symbols_cannot_spend_the_days_yahoo_budget():
                 except ing.NoDataError:
                     pass
             assert fy.downloads[-2:] == [["AAPL"], ["AAPL"]], "a suggested name was locked out"
+        finally:
+            globals()["_fake_history"] = real_hist
+
+
+def test_a_real_name_beside_made_up_ones_does_not_triple_their_cost():
+    """2026-11-13 audit: the 11-12 fix stopped retrying a download that brought
+    back nothing, but one real name in the basket brought back something, so
+    every made-up name beside it was asked for three times - three times the
+    budget per rerun. Only a symbol we know is real (a suggested name or an
+    anchor) is asked for again; Yahoo dropping one for a moment still heals."""
+    import src.ingestion as ing
+
+    fake = ["ZZZZ1", "ZZZZ2", "ZZZZ3"]
+    with _FakeYahoo(flaky={"AAPL": 1}) as fy:          # yahoo drops AAPL once
+        real_hist = globals()["_fake_history"]
+        globals()["_fake_history"] = lambda t, years=2.0: (
+            __import__("yfinance.utils", fromlist=["x"]).empty_df() if t.startswith("ZZZZ")
+            else real_hist(t, years))
+        try:
+            close, _ = ing._download_close_volume(["SPY", *fake], "2y")
+            assert fy.downloads == [["SPY", *fake]], f"made-up names asked again: {fy.downloads}"
+            assert list(close.columns.dropna()) and close["SPY"].notna().any()
+            close, _ = ing._download_close_volume(["AAPL", "MSFT"], "2y")
+            assert fy.downloads[1:] == [["AAPL", "MSFT"], ["AAPL"]], fy.downloads
+            assert close["AAPL"].notna().any(), "a real name Yahoo dropped once never came back"
         finally:
             globals()["_fake_history"] = real_hist
 
