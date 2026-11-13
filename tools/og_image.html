@@ -3,7 +3,7 @@
      iMessage show for the site's link. tools/brand_icons.mjs puts the crest from
      assets/logo.svg where the CREST comment sits and renders it.
 
-     Every figure on it is copied from audit/live_audit_2026-10-15T025826Z.md (a
+     Every figure on it is copied from audit/live_audit_2026-11-13T101321Z.md (a
      Live audit run on real Yahoo Finance data). The image carries no date (John,
      2026-11-05); when a newer live audit is committed, update the figures here.
 
@@ -108,11 +108,11 @@ h1 { font: 700 150px/0.88 var(--serif); letter-spacing: -0.035em; color: var(--i
 
 <div class="receipt">
   <h2>Live audit on Yahoo Finance data</h2>
-  <div class="row lead"><span>Audit checks passed</span><b>727 of 728</b></div>
-  <div class="row"><span>Prices vs Yahoo's raw feed</span><b>identical</b></div>
-  <div class="row"><span>T-bill, Yahoo vs Treasury</span><b>4.085% / 4.100%</b></div>
-  <div class="row"><span>SPY vs IVV, daily correlation</span><b>0.9995</b></div>
-  <p class="note">Across every preset basket. No check failed: the one that did not pass is a warning, and the audit says why.</p>
+  <div class="row lead"><span>Audit checks failed</span><b>0 of 832</b></div>
+  <div class="row"><span>Source checks passed</span><b>178 of 178</b></div>
+  <div class="row"><span>Page checks failed</span><b>0 of 388</b></div>
+  <div class="row"><span>Visitor walkthrough</span><b>no findings</b></div>
+  <p class="note">Across every preset basket. 831 passed and 1 is a warning, which the audit explains.</p>
 </div>
 
 <div class="plinth">

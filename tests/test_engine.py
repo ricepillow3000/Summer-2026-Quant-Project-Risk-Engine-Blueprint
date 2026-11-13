@@ -4457,6 +4457,27 @@ def test_the_crest_engraving_is_the_banners_and_used_sparingly():
     assert ".showcase-row::before" not in css, "a plate is drawn behind the band again"
 
 
+def test_the_link_preview_quotes_the_newest_live_audit():
+    """John, 2026-11-13: the preview still read "727 of 728" from the 15 Oct
+    audit, and that phrase reads as one failure when the 728th was a warning.
+    The banner cites the newest committed live audit receipt, and every figure
+    on it, and in the image's alt text, is printed in that receipt."""
+    import re
+    root = pathlib.Path(__file__).resolve().parent.parent
+    banner = (root / "tools" / "og_image.html").read_text(encoding="utf-8")
+    cited = re.search(r"copied from (audit/live_audit_[\w-]+\.md)", banner).group(1)
+    newest = sorted((root / "audit").glob("live_audit_*.md"))[-1]
+    assert cited == f"audit/{newest.name}", f"the banner cites {cited}, not the newest {newest.name}"
+    receipt = newest.read_text(encoding="utf-8")
+    block = banner[banner.index('<div class="receipt">'):banner.index('<div class="plinth">')]
+    alt = (root / "tools" / "public_files.py").read_text(encoding="utf-8")
+    alt = alt[alt.index('og:image:alt'):alt.index('twitter:card')]
+    figures = re.findall(r"\d[\d.,]*", re.sub(r"<[^>]+>", " ", block) + alt)
+    assert figures, "the receipt shows no figures"
+    for f in figures:
+        assert re.search(rf"(?<![\d.]){re.escape(f)}(?![\d])", receipt), f"{f} is not in {newest.name}"
+
+
 def test_public_files_give_crawlers_and_link_previews_a_real_head(tmp_path=None):
     """LinkedIn/Slack previews and search crawlers do not run JavaScript, so
     tools/public_files.py writes the head they read into Streamlit's static
