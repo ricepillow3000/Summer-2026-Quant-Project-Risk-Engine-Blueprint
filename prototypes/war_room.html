@@ -442,7 +442,7 @@ select {
         <dd>How the beta and volatility shocks move together, and how a day's return moves with the volatility shock (usually negative: falling prices tend to lift volatility).</dd>
         <dt>Shocks widened (k)</dt>
         <dd>A factor between 1 and 3, measured by replaying the book's own history with only earlier data, that widens the shocks until the 68% ring really holds about 68% of 30-day outcomes.</dd>
-        <dt>Drawdown cushion</dt>
+        <dt>Anchor effect</dt>
         <dd>How many percentage points less the pair fell at its worst than the flyer alone, on replayed real days: "shallower" means it fell less, "deeper" more.</dd>
         <dt>Flyer · anchor</dt>
         <dd>Here the flyer is the most volatile name in your basket; the anchor is a steadier, defensive name paired with it, weighted so each carries an equal share of the risk. The Book picks its leaders by their recent climb instead, so the two can name different stocks.</dd>
@@ -507,7 +507,7 @@ select {
   <div class="inspector glass" id="inspPanel">
     <div class="insp-h">
       <div class="k">Defensive pairing</div>
-      <div class="t">Flyer · anchor, ranked by cushion</div>
+      <div class="t">Flyer · anchor, ranked by anchor effect</div>
     </div>
     <div class="standings" id="standings"></div>
     <div class="detail" id="detail"></div>
@@ -1431,7 +1431,7 @@ function cushOf(i) {
   const pr = DEMO.pairs[i];
   return pr.real ? pr.real.cushion : S.pairStats[i].cushion;
 }
-/* The cushion is a gap between two losses in percentage points. A bare
+/* The anchor effect is a gap between two losses in percentage points. A bare
    "+16.8" plus a two-letter unit meant nothing to a visitor (John,
    2026-10-19), and a "+" on a loss reads as
    a gain - so the size goes in digits and the direction in a word. Live it is
@@ -1455,7 +1455,7 @@ function renderDetail() {
   const volP = real ? real.volPair : st.volPair;
   const ctrTarget = real ? real.nDays : 10000;
   const ctrLabel = real ? 'Trading days replayed · this linkage' : 'Simulator runs · this linkage';
-  const cushLabel = real ? 'Drawdown cushion' : 'Crisis cushion';
+  const cushLabel = real ? 'Anchor effect' : 'Anchor effect · crisis';
   const esUnit = real ? 'daily' : 'T+30';
   el.innerHTML =
     linkDiagramSVG(pr, st) +
@@ -1471,7 +1471,7 @@ function renderDetail() {
     '<div class="agents-note">The dots crossing this link on the map are the tally itself: each courier is one block of the ' + (real ? 'replayed days' : 'draws') + ' being counted into these numbers. They stop when the count completes.</div>' +
     '</div>' +
     (real
-      ? '<div class="pnote"><b>Paper trail.</b> ES and cushion come from the engine\'s real-history pair backtest: ' +
+      ? '<div class="pnote"><b>Paper trail.</b> ES and the anchor effect come from the engine\'s real-history pair backtest: ' +
         'actual daily returns, monthly rebalance, no lookahead, over ' + real.nDays.toLocaleString('en-US') + ' trading days ' +
         'of Yahoo Finance adjusted closes. Weights are exact two-asset risk parity. Pair correlation ' + pr.rho.toFixed(2) + ' measured on the same window.</div>'
       : '<div class="pnote"><b>Limits.</b> Pair statistics come from a Gaussian daily-loop Monte Carlo ' +

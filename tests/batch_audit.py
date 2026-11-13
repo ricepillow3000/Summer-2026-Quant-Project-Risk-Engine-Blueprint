@@ -770,11 +770,10 @@ def audit_static_map_source() -> None:
            "constants are absent from the rendered page", "engine")
 
     record("MAP-S4", "map source", "live linkage label names the right statistic",
-           "'Drawdown cushion' : 'Crisis cushion'" in html.replace("? ", "").replace(" ?", "")
-           or "Drawdown cushion" in html,
-           "in live mode the inspector labels the backtested number 'Drawdown "
-           "cushion' (max-drawdown difference), not the demo-mode 'Crisis "
-           "cushion' computed from an ES difference", "engine")
+           "real ? 'Anchor effect' : 'Anchor effect · crisis'" in html,
+           "in live mode the inspector labels the backtested number 'Anchor "
+           "effect' (max-drawdown difference), not the demo-mode 'Anchor effect "
+           "· crisis' computed from an ES difference", "engine")
 
     record("MAP-S3", "map source", "shared constants survive the splice",
            html.index("const ISO_LEVELS") < html.index(begin) and "ISO_LEVELS" in spliced,

@@ -20,7 +20,7 @@ Every market figure is fetched from Yahoo Finance at runtime and computed by the
 - Stress testing: custom parametric shocks (drawdown and volatility), or a replay of the actual daily returns of real crisis windows (dot-com, GFC, COVID, 2022, SVB, …), which keeps their real correlation breakdown.
 - Risk decomposition: per-asset risk contribution against dollar weight, and a Sharpe ratio against the real T-bill rate.
 - Liquidity modeling: days to liquidate from a participation-rate model on average daily dollar volume, which sizes The Book and widens the headline tail; names with no volume feed are flagged, not filled in.
-- The Book and the Risk Topology map: which high-flying names lead the book and which steady anchors cushion them, from the book's own history.
+- The Book and the Risk Topology map: which high-flying names lead the book and which steady anchors pair with them, from the book's own history.
 - Crisis Conviction: what a buyer of the S&P 500 actually earned after every named crisis, at the trough and at the worst-timed peak.
 - Grit Zone: ranks each asset's own price history on drawdown-recovery speed, rolling 1-year consistency and resilience across real crisis windows. The score is relative to the chosen basket.
 - Case studies: three named crashes (COVID-19, 2022, the 2008 crisis) as one row each - the fall, the trading days back to the old peak, and a bottom-day buyer a year on - read from the live crisis record.

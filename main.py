@@ -1059,8 +1059,8 @@ with _gungnir_zone:
                  "Borrowing fees, margin interest and forced buy-backs are not "
                  "included, so a real short would do worse than shown.")
 bearish = direction.startswith("Bearish")
-_bv_sk_a, _bv_sk_b = ("the short position", "the squeeze cushion") if bearish \
-    else ("the high-flyer", "the steady cushion")
+_bv_sk_a, _bv_sk_b = ("the short position", "the squeeze anchor") if bearish \
+    else ("the high-flyer", "the steady anchor")
 # Geometry note: the tether line runs CIRCUMFERENCE to CIRCUMFERENCE - its
 # endpoints sit on each circle's edge plus a 4px breath, never inside. All
 # labels are sized against the chord width where they sit, so nothing
@@ -1096,14 +1096,14 @@ with _gungnir_zone:
         f'<text x="268" y="184" text-anchor="middle" font-family="Georgia" font-size="11.5" fill="#5D574D">{_bv_sk_a}</text>'
         f'</svg>'
         f'<div style="font-family:Georgia;font-size:13px;color:#5D574D;max-width:560px;margin:2px auto 0;">'
-        f'{"Shorting flips the sketch: the tall block is the stock you bet against, the wide one a stock you own that tends to rise with it, softening a sudden jump. The areas match, so each carries the same share of the risk. A short can lose more than 100%, and borrowing costs are not included." if bearish else "The flyer is narrow and tall: little money, big price swings. The cushion is wide and short: more money, small swings. The areas match, so each name carries the same share of the risk."}'
+        f'{"Shorting flips the sketch: the tall block is the stock you bet against, the wide one a stock you own that tends to rise with it, softening a sudden jump. The areas match, so each carries the same share of the risk. A short can lose more than 100%, and borrowing costs are not included." if bearish else "The flyer is narrow and tall: little money, big price swings. The anchor is wide and short: more money, small swings. The areas match, so each name carries the same share of the risk."}'
         f'</div>'
         f'<a href="#engine" class="cta-btn" style="margin-top:14px;">'
         f'To the engine<span class="cta-arrow" aria-hidden="true"><svg viewBox="0 0 16 30" fill="none" xmlns="http://www.w3.org/2000/svg"><path class="shaft" d="M8 1 V22" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path class="head" d="M2.5 16.5 L8 22.5 L13.5 16.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a>'
         f'</div>',
         unsafe_allow_html=True)
     # Overwhelm audit (2026-10-29): the sketch and the equation stay - they draw
-    # the flyer-and-cushion pairing, the linkage the product is built on. The
+    # the flyer-and-anchor pairing, the linkage the product is built on. The
     # dense paragraph under them (equal risk contribution, correlation
     # cancelling, the covariance matrix) went: the engine below does that work.
     with _gg_plaque:
@@ -1114,7 +1114,7 @@ with _gungnir_zone:
         f'<span class="c">flyer</span></span>'
         f'<span class="gplaque-eqs">=</span>'
         f'<span class="gplaque-term"><span class="t">w<sub>2</sub>&sigma;<sub>2</sub></span>'
-        f'<span class="c">cushion</span></span>'
+        f'<span class="c">anchor</span></span>'
         f'</div>'
         f'<div class="gplaque-read">Money in a name (w) times how much its price '
         f'swings (&sigma;, volatility) is the same for both: a stock that swings '
