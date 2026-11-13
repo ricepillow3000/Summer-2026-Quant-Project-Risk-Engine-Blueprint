@@ -108,6 +108,8 @@ jobs:
           node tools/map_wheel_check.mjs http://127.0.0.1:8501 2>&1 | tee -a 8b.log; test "${PIPESTATUS[0]}" -eq 0
           # the page's craft: type, figures, measure, widows, touch, safe area, motion (John, 2026-11-09)
           node tools/craft_check.mjs http://127.0.0.1:8501 2>&1 | tee -a 8b.log; test "${PIPESTATUS[0]}" -eq 0
+          # scrolling down, each block is seen arriving, from its side, never during the load (John, 2026-11-13)
+          node tools/arrival_check.mjs http://127.0.0.1:8501 2>&1 | tee -a 8b.log; test "${PIPESTATUS[0]}" -eq 0
       # Every button glide lands (tools/glide_load_check.mjs): on the settled
       # page, through a trackpad flick, under a reader's swipe back and a
       # steady mouse wheel - and pressed while the page is still loading. Each
