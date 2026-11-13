@@ -11,7 +11,7 @@ scipy==1.18.1         # PINNED: src/risk's tail fit hands genpareto.fit a lean
                        # (test_the_lean_tail_objective_equals_scipys_bit_for_bit).
                        # Bump deliberately: change the pin, run tests.test_engine
                        # and tests.batch_audit, then deploy.
-yfinance==1.7.0       # PINNED: src/ingestion keeps each name's download and
+yfinance==1.8.0       # PINNED: src/ingestion keeps each name's download and
                        # stitches baskets the way 1.7.0's yf.download assembles
                        # them (test_a_basket_stitched_from_single_names_matches_
                        # one_download). Bump deliberately: change the pin, run
