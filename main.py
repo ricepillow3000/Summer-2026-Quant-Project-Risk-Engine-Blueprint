@@ -35,7 +35,7 @@ from src.pairing import DEFENSIVE_ANCHOR_TICKERS
 from src.covariance import estimate_covariance, TRADING_DAYS
 from src.topology import build_map_payload, war_room_html
 from src.observability import (count_preset, count_session, host_setting, log_incident,
-                               log_session_start, new_session_ref, setup_logging)
+                               log_no_data, log_session_start, new_session_ref, setup_logging)
 from src.scenarios import HISTORICAL_REGIMES, replay_returns
 from hero import (N_PATHS, CONTACT_MAX, CONTACT_NAME_MAX, CONTACT_TOPICS, RESPONSE_TIME,
                   RESPONSE_WINDOW, about_html, contact_mailto, crest_engraving, faq_html, story_html,
@@ -1350,10 +1350,15 @@ try:
 except NoDataError as exc:
     # A visitor's typo is not a crash: say what to do, not "quote a reference".
     # NoDataError messages are written for visitors (src/ingestion.py).
-    log_incident(SESSION_REF, "load_universe", exc)
-    # Every name came from a preset, so nothing was typed and "check the
-    # spelling" points the wrong way: the feed is the likely cause.
-    st.error(FEED_DOWN_MSG if set(tickers) <= set(PRESETS[preset]) else str(exc))
+    if set(tickers) <= set(PRESETS[preset]):
+        # Every name came from a preset, so nothing was typed and "check the
+        # spelling" points the wrong way: the feed is down, an incident.
+        log_incident(SESSION_REF, "load_universe", exc)
+        st.error(FEED_DOWN_MSG)
+    else:
+        # A typo: one quiet line, so a script can't bury real errors.
+        log_no_data(SESSION_REF, "load_universe")
+        st.error(str(exc))
     st.stop()
 except Exception as exc:  # noqa: BLE001 - surface any fetch failure to the user
     st.error(f"Couldn't load market data: {safe_err('couldn-t-load-market-data', exc)}")

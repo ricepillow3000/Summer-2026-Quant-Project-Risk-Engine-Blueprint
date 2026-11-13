@@ -144,7 +144,7 @@ yfinance's download threads make hard to attribute - left until there is evidenc
 No way in: no visitor text reaches HTML, a file path, a URL or a log line unchecked; the map's `esc()` held against
 `</script>`, quotes and U+2028 in every name, clicked and hovered in Chromium; every path trick on the hidden routes
 (`//_stcore/metrics`, `/_STCORE/...`, encoded dots) fell through to the page; netguard covers every Yahoo call and
-pip-audit is clean. Fixed, each test-first and planted (M46, M47):
+pip-audit is clean. Fixed, each test-first and planted (M46-M48):
 
 | Finding | Attack | Fix | Test |
 |---|---|---|---|
@@ -153,10 +153,10 @@ pip-audit is clean. Fixed, each test-first and planted (M46, M47):
 | Dependabot PRs ran no audit | the audits ran only on `claude/**`, so the "every bump runs every check" promise was paper | `dependabot/**` added to the Live, Pair, Options and Container triggers | `test_dependabot_prs_run_every_audit` |
 | serve.py's server floated | starlette, uvicorn and websockets carry the headers, rate limits and the 256 KB cap, but only streamlit's ranges bound them | pinned exactly (Dependabot bumps them) | `test_every_dependency_is_pinned_to_an_exact_version` |
 | Secrets could enter a local image | the image's ignore file lacked `.gitignore`'s secret patterns | copied in | `test_a_local_image_build_leaves_secrets_out` |
+| A typo logged like a crash | a typed basket with no data wrote an ERROR and a full traceback; past the cooldown a made-up name costs no Yahoo request, so 600 reruns a minute buried real incidents | one INFO line (`log_no_data`); a preset with no data, the feed being down, is still an incident | `test_a_typo_is_one_quiet_log_line_not_an_incident` |
 
 **Left open, said plainly:** a basket of one real name plus made-up ones retries the made-up ones twice (about 3x the
-accepted budget risk; the retry exists for names Yahoo drops for a moment). A made-up basket logs a full ERROR
-traceback each rerun (`main.py`, front-end owned: a typo is not an incident). Hardening only, no attack traced: the
+accepted budget risk; the retry exists for names Yahoo drops for a moment). Hardening only, no attack traced: the
 Docker base image is a tag, not a digest; `packages: write` is granted on every branch though used only on main;
 host settings (support e-mails, site URL) go into HTML unescaped, but only John's Railway account sets them; one
 compressed websocket message can still unpack to 16 MB before serve.py refuses it.

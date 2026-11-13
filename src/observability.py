@@ -109,6 +109,12 @@ def log_incident(session_ref: str, where: str, exc: BaseException) -> str:
     return session_ref
 
 
+def log_no_data(session_ref: str, where: str) -> None:
+    """a typed basket yahoo had nothing for: a typo, not an incident. one INFO
+    line, no traceback, so a script rerunning it can't bury real errors."""
+    logging.getLogger("meliona.session").info("ref=%s where=%s no data", session_ref, where)
+
+
 USAGE_EVERY_S = 3600       # one summary line an hour, max
 
 # the usage line gets its own logger: INFO straight to the host's stderr, not

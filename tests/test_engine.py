@@ -6357,6 +6357,53 @@ def test_the_download_asks_again_only_for_a_dropped_name_and_only_with_budget():
         assert close["BBB"].isna().all()
 
 
+def test_a_typo_is_one_quiet_log_line_not_an_incident():
+    """2026-11-13 audit: every typed basket with no data logged an ERROR and a
+    full traceback, and after the 15-minute cooldown a made-up name costs no
+    Yahoo request - so a script could rerun one 600 times a minute and bury
+    real incidents in the host's log. A typo gets one INFO line, no traceback;
+    a preset with no data (the feed is down) is still an incident."""
+    import ast
+    import logging
+
+    from src import observability
+
+    records = []
+
+    class Keep(logging.Handler):
+        def emit(self, record):
+            records.append(record)
+
+    logger = logging.getLogger("meliona.session")
+    keep, before = Keep(level=logging.DEBUG), logger.level
+    logger.addHandler(keep)
+    logger.setLevel(logging.DEBUG)
+    try:
+        observability.log_no_data("ref123", "load_universe")
+    finally:
+        logger.removeHandler(keep)
+        logger.setLevel(before)
+    assert [r.levelno for r in records] == [logging.INFO], records
+    assert "ref123" in records[0].getMessage() and "\n" not in records[0].getMessage()
+    assert records[0].exc_info is None
+
+    main = (pathlib.Path(__file__).resolve().parents[1] / "main.py").read_text(encoding="utf-8")
+    handler = next(h for node in ast.walk(ast.parse(main)) if isinstance(node, ast.Try)
+                   for h in node.handlers
+                   if isinstance(h.type, ast.Name) and h.type.id == "NoDataError")
+    branch = next(n for n in handler.body if isinstance(n, ast.If))
+    assert "PRESETS" in ast.unparse(branch.test), "the incident must hang on a preset basket"
+
+    def called(nodes):
+        return {n.func.id if isinstance(n.func, ast.Name) else n.func.attr
+                for node in nodes for n in ast.walk(node) if isinstance(n, ast.Call)}
+    unbranched = [n for n in handler.body if n is not branch]
+    assert "log_incident" in called(branch.body), "a preset with no data is an incident"
+    assert "log_incident" not in called(branch.orelse) | called(unbranched), \
+        "a typed basket with no data logs an incident"
+    assert "log_no_data" in called(branch.orelse)
+
+
 def test_made_up_symbols_cannot_spend_the_days_yahoo_budget():
     """2026-11-12 security review: a made-up but ticker-shaped symbol was
     never cached and asked for three times, so a script re-sending a basket of
