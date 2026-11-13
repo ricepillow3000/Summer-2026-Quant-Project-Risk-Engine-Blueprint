@@ -56,6 +56,12 @@ page.on('requestfailed', r => {
   // A navigation away aborts in-flight fetches; that is not a defect.
   if (!/ERR_ABORTED/.test(why)) failedRequests.push(`${why} ${r.url().slice(0, 120)}`);
 });
+// The largest message the server sends: server.maxMessageSize caps it, and the
+// same cap bounds what one inbound message may unpack to (2026-11-13 audit).
+let wsLargest = 0;
+page.on('websocket', ws => ws.on('framereceived', f => {
+  wsLargest = Math.max(wsLargest, typeof f.payload === 'string' ? Buffer.byteLength(f.payload) : f.payload.length);
+}));
 
 // A rerun is finished when the status widget is gone AND no element is still
 // marked stale - checked twice, because the widget can blink off mid-run.
@@ -723,6 +729,13 @@ const noise = s => /favicon|Failed to load resource: the server responded with a
 ok(!consoleErrors.filter(e => !noise(e)).length, 'no console or script errors from boot to finish', consoleErrors.slice(0, 4).join(' | '));
 ok(!badResponses.length, 'no request answered with an error status', badResponses.slice(0, 4).join(' | '));
 ok(!failedRequests.length, 'no request failed outright', failedRequests.slice(0, 4).join(' | '));
+{
+  const { readFileSync } = await import('node:fs');
+  const cfg = readFileSync(new URL('../.streamlit/config.toml', import.meta.url), 'utf8');
+  const capMb = Number((cfg.match(/^maxMessageSize\s*=\s*(\d+)/m) || [])[1]);
+  ok(wsLargest > 0 && wsLargest <= capMb * 1e6 / 2, 'the largest message keeps half the message cap free',
+     `${(wsLargest / 1e3).toFixed(0)} KB of a ${capMb} MB cap`);
+}
 await browser.close();
 
 const n = s => results.filter(r => r.status === s).length;

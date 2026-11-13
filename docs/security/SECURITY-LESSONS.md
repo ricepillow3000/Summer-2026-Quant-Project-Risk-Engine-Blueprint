@@ -156,7 +156,11 @@ pip-audit is clean. Fixed, each test-first and planted (M46-M49):
 | A typo logged like a crash | a typed basket with no data wrote an ERROR and a full traceback; past the cooldown a made-up name costs no Yahoo request, so 600 reruns a minute buried real incidents | one INFO line (`log_no_data`); a preset with no data, the feed being down, is still an incident | `test_a_typo_is_one_quiet_log_line_not_an_incident` |
 | Made-up names retried beside a real one | the 11-12 fix skipped a retry only when NOTHING came back, so one real name in the basket had every made-up name beside it asked three times (73 requests for 1 real + 24 made-up, not 25) | only a symbol we know is real (suggested or an anchor) is asked again; Yahoo dropping one for a moment still heals | `test_a_real_name_beside_made_up_ones_does_not_triple_their_cost` |
 
-**Left open, said plainly** (hardening only, no attack traced): the
-Docker base image is a tag, not a digest; `packages: write` is granted on every branch though used only on main;
-host settings (support e-mails, site URL) go into HTML unescaped, but only John's Railway account sets them; one
-compressed websocket message can still unpack to 16 MB before serve.py refuses it.
+The four hardening items left open that day were closed the same day, each test-first and planted (M50-M53):
+
+| Finding | Fix | Test |
+|---|---|---|
+| Host settings reached HTML as typed (support and contact e-mails, phone, site URL) | `host_setting` checks each against its shape (an e-mail, a phone, an https URL) and falls back to the default, logging the name but not the value | `test_a_host_setting_that_is_not_its_shape_falls_back_to_the_default` |
+| One compressed websocket message could unpack to 16 MB before serve.py refused it | `server.maxMessageSize` 16 -> 1 MB, the same cap as the largest message out: measured at 103 KB over a full-depth deep scan fed 30 years per name; the deep scan now fails if any message takes more than half the cap | `test_deploy_config_keeps_the_visitor_out_of_the_operator_seat` |
+| The image's base was a tag | pinned to today's `python:3.13-slim` digest; Dependabot watches `docker/` and proposes the next one | `test_the_image_is_pinned_and_only_main_may_publish_it` |
+| `packages: write` was granted on every branch | publishing is its own job, on main only, after the image passed its checks | same test |

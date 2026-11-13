@@ -1,7 +1,7 @@
 # Dependencies are pinned to exact versions (requirements.txt, the workflows'
-# actions), so nothing updates by itself. Dependabot opens one PR a week per
-# ecosystem; every PR runs the full Live, Pair and Options audits before
-# anyone merges it. Security fixes still arrive the moment GitHub knows of them.
+# actions, the image's base), so nothing updates by itself. Dependabot opens
+# one PR a week per ecosystem; every PR runs the full Live, Pair and Options
+# audits before anyone merges it. Security fixes still arrive the moment GitHub knows of them.
 version: 2
 updates:
   - package-ecosystem: "pip"
@@ -11,6 +11,11 @@ updates:
     open-pull-requests-limit: 5
   - package-ecosystem: "github-actions"
     directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+  - package-ecosystem: "docker"
+    directory: "/docker"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5

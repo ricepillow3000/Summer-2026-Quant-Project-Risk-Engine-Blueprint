@@ -10,7 +10,9 @@
 #
 # Not at the repo root on purpose: Railway builds a root Dockerfile instead of
 # its own builder, and the live site's build must not change by accident.
-FROM python:3.13-slim
+# Pinned to one build of the base image: a tag can be moved to new code, a
+# digest cannot. Dependabot proposes the next digest (.github/dependabot.yml).
+FROM python:3.13-slim@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90
 
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 PORT=8501
