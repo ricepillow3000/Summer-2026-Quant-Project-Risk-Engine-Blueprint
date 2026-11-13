@@ -4476,6 +4476,20 @@ def test_the_link_preview_quotes_the_newest_live_audit():
     assert figures, "the receipt shows no figures"
     for f in figures:
         assert re.search(rf"(?<![\d.]){re.escape(f)}(?![\d])", receipt), f"{f} is not in {newest.name}"
+    # John's LinkedIn cover quotes the same receipt; its crisis count is the engine's own
+    from src.scenarios import HISTORICAL_REGIMES
+    cover = (root / "tools" / "linkedin_banner.html").read_text(encoding="utf-8")
+    assert re.search(r"copied from (audit/live_audit_[\w-]+\.md)", cover).group(1) == cited, \
+        "the LinkedIn cover cites another audit than the link preview"
+    rows = re.findall(r'<div class="row[^"]*"><span>([^<]+)</span><b>([^<]+)</b>', cover)
+    assert rows, "the cover shows no receipt rows"
+    for label, value in rows:
+        if label == "Real crises replayed":
+            assert value == str(len(HISTORICAL_REGIMES)), "the cover's crisis count drifted from the engine"
+            continue
+        for f in re.findall(r"\d[\d.,]*", value):
+            assert re.search(rf"(?<![\d.]){re.escape(f)}(?![\d])", receipt), \
+                f"the cover's {label!r} figure {f} is not in {newest.name}"
 
 
 def test_public_files_give_crawlers_and_link_previews_a_real_head(tmp_path=None):
