@@ -5,7 +5,7 @@
 # look-alike. Bump one deliberately: change the pin, run python -m tools.check
 # and the Live audit, then deploy. Dependabot opens those PRs weekly.
 numpy==2.5.4
-pandas==3.1.0
+pandas==3.1.1
 scipy==1.18.1         # PINNED: src/risk's tail fit hands genpareto.fit a lean
                        # copy of 1.18.1's likelihood, equal to it bit for bit
                        # (test_the_lean_tail_objective_equals_scipys_bit_for_bit).
