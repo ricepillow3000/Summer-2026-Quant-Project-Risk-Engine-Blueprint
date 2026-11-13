@@ -26,9 +26,12 @@ maxUploadSize = 1
 # The websocket's largest message, both ways. Streamlit's default is 200 MB,
 # so one scripted client could make the one shared process buffer 200 MB per
 # frame (2026-11-04 security review). The page's biggest message is the Risk
-# Topology page: about 0.1 MB with the full 25 names (measured 2026-11-04), so
-# 16 MB leaves over a hundred times that.
-maxMessageSize = 16
+# Topology page: about 0.1 MB with the full 25 names (measured 2026-11-04; 103 KB
+# on 2026-11-13 over a full-depth deep scan fed 30 years per name), so 1 MB
+# leaves ten times that, and one compressed inbound message can no longer
+# unpack to 16 MB before serve.py refuses it. The deep scan fails if a message
+# ever takes more than half the cap.
+maxMessageSize = 1
 # Serves ./static/ at /app/static/ (path-traversal safe, nosniff) - locally and
 # on Railway. The photos (and reveal.js) live there as files: inlined as base64
 # they were ~5 MB on the websocket AHEAD of the boot skeleton, which then

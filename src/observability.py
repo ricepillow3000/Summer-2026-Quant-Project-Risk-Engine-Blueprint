@@ -28,6 +28,7 @@ PRIVACY.md "Analytics" says exactly this.
 import atexit
 import logging
 import os
+import re
 import secrets
 import sys
 import threading
@@ -50,10 +51,27 @@ _FORMAT = "%(asctime)s | %(levelname)-7s | %(name)s | %(message)s"
 _configured = False
 
 
+# settings that reach html, a mailto link or robots.txt: anything not shaped
+# like one is ignored, so a stray quote or newline can't break the page
+_EMAIL = r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}"
+SHAPES = {
+    "SUPPORT_EMAIL": _EMAIL,
+    "CONTACT_EMAIL": _EMAIL,
+    "SUPPORT_PHONE": r"[0-9 ()+.-]{7,20}|off|none|0",
+    "SITE_URL": r"https://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/[A-Za-z0-9._~/-]*)?",
+}
+
+
 def host_setting(name: str, default: str = "") -> str:
     """the host's MELIONA_<name> variable. the old MELEONA_ spelling still
     counts, so the rename can't quietly turn off the kill switch."""
-    return os.getenv(f"MELIONA_{name}") or os.getenv(f"MELEONA_{name}") or default
+    value = os.getenv(f"MELIONA_{name}") or os.getenv(f"MELEONA_{name}") or default
+    shape = SHAPES.get(name)
+    if value != default and shape and not re.fullmatch(shape, value.strip(), re.IGNORECASE):
+        logging.getLogger("meliona.config").warning(
+            "MELIONA_%s ignored: not shaped like one; using the default", name)
+        return default
+    return value.strip() if shape else value
 
 
 def setup_logging(level: int = logging.INFO) -> str:

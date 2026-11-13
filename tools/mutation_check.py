@@ -9,7 +9,7 @@ bug below is copied into a temp copy of the repo (never this checkout), the
 engine and narrative tests run against it, and the first red test is named. a
 bug no test catches is a hole: write the test that kills it (John, 2026-11-10;
 the first run caught 21 of 36, the tests added after it catch all 36; 37-40
-guard end-of-day, 41-45 the 2026-11-12 security review, 46-49 the
+guard end-of-day, 41-45 the 2026-11-12 security review, 46-53 the
 2026-11-13 audit).
 takes ~40 minutes on 4 cores: run it after touching src/, serve.py or safe_err.
 exit code 1 if any planted bug survives.
@@ -76,6 +76,10 @@ BUGS = [
     ("M47", "src/ingestion.py", "             | set(DEFENSIVE_ANCHOR_TICKERS))", "             | set())", "the anchor shelf pruned out of the cache"),
     ("M48", "main.py", '        log_no_data(SESSION_REF, "load_universe")', '        log_incident(SESSION_REF, "load_universe", exc)', "a script buries real errors under typos"),
     ("M49", "src/ingestion.py", "            ask = [t for t in missing if t in known]", "            ask = missing", "a real name beside made-up ones triples their cost"),
+    ("M50", "src/observability.py", "    if value != default and shape and not re.fullmatch(", "    if False and not re.fullmatch(", "a host setting breaks out of its html attribute"),
+    ("M51", ".streamlit/config.toml", "maxMessageSize = 1\n", "maxMessageSize = 16\n", "one message unpacks to 16 MB"),
+    ("M52", ".github/workflows/container.yml", "    needs: image\n    if: github.ref == 'refs/heads/main'\n", "    needs: image\n", "every branch may publish the image"),
+    ("M53", "docker/Dockerfile", "FROM python:3.13-slim@sha256:", "FROM python:3.13-slim #", "the image's base moves under it"),
 ]
 SKIP = shutil.ignore_patterns(".git", "data", "logs", "audit", ".claude", "__pycache__", "node_modules")
 

@@ -2332,7 +2332,9 @@ def test_deploy_config_keeps_the_visitor_out_of_the_operator_seat():
     assert settings["enableCORS"] == "true"
     assert settings["headless"] == "true"
     # 2026-11-04: the websocket's message cap, Streamlit's 200 MB by default.
-    assert 0 < int(settings["maxMessageSize"]) <= 16
+    # the same cap bounds what one inbound message may unpack to; the page's
+    # biggest message is ~0.1 MB (deep scan checks it keeps half the cap free)
+    assert int(settings["maxMessageSize"]) == 1, "one message may unpack to 16 MB"
 
 
 def test_every_response_carries_the_security_headers():
@@ -3986,6 +3988,29 @@ def test_dependabot_prs_run_every_audit():
     for name in ("live-audit.yml", "pair-audit.yml", "options-audit.yml", "container.yml"):
         push = re.search(r"\n  push:\n    branches: \[(.*)\]", (flows / name).read_text(encoding="utf-8"))
         assert push and '"dependabot/**"' in push.group(1), f"{name} skips Dependabot's PRs"
+
+
+def test_the_image_is_pinned_and_only_main_may_publish_it():
+    """2026-11-13 audit: the image's base was a tag (whatever python:3.13-slim
+    pointed to that day went straight into ghcr.io), Dependabot watched no
+    Docker file, and every branch's build ran with the right to publish. The
+    base is a digest Dependabot moves, and only a job that runs on main alone
+    holds packages: write."""
+    import re
+    root = pathlib.Path(__file__).resolve().parents[1]
+    docker = (root / "docker" / "Dockerfile").read_text(encoding="utf-8")
+    assert re.search(r"^FROM \S+@sha256:[0-9a-f]{64}$", docker, re.M), "the base image is a tag"
+    bot = (root / ".github" / "dependabot.yml").read_text(encoding="utf-8")
+    assert re.search(r'package-ecosystem: "docker"\n\s+directory: "/docker"', bot), \
+        "nothing proposes the base image's updates"
+    flow = (root / ".github" / "workflows" / "container.yml").read_text(encoding="utf-8")
+    jobs = re.split(r"\n  (?=[\w-]+:\n)", flow.split("\njobs:\n", 1)[1])
+    writers = [j for j in jobs if "packages: write" in j]
+    assert len(writers) == 1, f"{len(writers)} jobs may publish"
+    assert re.search(r"\n    if: github\.ref == 'refs/heads/main'\n", writers[0]), \
+        "the job that may publish runs on every branch"
+    head = flow.split("\njobs:\n", 1)[0]
+    assert "packages: write" not in head
 
 
 def test_a_local_image_build_leaves_secrets_out():
@@ -6356,6 +6381,45 @@ def test_the_download_asks_again_only_for_a_dropped_name_and_only_with_budget():
         close, _ = ing._download_close_volume(["AAPL", "MSFT"], "2y")
         assert fy.downloads == [["AAPL", "MSFT"]], f"a retry spent a spent budget: {fy.downloads}"
         assert close["AAPL"].isna().all()
+
+
+def test_a_host_setting_that_is_not_its_shape_falls_back_to_the_default():
+    """2026-11-13 audit: the support and contact e-mails, the phone and the
+    site URL went from the host's environment into HTML attributes, a mailto
+    link and robots.txt as typed. Only John's Railway account sets them, but a
+    stray quote or newline would break the page or add robots rules. Each is
+    checked against its shape when read; anything else is the default."""
+    import os
+
+    from src.observability import host_setting
+    import tools.public_files as pf
+
+    cases = {
+        "SUPPORT_EMAIL": ("help@example.com",
+                          ['a@b.com"><script>alert(1)</script>', "a@b.com\nBcc: x@y.z", "not-an-email"]),
+        "CONTACT_EMAIL": ("john@example.org", ["<b>@x.com", "x@y.com?subject=hi"]),
+        "SUPPORT_PHONE": ("(770) 265-9930", ["770<script>", "+1 770 265 9930\n<b>"]),
+        "SITE_URL": ("https://meliona.example.com",
+                     ["https://x.com\nDisallow: /", "http://x.com", "javascript:alert(1)",
+                      'https://x.com/"><script>']),
+    }
+    saved = {k: os.environ.get(f"MELIONA_{k}") for k in cases}
+    try:
+        for name, (good, bad) in cases.items():
+            os.environ[f"MELIONA_{name}"] = good
+            assert host_setting(name, "DEFAULT") == good, f"{name}: a good value was refused"
+            for value in bad:
+                os.environ[f"MELIONA_{name}"] = value
+                assert host_setting(name, "DEFAULT") == "DEFAULT", f"{name} took {value!r}"
+        os.environ["MELIONA_SUPPORT_PHONE"] = "off"
+        assert host_setting("SUPPORT_PHONE", "DEFAULT") == "off", "the phone's off switch broke"
+    finally:
+        for k, v in saved.items():
+            os.environ.pop(f"MELIONA_{k}", None)
+            if v is not None:
+                os.environ[f"MELIONA_{k}"] = v
+    src = pathlib.Path(pf.__file__).read_text(encoding="utf-8")
+    assert 'host_setting("SITE_URL"' in src, "public_files reads the site URL around the check"
 
 
 def test_a_typo_is_one_quiet_log_line_not_an_incident():
