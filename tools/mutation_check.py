@@ -9,7 +9,7 @@ bug below is copied into a temp copy of the repo (never this checkout), the
 engine and narrative tests run against it, and the first red test is named. a
 bug no test catches is a hole: write the test that kills it (John, 2026-11-10;
 the first run caught 21 of 36, the tests added after it catch all 36; 37-40
-guard end-of-day, 41-45 the 2026-11-12 security review, 46-53 the
+guard end-of-day, 41-45 the 2026-11-12 security review, 46-54 the
 2026-11-13 audit).
 takes ~40 minutes on 4 cores: run it after touching src/, serve.py or safe_err.
 exit code 1 if any planted bug survives.
@@ -80,6 +80,7 @@ BUGS = [
     ("M51", ".streamlit/config.toml", "maxMessageSize = 1\n", "maxMessageSize = 16\n", "one message unpacks to 16 MB"),
     ("M52", ".github/workflows/container.yml", "    needs: image\n    if: github.ref == 'refs/heads/main'\n", "    needs: image\n", "every branch may publish the image"),
     ("M53", "docker/Dockerfile", "FROM python:3.13-slim@sha256:", "FROM python:3.13-slim #", "the image's base moves under it"),
+    ("M54", ".github/dependabot.yml", '      - dependency-name: "python"\n', '      - dependency-name: "none"\n', "Dependabot moves the image off the site's Python"),
 ]
 SKIP = shutil.ignore_patterns(".git", "data", "logs", "audit", ".claude", "__pycache__", "node_modules")
 
