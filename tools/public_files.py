@@ -172,7 +172,7 @@ def head_tags(site_url: str, build: str = "") -> str:
         f'<meta property="og:image:width" content="1200">\n'
         f'<meta property="og:image:height" content="627">\n'
         f'<meta property="og:image:alt" content="The Meliona crest and name beside '
-        f'its live audit on Yahoo Finance data: 727 of 728 checks passed">\n'
+        f'its live audit on Yahoo Finance data: 0 of 832 checks failed">\n'
         f'<meta name="twitter:card" content="summary_large_image">\n'
         # Structured data: a data block, never run - the meta CSP above sets no
         # script policy, and application/ld+json is not executed in any case.

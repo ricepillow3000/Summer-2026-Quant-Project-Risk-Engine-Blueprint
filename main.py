@@ -1149,7 +1149,8 @@ st.markdown(
     'simulated years. Everything below it shows the working.</li>'
     '</ol>'
     '<div class="orient-f">Nothing here is advice. Every number is computed '
-    'from live end-of-day prices, and every tab shows its method.</div>'
+    'from live end-of-day prices, and every tab shows its method. Like any '
+    'model, it simplifies, so read each number as an estimate.</div>'
     '</div>',
     unsafe_allow_html=True)
 

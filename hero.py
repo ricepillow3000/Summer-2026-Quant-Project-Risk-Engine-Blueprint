@@ -123,9 +123,10 @@ PERSON_ROLE = "Computer Information Systems student specializing in AI & Analyti
 # with AI, and still corporate and clean.
 ABOUT_BIO = ("Hello! I am John, a Computer Information Systems student specializing "
              "in AI & Analytics. Building tools with AI is the work I go deepest on: "
-             "I pick one problem and stay with it until every detail holds. I built "
-             "Meliona that way, from the price feed to the risk engine to this page. "
-             "Its code is public so that anyone can check every number.")
+             "I pick one problem and stay with it until every detail holds, and I learn "
+             "from whatever breaks on the way. I built Meliona that way, from the price feed "
+             "to the risk engine to this page. Its code is public, so anyone can check every "
+             "number and tell me what I got wrong.")
 # Where the contact form's email goes (John, 2026-11-05: his personal inbox,
 # "I'm more active there"), with LinkedIn as the second way to reach him.
 # main.py reads it through host_setting("CONTACT_EMAIL", ...) so a deployment
@@ -239,9 +240,10 @@ STORY = (
     "anchor of its own. Then the whole portfolio faces real crashes and "
     f"{N_PATHS:,} simulated years.",
     "I am a student, and I hold this to a trading desk's bar. The prices are live, the "
-    "code is public, and the numbers are checked a second way on every change. Meliona "
+    "code is public, and the numbers are checked a second way on every change. It will still get some "
+    "things wrong. When it does, I want to hear it, so I can fix it and learn. Meliona "
     "does not tell anyone what to buy, and it cannot say how a stock will do. It is "
-    "built for people like my dad. Ask which stock you can rely on, and you get the "
+    "built for people like my dad. Ask which stock you can rely on, and you get "
     "evidence to weigh it yourself.",
 )
 
@@ -282,11 +284,13 @@ FAQS = (
      "Live end-of-day prices from Yahoo Finance, run through the engine's own public code. "
      "No market figure is typed in by hand or written by an AI model. The few fixed "
      "settings, like the crisis dates, are printed on the page. The drawer at the end of "
-     "the analysis shows the source and when each price was pulled."),
+     "the analysis shows the source and when each price was pulled. Spot a mistake? "
+     "Tell John below, so he can fix it."),
     ("Is this investment advice?",
      "No. Meliona is a student project built for learning. It shows what happened and "
      "simulates years that could happen. It does not tell anyone what to buy or sell, "
-     "and nothing on it is a forecast."),
+     "and nothing on it is a forecast. Like any model, it simplifies real markets, so "
+     "its numbers can be wrong."),
     ("What is grit?",
      "Our word for getting back up after a fall. It scores how fast and how fully a stock "
      "won back its own drops of 5% or more. It counts how often a year of holding it "

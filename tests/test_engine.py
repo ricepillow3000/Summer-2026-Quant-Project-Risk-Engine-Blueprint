@@ -4563,6 +4563,41 @@ def test_the_crest_engraving_is_the_banners_and_used_sparingly():
     assert ".showcase-row::before" not in css, "a plate is drawn behind the band again"
 
 
+def test_the_link_preview_quotes_the_newest_live_audit():
+    """John, 2026-11-13: the preview still read "727 of 728" from the 15 Oct
+    audit, and that phrase reads as one failure when the 728th was a warning.
+    The banner cites the newest committed live audit receipt, and every figure
+    on it, and in the image's alt text, is printed in that receipt."""
+    import re
+    root = pathlib.Path(__file__).resolve().parent.parent
+    banner = (root / "tools" / "og_image.html").read_text(encoding="utf-8")
+    cited = re.search(r"copied from (audit/live_audit_[\w-]+\.md)", banner).group(1)
+    newest = sorted((root / "audit").glob("live_audit_*.md"))[-1]
+    assert cited == f"audit/{newest.name}", f"the banner cites {cited}, not the newest {newest.name}"
+    receipt = newest.read_text(encoding="utf-8")
+    block = banner[banner.index('<div class="receipt">'):banner.index('<div class="plinth">')]
+    alt = (root / "tools" / "public_files.py").read_text(encoding="utf-8")
+    alt = alt[alt.index('og:image:alt'):alt.index('twitter:card')]
+    figures = re.findall(r"\d[\d.,]*", re.sub(r"<[^>]+>", " ", block) + alt)
+    assert figures, "the receipt shows no figures"
+    for f in figures:
+        assert re.search(rf"(?<![\d.]){re.escape(f)}(?![\d])", receipt), f"{f} is not in {newest.name}"
+    # John's LinkedIn cover quotes the same receipt; its crisis count is the engine's own
+    from src.scenarios import HISTORICAL_REGIMES
+    cover = (root / "tools" / "linkedin_banner.html").read_text(encoding="utf-8")
+    assert re.search(r"copied from (audit/live_audit_[\w-]+\.md)", cover).group(1) == cited, \
+        "the LinkedIn cover cites another audit than the link preview"
+    rows = re.findall(r'<div class="row[^"]*"><span>([^<]+)</span><b>([^<]+)</b>', cover)
+    assert rows, "the cover shows no receipt rows"
+    for label, value in rows:
+        if label == "Real crises replayed":
+            assert value == str(len(HISTORICAL_REGIMES)), "the cover's crisis count drifted from the engine"
+            continue
+        for f in re.findall(r"\d[\d.,]*", value):
+            assert re.search(rf"(?<![\d.]){re.escape(f)}(?![\d])", receipt), \
+                f"the cover's {label!r} figure {f} is not in {newest.name}"
+
+
 def test_public_files_give_crawlers_and_link_previews_a_real_head(tmp_path=None):
     """LinkedIn/Slack previews and search crawlers do not run JavaScript, so
     tools/public_files.py writes the head they read into Streamlit's static
@@ -6857,7 +6892,7 @@ def test_the_contact_form_writes_to_john_and_linkedin_is_the_second_way():
     # John, 2026-11-09: his own words, first person, passionate about building
     # tools with AI and still corporate - no promise, no advice
     assert hero.ABOUT_BIO.startswith("Hello! I am John") and "Building tools with AI" in hero.ABOUT_BIO
-    assert "check every number" in hero.ABOUT_BIO
+    assert "check every number" in hero.ABOUT_BIO and "what I got wrong" in hero.ABOUT_BIO
     assert not any(w in hero.ABOUT_BIO.lower() for w in ("guarantee", "should buy", "will make", "!!"))
     assert "&amp; Analytics" in hero.about_html(), "the bio's ampersand is escaped in the page"
 
@@ -7499,6 +7534,40 @@ def test_the_story_and_the_faq_say_the_same_thing():
                     "hold each other up", "will do well", "safe"):
         assert promise not in story, f"the story promises what the FAQ disclaims: {promise!r}"
     assert "cannot say how a stock will do" in story, "the story must say it forecasts nothing"
+
+
+def test_the_page_is_confident_and_says_it_can_be_wrong():
+    """John, 2026-11-13: "have confidence but have humbleness". The page keeps
+    its confident, true claims (every number computed from live prices and
+    checked a second way, a trading desk's bar, John replies within 2 business
+    days) and promises no outcome. Where it explains the numbers it also says,
+    as a fact of every model, that they can be wrong, and asks to hear about a
+    mistake so it can be fixed and learned from."""
+    import re
+    import hero
+    import tools.public_files as pf
+    root = pathlib.Path(__file__).resolve().parent.parent
+    main = (root / "main.py").read_text(encoding="utf-8")
+    thanks = re.sub(r"<[^>]+>", " ", (root / "public" / "thanks.html").read_text(encoding="utf-8"))
+    orient = main[main.index('<div class="orient-f">'):main.index("# ---- The cockpit")]
+    faq = " ".join(a for _, a in hero.FAQS)
+    story = " ".join(hero.STORY)
+    words = " ".join([hero.HERO_SUB, hero.ABOUT_BIO, story, faq, thanks, orient, pf.DESCRIPTION]).lower()
+    for promise in ("guarantee", "risk-free", "can't lose", "cannot lose", "will make you",
+                    "no risk", "always right", "never wrong"):
+        assert promise not in words, f"the page promises an outcome: {promise!r}"
+    # confident: John's own lines stay (2026-11-13)
+    assert "every number is computed" in orient.lower() and "check every number" in hero.ABOUT_BIO
+    assert hero.RESPONSE_TIME == "John replies within 2 business days."
+    assert "a barrier is fixed as a defect" in main
+    # humble: the cons are said out loud
+    for name, text in (("the FAQ", faq), ("the story", story)):
+        assert "wrong" in text.lower(), f"{name} must say the numbers can be wrong"
+    assert "estimate" in orient.lower(), "How to use this page must call each number an estimate"
+    assert re.search(r"tell (john|me)", (faq + story + hero.ABOUT_BIO).lower()), \
+        "invite the visitor to point out a mistake"
+    assert re.search(r"\bfix", story.lower()) and re.search(r"\blearn", story.lower()), \
+        "say mistakes get fixed and learned from"
 
 
 def test_a_waiting_press_yields_only_to_the_readers_own_hand():
