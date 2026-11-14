@@ -19,3 +19,9 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    # The box runs the site's Python (runtime.txt, test_the_container_runs_what_
+    # the_procfile_runs): only new builds of the same version (the digest), never
+    # a version jump - move runtime.txt and the image together, on purpose.
+    ignore:
+      - dependency-name: "python"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]

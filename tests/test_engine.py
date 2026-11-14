@@ -4003,6 +4003,12 @@ def test_the_image_is_pinned_and_only_main_may_publish_it():
     bot = (root / ".github" / "dependabot.yml").read_text(encoding="utf-8")
     assert re.search(r'package-ecosystem: "docker"\n\s+directory: "/docker"', bot), \
         "nothing proposes the base image's updates"
+    # the box runs the site's Python (runtime.txt): Dependabot may move the
+    # digest within it, never jump the version (it proposed 3.13 -> 3.15 at once)
+    docker_block = bot.split('package-ecosystem: "docker"', 1)[1].split("package-ecosystem", 1)[0]
+    assert re.search(r'dependency-name: "python"\n\s+update-types: \["version-update:semver-major", '
+                     r'"version-update:semver-minor"\]', docker_block), \
+        "Dependabot may move the image off the site's Python"
     flow = (root / ".github" / "workflows" / "container.yml").read_text(encoding="utf-8")
     jobs = re.split(r"\n  (?=[\w-]+:\n)", flow.split("\njobs:\n", 1)[1])
     writers = [j for j in jobs if "packages: write" in j]
