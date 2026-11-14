@@ -24,10 +24,36 @@ Paste this into a new chat session to bring it up to speed instantly.
   side columns from their own side (`tools/arrival_check.mjs`); and every
   word a visitor reads says "anchor", never "cushion" (the code's own
   names, `Role.CUSHION` and the payload's `cushion` field, stay).
+- **2026-11-13, a full back-end security audit (back-end session, PRs #72
+  and #74, both merged; #72 live at fefc8a7, Live audit green):** four
+  cold readers (CI and supply chain, the data path, HTML/JS output,
+  `serve.py` and netguard) found no way in. Everything they did find is
+  fixed, each test-first and planted as a bug (M46-M53, all caught):
+  - cache files were named by 12 hex characters of md5, so a basket could
+    be searched offline to land in a preset's slot: now full sha256;
+  - the cache prune could evict the anchor shelf's USMV: anchors now count
+    as a preset;
+  - a typo logged an ERROR and a traceback on every rerun: one INFO line
+    (`log_no_data`; a preset with no data is still an incident);
+  - one real name beside made-up ones had each made-up name asked three
+    times: only a symbol we know is real is asked again;
+  - Dependabot PRs ran no audit: `dependabot/**` now triggers all four;
+  - starlette, uvicorn and websockets are pinned; the image ignores the
+    same secret files git does;
+  - host settings (e-mails, phone, site URL) are checked against their
+    shape when read (`host_setting`);
+  - `server.maxMessageSize` 16 -> 1 MB (largest message measured at 103 KB
+    with 30 years per name; the deep scan fails past half the cap);
+  - the image's base is pinned by digest (Dependabot watches `docker/`),
+    and only a main-only job may publish it.
+  Nothing from the audit is left open (SECURITY-LESSONS.md, 2026-11-13).
+  One timing check (a 217 ms frame in one button's glide, limit 200 ms)
+  failed once on the CI runner after #72 and passed on re-run.
 - **Accepted risk, still open by choice:** a script inventing new made-up
   symbols on every rerun can spend the web process's 5,000-request Yahoo
-  day; presets and cached baskets keep working. Fix only on evidence of
-  abuse (SECURITY-LESSONS.md, 2026-11-12).
+  day, now one request per made-up name (2026-11-13); presets and cached
+  baskets keep working. Fix only on evidence of abuse (SECURITY-LESSONS.md,
+  2026-11-12).
 - **2026-11-12, end of day means end of day, and a cold security review
   (back-end session, PR #64, live at cced9d4):** in market hours Yahoo's
   daily download carries today's row at the live price, and the cache kept
