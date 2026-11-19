@@ -29,7 +29,7 @@ jobs:
       - run: python -m pip install -r requirements.txt
       - name: Every symbol the page can read, every period, from Yahoo once
         run: python -m tests.options_audit download audit/options
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: options-prices
           path: audit/options
@@ -56,7 +56,7 @@ jobs:
           path: audit/options
       - name: Engine shard ${{ matrix.shard }} of 16
         run: python -m tests.options_audit engine audit/options --shard ${{ matrix.shard }}/16
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         if: always()
         with:
           name: options-engine-${{ matrix.shard }}
@@ -85,7 +85,7 @@ jobs:
           path: audit/options
       - name: Page shard ${{ matrix.shard }} of 32 - the real page, every pair of settings
         run: python -m tests.options_audit page audit/options --shard ${{ matrix.shard }}/32
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         if: always()
         with:
           name: options-page-${{ matrix.shard }}
